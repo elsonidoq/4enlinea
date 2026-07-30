@@ -47,11 +47,134 @@ function pickFromPool(translations, prefix) {
   return `${prefix}.${keys[idx]}`;
 }
 
-// Factory: builds the POST /api/evaluate-move handler, parameterized on the solver process and
-// the i18n translations object (the two values that differ between the live server and a test).
-export function createEvaluateMoveHandler({ solver, i18nTranslations }) {
+// Factory: builds the POST /api/evaluate-move handler, parameterized on the solver process, the
+// i18n translations object, and (Spec 051 US3 T050) the supabase client used by the stored-set
+// grading branch. `supabase` may be undefined (e.g. some tests) — the stored-set branch is only
+// reached when req.body.puzzleId is present, and every call site that sends puzzleId also has a
+// live supabase client threaded through.
+// Everything about the /api/evaluate-move response EXCEPT `accepted`. Both grading branches
+// (stored-set and computed-live) shape their response through this one function, because the two
+// branches differ *only* in how `accepted` is derived — badge/quality/patternTag/coach keys/mood
+// are identical by definition. Keeping it in one place is not cosmetic: the sequence below was
+// previously written out verbatim in both branches, so any future change to the coach-key
+// derivation or the mood map applied to only one of them would silently make the same move grade
+// differently depending on whether the request carried a `puzzleId` — which, post-backfill, is the
+// difference between almost every real puzzle drill and every lesson inline challenge.
+async function buildEvaluationResponse({ movestring, colInt, category, isAiMove, solver, i18nTranslations }) {
+  const scores = (movestring === '' || movestring.length === 0)
+    ? EMPTY_BOARD_SCORES
+    : await solver.query(movestring);
+
+  // bestCol is unused here, same as the original inline handler — kept destructured to match
+  // scoreMove's return shape verbatim, prefixed to satisfy lint.
+  const { badge, quality, bestCol: _bestCol } = scoreMove(scores, colInt);
+
+  let patternTag;
+  if (isAiMove) {
+    patternTag = await classifyAiMove(movestring, colInt, solver);
+  } else {
+    const classifyResult = classify(movestring, colInt, scores);
+    patternTag = classifyResult?.tag ?? null;
+  }
+
+  // Category takes priority over the classifier's tag.
+  const phrasePoolKey = category || patternTag;
+  const coachPhraseKey = phrasePoolKey
+    ? pickFromPool(i18nTranslations, `coach.spoken.${phrasePoolKey}.${quality}`)
+    : null;
+  const summaryLineKey = phrasePoolKey
+    ? pickFromPool(i18nTranslations, `eval.${phrasePoolKey}.${quality}.summary`)
+    : null;
+  const coachMoodMap = { optimal: 'happy', suboptimal: 'think', blunder: 'oops' };
+  const coachMood = coachMoodMap[quality] ?? 'think';
+
+  // `scores` is returned for the caller's own `accepted` derivation; it is NOT part of the
+  // response body (see api-conventions.md — the stored set and raw scores never ship to a client).
+  return { scores, response: { badge, quality, coachPhraseKey, coachMood, summaryLineKey, patternTag } };
+}
+
+export function createEvaluateMoveHandler({ solver, i18nTranslations, supabase }) {
   return async function evaluateMoveHandler(req, res) {
-    const { movestring, col, category, correctCol, highlightMetadata } = req.body;
+    const { movestring: bodyMovestring, col, category: bodyCategory, correctCol: bodyCorrectCol, highlightMetadata: bodyHighlightMetadata, puzzleId } = req.body;
+
+    let movestring = bodyMovestring;
+    let category = bodyCategory;
+    let correctCol = bodyCorrectCol;
+    let highlightMetadata = bodyHighlightMetadata;
+
+    // Spec 051 US3 (FR-024/FR-024a/FR-025): stored-set grading branch. When puzzleId is present,
+    // look up the row and grade directly against its stored correct_cols — the seven pattern
+    // evaluators (evaluatePredicate/buildPredicatePuzzle) are never consulted for this branch.
+    // If correct_cols is NULL (not yet backfilled), fall through to the computed-live branch
+    // below using the row's own category/move_string/correct_col/highlight_metadata as inputs
+    // (fail-open, not an error). Absence of puzzleId is unchanged — it always selects the
+    // pre-existing computed-live branch (Decision D2 / FR-028).
+    if (puzzleId) {
+      let puzzle = null;
+      if (supabase) {
+        const { data } = await supabase
+          .from('puzzles')
+          .select('id, category, move_string, highlight_metadata, correct_col, correct_cols')
+          .eq('id', puzzleId)
+          .eq('is_active', true)
+          .single();
+        puzzle = data;
+      }
+
+      // A puzzleId that resolves to no active row falls through to the computed-live branch rather
+      // than failing the request. This deviates deliberately from T051's original "404 if not found"
+      // instruction, for the same reason FR-024a makes a NULL correct_cols fail open: a live drill
+      // must never be broken by a row the server can't find. The request still carries
+      // movestring/category/correctCol/highlightMetadata, so computed-live grading is fully
+      // possible and loses nothing — whereas a 404 silently killed grading feedback entirely
+      // (ChallengeScreen commits the phase change before the response lands, so the learner saw
+      // no error, just nothing). This is what OI-84 reported against lesson confirmation
+      // challenges, every one of whose authored puzzleIds resolves to zero rows today.
+      // The warn keeps the underlying data bug observable instead of hiding it.
+      if (!puzzle) {
+        console.warn(`[evaluate-move] puzzleId ${puzzleId} did not resolve to an active puzzles row — falling through to computed-live grading`);
+      }
+
+      if (puzzle && puzzle.correct_cols != null) {
+        // Stored-set branch: grade directly, no evaluator call at all.
+        try {
+          const colInt = typeof col === 'number' ? col : parseInt(col, 10);
+          if (!isValidCol0(colInt)) {
+            return res.status(400).json({ error: 'invalid col' });
+          }
+
+          const { response } = await buildEvaluationResponse({
+            movestring: puzzle.move_string,
+            colInt,
+            category: puzzle.category,
+            isAiMove: req.body.aiMove === true,
+            solver,
+            i18nTranslations,
+          });
+
+          // The ONE thing that makes this branch different: correctness comes straight from the
+          // stored set. The seven pattern evaluators are never consulted (FR-024/Decision D2a).
+          const accepted = puzzle.correct_cols.includes(colInt);
+
+          return res.json({ ...response, accepted });
+        } catch (err) {
+          logError('[evaluate-move]', err);
+          return res.status(500).json({ error: 'internal error' });
+        }
+      }
+
+      // FR-024a: not yet backfilled — fall through to the computed-live branch below, sourcing
+      // its inputs from the row itself rather than the request body.
+      // When the id resolved to no row at all (the warn above), there is nothing to source from,
+      // so the request body's own fields stand as-is — that is exactly the pre-existing
+      // computed-live input shape, which is what a lesson inline challenge already sends.
+      if (puzzle) {
+        movestring = puzzle.move_string;
+        category = puzzle.category;
+        correctCol = puzzle.correct_col ?? null;
+        highlightMetadata = puzzle.highlight_metadata ?? null;
+      }
+    }
 
     // Validate movestring
     if (typeof movestring !== 'string' || !MOVES_RE.test(movestring)) {
@@ -65,42 +188,16 @@ export function createEvaluateMoveHandler({ solver, i18nTranslations }) {
     }
 
     try {
-      // Get solver scores
-      let scores;
-      if (movestring === '' || movestring.length === 0) {
-        scores = EMPTY_BOARD_SCORES;
-      } else {
-        scores = await solver.query(movestring);
-      }
-
-      // Score the move (bestCol is unused here, same as the original inline handler — kept
-      // destructured to match scoreMove's return shape verbatim, prefixed to satisfy lint)
-      const { badge, quality, bestCol: _bestCol } = scoreMove(scores, colInt);
-
-      // Classify for pattern tag
-      let patternTag;
-      if (req.body.aiMove === true) {
-        patternTag = await classifyAiMove(movestring, colInt, solver);
-      } else {
-        const classifyResult = classify(movestring, colInt, scores);
-        patternTag = classifyResult?.tag ?? null;
-      }
-
-      // Determine phrase pool key (request category takes priority)
-      const phrasePoolKey = category || patternTag;
-
-      // Pick i18n keys from pools
-      const coachPhraseKey = phrasePoolKey
-        ? pickFromPool(i18nTranslations, `coach.spoken.${phrasePoolKey}.${quality}`)
-        : null;
-
-      const summaryLineKey = phrasePoolKey
-        ? pickFromPool(i18nTranslations, `eval.${phrasePoolKey}.${quality}.summary`)
-        : null;
-
-      // Determine coach mood
-      const coachMoodMap = { optimal: 'happy', suboptimal: 'think', blunder: 'oops' };
-      const coachMood = coachMoodMap[quality] ?? 'think';
+      // Shared with the stored-set branch above — see buildEvaluationResponse's header for why
+      // this must not be inlined per-branch again.
+      const { scores, response } = await buildEvaluationResponse({
+        movestring,
+        colInt,
+        category,
+        isAiMove: req.body.aiMove === true,
+        solver,
+        i18nTranslations,
+      });
 
       // Spec 044 US3 / FR-015a (multi-solution) + Spec 049 (Epic 9) FR-001–FR-012
       // (single-answer): for these nine categories, add an additive `accepted` field computed
@@ -118,7 +215,7 @@ export function createEvaluateMoveHandler({ solver, i18nTranslations }) {
         accepted = predicateResult.result === 'correct' || predicateResult.result === 'tied';
       }
 
-      res.json({ badge, quality, coachPhraseKey, coachMood, summaryLineKey, patternTag, accepted });
+      res.json({ ...response, accepted });
     } catch (err) {
       logError('[evaluate-move]', err);
       res.status(500).json({ error: 'internal error' });

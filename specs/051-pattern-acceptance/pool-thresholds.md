@@ -1,0 +1,144 @@
+# FR-022 / FR-022a minimum-viable-pool threshold
+
+## The threshold: N = 20 active puzzles, for EVERY category
+
+**Owner decision, 2026-07-30**: *"The thresholds should be the same for all categories, unless we
+have a clear reason to do something different for a specific category."* There is currently **no
+such reason for any category**, so one number governs all twelve. The per-category numbers an
+earlier pass set (`undercut` 14, `overcut` 1) are superseded by this and kept below only as the
+measurement record that produced them.
+
+**Why 20, grounded in measured data rather than invented** (Decision D4): the pools that actually
+serve today are `double_threat` 100, `forced_block` 100, `immediate_threat` 66, `undercut` 25.
+The smallest pool anyone currently considers serviceable is `undercut` at 25, so the floor sits
+just under it. Below ~20 a learner drilling a single category starts seeing the same board twice
+in one session, which is the point at which pool size becomes visible to the user.
+
+### What the threshold gates — read this before applying it
+
+It gates **depletion caused by a change**, not absolute pool health. A category that a change
+pushes from above 20 to below 20 **blocks that change** until FR-023's replace-not-exempt
+remediation runs.
+
+A category that was **already** below 20 before the change is a **content backlog item, not a
+ship blocker** — otherwise the gate would block every future change forever, since eight
+categories sit at 0 active puzzles in the local DB today for reasons entirely unrelated to any
+code change (they have valid, unpromoted candidates waiting in the curation queue — see memory
+`feedback_generate_puzzles_for_local_qa`). Those are tracked as content work (e.g. OI-83 for
+`forced_win`), not as regressions.
+
+**Remedy when a category falls below the floor: generate and promote more puzzles. Never lower
+the threshold** (owner, 2026-07-30). Note `audit_answer_ambiguity.mjs --repair` can only *replace*
+rows, never seed a category from zero — it throws
+`'no existing <category> row to inherit goal_prompt from'` — so a zero-row category needs a
+generation + promotion pass instead.
+
+### Status of all twelve categories against N = 20 (local DB, post-backfill 2026-07-30)
+
+| Category | Active puzzles | vs. N=20 | Caused by this change? |
+|---|---|---|---|
+| `double_threat` | 100 | pass | no change |
+| `forced_block` | 100 | pass | no change |
+| `immediate_threat` | 66 | pass | no change |
+| `undercut` | 25 | pass | 28 → 25, still above floor |
+| `forced_win` | 0 | **below** | 1 → 0 (backfill retired its only row as AMBIGUOUS — OI-83). Was already at 1, i.e. below the floor *before* this change; the change took the last one. Content backlog: 2 valid candidates are pending promotion. |
+| `overcut`, `z_threat`, `claimeven`, `figure_7`, `j_shape`, `odd_even_threat`, `forbidden_columns` | 0 | **below** | **no** — pre-existing, zero rows before and after. Never curated into this local DB; all have valid pending candidates. |
+
+No category was pushed below the floor *by this change* except `forced_win`, which was already
+below it at 1.
+
+---
+
+## Measurement record (supersedes nothing above — this is how the original per-category numbers were derived)
+
+# FR-022 / FR-022a minimum-viable-pool thresholds — undercut & overcut
+
+Recorded 2026-07-29, US2 (T024–T035). Per research.md Decision D4, these thresholds are set
+**from measured before/after data**, not invented in advance. Measurement path: `node
+server/scripts/audit_answer_ambiguity.mjs --puzzles <category> --env local` (T004's
+cross-checked script) — the single measurement path per Decision #2. Both measurements below are
+**pre-backfill dry runs**: `correct_cols` is `NULL` for every row at measurement time (no
+backfill has run); only the in-memory code fix (T024/T025 for undercut, T032 for overcut) was
+toggled in/out of the working tree between the "before" and "after" runs.
+
+## undercut (FR-021/FR-022)
+
+**Before** (T028 — `checkUndercutPredicate`/`evalUndercut` pre-fix, i.e. the OI-61-item-1 defect
+still live: every non-killing column marked correct with no score check):
+
+```
+28 board(s) audited — LOST-POSITION: 21, OK: 7
+```
+28/28 active rows pass (as expected — the unfixed code cannot fail its own audit).
+
+**After** (T029 — same 28 rows, `checkUndercutPredicate`/`evalUndercut` with the T024/T025
+relative-solver-safety-floor fix applied):
+
+```
+>> NO-CONCEPT  puzzle 4e192c6b-26f1-42ee-a069-bed436bbce77 (undercut)
+               board 3333334512652222610601001264
+               accepted []  optimal [4] (display 5)  scores [-7,-7,-1000,-1000,-1,-7,-7]
+>> NO-CONCEPT  puzzle add44b30-abef-49f6-85bf-2fdff09793b6 (undercut)
+               board 2422424220446111113
+               accepted []  optimal [3] (display 4)  scores [-11,-11,-1000,-2,-11,-11,-11]
+>> NO-CONCEPT  puzzle e8010e1f-a3c1-47fc-9962-4aa4ad8bd7e4 (undercut)
+               board 333302050055533515111212
+               accepted []  optimal [2] (display 3)  scores [-9,-9,-2,-1000,-9,-1000,-9]
+
+28 board(s) audited — LOST-POSITION: 18, OK: 7, NO-CONCEPT: 3
+```
+
+**Delta**: 28 passing → 25 passing (7 OK + 18 LOST-POSITION), 3 newly-failing as `NO-CONCEPT`
+(their entire non-killing answer set collapsed under the floor — every non-killing column on
+those three boards concedes strictly worse than the board's own optimum). Retention: 25/28 =
+**89.3%**.
+
+**Threshold set (FR-022)** *(SUPERSEDED 2026-07-30 by the uniform N = 20 above — retained as the
+measurement record)*: **N = 14** active `undercut` puzzles (50% of the pre-fix pool of 28),
+chosen as a round, defensible floor below which serving variety would visibly degrade (fewer than
+~half the original pool risks the same board repeating too often for a learner drilling this
+category). The measured after-count (25) is well above this floor (25 ≥ 14) —
+**no remediation required** for undercut. If a future change (e.g. the US3 backfill, run against
+the real `checkPredicate` for every row) drops the active undercut count below 14, that MUST
+trigger `audit_answer_ambiguity.mjs --repair --yes --puzzles undercut` (FR-023, replace-not-exempt)
+before ship.
+
+## overcut (FR-021a/FR-022a)
+
+**Before** (T031 — pre-F1-fix `checkOvercutPredicate`, no uniqueness guard):
+
+```
+0 board(s) audited —
+```
+
+**After** (T033 — post-F1-fix `checkOvercutPredicate`, `if (result.correctCols.length !== 1)
+return { passes: false, correctCols: [] }` guard added):
+
+```
+0 board(s) audited —
+```
+
+**Delta**: 0 → 0. Direct DB query (`puzzles` table, `is_active = true`, grouped by `category`)
+confirms the local DB has **zero** `overcut` rows at all — the active-row categories present
+locally are only `double_threat` (100), `forced_block` (100), `immediate_threat` (66),
+`undercut` (28), and `forced_win` (1); `overcut`, `z_threat`, `claimeven`, `figure_7`, `j_shape`,
+and `odd_even_threat` all have 0 active rows in this local DB. This is a **pre-existing gap
+unrelated to this feature** — no overcut puzzle has ever been generated/promoted into this local
+`puzzles` table — not something T032's uniqueness-guard fix caused or could have caused (a guard
+cannot shrink a pool that was already empty).
+
+**Threshold set (FR-022a)** *(SUPERSEDED 2026-07-30 by the uniform N = 20 above)*: **N = 1** (the only floor that is meaningful against a zero-row
+baseline: any future overcut generation/backfill must not *knowingly* leave the category at zero
+active rows once puzzles for it exist — this is a placeholder floor to be revisited with real
+data once `overcut` candidates are actually generated and promoted, per this feature's own
+Correction note that "a milder tightening... retired 7 perfectly good undercut puzzles" — the same
+risk cannot be assessed for overcut today because there is no live pool to measure a tightening
+against).
+
+**Remediation**: **not triggered and not possible from this batch.** `audit_answer_ambiguity.mjs
+--repair --yes --puzzles overcut` requires at least one existing failing row to retire and to use
+as a template (`repairPuzzles` throws `'no existing <category> row to inherit goal_prompt from —
+repair by hand'` when the category has zero rows). Populating `overcut` puzzles from scratch is
+candidate generation/curation work, out of scope for T024–T035 (which only fixes the *predicate*,
+not the empty pool) — flagged here as a gap for whoever next runs the real backfill (US3, T048)
+or generates fresh `overcut` candidates, not silently left unmeasured.

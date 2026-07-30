@@ -1,5 +1,5 @@
 import { evaluatePredicate } from './predicates.js';
-import { answerSetHolds } from './answerSetInvariant.js';
+import { answerSetHolds, isSolverSafe } from './answerSetInvariant.js';
 import {
   classify, checkWin, getImmediateThreats, parseBoardState,
   hasActiveDoubleThreat, Board, hasWon,
@@ -307,22 +307,34 @@ async function computeHighlightCells(category, moveString, scores, correctCols, 
 export function checkZThreatPredicate(ms, scores) {
   const result = detectZThreat(new Board(ms), scores);
   if (!result.matched) return { passes: false, correctCols: [] };
-  const correctCol = result.highlightMetadata.column;
+  // T016: consume detectZThreat's own correctCols field (T014) rather than re-deriving the
+  // single column from highlightMetadata.column. detectZThreat's existing candidates.length !== 1
+  // rejection keeps this a singleton — no cardinality relaxation (FR-010).
+  const correctCols = result.correctCols;
   return {
     passes: true,
-    correctCols: [correctCol],
-    correct_col: correctCol,
+    correctCols,
+    correct_col: correctCols[0],
     highlight_metadata: result.highlightMetadata,
     category_evidence: result.categoryEvidence,
   };
 }
 
+// T019 (spec 051): consume detectClaimeven's now-genuine `correctCols` enumeration (T018) rather
+// than the old one-element `[result.correctCol]` wrap. Solver cost: each odd-height column tested
+// runs its own `runClaimevenSimulation` (classifier.js), which simulates up to MAX_PAIRS=60
+// red/yellow move-pairs, one `solver.query(...)` per pair — in typical practice this terminates
+// early on a decided win/loss after roughly 20 queries, not the full 60-pair ceiling. Full
+// enumeration therefore costs up to (number of odd-height columns) × ~20 solver queries per
+// accepted claimeven candidate, versus one such rollout (~20 queries) before this change. This
+// cost lands entirely at generation/backfill time (never per learner request — FR-011); it is
+// never incurred on the `/api/evaluate-move` request path.
 export async function checkClaimevenPredicate(ms, scores, solver) {
   const result = await detectClaimeven(new Board(ms), solver);
   if (!result.matched) return { passes: false, correctCols: [] };
   return {
     passes: true,
-    correctCols: [result.correctCol],
+    correctCols: result.correctCols,
     correct_col: result.correctCol,
     highlight_metadata: result.highlightMetadata, // null for claimeven
     category_evidence: result.categoryEvidence,
@@ -333,11 +345,15 @@ export function checkUndercutPredicate(ms, scores) {
   const b = new Board(ms);
   const result = detectUndercutVictim(b, scores);
   if (!result.matched) return { passes: false, correctCols: [] };
-  // For undercut, "correct" = any column except the killing_threat column
+  // For undercut, "correct" = any column except the killing_threat column, AND itself safe under
+  // the relative solver-safety floor (T024, FR-005, closes OI-61 item 1 on the generation path) —
+  // a non-killing column that concedes strictly more than the board's own optimum must not enter
+  // the answer set. `isSolverSafe` already encodes the relative floor uniformly for both won and
+  // fully-lost boards (LOST-POSITION exemption lives in classifyAnswerSet, not here).
   const killingCol = result.highlightMetadata.cells.find(c => c.role === 'killing_threat').column;
   const correctCols = [];
   for (let c = 0; c < COLS; c++) {
-    if (b.colHeights[c] < ROWS && c !== killingCol) correctCols.push(c);
+    if (b.colHeights[c] < ROWS && c !== killingCol && isSolverSafe(c, scores)) correctCols.push(c);
   }
   return {
     passes: correctCols.length >= 1,
@@ -351,10 +367,16 @@ export function checkUndercutPredicate(ms, scores) {
 export function checkOvercutPredicate(ms, scores) {
   const result = detectOvercut(new Board(ms), scores);
   if (!result.matched) return { passes: false, correctCols: [] };
-  const majorCol = result.highlightMetadata.cells.find(c => c.role === 'major_threat').column;
+  // T016: consume detectOvercut's own correctCols field (T015) rather than re-deriving the
+  // single column from highlightMetadata.cells.
+  // T032 (Finding F1, FR-010 sub-decision): a board with 2+ structurally valid overcut columns
+  // must not silently enter the pool with only the first-found column recorded — the aggregate
+  // answerSetHolds check never sees the second column to catch it. Mirrors detectZThreat's own
+  // `candidates.length !== 1` singleton guard.
+  if (result.correctCols.length !== 1) return { passes: false, correctCols: [] };
   return {
     passes: true,
-    correctCols: [majorCol],
+    correctCols: result.correctCols,
     correct_col: null, // overcut eval derives from highlight_metadata
     highlight_metadata: result.highlightMetadata,
     category_evidence: result.categoryEvidence,
@@ -364,6 +386,10 @@ export function checkOvercutPredicate(ms, scores) {
 export function checkFigure7Predicate(ms, _scores) {
   const board = new Board(ms);
 
+  // T011 (spec 051 Epic 1, FR-009): accumulate every matching column, not only the first —
+  // control-flow change only, no detector logic re-derived.
+  const correctCols = [];
+  let firstMatch = null;
   for (let col = 0; col < 7; col++) {
     if (board.colHeights[col] >= 6) continue;
     const nextMs = ms + col.toString();
@@ -377,20 +403,26 @@ export function checkFigure7Predicate(ms, _scores) {
     const prevResult = detectFigure7(board, null, patternOwner);
     if (prevResult.matched) continue;
 
-    return {
-      passes: true,
-      correctCols: [col],
-      correct_col: col,
-      highlight_metadata: result.highlightMetadata,
-      category_evidence: result.categoryEvidence,
-    };
+    correctCols.push(col);
+    if (firstMatch === null) firstMatch = result;
   }
-  return { passes: false, correctCols: [] };
+  if (correctCols.length === 0) return { passes: false, correctCols: [] };
+  return {
+    passes: true,
+    correctCols,
+    correct_col: correctCols[0],
+    highlight_metadata: firstMatch.highlightMetadata,
+    category_evidence: firstMatch.categoryEvidence,
+  };
 }
 
 export function checkJShapePredicate(ms, _scores) {
   const board = new Board(ms);
 
+  // T011 (spec 051 Epic 1, FR-009): accumulate every matching column, not only the first —
+  // control-flow change only, no detector logic re-derived.
+  const correctCols = [];
+  let firstMatch = null;
   for (let col = 0; col < 7; col++) {
     if (board.colHeights[col] >= 6) continue;
     const nextMs = ms + col.toString();
@@ -402,15 +434,17 @@ export function checkJShapePredicate(ms, _scores) {
     const prevResult = detectJShape(board, null, patternOwner);
     if (prevResult.matched) continue;
 
-    return {
-      passes: true,
-      correctCols: [col],
-      correct_col: col,
-      highlight_metadata: result.highlightMetadata,
-      category_evidence: result.categoryEvidence,
-    };
+    correctCols.push(col);
+    if (firstMatch === null) firstMatch = result;
   }
-  return { passes: false, correctCols: [] };
+  if (correctCols.length === 0) return { passes: false, correctCols: [] };
+  return {
+    passes: true,
+    correctCols,
+    correct_col: correctCols[0],
+    highlight_metadata: firstMatch.highlightMetadata,
+    category_evidence: firstMatch.categoryEvidence,
+  };
 }
 
 export function checkOddEvenThreatPredicate(ms, scores) {
@@ -473,11 +507,22 @@ export async function checkPredicate(category, moveString, scores, solver) {
   // best move was the one the drill punishes (2 of 7 sampled). The same hole exists wherever an
   // instance detector supplies the answer.
   //
-  // forbidden_columns is exempt: its `correctCols` are the columns to AVOID, so the subset
-  // relation is inverted and the test would be meaningless there.
+  // forbidden_columns is exempt: checkForbiddenColumnsPredicate returns `correctCols: safeCols` —
+  // the ACCEPTED/safe columns, not the columns to avoid — but those safe columns are already
+  // whatever remains after the caller's own forbidden-column exclusion, so re-running the
+  // answer-set-invariant subset check against them here would be meaningless (double-filtering
+  // the same set against itself under a different rule).
   if (category !== 'forbidden_columns' && !answerSetHolds(result.correctCols, scores)) {
     return { passes: false, correctCols: [] };
   }
+
+  // Centralized sort + scalar sync (D6, FR-016a/FR-019) — the single point both generation
+  // (T039/T040) and the backfill (T043) write from. Do NOT duplicate either rule inside any
+  // individual check*Predicate function.
+  result.correctCols = [...result.correctCols].sort((a, b) => a - b);
+  result.correct_col = (category === 'undercut' || category === 'overcut')
+    ? null
+    : (result.correctCols[0] ?? null);
 
   return result;
 }
@@ -640,6 +685,7 @@ export async function generateCandidates(category, count, seed) {
         highlight_metadata: matchedHighlightMetadata,
         category_evidence: matchedCategoryEvidence,
         correct_col: matchedCorrectCol,
+        correctCols,
       });
 
       const now = Date.now();

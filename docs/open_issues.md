@@ -1064,7 +1064,47 @@ The overcut lesson teaches the gravity-top-adjacent shape (opponent threat direc
 
 ## OI-61 — Challenge grader semantics: `evalUndercut` accepts losing non-killing columns; single-answer categories mark solver-tied/positive alternatives wrong
 
-**Status**: deferred / open (family of grader-semantics gaps; surfaced 2026-07-24, sibling of OI-1)
+**Status**: ✅ RESOLVED 2026-07-29 (spec 051, Epic 1, US2/US4 — final closeout for item 1; item 2 was
+already resolved 2026-07-28, see below). This supersedes the 2026-07-29 interim `UPDATE`.
+
+**What shipped and where (item 1 — `evalUndercut` had no solver-verdict floor):**
+- **T024** (`connect-four/server/candidate-generator.js`, `checkUndercutPredicate`): excludes any
+  non-killing column that is not `isSolverSafe(col, scores)` from its `correctCols` answer set at
+  generation time — previously it marked every non-killing column "correct" with no score check at
+  all.
+- **T025** (`connect-four/server/predicates.js`, `evalUndercut`): applies the identical
+  `isSolverSafe(candidateCol, scores)` check on the grading path, independently of T024 (both were
+  required — either alone leaves the other's defect live).
+- Verified with a direct API call against the running local server (2026-07-29), a real active
+  `undercut` puzzle row (`d22300db-3f4d-451a-9a25-7f40145ce6cb`, killing_threat col 4,
+  `correct_cols [1,2,3,5,6]`): col 0 (non-killing but excluded by the floor) grades
+  `accepted:false`; col 1 (in the answer set) grades `accepted:true`; col 4 (the killing column,
+  raw `quality:'optimal'`) grades `accepted:false` — concretely proving the drill now grades a
+  pattern-matching-but-unsafe or pattern-violating column wrong even when its raw solver quality is
+  "optimal," which is exactly the defect this issue named.
+- **T026/T027** — a harvested board (`333330654544210414405513`) proved both the red-first
+  counterexample (a non-killing column conceding worse than the board's optimum is rejected on both
+  paths) and the LOST-POSITION regression (the relative, not absolute, floor keeps a losing board's
+  slowest-loss column valid).
+- **Before/after pool measurement** (FR-021/FR-022): 28 active rows before the fix → 25 after (3
+  newly `NO-CONCEPT`), threshold 14, no remediation required. **Post-backfill** (T048, US3, real
+  `checkPredicate` run against every row): still **25 active `undercut` rows**, matching the dry-run
+  prediction exactly — `pool-thresholds.md` has the full accounting.
+- **T058/T060** (final audit): `audit_answer_ambiguity.mjs` reports 0 failures for `undercut` in both
+  the local DB pool and lesson content.
+- The sibling **overcut** Finding F1 uniqueness gap (**T032**, `checkOvercutPredicate`'s
+  `correctCols.length !== 1` guard) was fixed under the identical before/after discipline; the local
+  DB has zero active `overcut` rows before and after (pre-existing gap unrelated to this fix).
+
+Item 2 (solver-tied/positive alternatives marked wrong) was already resolved 2026-07-28 via the
+systematic `answerSetInvariant.js` vetting described below — unchanged by this closeout.
+
+---
+
+<details>
+<summary>Original report + superseded interim UPDATEs (2026-07-24/28/29) — kept for history</summary>
+
+**Original status**: deferred / open (family of grader-semantics gaps; surfaced 2026-07-24, sibling of OI-1)
 **Area**: `connect-four/server/predicates.js` (`evalUndercut`), single-answer challenge grading (`ChallengeScreen.jsx` / `scoreMove` path), lessons 04/06/08 challenge boards
 **Discovered**: lesson-content remediation final review (2026-07-24)
 
@@ -1091,6 +1131,43 @@ routinely losing — exactly where the exemption applies. A losing non-killing c
 still grade "correct" in an undercut drill. Cross-ref OI-74, which shows the undercut lesson and the
 undercut puzzle category model opposite sides of the pattern; item 1 is probably not fixable in
 isolation from that decision.
+
+**UPDATE 2026-07-29** (spec 051, Epic 1, US2 in progress — not fully resolved yet): item 1's
+solver-verdict floor is now enforced on both paths, using the *relative* floor (`isSolverSafe`,
+`answerSetInvariant.js`) rather than an absolute one — this is exactly what keeps the exemption
+above meaningful rather than removing it:
+
+- **T024** (generation path): `checkUndercutPredicate` (`candidate-generator.js`) now excludes any
+  non-killing column that is not `isSolverSafe(col, scores)` from its `correctCols` answer set —
+  previously it marked every non-killing column "correct" with no score check at all.
+- **T025** (grading path): `evalUndercut` (`predicates.js`) applies the identical
+  `isSolverSafe(candidateCol, scores)` check before returning `'correct'` — independently of T024;
+  both were required, since either alone leaves the other's defect live.
+- **T026** (red-first counterexample): a harvested, solver-verified board
+  (`333330654544210414405513`, `tests/integration/undercut_overcut.test.js`) has a non-killing
+  column (col 5, score -8) that concedes strictly worse than the board's own optimum (cols 0/1/2,
+  score -6) — confirmed to fail for the right reason on the pre-fix code (via `git stash`), and to
+  pass after T024/T025.
+- **T027** (LOST-POSITION exemption verified to survive): the same board is a genuine
+  fully-lost position (every legal column negative) where a non-killing column (col 0) is among
+  the slowest losses (tied-optimal at -6) — both `checkUndercutPredicate` and `evalUndercut` still
+  accept it, proving the relative floor (not an absolute `scores[C] > 0` floor) is what shipped.
+- **Before/after pool measurement** (FR-021/FR-022, via `audit_answer_ambiguity.mjs --puzzles
+  undercut --env local`, pre-backfill dry run): 28 active rows before the fix (all passing,
+  21 LOST-POSITION + 7 OK, as expected of the unfixed code); 25 passing after (18 LOST-POSITION +
+  7 OK), 3 newly `NO-CONCEPT` (their entire non-killing answer set collapsed under the floor).
+  Threshold set at 14 (50% of the pre-fix pool) — 25 ≥ 14, so **no remediation was required**.
+  Full data persisted at `specs/051-pattern-acceptance/pool-thresholds.md`.
+- The sibling **overcut** Finding F1 uniqueness gap (a board with 2+ structurally valid overcut
+  columns silently entering the pool with only the first recorded) was fixed in the same batch
+  (T032, `checkOvercutPredicate`'s `correctCols.length !== 1` guard) under the identical
+  before/after discipline — the local DB has **zero** active `overcut` rows before and after
+  (a pre-existing gap unrelated to this fix; see `pool-thresholds.md` for detail).
+
+**Superseded 2026-07-29**: see the ✅ RESOLVED closeout at the top of this entry (T065) — the
+post-backfill DB audit referenced below has run clean.
+
+</details>
 
 ## OI-62 — KB touch-ups from the lesson remediation: `3334434` now solver-verified; figure-7 `gravity_top>=2` filter note
 
@@ -1455,7 +1532,47 @@ comment in `ConceptScreen` was added to prevent.
 
 ## OI-75 — `odd_even_threat` is in neither acceptance set, so its stored `correctCol` is never consulted
 
-**Status**: open — latent, currently masked (observed 2026-07-28)
+**Status**: ✅ RESOLVED 2026-07-29 (spec 051, Epic 1, US1/US4 — final closeout, supersedes the
+2026-07-29 interim `UPDATE` below). The single-answer model was chosen and shipped: `odd_even_threat`
+is now a graded category end to end.
+
+**What shipped and where:**
+- **T005** (`connect-four/server/predicates.js`) fixed the dispatch bug — `evaluatePredicate`'s
+  `odd_even_threat` case now passes `scores` through to `evalOddEvenThreat(candidateCol, puzzle,
+  scores)` (previously silently dropped even though already in scope at the call site), and
+  `evalOddEvenThreat` grades by set membership against `detectOddEvenThreat`'s `correctCols` rather
+  than scalar equality.
+- **T006/T007** added `'odd_even_threat'` to `SINGLE_ANSWER_CATEGORIES` in both
+  `server/categories.js` and the hand-mirrored `src/lib/categories.js` — `ChallengeScreen.jsx`'s
+  `usesAcceptedGate` now includes it, so grading uses `data.accepted` (from `evaluatePredicate`), not
+  raw solver score. Verified with a direct API call against the running local server (2026-07-29):
+  board `33330256555322322` (scores `[4,4,4,-1000,4,4,4]`, taught col 2) — playing col 0 (tied-max
+  solver score, does NOT satisfy the pattern) grades `accepted:false`; playing col 2 (taught,
+  pattern-satisfying) grades `accepted:true`. This is the concrete proof the drill now grades against
+  the taught pattern, not raw score — the exact defect this issue named.
+- **T009/T010** — lesson-07's two boards (`3553515566110063` cc 3, `3411022114433433` cc 2) still
+  pass `tests/lessons/lessonAnswerSets.test.js`; `tests/predicates/fixtures/fixtures.json` gained the
+  category's first fixtures (previously zero): a 3-independently-qualifying-column board and a
+  floor-violating rejection.
+- **T058/T060** (US3/US4 final audit): `audit_answer_ambiguity.mjs` reports 0 failures for
+  `odd_even_threat` in both the lesson content (39/39 OK) and the local DB pool (0 active rows —
+  pre-existing, unrelated to this fix; see `pool-thresholds.md`/OI-83 for the local pool's overall
+  state).
+
+**Known caveat, tracked separately**: the local DB currently has 0 active `odd_even_threat` puzzle
+rows, so this category is only reachable through the live app via the DEV board injector, not a real
+puzzle drill — and the DEV board injector currently 404s at grading time for an unrelated reason (a
+regression this same feature's T054/T051 introduced for any non-DB-row `puzzleId`, filed as
+**OI-84**). OI-75 itself — "is `odd_even_threat` graded against its taught pattern" — is resolved and
+verified per the API-level proof above; OI-84 is what blocks exercising it end-to-end through
+`ChallengeScreen` today.
+
+---
+
+<details>
+<summary>Original report + superseded interim UPDATE (2026-07-28/29) — kept for history</summary>
+
+**Original status**: open — latent, currently masked (observed 2026-07-28)
 **Area**: `connect-four/server/categories.js`, `src/lib/categories.js`, `src/screens/ChallengeScreen.jsx`, `connect-four/lessons/lesson-07-odd-rows-belong-to-red.json`
 
 `categories.js` deliberately keeps `odd_even_threat` out of both `MULTI_SOLUTION_CATEGORIES` and
@@ -1485,6 +1602,31 @@ OI-1 / OI-61.
 `SINGLE_ANSWER_CATEGORIES` in **both** `server/categories.js` and the hand-mirrored
 `src/lib/categories.js`, and confirm the lesson-07 boards still pass
 `tests/lessons/lessonAnswerSets.test.js`.
+
+**UPDATE 2026-07-29** (spec 051, Epic 1, US1 in progress — not fully resolved yet): the
+single-answer model was chosen and shipped. `odd_even_threat` is now a graded category:
+
+- T005 fixed the actual dispatch bug — `evaluatePredicate`'s `odd_even_threat` case now passes
+  `scores` through to `evalOddEvenThreat(candidateCol, puzzle, scores)` (it was silently dropped
+  before, even though already in scope at the call site), and `evalOddEvenThreat` grades by set
+  membership against `detectOddEvenThreat`'s own `correctCols` (recomputed live — cheap,
+  synchronous, no async/solver cost) rather than equality against the stored scalar.
+- T006/T007 added `'odd_even_threat'` to `SINGLE_ANSWER_CATEGORIES` in both `server/categories.js`
+  and the hand-mirrored `src/lib/categories.js` — this closes the exact gap this issue named
+  (`ChallengeScreen.jsx`'s `usesAcceptedGate` now includes it, so grading uses `data.accepted`
+  from `evaluatePredicate`, not raw solver score).
+- T009 confirmed lesson-07's two boards (`3553515566110063` correct col 3,
+  `3411022114433433` correct col 2) still pass `tests/lessons/lessonAnswerSets.test.js` in full
+  after the dispatch fix — the "masked by luck" scenario this issue described no longer matters,
+  because the drill is now actually graded against the taught concept, not just solver score.
+- T010 added the first `odd_even_threat` fixtures to `tests/predicates/fixtures/fixtures.json`
+  (previously zero), covering a harvested 3-independently-qualifying-column board and a
+  floor-violating board rejected under the shared `isSolverSafe` invariant.
+
+**Superseded 2026-07-29**: see the ✅ RESOLVED closeout at the top of this entry (T065) — the
+post-backfill DB audit referenced below has run clean.
+
+</details>
 
 ---
 
@@ -1595,3 +1737,322 @@ so an existing file is updated in place regardless of its slug. Add a `lessonCon
 asserting `basename` slug == `id` and `prefix` == `order` for every lesson file — that alone would
 have caught this before it forked anything. Related: OI-78; the filename prefix is also what
 `lessonLoader.js` uses for ordering (the JSON `order` field is overwritten).
+
+---
+
+## OI-81 — Retire the legacy `correct_col` scalar once `correct_cols` is the source of truth (105 refs / 22 files)
+
+**Status**: open — deferred, split out of spec 051 by owner decision (2026-07-29)
+**Area**: `connect-four/server/` (22 files below), `connect-four/src/`, `connect-four/tests/`, `connect-four/scripts/`
+
+Spec 051 (`specs/051-pattern-acceptance/`, Epic 1) introduces `correct_cols integer[]` on `puzzles` and
+`candidates` as the solver-gated, set-valued answer computed once at generation time. The original plan for
+that spec ("Decision B") was to migrate every remaining consumer off the legacy scalar `correct_col` and
+then drop the column in the same feature. The owner reversed that decision on 2026-07-29: the consumer
+inventory, once actually re-derived against this worktree, came back at **105 references across 22 files** —
+not the "62 references across 11 files" estimate the original decision had been made on — and that scope
+sits on top of an already-large feature (schema migration + backfill + API contract change). The retirement
+is now split out into its own separate future epic. Spec 051 instead **keeps `correct_col` and maintains it
+in sync** as `correct_cols[0]` (FR-017/FR-019) for the duration of that feature.
+
+This entry preserves the inventory work — genuinely valuable, and expensive to re-derive — so it isn't lost.
+**Spec-ready home**: this issue is the seed for `docs/epics/open-issues-epics.md` **Epic 9 — Legacy
+`correct_col` Scalar Retirement**, which carries the full inventory table, the migration plan, and the
+sized user stories. Read Epic 9 before picking this up — it is the canonical work breakdown; this entry is
+the issue record it cites.
+
+**What the work is**: retire the legacy `puzzles`/`candidates` scalar column `correct_col` now that
+`correct_cols` is the computed-once, solver-gated source of truth. Concretely: migrate every call site
+(105 references across 22 files, re-derived 2026-07-29 — full table in Epic 9) off the scalar (DB column and
+its camelCase API/object mirror `correctCol`, where it refers to this same puzzle/candidate scalar), then
+drop the column via a migration sequenced strictly after every consumer has migrated.
+
+**Why it was deferred**: split out of spec 051 by owner decision on 2026-07-29, after the inventory came
+back at 105 references across 22 files — substantially larger than the ~62/11 estimate the original
+"migrate and drop in the same feature" decision was made on.
+
+**Critical carve-out — do not naively rewrite by substring**: camelCase `correctCol` is overloaded. It also
+names an authored **lesson-JSON** field (`server/lessonLoader.js`, `server/scripts/verify_lesson_content.mjs`)
+used by Socratic/confirmation-challenge nodes (e.g. `SocraticScreen.jsx`'s `col === socratic.correctCol`
+client-side check — memory `project_lesson_interactivity_evaluation`) that has **nothing to do** with the
+`puzzles`/`candidates` table. A naive migration that rewrites every `correctCol` occurrence would wrongly
+touch lesson content that was never the scalar this issue is about. The snake_case `correct_col` (DB column)
+is the unambiguous form; camelCase call sites must be triaged individually (see Epic 9's inventory).
+
+**Sequencing constraint**: the column-drop migration MUST land strictly after every consumer has migrated to
+`correct_cols` — dropping the column while a consumer still reads it produces a silent runtime failure, not
+a migration error. The drop migration's number cannot be reserved in advance.
+
+**If picked up**: work this via Epic 9 (`docs/epics/open-issues-epics.md`), not standalone — its inventory
+will need re-deriving fresh against the worktree at pickup time (it will have drifted). Related: spec 051
+(`specs/051-pattern-acceptance/`, FR-017/FR-019).
+
+---
+
+## OI-82 — `npm run test:fast` baseline is RED on `main`: 5 pre-existing failures, 2 of them a stale fixture path
+
+**Status**: open — measured 2026-07-29 on `feature/finish-lessons` and reproduced identically in the
+main checkout, so it is not branch-local
+**Area**: `connect-four/server/tests/` — `renderCoverageCorpus.test.mjs`, `renderCoverageUniverse.test.mjs`,
+`branchInvariance.test.mjs`, `causalLinksComposers.test.mjs`, `reasonRenderFixes.test.mjs`
+
+`npm run test:fast` reports **1479 pass / 5 fail**. All five fail in the main checkout too — a fresh
+worktree inherits them, where they read as damage the new work caused.
+
+**Two have a diagnosed root cause — a stale fixture path.** Both tests build their corpus path as
+`../scripts/reason_evidence_boards_coverage_<ts>.jsonl` relative to `server/tests/`:
+
+```js
+const CORPUS = join(__dirname, '../scripts/reason_evidence_boards_coverage_2026-07-02T11-37-56Z.jsonl');
+```
+
+Nothing matching `reason_evidence_boards_coverage_*.jsonl` exists at `server/scripts/`. The coverage
+corpora live one directory deeper, under `server/scripts/fv_suff/`. So both tests die at
+`readFileSync` with `ENOENT` before asserting anything — they are not failing, they are not running.
+`renderCoverageUniverse` wants the `2026-07-03T17-14-51Z` set, `renderCoverageCorpus` the
+`2026-07-02T11-37-56Z` set; `git ls-files` shows both timestamps present under `fv_suff/` as
+`boards_coverage_<ts>.jsonl` (note: also without the `reason_evidence_` prefix, so the fix is both a
+directory and a filename correction — confirm which artifact each test actually wants before editing).
+
+**The other three are undiagnosed.** `branchInvariance`, `causalLinksComposers` and `reasonRenderFixes`
+fail at the file level (whole-file failures, not individual assertions). Not investigated — they were
+out of scope for the session that found them.
+
+**Why deferred**: surfaced while baselining a worktree for spec 051 (Epic 1); none of the five touches
+that feature's surface, so fixing them was out of scope and would have muddied the diff.
+
+**Cost of leaving it**: `test:fast` cannot be used as a clean gate. Every plan in this repo now has to
+carry the "these 5 and only these 5 may fail" phrasing instead of "all tests pass" (spec 051's plan and
+tasks both do), and a genuine sixth failure is easy to lose in the noise.
+
+**If picked up**: fix the two path bugs first — they are cheap and restore two real coverage gates that
+have silently not been running. Then diagnose the remaining three. Verify with
+`cd connect-four && npm run test:fast` from the **main checkout**, not a worktree, so an inherited
+gitignored-file problem is not mistaken for a code one.
+
+## OI-83 — Backfilling `correct_cols` with real solver scores retires the only `forced_win` puzzle (AMBIGUOUS, tied win column not detected)
+
+**Status**: open — surfaced by the spec 051 (Epic 1, US3) real backfill run, 2026-07-29
+**Area**: `connect-four/server/candidate-generator.js` (`checkForcedWinPredicate`), `puzzles` table (`forced_win` category)
+
+Running `server/scripts/backfill-correct-cols.mjs --env local` (T048) against the local DB
+recomputed `correct_cols` for every active `puzzles`/`candidates` row via `checkPredicate` with
+fresh `solver.query(move_string)` scores (FR-015 — the same detection path fresh generation
+uses). The single active `forced_win` puzzle
+(`ea8d1739-8a69-45a6-964f-edd1b15ecf40`, board `33343033224450611655500550011116`) was
+**deactivated** (FR-016b) as a result: `checkForcedWinPredicate` only detects the forced-win
+trace through column 6 (0-indexed), storing `correct_cols: [6]`, but the position's solver
+scores show column 2 (0-indexed) is an independently-winning (tied-score) column too —
+`checkPredicate`'s `answerSetHolds` guard now correctly classifies this `AMBIGUOUS` (a
+solver-optimal column, col 2, is not in the accepted set) and rejects it. This is a genuine
+pre-existing content defect the tightened invariant exposes, not a bug in the backfill script:
+`checkForcedWinPredicate` finds *a* forced-win trace but does not check whether other legal
+columns are *also* outright wins.
+
+**Net effect**: the local `puzzles` table now has **zero** active `forced_win` rows (was 1
+before the backfill). No FR-022/FR-022a-style threshold was ever established for `forced_win`
+(pool-thresholds.md only measured `undercut`/`overcut`), so this was not in scope for spec 051's
+T049 replace-not-exempt remediation step, and doing so was explicitly out of scope for that task
+(no threshold to check against, and inventing one there would have contradicted Decision D4 —
+"thresholds are set from measured data, not invented in advance").
+
+**Why deferred**: fixing `checkForcedWinPredicate` to detect ties (or generating a fresh
+solver-verified `forced_win` replacement board) is real work, orthogonal to the backfill script
+itself, and forced_win already had only 1 active row (a marginal category) before this was found.
+
+**If picked up**: either (a) widen `checkForcedWinPredicate` to include every column whose score
+ties the maximum (mirroring how `evaluatePredicate` already treats ties for
+`immediate_threat`/`forced_block`/`double_threat` — see `candidate-generator.js:556-559`'s
+`'tied'` handling), or (b) run `node server/scripts/audit_answer_ambiguity.mjs --repair --yes
+--puzzles forced_win --env local` to retire-and-replace with a fresh solver-verified board
+(`repairPuzzles` can use the retired row as its template — its own `.select(...)` has no
+`is_active` filter). Either way, re-run `audit_answer_ambiguity.mjs --puzzles forced_win --env
+local` afterward to confirm `OK`.
+
+## OI-84 — Every lesson confirmation-challenge and DEV-board Challenge play now 404s silently (T054's unconditional `puzzleId` + T051's hard 404-on-miss)
+
+**Status**: ✅ **RESOLVED 2026-07-29** — fixed in the same change that introduced it (see
+"What shipped" at the end of this entry). Kept in full because the diagnosis documents a real
+seam-failure mode between the client's id minting and the server's stored-set lookup.
+
+*Original status when filed*: open — SEVERE regression, surfaced by spec 051 (Epic 1) US4 T064
+browser QA, 2026-07-29. Recommended treating as release-blocking for this feature.
+**Area**: `connect-four/src/screens/ChallengeScreen.jsx` (`handleColumnClick`, sends
+`puzzleId: current.id` unconditionally), `connect-four/server/evaluateMoveHandler.js` (the T051
+stored-set branch: `if (!puzzle) return res.status(404)...`)
+**Discovered**: spec 051 US4 T064 manual/browser verification (2026-07-29)
+
+Spec 051's T054 added `puzzleId: current.id` to **every** `/api/evaluate-move` request
+`ChallengeScreen.jsx` sends (`handleColumnClick`, ~line 271) — unconditionally, for every code path
+that sets `current` (`loadPuzzles`): the real pool draw (`GET /api/puzzles/draw`, real DB uuid),
+the lesson-embedded `confirmationChallenges` branch (`id: ch.puzzleId || 'inline-${ch.moveString}'`),
+and the DEV board injector (`id: 'dev-${movestring}'`, `devFixtures.js#buildDevPuzzle`). T051's
+stored-set branch (`evaluateMoveHandler.js`) then does `.eq('id', puzzleId).single()` and, on a
+lookup miss (`data` is `null`), returns a hard `404 { error: 'puzzle not found' }` — there is no
+fallback to the computed-live branch for "row not found," only for "row found but `correct_cols`
+IS NULL" (FR-024a). The two misses are NOT the same thing, but T051 only handles one of them.
+
+**Confirmed live, three ways (2026-07-29):**
+1. **All 24 lesson confirmation-challenge `puzzleId`s, across all 15 lessons, are absent from the
+   local `puzzles` table** (`SELECT id FROM puzzles WHERE id IN (<the 24 ids>)` → 0 rows — verified
+   both against `is_active` and without that filter). These ids are analytics-only identifiers
+   authored into the lesson JSON (`lessons/*.json`), never rows in `puzzles`/`candidates` — grepping
+   both tables for two sample ids (`0eb165aa-...`, `25bb4952-...`) confirms zero matches anywhere.
+2. **Reproduced via `curl`** against the running local server: the exact request body
+   `ChallengeScreen.jsx` would send for lesson-02's first confirmation challenge
+   (`movestring: '34133344142', puzzleId: '0eb165aa-2235-4e84-9577-aa03769cb951', ...`) returns
+   `404 {"error":"puzzle not found"}`.
+3. **Reproduced via a real browser** (chrome-devtools over CDP, fresh anonymous profile): navigating
+   to `/challenge/undercut?devBoard=...` (the DEV board injector, used because the local pool has
+   0 active `odd_even_threat`/`overcut` rows) and to `/challenge/odd_even_threat?devBoard=...`, then
+   clicking a column, both times produced a real `POST /api/evaluate-move` with a `dev-<movestring>`
+   `puzzleId` and a genuine `404` response (captured via `Network.responseReceived`). The UI does
+   **not** surface this as an error — `setPhase('post-move')` already ran (commit-first, FR-017) and
+   the fetch's rejection is swallowed by `.catch(err => console.error(...))`, so the learner sees the
+   move committed and a "Next →" button, but **no grading feedback at all**: no correct/wrong
+   indicator, no coach reaction. This is a silent failure, not a visible one.
+
+**By contrast**, a real pool-drawn puzzle (`/challenge/immediate_threat`, a genuine DB uuid
+`puzzleId`) works end-to-end in the same browser session: `200`, correct `accepted`/`quality`
+grading, real coach feedback, and (confirmed) no `correct_cols` field in the response — the
+stored-set branch itself (T050–T052) is sound; only the "row not found" edge is broken.
+
+**Net effect**: SC-003 ("identical accept/reject outcomes… across all 39 lesson boards") is
+currently **violated** for the subset of lesson content delivered via `ChallengeScreen`'s
+`confirmationChallenges` mechanism (at least lessons 01, 02, 06, 08 — likely all 15, since 24/24
+sampled ids miss). `tests/lessons/lessonAnswerSets.test.js` (T059) does not catch this because it is
+a pure-function test of the predicate/invariant layer, never an HTTP call through
+`evaluateMoveHandler.js` with a lesson-shaped `puzzleId`; `tests/integration/
+evaluateMoveMultiSolution.test.js` (T053) does not catch it either because its fixtures never send a
+`puzzleId` at all. There is no existing automated test that sends a `puzzleId` which fails to
+resolve to a row.
+
+**Why not fixed in this batch**: T051's "404 if not found" was a deliberate, already-shipped US3
+decision (Blocking #3c / FR-024), and T054 (also already shipped) is what turned every request into
+one that exercises it. Changing either is a code change to a prior, verified-complete batch, outside
+this batch's assigned scope (T059–T065, verification/closeout only) — flagged here per instruction
+rather than patched silently.
+
+**If picked up**: the fix almost certainly belongs in `evaluateMoveHandler.js`, not `ChallengeScreen.jsx`
+— treat "puzzleId present but no row found" the same as "row found but `correct_cols` IS NULL"
+(FR-024a): fall through to the computed-live branch using the request body's own
+`movestring`/`category`/`correctCol`/`highlightMetadata` (which the lesson-embedded and DEV-board
+requests already carry in full) instead of hard-404ing. This is a one-branch change, keeps the real
+stored-set path (genuine DB uuid → 404 on a truly bad id, e.g. a stale/deleted puzzle) meaningfully
+distinct from "this was never a DB row at all," and directly restores FR-025/SC-003's guarantee.
+Add a regression test alongside `tests/integration/evaluateMoveStoredSet.test.js` sending a
+`puzzleId` that resolves to zero rows, asserting a graded response (not a 404) that matches what the
+same request would grade with no `puzzleId` at all.
+
+### What shipped (2026-07-29) — fixed both halves of the seam
+
+The recommendation above was followed, plus a client-side guard so the two defects are fixed
+independently rather than relying on one of them:
+
+1. **Server (`connect-four/server/evaluateMoveHandler.js`)** — a `puzzleId` that resolves to no
+   active row now logs `console.warn('[evaluate-move] puzzleId … did not resolve …')` and **falls
+   through to the computed-live branch**, instead of `404`-ing. The NULL-`correct_cols` fallback's
+   row-sourced reassignment is guarded on `puzzle` being non-null, so when there is no row the
+   request body's own fields stand — which is exactly the pre-existing computed-live input shape a
+   lesson inline challenge already sends. This is a deliberate revision of T051's original
+   "404 if not found" instruction, on FR-024a's own fail-open reasoning; documented as such in
+   `docs/architecture/api-conventions.md` §"Grading branches".
+2. **Client (`connect-four/src/lib/syntheticPuzzleId.js`, new + `ChallengeScreen.jsx`)** —
+   `isSyntheticPuzzleId(id)` returns true for the two id shapes this screen mints for row-less
+   boards (`dev-…` from `buildDevPuzzle`, `inline-…` from a lesson challenge with no authored
+   `puzzleId`) and for a nullish id. The request body now spreads `puzzleId` in only when the id is
+   **not** synthetic, so these boards route to the computed-live branch by omission — the branch
+   they were always supposed to use (FR-025). Mirrors the existing `dev-` guard already present on
+   `recordPuzzleAttempt` in the same file. Lives in `src/lib/` rather than in the component so it
+   stays unit-testable without tripping `react-refresh/only-export-components`.
+
+**Note on the authored lesson ids**: fix (2) does *not* cover them — the 24 lesson
+confirmation-challenge `puzzleId`s are real-looking uuids, not `inline-`-prefixed, so the client
+still sends them. Fix (1) is what makes them grade correctly, and is why both halves were needed.
+Whether those 24 authored ids should exist at all (they resolve to zero rows and are analytics-only)
+is a separate lesson-content question, not a grading defect any more.
+
+**Tests**: `tests/integration/evaluateMoveStoredSet.test.js` case (c) was rewritten from asserting
+`404 { error: 'puzzle not found' }` to asserting a graded `200` with no leaked `correct_cols` — the
+old assertion encoded the defective contract. New `tests/unit/syntheticPuzzleId.test.js` (6 tests)
+covers both synthetic prefixes, nullish ids, a real uuid, mid-string prefix near-misses, and a
+non-string id. Registered in **both** `test` and `test:fast`. Full suite: 1544 pass / 5 fail (the
+5 pre-existing reason-engine failures of OI-82, unchanged).
+
+---
+
+## OI-85 — Lesson `confirmationChallenges[].puzzleId` values resolve to no row, so every lesson challenge grades via the fall-through path and logs a warning
+
+**Status**: ✅ **RESOLVED 2026-07-30** (owner decision: "lessons should not use the puzzle id at any
+place, since the whole puzzle is inside the lesson"). Remediation (b) below was taken — see
+"What shipped" at the end. Kept in full because the analysis explains why the authored ids exist.
+
+*Original status when filed*: deferred (content/data cleanup, not a grading defect)
+**Area**: `connect-four/src/lessons/*.json` (`confirmationChallenges[].puzzleId`),
+`connect-four/src/screens/ChallengeScreen.jsx`, `connect-four/server/evaluateMoveHandler.js`
+**Discovered**: spec 051 (Epic 1) browser QA, 2026-07-29
+
+Every authored `confirmationChallenges[].puzzleId` in the lesson JSON references a `puzzles` row
+that does not exist. Verified across 10 lessons (`lesson-01`, `02`, `06`, `07`, `08`, `09`, `11`,
+`12`, `13`, `14`); `lesson-07-odd-rows-belong-to-red.json`'s two ids and
+`lesson-01-immediate-threat.json`'s ids were each checked directly against the local `puzzles`
+table and match **no row, active or inactive**.
+
+Consequence, per play of any such lesson challenge:
+1. `ChallengeScreen.jsx` sends the id as `puzzleId` — `src/lib/syntheticPuzzleId.js` cannot catch
+   these, because it only recognises ids *minted locally* (`dev-…`, `inline-…`). A real-looking
+   UUID that merely doesn't exist in this database is structurally undetectable client-side.
+2. The server's stored-set lookup misses, emits
+   `[evaluate-move] puzzleId … did not resolve to an active puzzles row — falling through to
+   computed-live grading`, and grades via the computed-live branch using the request's own
+   `correctCol`/`highlightMetadata`.
+3. **Grading is correct and visible** (confirmed live in the browser for lesson-01's
+   `immediate_threat` and lesson-07's `odd_even_threat`, both a correct and a wrong column). The
+   only real cost is a `console.warn` on every lesson challenge play — genuine production log
+   noise once this ships.
+
+**This is not a regression, and it is evidence the OI-84 fix was necessary.** Before spec 051's
+fall-through, an unresolvable `puzzleId` returned a hard 404, which silently removed grading
+feedback entirely for exactly this request shape. So these lessons' confirmation challenges were
+broken the moment `puzzleId` started being sent, and the fall-through is what makes them work.
+
+**Why deferred**: the grading path is correct, so this is stale authored content plus log noise,
+not a user-facing defect. Fixing it means either editing lesson JSON across ~10 files or changing
+the lesson authoring contract — both outside spec 051's scope (which explicitly does not redesign
+lesson content).
+
+**If picked up**: decide which of these two the authored `puzzleId` is *meant* to be —
+  (a) **a real row reference** → backfill the ids to actual `puzzles` rows, or
+  (b) **analytics-only metadata** (the likelier reading: lesson confirmation challenges are
+      inherently row-less content, per memory `project_lesson_interactivity_evaluation`) → stop
+      emitting it as `puzzleId` on the wire. Cleanest fix for (b) is to have the lesson-loading
+      branch in `ChallengeScreen.jsx` mint `inline-<movestring>` ids **unconditionally**, keeping
+      any authored `puzzleId` in a separate non-wire field for analytics — one line, and it makes
+      `isSyntheticPuzzleId` sufficient again.
+Then drop the `console.warn` to debug level, or leave it (it correctly flags genuinely stale ids).
+Cross-refs: OI-84 (the fall-through this depends on), `specs/051-pattern-acceptance/quickstart.md`
+step 4 (wording corrected 2026-07-29 to match this reality).
+
+### What shipped (2026-07-30) — remediation (b), per owner decision
+
+`connect-four/src/screens/ChallengeScreen.jsx`'s lesson branch now mints
+`id: \`inline-${ch.moveString}\`` **unconditionally**, instead of `ch.puzzleId || \`inline-…\``.
+Lesson confirmation challenges are therefore always synthetic, `isSyntheticPuzzleId` always
+suppresses them, and the request omits `puzzleId` entirely — routing to the computed-live branch,
+which is the branch row-less content is supposed to use (FR-025). No more per-play `console.warn`,
+and no lookup that could only ever miss.
+
+**The authored `puzzleId` field stays in the lesson JSON** — it is *authoring provenance*, not a
+runtime reference, and it has three real consumers that continue to read it unchanged:
+`AdminLessonEditorScreen.jsx` (stamps it when a puzzle is curated into a lesson),
+`PuzzlePickerModal.jsx` (dedupes puzzles already added to a lesson), and `PuzzlePickerRow.jsx`
+(displays a short form of it). That is why these values look like real UUIDs — they *were* real
+puzzle ids in whatever database the lesson author was working against; they simply were never rows
+in any database the app grades against at runtime. Nothing about the lesson content needed to
+change.
+
+**Relationship to OI-84**: this removes the last *load-bearing* dependency on OI-84's
+unresolvable-`puzzleId` fall-through. That fall-through stays as a safety net — it still covers the
+real race where a puzzle is drawn and then deactivated (e.g. by a backfill run) before the learner
+submits, which `.eq('is_active', true)` would otherwise turn into a silent no-feedback 404 — but it
+is no longer what keeps lessons working.

@@ -110,18 +110,27 @@ function parseEnv(filePath) {
 const showCols = (cols) => cols.length ? `[${cols.join(',')}] (display ${cols.map(c => c + 1).join(',')})` : '[]';
 
 function report(rows, { verbose }) {
-  const failing = rows.filter(r => !PASSING.has(r.verdict));
+  // FR-023a — a MISMATCH between the stored correct_cols and this script's own live
+  // re-derivation fails the audit exactly like a bad verdict does; NOT_YET_BACKFILLED never does.
+  const isFailing = (r) => !PASSING.has(r.verdict) || r.correctColsCheck === 'MISMATCH';
+  const failing = rows.filter(isFailing);
   const shown = verbose ? rows : failing;
   for (const r of shown) {
-    const flag = r.verdict === 'OK' ? '   ' : '>> ';
+    const flag = isFailing(r) ? '>> ' : '   ';
     console.log(`${flag}${r.verdict.padEnd(18)} ${r.where}`);
     console.log(`   ${' '.repeat(18)} board    ${r.moveString}`);
     console.log(`   ${' '.repeat(18)} accepted ${showCols(r.accepted)}`);
     console.log(`   ${' '.repeat(18)} optimal  ${showCols(r.optimal)}   scores ${JSON.stringify(r.scores)}`);
+    if (r.correctColsCheck !== undefined) {
+      console.log(`   ${' '.repeat(18)} correct_cols ${r.correctColsCheck}` +
+        (r.storedCorrectCols != null ? ` stored ${showCols(r.storedCorrectCols)}` : ''));
+    }
   }
   const counts = rows.reduce((acc, r) => { acc[r.verdict] = (acc[r.verdict] ?? 0) + 1; return acc; }, {});
   console.log(`\n${rows.length} board(s) audited — ` +
     Object.entries(counts).map(([k, v]) => `${k}: ${v}`).join(', '));
+  const mismatches = rows.filter(r => r.correctColsCheck === 'MISMATCH').length;
+  if (mismatches > 0) console.log(`${mismatches} correct_cols cross-check MISMATCH(es)`);
   return failing.length;
 }
 
@@ -177,7 +186,7 @@ async function auditPuzzles(solver, category, env) {
   // of circulation. Auditing retired rows would keep reporting boards we deliberately took out
   // and make a clean run impossible.
   let q = sb.from('puzzles')
-    .select('id,category,move_string,correct_col,highlight_metadata')
+    .select('id,category,move_string,correct_col,correct_cols,highlight_metadata')
     .eq('is_active', true);
   if (category) q = q.eq('category', category);
   const { data, error } = await q;
@@ -191,11 +200,24 @@ async function auditPuzzles(solver, category, env) {
       highlightMetadata: p.highlight_metadata,
     });
     const optimal = optimalCols(scores);
+    // FR-023a — cross-check the stored correct_cols set (once the backfill/generation-time
+    // writes populate it) against this script's own live acceptedCols(...) re-derivation. NULL
+    // (not yet backfilled) is "not yet comparable", never a failure — only a populated,
+    // disagreeing set is a MISMATCH.
+    let correctColsCheck = 'NOT_YET_BACKFILLED';
+    if (p.correct_cols != null) {
+      const stored = [...p.correct_cols].sort((a, b) => a - b);
+      const live = [...accepted].sort((a, b) => a - b);
+      const matches = stored.length === live.length && stored.every((c, i) => c === live[i]);
+      correctColsCheck = matches ? 'MATCH' : 'MISMATCH';
+    }
     rows.push({
       where: `puzzle ${p.id} (${p.category})`,
       moveString: p.move_string,
       accepted, optimal, scores,
       verdict: verdict(accepted, optimal, scores),
+      correctColsCheck,
+      storedCorrectCols: p.correct_cols,
     });
   }
   return rows;
@@ -287,6 +309,7 @@ async function repairPuzzles(category, env) {
           interaction_mode: template.interaction_mode,
           highlight_metadata: c.highlight_metadata ?? null,
           correct_col: c.correct_col ?? null,
+          correct_cols: c.correctCols ?? null,
           highlight_cells: c.highlight_cells ?? null,
           user_player: c.move_string.length % 2 === 0 ? 1 : 2,
           simulation_trace: c.category_evidence?.simulation_trace ?? [],

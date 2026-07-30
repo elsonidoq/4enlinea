@@ -19,6 +19,7 @@ import { SINGLE_ANSWER_CATEGORIES, MULTI_SOLUTION_CATEGORIES } from '../lib/cate
 import { DevBoardInjector } from '../components/DevBoardInjector.jsx';
 import { buildDevPuzzle } from '../lib/devFixtures.js';
 import { readDevBoardParam } from '../lib/devBoardParam.js';
+import { isSyntheticPuzzleId } from '../lib/syntheticPuzzleId.js';
 
 const API = import.meta.env.VITE_API_BASE_URL || '';
 
@@ -153,7 +154,16 @@ export function ChallengeScreen({
         // Use embedded challenges when provided (lesson editor curation)
         if (lessonMode && confirmationChallenges?.length > 0) {
           const loaded = confirmationChallenges.map(ch => ({
-            id: ch.puzzleId || `inline-${ch.moveString}`,
+            // Always a synthetic `inline-` id, even when the lesson JSON carries an authored
+            // `ch.puzzleId`. A lesson confirmation challenge IS the whole puzzle — board, correct
+            // column and highlight metadata all live in the lesson file — so it has no `puzzles`
+            // row and must never claim one. Every authored `puzzleId` in the lesson content today
+            // resolves to no row at all (see docs/open_issues.md OI-85), and sending one made the
+            // server attempt a stored-set lookup that could only miss. Minting the id here keeps
+            // `isSyntheticPuzzleId` sufficient: these requests omit `puzzleId` entirely and take
+            // the computed-live branch, which is the branch row-less content is supposed to use
+            // (FR-025).
+            id: `inline-${ch.moveString}`,
             category: confirmationCategory,
             move_string: ch.moveString,
             interaction_mode: ch.interactionMode || 'single_move',
@@ -263,6 +273,23 @@ export function ChallengeScreen({
         // don't consume it.
         correctCol: current.correct_col,
         highlightMetadata: current.highlight_metadata,
+        // Spec 051 (Epic 1) US3 T054 / FR-027 — lets the server's stored-set grading branch
+        // (server/evaluateMoveHandler.js) look the row up and grade directly against its stored
+        // correct_cols instead of recomputing. Kept alongside correctCol/highlightMetadata (not a
+        // replacement, FR-017) — those still serve the FR-024a NULL-correct_cols fallback and any
+        // request this endpoint gets with no puzzle row at all (lesson inline challenges).
+        //
+        // Only sent for ids that can actually resolve to a `puzzles` row. Two id shapes minted
+        // locally in this file are synthetic and have no row: `dev-<movestring>` (DEV board
+        // injector, see buildDevPuzzle) and `inline-<movestring>` (lesson confirmation challenges
+        // minted above, unconditionally, for every lesson confirmation challenge).
+        // Sending either made the server's stored-set lookup 404 the whole request, which silently
+        // killed grading feedback for every lesson inline challenge and every DEV-injected board —
+        // the phase change has already committed by then, so the UI shows no error, just nothing.
+        // Omitting the field routes these to the pre-existing computed-live branch, which is the
+        // branch they are supposed to use (FR-025). Mirrors the existing `dev-` guard on
+        // recordPuzzleAttempt below.
+        ...(isSyntheticPuzzleId(current.id) ? {} : { puzzleId: current.id }),
       }),
     })
       // Guard against non-2xx responses (e.g. a solver/server error): without this, `r.json()`

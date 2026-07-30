@@ -170,7 +170,11 @@ Returns `{ result: 'correct' | 'wrong' | 'tied', correctCol?, tiedWith?, forbidd
 New category evaluators MUST be added as a named function `eval<CategoryCamelCase>(candidateCol, puzzle)` and registered in the `switch` statement.
 
 Categories that store their answer in `highlightMetadata` (z_threat, undercut, overcut) read `puzzle.highlightMetadata`.
-Categories that store their answer as a scalar (claimeven, figure_7, j_shape) read `puzzle.correctCol`.
+Categories whose answer set was widened by spec 051 (Epic 1) — `claimeven`, `figure_7`, `j_shape`,
+`odd_even_threat`, `z_threat`, and (set-membership-wise) `overcut` — read `puzzle.correctCols`, an
+array, not a single scalar (post-FR-024; the stale `puzzle.correctCol` scalar line this replaces was
+only ever true pre-spec-051). See "The tri-state set-membership contract" below for the exact shape
+and the threaded-vs-recomputed decision each of these evaluators had to make.
 
 ### Answer sets are derived, never re-implemented (2026-07-28)
 
@@ -191,10 +195,16 @@ set to `correct` (sole member) / `tied` (one of several) / `wrong`. Two rules:
    means the board is not a puzzle for that category; return `wrong` and let
    `checkPredicate` report `passes: false`.
 
-**The board-quality invariant that makes single-answer categories sound.** For the six
-`SINGLE_ANSWER_CATEGORIES` the detectors are *instance* detectors — they return their first match
-and a single column, so there is no cheap way to enumerate a set. Those evaluators legitimately
-compare against the stored scalar, but only because the board is required to satisfy:
+**The board-quality invariant that makes single-answer categories sound.** Pre-spec-051, the six
+`SINGLE_ANSWER_CATEGORIES` detectors were *instance* detectors — they returned their first match and
+a single column, so there was no cheap way to enumerate a set, and those evaluators compared against
+the stored scalar directly. Spec 051 (Epic 1) removed that ceiling: every one of the six now has a
+set-returning path (`checkFigure7Predicate`/`checkJShapePredicate` accumulate every matching column
+instead of returning on the first; `detectZThreat`/`detectOvercut` gained an additive `correctCols`
+field over their existing per-column sweep; `detectClaimeven` now runs one solver simulation per
+odd-height column and enumerates every column whose simulation confirms, rather than picking exactly
+one — see "Claimeven: full per-column enumeration" below). The invariant itself is unchanged and
+still governs every category, single-answer or not — the board is required to satisfy:
 
 ```
 optimalCols ⊆ acceptedCols        every winning move is accepted
@@ -202,6 +212,83 @@ acceptedCols ∩ optimalCols ≠ ∅    the taught move actually wins
 ```
 
 A board that violates either is a **content defect** — replace the board, never loosen the grader.
+(`claimeven` is exempt from the sibling **uniqueness** rule other single-answer categories carry —
+see "Claimeven: full per-column enumeration" below — but is not exempt from this invariant.)
+
+### The tri-state set-membership contract (FR-003, spec 051 Epic 1)
+
+Every pattern-category evaluator returns the same tri-state shape:
+
+```
+{ result: 'correct' | 'wrong' | 'tied', correctCol?: number, tiedWith?: number[] }
+```
+
+`'correct'` means the played column is the *sole* member of the answer set; `'tied'` means it is one
+of 2+ members (`correctCol` is the first member, `tiedWith` the rest); `'wrong'` means it is not a
+member at all (`correctCol`, when present, names a member for hint/feedback purposes). Reading this
+contract's *shape* from `evalDoubleThreat` is the reference — cite it only for the three-way return
+shape, never for its sweep (`evalDoubleThreat` enumerates by calling `detectDoubleThreat` per legal
+column, which is specific to double-threat's own board-geometry input; each of the six widened
+evaluators below works its own set-enumeration logic against its own input shape, none of them a
+copy-paste of that sweep).
+
+**Threaded, not recomputed — a decision every widened evaluator had to make explicitly.** An
+evaluator either (a) reads an already-computed answer set off the puzzle object (*threaded*), or (b)
+calls the `classifier.js` detector itself, from the evaluator, at grading time (*recomputed*).
+`evalFigure7`/`evalJShape`/`evalZThreat`/`evalOvercut`/`evalClaimeven` all chose (a): they read
+`puzzle.correctCols ?? (puzzle.correctCol != null ? [puzzle.correctCol] : [])`. `evalOddEvenThreat`
+chose (b): it calls `detectOddEvenThreat` live from `moveString` + `scores` (mirroring
+`evalDoubleThreat`'s *contract shape*, not its sweep — see above). Both choices are legitimate; which
+one is correct is a property of the specific detector being widened, decided per evaluator, not a
+global rule:
+
+- **Recomputing is wrong when "correct" depends on when the pattern formed, not just whether it
+  currently holds.** `evalFigure7`/`evalJShape` were first written to recompute
+  `detectFigure7`/`detectJShape` live — mirroring `checkFigure7Predicate`'s generation-time notion of
+  "does playing this column COMPLETE the kernel". This broke `lesson-13-figure-7.json`:
+  `detectFigure7` matches identically both *before and after* the taught move, because that lesson
+  teaches a board where the figure-7 kernel is already fully formed and the correct move exploits the
+  resulting threat column from outside the kernel — not a move that completes it. Recomputing live
+  conflated "the kernel exists" with "this move built the kernel" and produced `NO-CONCEPT` for a
+  legitimate lesson. The fix was to thread the stored/threaded `correctCols` instead (with the
+  scalar-`correctCol` fallback above, so pre-spec-051 callers that never populated `correctCols` —
+  `buildPredicatePuzzle` was deliberately **not** extended to synthesize it — keep working
+  byte-identically).
+- **`evalClaimeven` inherits the same threaded choice, for a stronger reason.** `detectClaimeven` is
+  `async` and solver-simulating — one `runClaimevenSimulation` rollout (~20 solver queries) per
+  odd-height column tested (see below). Recomputing it live inside the evaluator would re-run that
+  solver cost on every graded request, which is exactly the per-request cost FR-011 forbids on this
+  evaluator's row-less/computed-live branch — a strictly worse violation than the figure_7/j_shape
+  case (which only risked a stale *notion* of correctness, not a live solver call).
+- **`evalOddEvenThreat` recomputes because it is cheap and stateless.** `detectOddEvenThreat` is a
+  synchronous, pure board-geometry detector with no async/solver cost and no "did this move build the
+  pattern" ambiguity — recomputing it live from `moveString` + `scores` is safe and requires no new
+  puzzle-object field.
+
+When widening a **new** evaluator under this contract, decide threaded-vs-recompute explicitly and
+justify it in a comment near the evaluator, the way each of the above does — do not default to
+recompute just because it looks simpler; verify against `tests/lessons/lessonAnswerSets.test.js` in
+full (the only test that has ever caught this class of regression) before shipping either choice.
+
+### Claimeven: full per-column enumeration (FR-011/FR-012, spec 051 Epic 1)
+
+`detectClaimeven` (`classifier.js`) now evaluates **every** odd-height column as an independent
+standard-Claimeven candidate — Allis's base rule
+(`docs/knowledge-base/allis-claimeven.md`) applies per column with no cap on how many columns may
+simultaneously admit it. The pre-spec-051 code's "subtype A" (exactly 1 odd column) / "subtype B"
+(exactly 2 odd columns, cross-column pairing) split, and its outright rejection of boards with 0 or
+3+ odd columns, was verified to be an **implementation gap**, not a domain constraint — "subtype B"
+is Allis's documented **Extended Claimeven** cross-pairing special case, an *additional*
+candidate-producing path layered on top of the per-column sweep, not evidence of a column cap. One
+solver simulation (`runClaimevenSimulation`, ≤ `MAX_PAIRS = 60` red/yellow move-pairs, ~20 solver
+queries in typical practice — it returns as soon as a win/loss is decided) runs per odd-height column
+tested; full enumeration costs up to `(number of odd-height columns) × ~20` solver queries per
+accepted candidate, entirely at generation/backfill time, never per learner request.
+
+`claimeven` deliberately carries **no uniqueness constraint** (FR-012) — unlike its
+`SINGLE_ANSWER_CATEGORIES` siblings (`z_threat`, `overcut`, `undercut`, `figure_7`, `j_shape`), a
+board with 2+ independently valid Claimeven response columns is a valid puzzle with every such
+column accepted, per `docs/architecture/data-model.md`'s "Correct Column Storage" section.
 
 **The rule lives in exactly one place: `server/answerSetInvariant.js`.** Import
 `classifyAnswerSet` / `answerSetHolds`; never restate the comparison. It was briefly written out
@@ -297,10 +384,14 @@ winning/blocking columns). For these three categories only:
   `result === 'correct' || result === 'tied'`. As of spec 044 Batch 2, all production callers
   already did this except `checkPredicateRaw`'s own filter (fixed above) — see the caller-sweep
   comment block atop `predicates.js` for the full audited list.
-- **`undercut`** (avoid-the-pattern: every legal column except the killing column is correct) and
-  **`z_threat`/`overcut`/`claimeven`** (exactly one correct column) are explicitly OUT of this rule
-  — their existing single-answer/avoid-the-pattern semantics are unchanged, and must never be
-  widened to "any generating column."
+- **`undercut`** (avoid-the-pattern: every legal column except the killing column is correct),
+  **`z_threat`/`overcut`** (uniqueness enforced — `detectZThreat` rejects unless exactly one
+  candidate; `checkOvercutPredicate` gained the identical guard in spec 051's T032), and
+  **`claimeven`** (deliberately **no** uniqueness constraint as of spec 051 FR-012 — see "Claimeven:
+  full per-column enumeration" above; a board with 2+ independently valid response columns is a
+  valid puzzle) are all explicitly OUT of this rule — none of the four gets the multi-solution
+  categories' `correctCols.length >= 1` acceptance threshold, and must never be widened to "any
+  generating column" the way `immediate_threat`/`forced_block`/`double_threat` are.
 - **Client**: `POST /api/evaluate-move` (`server/evaluateMoveHandler.js`'s
   `createEvaluateMoveHandler`, registered from `server/index.js`) exposes an additive
   `accepted: bool | null` response field, gated to these three categories via the request's
@@ -309,39 +400,53 @@ winning/blocking columns). For these three categories only:
   `handleColumnClick` reads `data.accepted` (not a bare `data.quality === 'optimal'` check) for
   these three categories only; every other category's client-side scoring is unchanged.
 
-### Single-answer categories widen the same gate (spec 049, Epic 9)
+### Single-answer categories widen the same gate (spec 049 Epic 9; membership updated by spec 051 Epic 1)
 
 `SINGLE_ANSWER_CATEGORIES` (`server/categories.js`, mirrored — duplicate literal, NOT
 cross-imported — in `src/lib/categories.js`) is a sibling list to `MULTI_SOLUTION_CATEGORIES`:
-`z_threat`, `overcut`, `claimeven`, `undercut`, `figure_7`, `j_shape` — the six categories whose
-correctness model has exactly one taught answer column (or, for `undercut`'s avoid-the-pattern
-semantics, one taught avoid-column). It is **disjoint** from `MULTI_SOLUTION_CATEGORIES` and MUST
-NOT be derived as its complement — a category in neither set (`forced_win`, `forbidden_columns`,
-`odd_even_threat`) would otherwise be silently miscategorized as single-answer. The
-`POST /api/evaluate-move` `accepted` gate is `MULTI_SOLUTION_CATEGORIES.has(category) ||
-SINGLE_ANSWER_CATEGORIES.has(category)` — one shared boolean expression
-(`result === 'correct' || result === 'tied'`) applied uniformly across all nine categories, not a
-second category-conditional branch (the six single-answer categories' `eval*` functions never
-actually return `'tied'`, so this is equivalent to strict `'correct'` for them, but the shared
-expression is what's implemented).
+`z_threat`, `overcut`, `claimeven`, `undercut`, `figure_7`, `j_shape`, and — added by spec 051's
+T006/T007 to close OI-75 — `odd_even_threat`, seven categories in total. **This set gates which
+categories expose the additive `accepted` field on `POST /api/evaluate-move`, not how many columns
+each category's answer set may contain** (reworded per FR-008/T008 — the pre-spec-051 "exactly one
+taught answer column" framing is no longer accurate: `claimeven`'s answer set is now a genuine,
+solver-gated enumeration of every qualifying odd-height column, with no upper bound, and
+`figure_7`/`j_shape`/`z_threat`/`overcut` are all graded by set membership too — see "The tri-state
+set-membership contract" above). It is **disjoint** from `MULTI_SOLUTION_CATEGORIES` and MUST NOT be
+derived as its complement — a category in neither set (`forced_win`, `forbidden_columns`) would
+otherwise be silently miscategorized. The `POST /api/evaluate-move` `accepted` gate is
+`MULTI_SOLUTION_CATEGORIES.has(category) || SINGLE_ANSWER_CATEGORIES.has(category)` — one shared
+boolean expression (`result === 'correct' || result === 'tied'`) applied uniformly across all ten
+categories, not a second category-conditional branch.
 
-For the six single-answer categories, the predicate-object the handler evaluates against is built
-from the request's `correctCol`/`highlightMetadata` fields (client-sent, remapped from the
-puzzle's stored snake_case columns — see api-conventions.md) rather than recomputed server-side
-metadata, via `buildPredicatePuzzle(category, movestring, { correctCol, highlightMetadata })` in
+For the seven categories in `SINGLE_ANSWER_CATEGORIES`, the predicate-object the handler evaluates
+against is built from the request's `correctCol`/`highlightMetadata` fields (client-sent, remapped
+from the puzzle's stored snake_case columns — see api-conventions.md) rather than recomputed
+server-side metadata, via `buildPredicatePuzzle(category, movestring, { correctCol, highlightMetadata })` in
 `server/predicates.js`. This same helper is shared with `POST /api/evaluate-move/inline`'s
 `evaluatePredicate` call site (previously a second, divergent construction of the predicate
 object) — the two endpoints now converge on one code path for building that object, closing a
 maintenance seam where the two handlers could silently drift.
 
 **Handler extraction**: the `/api/evaluate-move` route handler itself is extracted into
-`server/evaluateMoveHandler.js`'s `createEvaluateMoveHandler({ solver, i18nTranslations })` — a
-side-effect-free factory parameterized on the two values that differ between the live server and
-a test. `server/index.js` has no exported `app` and boots a live solver process at import time,
-so it cannot be imported directly by tests; this factory is what lets
-`tests/integration/singleAnswerCategoriesAccepted.test.js` and
-`tests/integration/evaluateMoveMultiSolution.test.js` mount the actual production handler instead
+`server/evaluateMoveHandler.js`'s `createEvaluateMoveHandler({ solver, i18nTranslations, supabase })`
+(the `supabase` parameter added by spec 051 Epic 1 T050, mirroring how `solver` is already
+threaded) — a side-effect-free factory parameterized on the values that differ between the live
+server and a test. `server/index.js` has no exported `app` and boots a live solver process at
+import time, so it cannot be imported directly by tests; this factory is what lets
+`tests/integration/singleAnswerCategoriesAccepted.test.js`,
+`tests/integration/evaluateMoveMultiSolution.test.js`, and
+`tests/integration/evaluateMoveStoredSet.test.js` mount the actual production handler instead
 of a hand-copied reimplementation.
+
+**Stored-set grading branch (spec 051 Epic 1, FR-024/FR-024a/FR-025)**: when the request body
+carries a `puzzleId`, the handler looks up the row (`is_active = true`) and, if its `correct_cols`
+is non-null, grades `accepted = correct_cols.includes(playedCol)` **directly** — `evaluatePredicate`/
+`buildPredicatePuzzle` and the seven pattern evaluators above are not consulted at all on this
+branch. If `correct_cols` is `NULL` (not yet backfilled), or `puzzleId` is absent entirely, the
+handler falls through to exactly the computed-live branch described in this section, unchanged.
+See `api-conventions.md`'s "Move Evaluation Endpoint" section for the full two-branch contract and
+`data-model.md`'s "`correct_cols` — the stored answer set" section for the column's population and
+`NULL`/`{}` semantics.
 
 ## Classifier API — Perspective, classifyPattern, and tagBlunder
 

@@ -147,12 +147,32 @@ describe('evaluatePredicate() — US3 solve-time: every valid multi-solution col
 // ── T018 — regression: single-answer / avoid-the-pattern categories unaffected ─────────
 
 describe('checkPredicate() — FR-013/FR-014 regression: undercut avoid-the-pattern unchanged', () => {
-  test('undercut: killing column excluded from correctCols, all other legal columns included', async () => {
+  // UPDATE (spec 051 Epic 1, US2, T024/T025 — 2026-07-29): this fixture's expected values were
+  // originally captured against the pre-floor `checkPredicate` (every non-killing column marked
+  // "correct" with no score check at all — the exact OI-61 item 1 defect this batch closes).
+  // Re-verified at source: on THIS board, the sole solver-optimal column (col 2, score -9) IS the
+  // killing_threat column itself, so once the relative solver-safety floor (`isSolverSafe`) is
+  // applied, every remaining non-killing column (1, 4, 5, 6 — all score -10, strictly worse than
+  // the board's own optimum) is correctly excluded, leaving an EMPTY answer set. That is not a
+  // regression — it is SC-002: a board with no safe non-killing column is not a valid undercut
+  // puzzle candidate and must be rejected outright at generation time.
+  test('undercut: a board whose only safe column is the killing column has an empty answer set (SC-002)', async () => {
     const ms = '3333320200110604440311';
     const scores = [-1000, -10, -9, -1000, -10, -10, -10];
     const result = await checkPredicate('undercut', ms, scores, null);
+    assert.equal(result.passes, false, 'no non-killing column on this board is solver-safe');
+    assert.deepEqual(result.correctCols, []);
+  });
+
+  // A fresh board (harvested via playGame, verified with visualize_board.sh) where the killing
+  // column is NOT the board's sole optimum, so the positive "killing column excluded, other
+  // SAFE legal columns included" case this describe block originally intended is still covered.
+  test('undercut: killing column excluded from correctCols, safe non-killing columns included', async () => {
+    const ms = '333330654544210414405513';
+    const scores = [-6, -6, -6, -1000, -1000, -8, -9];
+    const result = await checkPredicate('undercut', ms, scores, null);
     assert.equal(result.passes, true);
-    assert.deepEqual(result.correctCols.slice().sort(), [1, 4, 5, 6]);
+    assert.deepEqual(result.correctCols.slice().sort(), [0, 1, 2]);
     assert.equal(result.correct_col, null, 'undercut has no single correct_col');
   });
 

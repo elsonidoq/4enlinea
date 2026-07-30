@@ -402,177 +402,150 @@
     "expectedResult": "wrong"
   },
   {
-    "description": "figure_7: correct (plays completing column)",
+    "description": "figure_7 (T013, spec 051 Epic 1): correct — col 1 of 2 independently qualifying, solver-safe columns (harvested via playGame, verified with ./visualize_board.sh: move 24, scores [7,8,7,7,8,--,7], optimal={1,4})",
     "puzzle": {
       "id": 14,
       "category": "figure_7",
-      "moveString": "01234566543210",
+      "moveString": "325655363345242660221551",
       "goalPredicateType": "figure_7",
       "highlightMetadata": {
         "type": "cells",
         "cells": [
-          {
-            "column": 2,
-            "row": 0,
-            "role": "pattern_piece"
-          },
-          {
-            "column": 3,
-            "row": 1,
-            "role": "pattern_piece"
-          },
-          {
-            "column": 4,
-            "row": 2,
-            "role": "pattern_piece"
-          },
-          {
-            "column": 5,
-            "row": 2,
-            "role": "pattern_piece"
-          }
+          { "column": 1, "row": 0, "role": "pattern_piece" },
+          { "column": 2, "row": 1, "role": "pattern_piece" },
+          { "column": 1, "row": 2, "role": "pattern_piece" },
+          { "column": 2, "row": 2, "role": "pattern_piece" },
+          { "column": 3, "row": 2, "role": "pattern_piece" }
         ]
       },
-      "correctCol": 6
+      "correctCol": 1,
+      "correctCols": [1, 4]
     },
-    "candidateCol": 6,
-    "scores": [
-      0,
-      0,
-      0,
-      0,
-      0,
-      0,
-      5
-    ],
-    "expectedResult": "correct"
+    "candidateCol": 1,
+    "scores": [7, 8, 7, 7, 8, -1000, 7],
+    "expectedResult": "tied"
   },
   {
-    "description": "figure_7: wrong (plays wrong column)",
+    "description": "figure_7 (T013): tied — col 4 of the same 2-column board",
     "puzzle": {
       "id": 14,
       "category": "figure_7",
-      "moveString": "01234566543210",
+      "moveString": "325655363345242660221551",
       "goalPredicateType": "figure_7",
-      "highlightMetadata": {
-        "type": "cells",
-        "cells": [
-          {
-            "column": 2,
-            "row": 0,
-            "role": "pattern_piece"
-          },
-          {
-            "column": 3,
-            "row": 1,
-            "role": "pattern_piece"
-          },
-          {
-            "column": 4,
-            "row": 2,
-            "role": "pattern_piece"
-          },
-          {
-            "column": 5,
-            "row": 2,
-            "role": "pattern_piece"
-          }
-        ]
-      },
-      "correctCol": 6
+      "correctCols": [1, 4]
+    },
+    "candidateCol": 4,
+    "scores": [7, 8, 7, 7, 8, -1000, 7],
+    "expectedResult": "tied"
+  },
+  {
+    "description": "figure_7 (T013): wrong — col 0 is solver-suboptimal (score 7) and does not satisfy the pattern",
+    "puzzle": {
+      "id": 14,
+      "category": "figure_7",
+      "moveString": "325655363345242660221551",
+      "goalPredicateType": "figure_7",
+      "correctCols": [1, 4]
     },
     "candidateCol": 0,
-    "scores": [
-      0,
-      0,
-      0,
-      0,
-      0,
-      0,
-      5
-    ],
+    "scores": [7, 8, 7, 7, 8, -1000, 7],
     "expectedResult": "wrong"
   },
   {
-    "description": "j_shape: correct (plays completing column)",
+    "description": "j_shape (T013, spec 051 Epic 1): correct — col 2 of 2 independently qualifying, solver-safe columns (harvested via playGame, verified with ./visualize_board.sh: move 24, scores [3,-1,3,--,3,-1,3], optimal={0,2,4,6})",
     "puzzle": {
       "id": 15,
       "category": "j_shape",
-      "moveString": "3322330022",
+      "moveString": "333334140211155442322556",
       "goalPredicateType": "j_shape",
       "highlightMetadata": {
         "type": "cells",
         "cells": [
-          {
-            "column": 3,
-            "row": 0,
-            "role": "pattern_piece"
-          },
-          {
-            "column": 3,
-            "row": 2,
-            "role": "pattern_piece"
-          },
-          {
-            "column": 4,
-            "row": 1,
-            "role": "pattern_piece"
-          }
+          { "column": 3, "row": 2, "role": "pattern_piece" },
+          { "column": 2, "row": 3, "role": "pattern_piece" },
+          { "column": 3, "row": 4, "role": "pattern_piece" },
+          { "column": 2, "row": 4, "role": "pattern_piece" }
         ]
       },
-      "correctCol": 4
+      "correctCol": 2,
+      "correctCols": [2, 4]
     },
-    "candidateCol": 4,
-    "scores": [
-      0,
-      0,
-      0,
-      0,
-      4,
-      0,
-      0
-    ],
-    "expectedResult": "correct"
+    "candidateCol": 2,
+    "scores": [3, -1, 3, -1000, 3, -1, 3],
+    "expectedResult": "tied"
   },
   {
-    "description": "j_shape: wrong (plays wrong column)",
+    "description": "j_shape (T013): tied — col 4 of the same 2-column board",
     "puzzle": {
       "id": 15,
       "category": "j_shape",
-      "moveString": "3322330022",
+      "moveString": "333334140211155442322556",
       "goalPredicateType": "j_shape",
-      "highlightMetadata": {
-        "type": "cells",
-        "cells": [
-          {
-            "column": 3,
-            "row": 0,
-            "role": "pattern_piece"
-          },
-          {
-            "column": 3,
-            "row": 2,
-            "role": "pattern_piece"
-          },
-          {
-            "column": 4,
-            "row": 1,
-            "role": "pattern_piece"
-          }
-        ]
-      },
-      "correctCol": 4
+      "correctCols": [2, 4]
+    },
+    "candidateCol": 4,
+    "scores": [3, -1, 3, -1000, 3, -1, 3],
+    "expectedResult": "tied"
+  },
+  {
+    "description": "j_shape (T013): wrong — col 1 is solver-suboptimal (score -1) and does not satisfy the pattern",
+    "puzzle": {
+      "id": 15,
+      "category": "j_shape",
+      "moveString": "333334140211155442322556",
+      "goalPredicateType": "j_shape",
+      "correctCols": [2, 4]
+    },
+    "candidateCol": 1,
+    "scores": [3, -1, 3, -1000, 3, -1, 3],
+    "expectedResult": "wrong"
+  },
+  {
+    "description": "odd_even_threat: correct (col 2 of 3 independently qualifying, solver-safe columns)",
+    "puzzle": {
+      "id": 16,
+      "category": "odd_even_threat",
+      "moveString": "33330256555322322",
+      "goalPredicateType": "odd_even_threat"
+    },
+    "candidateCol": 2,
+    "scores": [4, 4, 4, -1000, 4, 4, 4],
+    "expectedResult": "tied"
+  },
+  {
+    "description": "odd_even_threat: tied (col 4 of the same 3-column board)",
+    "puzzle": {
+      "id": 16,
+      "category": "odd_even_threat",
+      "moveString": "33330256555322322",
+      "goalPredicateType": "odd_even_threat"
+    },
+    "candidateCol": 4,
+    "scores": [4, 4, 4, -1000, 4, 4, 4],
+    "expectedResult": "tied"
+  },
+  {
+    "description": "odd_even_threat: tied (col 6 of the same 3-column board)",
+    "puzzle": {
+      "id": 16,
+      "category": "odd_even_threat",
+      "moveString": "33330256555322322",
+      "goalPredicateType": "odd_even_threat"
+    },
+    "candidateCol": 6,
+    "scores": [4, 4, 4, -1000, 4, 4, 4],
+    "expectedResult": "tied"
+  },
+  {
+    "description": "odd_even_threat: wrong (col 0 is solver-optimal but does not satisfy the pattern)",
+    "puzzle": {
+      "id": 16,
+      "category": "odd_even_threat",
+      "moveString": "33330256555322322",
+      "goalPredicateType": "odd_even_threat"
     },
     "candidateCol": 0,
-    "scores": [
-      0,
-      0,
-      0,
-      0,
-      4,
-      0,
-      0
-    ],
+    "scores": [4, 4, 4, -1000, 4, 4, 4],
     "expectedResult": "wrong"
   }
 ]

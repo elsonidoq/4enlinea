@@ -227,6 +227,54 @@ describe('checkOvercutPredicate — end-to-end', () => {
   }, { timeout: 30_000 });
 });
 
+// ── Spec 051 Epic 1 US2 (T026/T027) — undercut relative solver-safety floor ─────────────────
+// Harvested via playGame (never hand-constructed); scores queried live at test time so this
+// fixture cannot drift. '333330654544210414405513' is a genuine LOST-POSITION undercut board
+// (every legal column scores negative): killing_threat sits at column 6 (0-indexed), the
+// solver-optimal (slowest-loss) columns are {0, 1, 2} (score -6), and non-killing column 5
+// (score -8) concedes strictly worse than that optimum — exactly the OI-61 item 1 defect
+// (checkUndercutPredicate/evalUndercut used to mark every non-killing column "correct" with no
+// score check at all).
+describe('undercut — relative solver-safety floor (T024/T025/T026/T027)', () => {
+  const MS = '333330654544210414405513';
+
+  test('T026 red-first: a non-killing column that concedes worse than the board optimum is excluded/rejected', async () => {
+    const scores = await solver.query(MS);
+    const board = new Board(MS);
+    const result = detectUndercutVictim(board, scores);
+    assert.equal(result.matched, true, 'fixture must be a real undercut match');
+    const killingCol = result.highlightMetadata.cells.find(c => c.role === 'killing_threat').column;
+    assert.notEqual(killingCol, 5, 'sanity: col 5 must be rejected for the FLOOR, not because it is the killing column');
+
+    const check = checkUndercutPredicate(MS, scores);
+    assert.ok(
+      !check.correctCols.includes(5),
+      'col 5 concedes strictly worse than the board optimum and must not enter the generation-time answer set',
+    );
+    assert.ok(check.correctCols.length >= 1, 'the safe non-killing columns must still be present');
+
+    const puzzle = { id: 1, category: 'undercut', moveString: MS, highlightMetadata: check.highlight_metadata };
+    const evalResult = evaluatePredicate(puzzle, 5, scores);
+    assert.equal(evalResult.result, 'wrong', 'evalUndercut must reject a floor-violating non-killing column on the grading path');
+  }, { timeout: 30_000 });
+
+  test('T027 regression: a LOST-POSITION board still accepts the slowest-loss non-killing column (relative floor, not absolute)', async () => {
+    const scores = await solver.query(MS);
+    const legal = [0, 1, 2, 5, 6].filter(c => scores[c] > -1000);
+    assert.ok(legal.every(c => scores[c] < 0), 'fixture must be a fully-lost position for this regression to be meaningful');
+
+    const check = checkUndercutPredicate(MS, scores);
+    assert.ok(
+      check.correctCols.includes(0),
+      'col 0 is among the slowest losses (tied-optimal at -6) and must still pass generation despite a negative score',
+    );
+
+    const puzzle = { id: 1, category: 'undercut', moveString: MS, highlightMetadata: check.highlight_metadata };
+    const evalResult = evaluatePredicate(puzzle, 0, scores);
+    assert.equal(evalResult.result, 'correct', 'evalUndercut must accept the slowest-loss column under the relative floor, not reject every negative-score column');
+  }, { timeout: 30_000 });
+});
+
 describe('evalUndercut — from highlightMetadata', () => {
   test('non-killing col returns correct', () => {
     const puzzle = {

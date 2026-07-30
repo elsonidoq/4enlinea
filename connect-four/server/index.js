@@ -21,6 +21,7 @@ import { insertGameBlunder } from './insertGameBlunder.js';
 import { resolveGameBlunderOwner, resolveQueueOwner, resolveExplainQuota } from './anonBlunderAccess.js';
 import { evaluatePredicate, buildPredicatePuzzle } from './predicates.js';
 import { createEvaluateMoveHandler } from './evaluateMoveHandler.js';
+import { buildPromotedPuzzleRow } from './promotePuzzleRow.js';
 import { registerUserRoutes } from './userRoutes.js';
 import { registerPaddleRoutes } from './paddleRoutes.js';
 import { createPaddleProcessor } from './paddleProcessor.js';
@@ -1777,7 +1778,7 @@ function pickFromPool(translations, prefix) {
 // as an importable, side-effect-free factory — this makes it mountable in integration tests
 // without booting the whole production server (see that module's header comment). No behavior
 // change here: this is a pure delegation, not a second implementation.
-app.post('/api/evaluate-move', createEvaluateMoveHandler({ solver, i18nTranslations }));
+app.post('/api/evaluate-move', createEvaluateMoveHandler({ solver, i18nTranslations, supabase }));
 
 // POST /api/evaluate-move/inline — evaluate a move with inline puzzle data
 // Returns richer results (correctCol, threatCells) than /api/evaluate-move.
@@ -2979,6 +2980,7 @@ app.post('/api/admin/generate', requireLocalhost, async (req, res) => {
       highlight_metadata: c.highlight_metadata ?? null,
       category_evidence: c.category_evidence ?? null,
       correct_col: c.correct_col ?? null,
+      correct_cols: c.correctCols ?? null,
     }));
     // Task 26 (finding 23): a transient dropped DB connection previously aborted the whole
     // category with 0 inserted after an expensive generateCandidates() run. Bounded retry with
@@ -3249,7 +3251,7 @@ app.post('/api/admin/candidates/:id/approve', requireLocalhost, async (req, res)
 
   const { data: candidate, error: fetchErr } = await supabase
     .from('candidates')
-    .select('id, category, move_string, status, highlight_metadata, correct_col, category_evidence, highlight_cells')
+    .select('id, category, move_string, status, highlight_metadata, correct_col, correct_cols, category_evidence, highlight_cells')
     .eq('id', id)
     .single();
 
@@ -3269,22 +3271,12 @@ app.post('/api/admin/candidates/:id/approve', requireLocalhost, async (req, res)
 
   const { data: puzzle, error: insertErr } = await supabase
     .from('puzzles')
-    .insert({
-      category: candidate.category,
-      move_string: candidate.move_string,
-      goal_prompt: goal_prompt.trim(),
-      goal_predicate_type: predicateType,
-      goal_predicate_params: {},
-      cooperative_ai_moves,
-      difficulty: Number(difficulty),
-      is_active: true,
-      interaction_mode: candidate.category === 'forced_win' ? 'sequence' : 'single_move',
-      highlight_metadata: candidate.highlight_metadata ?? null,
-      correct_col: candidate.correct_col ?? null,
-      highlight_cells: candidate.highlight_cells ?? null,
-      user_player: candidate.move_string.length % 2 === 0 ? 1 : 2,
-      simulation_trace: candidate.category_evidence?.simulation_trace ?? [],
-    })
+    .insert(buildPromotedPuzzleRow(candidate, {
+      goalPrompt: goal_prompt.trim(),
+      goalPredicateType: predicateType,
+      difficulty,
+      cooperativeAiMoves: cooperative_ai_moves,
+    }))
     .select('id')
     .single();
 
@@ -3311,7 +3303,7 @@ app.post('/api/admin/candidates/approve-batch', requireLocalhost, async (req, re
 
   const { data: candidates, error: fetchErr } = await supabase
     .from('candidates')
-    .select('id, category, move_string, status, highlight_metadata, correct_col, category_evidence, highlight_cells')
+    .select('id, category, move_string, status, highlight_metadata, correct_col, correct_cols, category_evidence, highlight_cells')
     .eq('category', category)
     .eq('status', 'pending');
 
@@ -3335,22 +3327,11 @@ app.post('/api/admin/candidates/approve-batch', requireLocalhost, async (req, re
 
     const { error: insertErr } = await supabase
       .from('puzzles')
-      .insert({
-        category: candidate.category,
-        move_string: candidate.move_string,
-        goal_prompt: goal_prompt.trim(),
-        goal_predicate_type: candidate.category,
-        goal_predicate_params: {},
-        cooperative_ai_moves: [],
-        difficulty: Number(difficulty),
-        is_active: true,
-        interaction_mode: candidate.category === 'forced_win' ? 'sequence' : 'single_move',
-        highlight_metadata: candidate.highlight_metadata ?? null,
-        correct_col: candidate.correct_col ?? null,
-        highlight_cells: candidate.highlight_cells ?? null,
-        user_player: candidate.move_string.length % 2 === 0 ? 1 : 2,
-        simulation_trace: candidate.category_evidence?.simulation_trace ?? [],
-      });
+      .insert(buildPromotedPuzzleRow(candidate, {
+        goalPrompt: goal_prompt.trim(),
+        goalPredicateType: candidate.category,
+        difficulty,
+      }));
 
     if (insertErr) { errors.push({ id: candidate.id, error: insertErr.message }); continue; }
 

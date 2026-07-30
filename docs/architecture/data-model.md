@@ -335,6 +335,66 @@ The `explorer` screen was removed. `ReviewScreen` now routes all non-optimal mov
 `puzzles.correct_col` and `candidates.correct_col` store the 0-indexed correct column for categories where it is computed at generation time (`claimeven`, `figure_7`, `j_shape`).
 `z_threat` and `undercut`/`overcut` store their answer inside `highlight_metadata` (column or cells array with role annotations).
 
+### `correct_cols` — the stored answer set (spec 051, Epic 1, FR-013–FR-019)
+
+`puzzles.correct_cols` and `candidates.correct_cols` (migration `061_correct_cols.sql`, `integer[]
+DEFAULT NULL`) store the **full, solver-gated answer set** for a row — every 0-indexed column that
+grades `correct`/`tied` for that row's category, computed once at generation or backfill time and
+read directly at grading time rather than re-derived (FR-024/FR-025 — see
+`api-conventions.md`'s "Move Evaluation Endpoint" for the two grading branches this enables).
+
+- **Type**: `integer[]`, nullable, `DEFAULT NULL`.
+- **Population timing**: written by `checkPredicate` (`server/candidate-generator.js`) at
+  generation time — through `generateCandidates`'s in-memory `correctCols` field, the real
+  `candidates`-table insert in `POST /api/admin/generate`, both promotion routes (`POST
+  /api/admin/candidates/:id/approve`, `POST /api/admin/candidates/approve-batch`), and
+  `audit_answer_ambiguity.mjs#repairPuzzles`'s replacement-row insert — and, for rows that predate
+  this feature, by the one-time `server/scripts/backfill-correct-cols.mjs` script, which calls the
+  same `checkPredicate` a fresh `solver.query(move_string)` feeds, never a simplified
+  re-derivation.
+- **Ascending-order guarantee (FR-016a)**: `checkPredicate` sorts `correctCols` ascending
+  (`[...correctCols].sort((a, b) => a - b)`) immediately before returning, so every writer above
+  inherits sorted order for free — no writer sorts independently.
+- **`correct_col` sync-and-carve-out (FR-017/FR-019)**: the same `checkPredicate` call also
+  writes the legacy scalar `correct_col = correctCols[0]`, keeping it in sync rather than
+  retiring it (retirement is deferred, tracked as `docs/open_issues.md` OI-81, out of scope for
+  this feature). **Carve-out**: for `undercut` and `overcut`, `correct_col` is always written as
+  `NULL` regardless of `correctCols[0]` — both categories deliberately store no single correct
+  column (there is no canonical "the" answer among several safe non-killing columns), so syncing
+  a scalar from an arbitrary array element would fabricate a false canonical answer.
+- **`NULL` vs `{}` (FR-016b)**: these are two different, non-interchangeable states, never
+  conflated:
+  - `correct_cols IS NULL` — **not yet backfilled**. The row predates this feature and hasn't
+    been reached by the backfill script yet. Grading falls through to the pre-existing
+    computed-live branch (FR-024a) — this is fail-open, not an error, so a live drill is never
+    broken by a row not yet backfilled.
+  - `correct_cols = '{}'` (empty array) — **would mean** "this category legitimately has zero
+    solver-safe answer columns for this board," which is a data defect for an *active* row, not a
+    valid served state. The backfill (and generation-time writes) never leave a row in this state:
+    when `checkPredicate` comes back with an empty `correctCols`, the row is **deactivated**
+    (`is_active = false`) instead of writing the empty array to an active row.
+
+See `api-conventions.md`'s "Move Evaluation Endpoint" section for how `/api/evaluate-move`'s
+stored-set grading branch reads `correct_cols` directly, and `server-conventions.md`'s §Predicate
+Evaluator paragraph for the tri-state `{ result, correctCol, tiedWith }` contract every evaluator
+now returns on the computed-live branch.
+
+### Where puzzle/candidate answer columns are written (verified at source 2026-07-29)
+
+**MUST**: adding a new column to `puzzles` or `candidates` requires editing **every** write path below. None of them uses a shared row-builder, and `INSERT` does not carry a new column automatically — a missed site yields `NULL` for every row it creates.
+
+`connect-four/server/candidate-generator.js` does **not** touch Supabase at all. `generateCandidates` only builds an in-memory object; the DB write happens in the route that calls it. Do not look for the insert there.
+
+| # | Site | Writes | Shape |
+|---|------|--------|-------|
+| 1 | `server/index.js` `POST /api/admin/generate` (~:2981-2992) | `candidates` | hand-enumerated field list |
+| 2 | `server/index.js` `POST /api/admin/candidates/:id/approve` (~:3272) | `puzzles` | hand-enumerated field list |
+| 3 | `server/index.js` `POST /api/admin/candidates/approve-batch` (~:3338) | `puzzles` | hand-enumerated field list |
+| 4 | `server/scripts/audit_answer_ambiguity.mjs#repairPuzzles` (~:298) | `puzzles` | its own row build, outside the server |
+| 5 | `server/index.js` `POST /api/admin/seed-puzzles` (~:3485) | `puzzles` | inserts `server/data/placeholder_puzzles.json` **verbatim** — dev seed only, so a new column appears only if the JSON file carries it |
+
+Sites 2 and 3 are the promotion path (candidate → puzzle) and are the ones that matter for anything a player is served. Site 4 is easy to miss because it lives in a script, not the server.
+
 **`claimeven` puzzle format:** single-move, Black (player 2) to move. The correct answer is the column Red (player 1) played in on the previous move — the UI highlights Red's last-played cell with the `trigger` highlight role so the learner sees why that column is the answer. **No uniqueness enforcement**: positions where multiple columns are independently valid claimeven responses are acceptable (unlike `z_threat`/`overcut`, which require exactly one correct column — see `server-conventions.md` §Generation-quality guards).
 
 ## Puzzle Attempts — `outcome` values and the serving pool

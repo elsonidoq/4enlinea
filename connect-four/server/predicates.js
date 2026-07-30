@@ -33,7 +33,8 @@
 // is a separate gap (client never got a category-aware verdict in the first place, not a 'tied'
 // mishandling) addressed by extending that endpoint in place.
 
-import { Board, detectDoubleThreat, detectForcedWin } from './classifier.js';
+import { Board, detectDoubleThreat, detectForcedWin, detectOddEvenThreat } from './classifier.js';
+import { isSolverSafe } from './answerSetInvariant.js';
 
 const ROWS = 6;
 const COLS = 7;
@@ -103,11 +104,11 @@ export function evaluatePredicate(puzzle, candidateCol, scores) {
     case 'forbidden_columns': return evalForbiddenColumns(candidateCol, scores, puzzle.moveString);
     case 'z_threat': return evalZThreat(candidateCol, puzzle);
     case 'claimeven': return evalClaimeven(candidateCol, puzzle);
-    case 'undercut': return evalUndercut(candidateCol, puzzle);
+    case 'undercut': return evalUndercut(candidateCol, puzzle, scores);
     case 'overcut': return evalOvercut(candidateCol, puzzle);
     case 'figure_7': return evalFigure7(candidateCol, puzzle);
     case 'j_shape': return evalJShape(candidateCol, puzzle);
-    case 'odd_even_threat': return evalOddEvenThreat(candidateCol, puzzle);
+    case 'odd_even_threat': return evalOddEvenThreat(candidateCol, puzzle, scores);
     default: return { result: 'wrong' };
   }
 }
@@ -303,64 +304,129 @@ function evalForbiddenColumns(candidateCol, scores, moveString) {
 
 // ── New category evaluators (T012) ───────────────────────────────────────────
 
-// z_threat: correct column is stored in highlightMetadata.column
+// z_threat: correct column is stored in highlightMetadata.column. FR-003/FR-010: graded as set
+// membership against a solver-gated one-element set (detectZThreat's own candidates.length !== 1
+// rejection keeps this a singleton — no cardinality relaxation), not a bare scalar equality check.
 function evalZThreat(candidateCol, puzzle) {
   const correctCol = puzzle.highlightMetadata?.column;
   if (correctCol === undefined || correctCol === null) return { result: 'wrong' };
-  if (candidateCol === correctCol) return { result: 'correct', correctCol };
-  return { result: 'wrong', correctCol };
+  const correctCols = [correctCol];
+  if (correctCols.includes(candidateCol)) return { result: 'correct', correctCol: candidateCol };
+  return { result: 'wrong', correctCol: correctCols[0] };
 }
 
-// claimeven: correct column stored as correctCol on puzzle
+// claimeven (T020, FR-003/FR-011/FR-012): set membership, not equality against a single stored
+// scalar. Threaded, not recomputed: detectClaimeven is async and solver-simulating — one
+// `runClaimevenSimulation` rollout (~20 solver queries) per odd-height column tested — which is
+// exactly the per-request cost FR-011 forbids on this evaluator's row-less/computed-live branch.
+// Applying Batch 2's recompute-vs-thread finding (see evalFigure7 above) to claimeven specifically:
+// recomputing live here would additionally re-run the same solver-simulation cost on every graded
+// request, not just re-derive a cheap structural predicate — a strictly worse violation of FR-011
+// than the figure_7/j_shape case (which only risked a stale *notion* of "correct", not a live
+// solver call). So this evaluator reads the already-enumerated `puzzle.correctCols` (falling back
+// to the legacy scalar `puzzle.correctCol` for callers that don't thread a set — same fallback
+// shape as evalFigure7/evalJShape/evalOddEvenThreat). Deliberately NO uniqueness constraint
+// (FR-012) — claimeven legitimately has no uniqueness rule; a board with 2+ independently valid
+// response columns keeps every one of them correct.
 function evalClaimeven(candidateCol, puzzle) {
-  const correctCol = puzzle.correctCol;
-  if (correctCol === undefined || correctCol === null) return { result: 'wrong' };
-  if (candidateCol === correctCol) return { result: 'correct', correctCol };
-  return { result: 'wrong', correctCol };
+  const correctCols = puzzle.correctCols ?? (puzzle.correctCol != null ? [puzzle.correctCol] : []);
+  if (correctCols.length === 0) return { result: 'wrong' };
+  if (correctCols.includes(candidateCol)) {
+    const others = correctCols.filter(c => c !== candidateCol);
+    return others.length > 0
+      ? { result: 'tied', tiedWith: others, correctCol: correctCols[0] }
+      : { result: 'correct', correctCol: candidateCol };
+  }
+  return { result: 'wrong', correctCol: correctCols[0] };
 }
 
-// undercut: any column except the killing_threat column is correct
-function evalUndercut(candidateCol, puzzle) {
+// undercut: any column except the killing_threat column is correct, AND itself safe under the
+// relative solver-safety floor (T025, FR-004, closes OI-61 item 1 on the grading path). T024
+// (checkUndercutPredicate) and this are independent implementations of the same fix — both are
+// required; fixing only one leaves the other's defect live. Per checkPredicate's own convention
+// (immediate_threat/forced_block are legitimately checked with `scores = []` — see
+// answerSetInvariant.js's classifyAnswerSet NO-SCORES verdict), an unusable/empty scores array
+// means "cannot verify the floor" and the check is skipped rather than failed closed — only a
+// real, full-length score array can prove a column unsafe.
+function evalUndercut(candidateCol, puzzle, scores) {
   const cells = puzzle.highlightMetadata?.cells;
   if (!cells) return { result: 'wrong' };
   const killing = cells.find(c => c.role === 'killing_threat');
   if (!killing) return { result: 'wrong' };
   if (candidateCol === killing.column) return { result: 'wrong', correctCol: null };
+  if (Array.isArray(scores) && scores.length === COLS && !isSolverSafe(candidateCol, scores)) {
+    return { result: 'wrong', correctCol: null };
+  }
   return { result: 'correct' };
 }
 
-// overcut: must play the major_threat column
+// overcut: must play the major_threat column. FR-003/FR-010: graded as set membership against a
+// solver-gated one-element set (uniqueness now enforced by T032's guard on the generation path,
+// `checkOvercutPredicate`'s `correctCols.length !== 1` check — Finding F1), not a bare scalar
+// equality check.
 function evalOvercut(candidateCol, puzzle) {
   const cells = puzzle.highlightMetadata?.cells;
   if (!cells) return { result: 'wrong' };
   const major = cells.find(c => c.role === 'major_threat');
   if (!major) return { result: 'wrong' };
-  if (candidateCol === major.column) return { result: 'correct', correctCol: major.column };
-  return { result: 'wrong', correctCol: major.column };
+  const correctCols = [major.column];
+  if (correctCols.includes(candidateCol)) return { result: 'correct', correctCol: candidateCol };
+  return { result: 'wrong', correctCol: correctCols[0] };
 }
 
-// figure_7: correct column stored as correctCol on puzzle
+// figure_7 (T012, FR-003/FR-009): set membership, not equality against a single stored scalar.
+// Threaded, not recomputed: checkFigure7Predicate's "does playing this column COMPLETE the
+// 5-cell kernel" notion (candidate-generator.js) is generation-time-specific and does not match
+// every figure_7 board's teaching intent — lesson-13-figure-7.json teaches a board where the
+// kernel is already fully formed and the correct move exploits the resulting threat column
+// (verified at source 2026-07-29: detectFigure7 matches identically before AND after that move,
+// since the answer column sits outside the kernel entirely). Recomputing detectFigure7 live here
+// broke that lesson's answer set; reading the stored/threaded `correctCols` (falling back to the
+// legacy scalar `correctCol` for callers that don't yet thread a set — buildPredicatePuzzle,
+// spec 051 US1, was not extended to carry `correctCols`) preserves both the old scalar callers
+// and the new multi-column T011 fixtures.
 function evalFigure7(candidateCol, puzzle) {
-  const correctCol = puzzle.correctCol;
-  if (correctCol === undefined || correctCol === null) return { result: 'wrong' };
-  if (candidateCol === correctCol) return { result: 'correct', correctCol };
-  return { result: 'wrong', correctCol };
+  const correctCols = puzzle.correctCols ?? (puzzle.correctCol != null ? [puzzle.correctCol] : []);
+  if (correctCols.length === 0) return { result: 'wrong' };
+  if (correctCols.includes(candidateCol)) {
+    const others = correctCols.filter(c => c !== candidateCol);
+    return others.length > 0
+      ? { result: 'tied', tiedWith: others, correctCol: correctCols[0] }
+      : { result: 'correct', correctCol: candidateCol };
+  }
+  return { result: 'wrong', correctCol: correctCols[0] };
 }
 
-// j_shape: correct column stored as correctCol on puzzle
+// j_shape (T012, FR-003/FR-009): set membership, same threaded/fallback reasoning as evalFigure7.
 function evalJShape(candidateCol, puzzle) {
-  const correctCol = puzzle.correctCol;
-  if (correctCol === undefined || correctCol === null) return { result: 'wrong' };
-  if (candidateCol === correctCol) return { result: 'correct', correctCol };
-  return { result: 'wrong', correctCol };
+  const correctCols = puzzle.correctCols ?? (puzzle.correctCol != null ? [puzzle.correctCol] : []);
+  if (correctCols.length === 0) return { result: 'wrong' };
+  if (correctCols.includes(candidateCol)) {
+    const others = correctCols.filter(c => c !== candidateCol);
+    return others.length > 0
+      ? { result: 'tied', tiedWith: others, correctCol: correctCols[0] }
+      : { result: 'correct', correctCol: candidateCol };
+  }
+  return { result: 'wrong', correctCol: correctCols[0] };
 }
 
-// odd_even_threat: correct column stored as correctCol on puzzle
-function evalOddEvenThreat(candidateCol, puzzle) {
-  const correctCol = puzzle.correctCol;
-  if (correctCol === undefined || correctCol === null) return { result: 'wrong' };
-  if (candidateCol === correctCol) return { result: 'correct', correctCol };
-  return { result: 'wrong', correctCol };
+// odd_even_threat (FR-006, spec 051 Epic 1, closes OI-75): set membership against
+// detectOddEvenThreat's own correctCols, not equality against a single stored scalar.
+// detectOddEvenThreat already produces a correctCols array (classifier.js) — no detector change
+// needed; this evaluator recomputes it live from moveString + scores, exactly as evalDoubleThreat
+// recomputes detectDoubleThreat live (contract shape only — this is not a copy-paste of that sweep).
+function evalOddEvenThreat(candidateCol, puzzle, scores) {
+  const board = new Board(puzzle.moveString);
+  const result = detectOddEvenThreat(board, scores);
+  if (!result.matched) return { result: 'wrong' };
+  const correctCols = result.correctCols;
+  if (correctCols.includes(candidateCol)) {
+    const others = correctCols.filter(c => c !== candidateCol);
+    return others.length > 0
+      ? { result: 'tied', tiedWith: others, correctCol: correctCols[0] }
+      : { result: 'correct', correctCol: candidateCol };
+  }
+  return { result: 'wrong', correctCol: correctCols[0] };
 }
 
 // ── Board utilities ───────────────────────────────────────────────────────────

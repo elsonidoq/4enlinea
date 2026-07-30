@@ -28,6 +28,15 @@ export function optimalCols(scores) {
   return legal.filter(c => scores[c] === max);
 }
 
+// The single shared relative solver-safety floor (FR-001, spec 051 Epic 1): a column `C` is safe
+// iff it is among the board's own solver-optimal columns — uniform for both won boards
+// (scores[C] > 0 and best) and fully-lost boards (C among the slowest losses). Every per-column
+// safety check in this codebase MUST import this rather than restating `optimalCols(scores)
+// .includes(col)` inline — see this file's header.
+export function isSolverSafe(col, scores) {
+  return optimalCols(scores).includes(col);
+}
+
 // The production grader's accepted set: every legal column evaluatePredicate does not reject.
 // 'tied' is an acceptance, not a rejection — see the caller sweep at the top of predicates.js.
 export function acceptedCols(category, moveString, scores, { correctCol, highlightMetadata } = {}) {
@@ -76,8 +85,10 @@ export const isPassing = (verdict) => PASSING_VERDICTS.has(verdict);
  * Generation-time guard: does this candidate's answer set satisfy the invariant?
  *
  * `correctCols` comes from checkPredicateRaw, so this works for every category without knowing
- * how the answer was derived. forbidden_columns is exempt by the caller: its `correctCols` are
- * the columns to AVOID, so the subset relation is inverted and the test is meaningless there.
+ * how the answer was derived. forbidden_columns is exempt by the caller: checkForbiddenColumnsPredicate
+ * returns `correctCols: safeCols` — the ACCEPTED/safe columns, not the columns to avoid — but those
+ * safe columns already reflect the caller's own forbidden-column exclusion, so re-running this
+ * subset check against them would be meaningless (double-filtering the same set against itself).
  */
 export function answerSetHolds(correctCols, scores) {
   return isPassing(classifyAnswerSet(correctCols ?? [], optimalCols(scores), scores));

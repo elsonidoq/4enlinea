@@ -1,6 +1,6 @@
 # Open-Issues Epics — spec-ready backlog for `/epics-manager`
 
-Consolidates every **still-open** entry in [`docs/open_issues.md`](../open_issues.md) into 8 epics sized for
+Consolidates every **still-open** entry in [`docs/open_issues.md`](../open_issues.md) into 9 epics sized for
 the full speckit pipeline. Each epic carries the sections `/epics-manager`'s Reading contract consumes
 verbatim: `Settled decisions`, `Non-obvious facts`, `Authoritative sources of truth`, `Acceptance criteria`,
 `NOT included`.
@@ -37,7 +37,7 @@ an epic get a **new** `OI-N` entry per
 [`feedback_open_issues_destination`] (deferred/latent bugs go to `docs/open_issues.md`, never to memory).
 
 **Invocation:** `/epics-manager docs/epics/open-issues-epics.md N` (or a substring of the heading).
-The only `##` headings that name an epic are `## Epic 1 …` through `## Epic 8 …`; `## Overview`,
+The only `##` headings that name an epic are `## Epic 1 …` through `## Epic 9 …`; `## Overview`,
 `## Already resolved`, and `## Traceability` are not epics.
 
 ---
@@ -45,19 +45,26 @@ The only `##` headings that name an epic are `## Epic 1 …` through `## Epic 8 
 ## Overview
 
 **Epic numbers ARE the execution order, and consecutive numbers belong to the same lane.** Numbering is
-lane-major: run 1 → 2 → 3 → 4 in Lane A, 5 → 6 → 7 in Lane B, and 8 alone in Lane C. Lanes A and B may run
+lane-major: run 1 → 2 → 3 → 4 in Lane A, 5 → 6 → 7 in Lane B, and 8 → 9 in Lane C. Lanes A and B may run
 **in parallel in separate git worktrees**; within a lane, order is sequential and load-bearing.
 
 | Lane | Epics | Theme | Parallel with |
 |---|---|---|---|
 | **A** | 1 → 2 → 3 → 4 | Correctness: classifier, grading, payments, handlers | Lane B |
 | **B** | 5 → 6 → 7 | Content: audio, lesson surface, QA/UX | Lane A |
-| **C** | 8 | Repo-wide gates (lint sweep, CSP, docs) | **nothing** — run before both lanes start or after both merge |
+| **C** | 8, 9 | Repo-wide gates (lint sweep, CSP, docs); legacy `correct_col` retirement | **nothing** — each runs alone; 8 runs before both lanes start or after both merge, 9 runs only after Epic 1/spec 051 has merged |
 
 **Hard dependencies inside a lane:** Epic 2 consumes the multi-column detector contract Epic 1 establishes;
 Epic 6's lesson-content verification consumes Epic 5's audio (a lesson translated but not voiced is worse
 than silent — `lesson-editor.md`). Epic 8 is isolated because its lint sweep (`eslint --fix`) touches the
-whole tree and would conflict with every open branch.
+whole tree and would conflict with every open branch. Epic 9 is likewise isolated, for a different reason:
+its 22-file mechanical sweep across server and frontend overlaps concrete files Lane A is still touching
+(`server/predicates.js`, `server/answerSetInvariant.js`, `server/evaluateMoveHandler.js` vs. Epic 2's
+`server/classifier.js`/`llmCoachHelpers.js` and Epic 4's `server/index.js` handlers/`classifier.js`) —
+running it concurrently with the rest of Lane A means repeatedly hand-merging the same files. Epic 9's
+dependency is specifically on **spec 051 having shipped/merged** (not merely on Epic 1 being underway) — a
+between-lanes constraint, not a within-Lane-A sequencing one — so it does not slot into the 1→2→3→4 chain;
+it does **not** need to wait for the rest of Lane A (2–4) to finish, only for 051.
 
 **Cross-lane cautions** (worktrees isolate files, not these): one local Supabase DB, one c4solver, and a
 **120-req/min per-IP API limit shared with browser QA** ([`project_api_rate_limit_breaks_bulk_scripts`]) —
@@ -67,7 +74,7 @@ those four. Run `eval "$(./worktree-ports.sh)"` in every worktree before startin
 
 | # | Lane | Epic | Open issues | Primary surface | Stories | Verdict |
 |---|---|------|-------------|-----------------|---------|---------|
-| **1** | A | Pattern Acceptance: multi-column answers + solver-safety invariant | OI-75, OI-61(1) | `server/predicates.js`, `server/categories.js` + `src/lib/categories.js`, `server/answerSetInvariant.js`, `classifier.js` detectors | 4 | Full speckit |
+| **1** | A | Pattern Acceptance: multi-column answers + solver-safety invariant | OI-75, OI-61(1) | `server/predicates.js`, `server/candidate-generator.js`, `server/categories.js` + `src/lib/categories.js`, `server/answerSetInvariant.js`, `classifier.js` detectors, `evaluateMoveHandler.js`, `ChallengeScreen.jsx`, a new schema migration | 6 (exceeds the 3–5 bar — see epic note) | Full speckit |
 | **2** | A | Detector Perspective Soundness & Blunder Tag Taxonomy | OI-76, OI-60, OI-48, OI-33, OI-30 | `server/classifier.js`, `server/llmCoachHelpers.js`, blunder fixtures | 5 | Full speckit |
 | **3** | A | Entitlement & Payments Consolidation | OI-66, OI-39, OI-55, OI-34, OI-41, OI-25 | lesson routes, tier-gate call sites, `paddleProcessor.js`, `pricing.html` | 5 | Full speckit |
 | **4** | A | Server/API Data Integrity & Environment Correctness | OI-40, OI-53, OI-17, OI-47, OI-50, OI-22, OI-49, OI-5, OI-14, OI-31, OI-51, OI-52 | `server/index.js` handlers, `userHelpers.js`, `classifier.js`, `vite.config.js`, migrations/ops | 4 | Full speckit |
@@ -75,6 +82,7 @@ those four. Run `eval "$(./worktree-ports.sh)"` in every worktree before startin
 | **6** | B | Lesson Learning Surface & Authoring Polish | OI-46, OI-44, OI-68, OI-69, OI-63, OI-73, OI-19, OI-38, OI-62 | `SocraticScreen.jsx`, `Board.jsx`, `admin/SlideEditor.jsx`, lesson tooling, i18n, KB | 5 | Full speckit |
 | **7** | B | QA Backlog & Product/UX Decisions | OI-35, OI-21, OI-37 | nav stack, onboarding entry, ReviewScreen, `agentic_QA_2026-07-15-1321.md` | 3 | Brainstorm-first, then speckit |
 | **8** | C | Dev Infrastructure & Test-Quality Baseline | OI-70, OI-71, OI-16, OI-29, OI-58, OI-6, OI-72 | `eslint.config.js`, `tests/dom/`, `SplitReveal.jsx`, CSP on `main` | 3 | Full speckit |
+| **9** | C | Legacy `correct_col` Scalar Retirement *(depends on Epic 1/spec 051 having merged)* | OI-81 | `server/index.js`, `server/candidate-generator.js`, `server/predicates.js`, `server/answerSetInvariant.js`, `server/evaluateMoveHandler.js`, `ChallengeScreen.jsx`, a column-drop migration | 5 | Full speckit |
 
 ---
 
@@ -107,110 +115,338 @@ Already marked resolved in the doc and likewise excluded: OI-2, 3, 4, 7, 8, 10, 
 
 ## Epic 1 — Pattern Acceptance: multi-column answers + solver-safety invariant
 
+> **Sizing note (owner directive, 2026-07-29):** this epic runs **6 user stories**, above the file's 3–5
+> story bar, because the owner's architectural directive (below) added a schema-migration+backfill story
+> and a request/response-contract story on top of the four originally scoped. Flagged here rather than
+> force-compressed — see "Owner architectural directive" for why the extra scope is load-bearing, not
+> gold-plating.
+
 **Intent:** Make "does this move demonstrate the taught pattern?" a *set*-valued, solver-safe question for
-**every** category, instead of a per-category mix of exact-column equality and pure solver score. A drill
-must accept every column that genuinely creates the pattern, and must reject a column that creates the
-pattern while handing the opponent a win or a fork.
+**every** category, computed **once, at generation time, and stored** — not re-derived independently by the
+generator and the grader, and not re-swept at serving time for every request. A drill must accept every
+column that genuinely creates the pattern, and must reject a column that creates the pattern while handing
+the opponent a win or a fork worse than the board's own optimum. Grading has exactly two branches: read the
+stored set for a real puzzle row, or compute it live for a row-less board (lesson inline challenges have no
+puzzle row to read from) — both branches share one solver-safety definition, not two.
 
 **Issues covered**
 - **OI-75** — `odd_even_threat` is in neither `MULTI_SOLUTION_CATEGORIES` nor `SINGLE_ANSWER_CATEGORIES`, so
   `ChallengeScreen` grades it on solver score alone and the authored `correctCol` is never consulted.
   Masked today only because lesson 07's two boards happen to have the taught column *be* the unique solver
   optimum.
-- **OI-61 item 1** — `evalUndercut` accepts any non-killing column, including ones that lose outright; the
-  `answerSetInvariant` LOST-POSITION exemption is exactly where undercut boards live, so nothing catches it.
+- **OI-61 item 1** — `evalUndercut` (the row-less grading path) accepts any non-killing column, including
+  ones that lose outright, AND `checkUndercutPredicate` (the generation path, `candidate-generator.js`)
+  builds the same overly-broad set with no score check at all — the defect is duplicated, not singular; the
+  `answerSetInvariant` LOST-POSITION exemption is exactly where undercut boards live, so neither copy is
+  caught by the existing aggregate invariant check.
 
 **Settled decisions** (owner, 2026-07-29)
 1. **A pattern condition can be met by more than one column.** This is a project-wide invariant across all
-   classifiers, not an `odd_even_threat` special case. `evalDoubleThreat` is the reference implementation:
-   sweep every legal column, collect the qualifying set, return `correct` for one and `tied` for alternates.
-2. **Solving a drill must be solver-safe.** If playing the pattern column lets the opponent win or build a
-   double threat, that board is **not a valid puzzle for the category** — the fix belongs at generation and
-   validation time, not only at grading time. `evalDoubleThreat`'s `if (!(scores[col] > 0)) continue`
-   ("a structural fork that still loses is not the answer") is the existing precedent for the gate.
-3. Acceptance is **pattern membership ∧ solver safety** — never solver score alone, and never stored-column
-   equality alone.
+   classifiers, not an `odd_even_threat` special case. `evalDoubleThreat` is the reference implementation for
+   the **return contract only** — `{ result: 'correct'|'wrong'|'tied', correctCol, tiedWith, ... }`. Its
+   per-column sweep is **not** copy-pasteable: `evalUndercut`/`evalOvercut` read `highlightMetadata`
+   (cells/roles), `evalFigure7`/`evalJShape`/`evalOddEvenThreat` read `puzzle.correctCol`, and `evalZThreat`
+   reads `highlightMetadata.column` — three different input shapes, so each evaluator's *set enumeration*
+   must be worked per-evaluator even though they all emit the same tri-state contract.
+2. **Solving a drill must be solver-safe.** If playing the pattern column concedes more than the board's own
+   optimum already concedes, that board is **not a valid puzzle for the category** — the fix belongs at
+   generation and validation time, not only at grading time. `evalDoubleThreat`'s
+   `if (!(scores[col] > 0)) continue` ("a structural fork that still loses is not the answer") is the
+   existing precedent for a gate, generalized below into a floor that also covers lost positions.
+3. Acceptance is **pattern membership ∧ solver safety** — never solver score alone. After the owner
+   directive (below), every category IS graded against a *stored* value — the invariant is that the stored
+   value is a solver-gated **set** computed once by the pattern detector, never a hand-picked scalar and
+   never re-derived by a second, independent implementation.
 4. `odd_even_threat` becomes a **graded** category under the new set-valued model (it is not dropped, and its
-   stored `correctCol` is not deleted).
+   stored `correctCol` is not deleted — it is widened alongside every other category's answer, per the
+   directive).
+5. **Solver-safety floor is *relative*, not absolute** (resolves this epic's former Open Question). A column
+   `C` is solver-safe iff `C ∈ optimalCols(scores)` — it does not make the position worse than the board's
+   own optimum already is. This is one uniform definition for won *and* lost boards, with no per-category
+   allowlist: on a won board it means `scores[C] > 0`-and-best; on a lost board (every legal move loses) it
+   means C is among the slowest losses, which is exactly what keeps `undercut` (a category that by
+   construction only fires on `scores[C] < 0` boards) alive as a category instead of emptying its accepted
+   set. The LOST-POSITION passing verdict in `classifyAnswerSet` therefore **survives**, reinterpreted under
+   the relative floor rather than exempted from safety checking altogether. Per `answerSetInvariant.js`'s own
+   "import it; do not restate it" instruction (added after a real duplication-and-drift incident — see its
+   header comment), this floor rule must be added **inside** `answerSetInvariant.js`, not beside it.
+6. `claimeven` gets **no uniqueness constraint.** An earlier proposal to force claimeven boards to have
+   exactly one correct column is dropped: once every category's answer is a stored, solver-gated set (item 7
+   below), the constraint is unnecessary and would discard otherwise-valid multi-column claimeven boards for
+   no benefit.
+7. **The answer set is computed once, at generation time, and stored — not derived twice.** (Owner
+   architectural directive, 2026-07-29 — supersedes an earlier draft's "add a parity test between the
+   generator and the grader" recommendation; a parity *test* would leave two implementations that can still
+   drift apart the next time either is edited. See "Owner architectural directive" below for the full target
+   architecture, which this epic must implement, not just document.)
 
-**Non-obvious facts** (verified 2026-07-29 unless noted)
-- The set-valued seam **already exists**: `server/answerSetInvariant.js#acceptedCols` sweeps
-  `legalCols(scores)` through `evaluatePredicate` and treats `'tied'` as acceptance. Generalizing the
-  evaluators is therefore additive at that seam, not a rewrite of it.
-- Six evaluators in `server/predicates.js` are pure single-column equality and are the work item:
-  `evalZThreat` (reads `highlightMetadata.column`), `evalClaimeven`, `evalFigure7`, `evalJShape`,
-  `evalOddEvenThreat` (all read `puzzle.correctCol`), and `evalOvercut` (reads the `major_threat` cell's
-  column). None consults `scores`.
-- `evalUndercut` reads `highlightMetadata.cells`, rejects only the `killing_threat` column, and consults no
-  solver score at all — the OI-61 item 1 defect verbatim.
-- `classifyAnswerSet` returns `LOST-POSITION` (a **passing** verdict) whenever `scores[optimal[0]] < 0`, with
-  an in-code rationale naming undercut as the motivating case. Any solver floor added to `evalUndercut` must
-  reconcile with that exemption rather than silently contradict it.
-- `categories.js` carries an explicit comment that set membership **MUST NOT** be derived by negation, and
-  the set is **hand-mirrored** in `src/lib/categories.js` — both files must change together or the client and
-  server graders drift.
-- `detectOddEvenThreat(board, scores, perspective = board.currentPlayer, solver = null)` already has an
-  FR-033 recursion branch for `perspective !== currentPlayer`; it returns `{ matched, cells }`, not a column
-  set. The perspective-soundness question for this detector belongs to Epic 2, not here.
+### Owner architectural directive
+
+Verbatim intent: *"We must ensure the processing time is done at puzzle generation and not at serving time.
+In fact, can't we do that for all puzzles? Store a list of correct cols so they are computed once."* — and,
+on the two-derivation-paths question: *"it should be computed once."*
+
+This is not a new idea in the codebase — it is the existing design, stopped one step short.
+`connect-four/server/migrations/016_correct_col.sql` already adds a **scalar** `correct_col integer` to both
+`puzzles` and `candidates`, with the verbatim rationale *"where the correct column is computed at generation
+time and stored for play-time evaluation."* Today, however, `ChallengeScreen.jsx:264` reads
+`current.correct_col` off the client's local puzzle object and POSTs it back as `correctCol` in the
+`/api/evaluate-move` request body; `evaluateMoveHandler.js`'s handler destructures
+`{ movestring, col, category, correctCol, highlightMetadata }` straight from `req.body` (no puzzle-id lookup
+of any kind happens in this handler today) — so the server currently grades against a value the **client**
+supplied, not one it looked up itself.
+
+**Target architecture:**
+1. **Generation computes and stores a SET.** Widen the stored answer from a scalar to a column array
+   (`correct_cols integer[]`, or equivalent) on both `puzzles` and `candidates`. It is populated at
+   generation time by the pattern detector, gated by the relative solver-safety floor (Decision 5). All
+   expensive work — including `claimeven`'s async, solver-simulating enumeration (`detectClaimeven` calls
+   `solver.query` per candidate odd-column) — is paid here, once, offline.
+2. **Grading reads the stored set server-side.** `evaluateMoveHandler` looks the puzzle up by id and grades
+   against its stored set; the client-supplied answer is no longer authoritative. This requires a
+   request-shape change — the client must send the puzzle id (`ChallengeScreen.jsx` already tracks
+   `current.id` for analytics, so it is available locally) — and makes the stored set genuinely authoritative
+   rather than authoritative-by-convention.
+3. **The live evaluator path REMAINS — it is not deleted.** Lesson inline challenges call
+   `/api/evaluate-move` with **no puzzle row at all** (memory `project_lesson_interactivity_evaluation`), so
+   there is nothing to precompute from. `evaluatePredicate`/`acceptedCols` stay as the row-less fallback and
+   continue to serve the lesson gate and the audit script. Grading therefore has two clearly-specified
+   branches — stored-set (puzzle rows) and computed-live (row-less boards) — and the relative-floor safety
+   rule must be shared by both, defined once inside `answerSetInvariant.js`.
+4. **`claimeven` gets no uniqueness constraint** (Decision 6) — enumerate and store its set like every other
+   category, rather than forcing a single answer or exempting it from the stored-set model.
+
+**Non-obvious facts** (verified 2026-07-29, at the named symbol, in this worktree)
+
+*Set-valued seam and duplication*
+- The set-valued seam **already exists** on the row-less/computed-live path:
+  `server/answerSetInvariant.js#acceptedCols` sweeps `legalCols(scores)` through `evaluatePredicate` and
+  treats `'tied'` as acceptance. Generalizing the evaluators is additive at that seam, not a rewrite of it.
+- The answer set is derived **twice, by two independent implementations**, today:
+  - Generation side: `candidate-generator.js#checkPredicateRaw` routes seven categories to private functions
+    — `checkZThreatPredicate`, `checkClaimevenPredicate`, `checkUndercutPredicate`, `checkOvercutPredicate`,
+    `checkFigure7Predicate`, `checkJShapePredicate`, `checkOddEvenThreatPredicate` — each with its own
+    per-category logic to compute `correctCols`. None of the seven calls `evaluatePredicate`.
+  - Grading side: `predicates.js#evaluatePredicate` dispatches to `evalZThreat` / `evalClaimeven` /
+    `evalUndercut` / `evalOvercut` / `evalFigure7` / `evalJShape` / `evalOddEvenThreat` — six of these seven
+    are pure single-column equality against `puzzle.correctCol` or a `highlightMetadata` cell role, and
+    consult no solver score at all; only `evalUndercut` even inspects `highlightMetadata`, and it does so
+    without any score check.
+  - `checkPredicate` (the exported wrapper, distinct from `checkPredicateRaw`) DOES apply one shared
+    cross-cutting guard after calling `checkPredicateRaw`: `answerSetHolds(result.correctCols, scores)` from
+    `answerSetInvariant.js`, for every category except `forbidden_columns`. This is a real, already-shared
+    generation-time gate — but it only checks the **aggregate** invariant
+    (`optimalCols ⊆ correctCols` and `correctCols ∩ optimalCols ≠ ∅`, or the LOST-POSITION exemption); it
+    does not verify that *every individual* column in `correctCols` is itself safe. This is precisely why the
+    undercut defect survives it: `checkUndercutPredicate` returns every non-killing column as "correct" with
+    no per-column score check, the board is typically a losing position for the mover, `classifyAnswerSet`
+    returns the passing verdict `LOST-POSITION`, and the aggregate check never inspects the individual unsafe
+    columns inside that set.
+  - **Net:** the OI-61 item 1 defect is duplicated — fixing `evalUndercut` alone leaves `checkUndercutPredicate`
+    admitting the same unsafe boards at generation time.
+- `evaluateMoveHandler.js`'s `req.body` destructure (`{ movestring, col, category, correctCol,
+  highlightMetadata }`) and `ChallengeScreen.jsx:264`'s `correctCol: current.correct_col` /
+  `highlightMetadata: current.highlight_metadata` POST confirm the client-supplies-the-answer gap the owner
+  directive closes.
+- `migrations/016_correct_col.sql` adds `correct_col integer DEFAULT NULL` (a **scalar**) to both `puzzles`
+  and `candidates` — the existing precedent the directive widens to an array; the latest migration in the
+  tree is `060_paddle_rename_and_payment_events.sql`, so the new migration is the next number after that.
+
+*Detector enumerability (resolves the former "one task per evaluator" framing — costs differ by detector)*
+- **Tier A — cheap, already sweeps every column, just returns early.** `checkFigure7Predicate` and
+  `checkJShapePredicate` already loop `for (let col = 0; col < 7; col++)` trying every column and calling
+  `detectFigure7`/`detectJShape` on each, but `return` on the **first** match instead of accumulating all
+  matches. Converting these two to a full set is a small, local change to an existing loop.
+- **Tier B — the underlying detector must be changed to return all matches, not one.**
+  `detectZThreat`/`checkZThreatPredicate` and `detectOvercut`/`checkOvercutPredicate` compute the pattern
+  once for the whole board / one column at a time and return a single `column`; there is no existing loop to
+  widen — the detector itself needs a set-returning mode.
+- **Tier C — async and solver-simulating; do not sweep live.** `export async function
+  detectClaimeven(board, solver, perspective = board.currentPlayer)` calls into the solver process
+  (indirectly, via its odd/even-column classification which the caller feeds solver-derived `scores`) and is
+  `async`; sweeping it per-request at serving time is the exact cost the owner directive's "computed at
+  generation, not serving time" principle rules out. Its set must be enumerated once at generation and
+  stored — never swept live.
+- `odd_even_threat` is **already Tier A-plus**: `checkOddEvenThreatPredicate` already does
+  `correctCols: result.correctCols ?? [result.correctCol]`, and `detectOddEvenThreat`'s Step 3 already builds
+  a `correctCols` array gated in-loop by `if (!scores || scores[col] <= 0) continue` before pushing a
+  candidate column. **Correction to an earlier draft of this epic:** `detectOddEvenThreat` does NOT return
+  only `{ matched, cells }` — that shape is only what its FR-033 (`perspective !== currentPlayer`) recursion
+  branch returns; the base-case return already carries `correctCols`. The one real gap is narrower than
+  previously stated: `evalOddEvenThreat(candidateCol, puzzle)` reads only `puzzle.correctCol` and is never
+  handed `scores`, even though `evaluatePredicate(puzzle, candidateCol, scores)` already has `scores` in
+  scope to pass through.
+
+*Registry and invariant details*
+- `docs/architecture/server-conventions.md` §Predicate Evaluator currently states the now-superseded
+  rationale for why `SINGLE_ANSWER_CATEGORIES` compare against a scalar: *"For the six
+  `SINGLE_ANSWER_CATEGORIES` the detectors are instance detectors — they return their first match and a
+  single column, so there is no cheap way to enumerate a set."* This must be rewritten once the detector-tier
+  work above lands, since it stops being true category-by-category.
+- `categories.js` (both `connect-four/server/categories.js` and `connect-four/src/lib/categories.js`,
+  hand-mirrored) carries an explicit comment that `SINGLE_ANSWER_CATEGORIES` **MUST NOT** be derived by
+  negation from `MULTI_SOLUTION_CATEGORIES`. Per the owner directive, both sets are **kept as-is** for this
+  epic (no rename, no merge) — `odd_even_threat` is simply added to `SINGLE_ANSWER_CATEGORIES` in both files,
+  purely to route it through the `accepted`-field gate in `evaluateMoveHandler.js`
+  (`MULTI_SOLUTION_CATEGORIES.has(category) || SINGLE_ANSWER_CATEGORIES.has(category)`). Both files' in-code
+  comments must be reworded to say the sets gate the `accepted` field, not that they describe answer
+  cardinality (which stops being an accurate distinction once every category has a stored set).
+  `tests/integration/evaluateMoveMultiSolution.test.js` asserts on the **literal source text**
+  `MULTI_SOLUTION_CATEGORIES.has(effectiveCategory)`, so a rename (not planned, but noted for the next
+  reader) would break `test:fast` by regex match, not by behaviour.
+- `classifyAnswerSet` (in `answerSetInvariant.js`) returns `LOST-POSITION` (a **passing** verdict) whenever
+  `scores[optimal[0]] < 0`, with an in-code rationale naming undercut as the motivating case. Decision 5
+  above reconciles this: the exemption survives, reinterpreted as "the relative floor still applies, it's
+  just relative to a losing optimum."
 - Answer-set enforcement runs at three points today (OI-61 update, 2026-07-28):
   `candidate-generator.js#checkPredicate`, `tests/lessons/lessonAnswerSets.test.js` (blocking, in `test` and
   `test:fast`), and `server/scripts/audit_answer_ambiguity.mjs`. Current state: lessons 39/39, local DB
-  295/295.
+  295/295. All three must be re-run after the stored-set migration, since the backfill changes what
+  "current DB state" means.
+- `detectOddEvenThreat(board, scores, perspective = board.currentPlayer, solver = null)` has an FR-033
+  recursion branch for `perspective !== currentPlayer` used only when a `solver` is passed; the
+  perspective-soundness question for this detector belongs to Epic 2, not here.
 
 **Authoritative sources of truth**
 - `docs/open_issues.md` — OI-75, OI-61, OI-1 (the shared modelling question)
-- `docs/architecture/server-conventions.md` §Predicate Evaluator, §Category Registry, §"Undercut has two sides"
+- `docs/architecture/server-conventions.md` §Predicate Evaluator, §Category Registry, §"Undercut has two
+  sides", §Classifier vs Predicate Evaluator
+- `docs/architecture/data-model.md`, `docs/architecture/db-schema.md` — read before writing the migration
 - `docs/knowledge-base/README.md` + the entry per category touched (`formal_predicate` is the spec,
   `false_positives` are tests you must not break)
-- `connect-four/server/answerSetInvariant.js` (the invariant, in code, with its rationale comments)
+- `connect-four/server/answerSetInvariant.js` (the invariant, in code, with its rationale comments — import
+  it, do not restate it)
+- `connect-four/server/migrations/016_correct_col.sql` (the scalar precedent this epic widens)
+- `connect-four/server/evaluateMoveHandler.js`, `connect-four/src/screens/ChallengeScreen.jsx` (the
+  request/response contract this epic changes)
 - `docs/architecture/testing-conventions.md`; `CLAUDE.md` §Running tests (`npm run test:fast`)
 
 **User stories & tasks**
 
-**US1.1 — Set-valued acceptance contract (7 tasks).** Define the `{ result, correctCol, tiedWith, … }`
-contract for a multi-column evaluator; extract `evalDoubleThreat`'s sweep into a shared helper; document the
-contract in `server-conventions.md`; unit-test the helper against a board with 2+ qualifying columns and one
-with exactly one; assert `'tied'` propagates through `acceptedCols`; add a fixture proving a qualifying but
-losing column is excluded.
+**US1.1 — Set-valued acceptance contract & relative solver-safety floor (7 tasks).** Document the
+`{ result, correctCol, tiedWith, … }` tri-state contract in `server-conventions.md`, citing `evalDoubleThreat`
+as the contract's reference implementation (not its sweep — three different evaluators read three different
+input shapes, per Settled decision 1); define the relative solver-safety floor (`C ∈ optimalCols(scores)`,
+Decision 5) as code inside `answerSetInvariant.js`, per its own "import it, do not restate it" instruction;
+unit-test the floor against a won board (absolute case reduces correctly) and a fully-lost board (relative
+case keeps at least the slowest-loss columns safe); unit-test the tri-state contract against a board with 2+
+qualifying columns and one with exactly one; assert `'tied'` propagates through `acceptedCols`; add a fixture
+proving a pattern-qualifying but unsafe (worse-than-optimum) column is excluded; rewrite
+`server-conventions.md` §Predicate Evaluator's "instance detectors, no cheap way to enumerate a set"
+paragraph, since it stops being true once US1.4's tiered conversions land.
 
-**US1.2 — Solver-safety gate (8 tasks).** Define "solver-safe" as an IF-THEN rule (IF playing column C lets
-the opponent reach a win or a double threat, THEN C is not accepted **and** the board is not a valid puzzle
-for the category); apply it to `evalUndercut` (OI-61 item 1); reconcile with `classifyAnswerSet`'s
-LOST-POSITION exemption — decide whether undercut boards keep the exemption or get a narrower one; extend
-`candidate-generator.js#checkPredicate`; add red-first tests per branch; re-run
-`audit_answer_ambiguity.mjs --puzzles undercut` and record the before/after row counts.
+**US1.2 — Solver-safety gate on the undercut generation path (OI-61 item 1) (6 tasks).** Add a per-column
+relative-floor check inside `checkUndercutPredicate` (`candidate-generator.js`) — today it marks every column
+except the killing column "correct" with no score check at all, independent of and in addition to
+`evalUndercut`'s equivalent gap; fix `evalUndercut` (`predicates.js`) to apply the same floor on the
+row-less/computed-live path; add a test confirming the LOST-POSITION exemption survives under the relative
+floor rather than silently disappearing (Decision 5); add a red-first fixture — an undercut board where a
+non-killing column concedes a fork worse than the board's own optimum — and assert it is excluded on both
+paths; re-run `audit_answer_ambiguity.mjs --puzzles undercut` and record the before/after row counts; update
+`docs/open_issues.md` OI-61 item 1's closeout.
 
-**US1.3 — `odd_even_threat` becomes graded (6 tasks).** Generalize `evalOddEvenThreat` to the US1.1 contract;
-add the slug to `SINGLE_ANSWER_CATEGORIES` in **both** `server/categories.js` and `src/lib/categories.js`;
-verify lesson 07's two boards (`3553515566110063` cc 3, `3411022114433433` cc 2) still pass
-`lessonAnswerSets.test.js`; add a board where 2+ columns create the odd threat and assert both grade correct;
-add a board where the odd-threat column concedes a fork and assert it is rejected as an invalid puzzle.
+**US1.3 — `odd_even_threat` becomes graded (5 tasks, narrower than an earlier draft — see Non-obvious
+facts).** Thread `scores` through `evaluatePredicate` into `evalOddEvenThreat` so it stops reading only
+`puzzle.correctCol` and instead accepts membership in the already-computed `correctCols` set (no detector
+change needed — `detectOddEvenThreat`/`checkOddEvenThreatPredicate` already produce it); add `odd_even_threat`
+to `SINGLE_ANSWER_CATEGORIES` in **both** `server/categories.js` and `src/lib/categories.js`, rewording both
+files' in-code comments to describe gating the `accepted` field rather than answer cardinality; verify lesson
+07's two boards (`3553515566110063` cc 3, `3411022114433433` cc 2) still pass `lessonAnswerSets.test.js`; add
+a board where 2+ columns create the odd threat and assert both grade correct; add a board where the odd-threat
+column concedes a fork and assert it is rejected as an invalid puzzle under the relative floor.
 
-**US1.4 — Roll the model across the remaining single-answer evaluators (9 tasks).** One task per evaluator
-(`evalZThreat`, `evalClaimeven`, `evalFigure7`, `evalJShape`, `evalOvercut`), each converting equality to
-set membership + solver safety while preserving the stored `correctCol` as the *canonical* answer for
-highlight metadata; re-run the three enforcement points; re-audit the full DB pool; record any board the new
-invariant rejects and replace rather than exempt it.
+**US1.4 — Roll the model across the remaining evaluators, tiered by enumeration cost (8 tasks).** Tier A
+(cheap): convert `checkFigure7Predicate`/`checkJShapePredicate`'s existing per-column loops from "return on
+first match" to "accumulate all matches", and generalize `evalFigure7`/`evalJShape` to set membership against
+the stored set. Tier B (detector must change): extend `detectZThreat`/`checkZThreatPredicate` and
+`detectOvercut`/`checkOvercutPredicate` to return every matching column, not one, and generalize
+`evalZThreat`/`evalOvercut` to set membership. Tier C (`claimeven`, async + solver-simulating): do **not**
+add a live sweep; fold its set-enumeration entirely into the generation-time stored-set work (US1.5) — no
+serving-time cost, no exemption needed. Re-run the three enforcement points
+(`checkPredicate`/`lessonAnswerSets.test.js`/`audit_answer_ambiguity.mjs`) after each tier; re-audit the full
+DB pool; record any board the new invariant rejects and replace rather than exempt it.
+
+**US1.5 — Schema migration + backfill: store the answer set once (8 tasks, new — owner architectural
+directive).** Add a migration (next number after `060_paddle_rename_and_payment_events.sql`) adding
+`correct_cols integer[]` to both `puzzles` and `candidates`, alongside the existing scalar `correct_col`;
+populate `correct_cols` at generation time from the now-generalized `checkPredicateRaw` branches, gated by the
+relative solver-safety floor; write a backfill script that recomputes `correct_cols` for every existing
+active puzzle and candidate row using the new solver-gated detectors (including `claimeven`, enumerated once
+here rather than swept live); decide and state explicitly the fate of the legacy scalar `correct_col` — keep
+it in sync for compatibility, or drop it once all consumers move to the array (pick one; do not leave it
+ambiguous); verify the backfilled DB against `audit_answer_ambiguity.mjs` (0 failures); test migration/backfill
+idempotency (re-running it twice produces the same `correct_cols`); update
+`docs/architecture/data-model.md`/`db-schema.md` with the new column.
+
+**US1.6 — Grading contract: stored-set branch + computed-live branch (8 tasks, new — owner architectural
+directive).** Add a stored-set grading branch to `evaluateMoveHandler.js` that looks the puzzle up by id
+(the client must now send `puzzleId`; `ChallengeScreen.jsx` already holds `current.id`) and grades against
+`puzzle.correct_cols` server-side, no longer trusting the client-supplied `correctCol`/`highlightMetadata` for
+that branch; keep the existing `evaluatePredicate`/`acceptedCols` computed-live path unchanged for row-less
+boards (lesson inline challenges call `/api/evaluate-move` with no puzzle row — memory
+`project_lesson_interactivity_evaluation`); ensure both branches call the **same** relative-floor safety
+function from `answerSetInvariant.js` rather than each encoding their own; update `ChallengeScreen.jsx` to
+send `puzzleId` in the `/api/evaluate-move` request body; update
+`docs/architecture/api-conventions.md` for the `/api/evaluate-move` request-shape change; add a test that the
+stored-set branch grades a multi-column DB puzzle correctly and a separate test that a row-less (lesson-style)
+call is unaffected; decide and document what happens on an old client request that supplies neither
+`puzzleId` nor a row-less shape (hard-reject vs. graceful fallback to the computed-live path) — do not leave
+this unspecified; update `docs/open_issues.md` closeouts for OI-75 and OI-61 item 1 reflecting the shipped
+shape.
 
 **Acceptance criteria**
-- No category is graded by solver score alone, and none by stored-column equality alone.
-- A board whose taught column concedes a win or a double threat fails `checkPredicate` at generation and
-  fails the lesson answer-set test.
-- `npm run test:fast` green; `audit_answer_ambiguity.mjs` reports 0 failures for lessons and the local DB.
-- `server/categories.js` and `src/lib/categories.js` agree (a test asserts it).
+- Every category's stored answer is a **solver-gated set produced once by the pattern detector at generation
+  time** — never a hand-picked scalar, and never independently re-derived by a second implementation at
+  serving time. (Supersedes the earlier "no category graded by stored-column equality alone" wording: after
+  this epic every category IS graded against a stored value; the invariant is about how that value is
+  computed, not whether it exists.)
+- A board whose taught column concedes a win or fork worse than the board's own optimum (the relative floor,
+  Decision 5) fails `checkPredicateRaw`/`checkPredicate` at generation and fails the lesson answer-set test.
+- Grading has exactly two branches — stored-set (puzzle rows, looked up by id) and computed-live (row-less
+  boards) — and both share one relative-floor safety definition living in `answerSetInvariant.js`. No third,
+  independent derivation of the answer set exists anywhere in the codebase.
+- `npm run test:fast` green; `audit_answer_ambiguity.mjs` reports 0 failures for lessons and the local DB,
+  re-run against the post-backfill data.
+- `server/categories.js` and `src/lib/categories.js` agree (a test asserts it); their `SINGLE_ANSWER_CATEGORIES`
+  / `MULTI_SOLUTION_CATEGORIES` in-code comments describe gating the `accepted` field, not answer cardinality.
 - Every `OI-N` under this epic's **Issues covered** is closed out in `docs/open_issues.md` per the
   Issue closeout convention at the top of this file — resolved-with-date, or still open with a dated
   UPDATE naming exactly what remains. A shipped fix with a stale backlog entry is an incomplete story.
 
 **NOT included**
 - Changing which categories exist, or adding a new puzzle category.
-- The `perspective`-parameter soundness of any detector (Epic 2).
+- The `perspective`-parameter soundness of any detector (Epic 2) — **except** the narrow, in-scope change of
+  converting `detectZThreat`/`detectOvercut` (and the already-column-sweeping
+  `checkFigure7Predicate`/`checkJShapePredicate`) from first-match to all-matches returns. That IS detector
+  surgery, of a different kind than Epic 2's perspective-soundness work — called out explicitly so the
+  boundary between the two epics is unambiguous.
 - The serving-pool filter and `puzzle_attempts.outcome` enum question (OI-49, Epic 4).
 - Re-designing `highlight_metadata` shapes.
+- Removing the row-less `evaluatePredicate`/`acceptedCols` computed-live path — it keeps serving lesson
+  inline challenges and the audit script.
+- Retiring the legacy `correct_col` scalar (migrating every remaining consumer off it, then dropping the
+  column) — split out to its own future epic; see "### Deferred" below.
+
+### Deferred
+
+- **Legacy `correct_col` scalar retirement — split out to `docs/open_issues.md` OI-81 (2026-07-29).**
+  US1.5's original plan ("Decision B") was to migrate every `correct_col` consumer and drop the column in
+  the same feature as spec 051. The owner reversed that decision once the consumer inventory was actually
+  re-derived against the worktree: **105 references across 22 files**, not the 62/11 estimate the decision
+  had been made on, sitting on top of an already-large feature (schema migration + backfill + API contract
+  change). Spec 051 instead keeps `correct_col` **in sync** as `correct_cols[0]` (a deliberate, temporary
+  duplicate) for this epic's scope; the full retirement — including the 22-file inventory, the camelCase
+  `correctCol` lesson-content carve-out, and the upstream-only (`gameSampling.js`/`debug-claimeven.js`)
+  checks — is preserved verbatim in OI-81 for a future epic to pick up.
 
 **Open questions**
-- Does the LOST-POSITION exemption survive as-is, narrow to "lost **and** the category is defensive", or
-  disappear once `evalUndercut` has a floor?
+- ~~US1.5 must decide, and state in the spec, whether the legacy scalar `correct_col` is kept in sync
+  indefinitely (compatibility) or dropped once all consumers read `correct_cols`~~ — **Resolved 2026-07-29**:
+  kept in sync for this feature (spec 051 FR-017); full retirement deferred, see "### Deferred" above and
+  OI-81.
+- US1.6 must decide, and state in the spec, the behaviour of `/api/evaluate-move` when a request supplies
+  neither a `puzzleId` nor a row-less (lesson-style) shape — hard-reject as a malformed request, or fall back
+  to the computed-live path. Left open deliberately; not a re-litigation of a settled decision.
 
 ---
 
@@ -896,6 +1132,165 @@ That audit is a backstop, not the primary mechanism: each epic closes its own is
 
 ---
 
+## Epic 9 — Legacy `correct_col` Scalar Retirement
+
+> **Lane C, isolated, runs alone.** Epic 9 is Lane C (with Epic 8), not Lane A, even though its subject
+> matter is Epic 1's unfinished business. Its 22-file mechanical sweep across server and frontend overlaps
+> concrete files Lane A is still touching while it runs (`server/predicates.js`,
+> `server/answerSetInvariant.js`, `server/evaluateMoveHandler.js` vs. Epic 2's `server/classifier.js`/
+> `llmCoachHelpers.js` and Epic 4's `server/index.js` handlers/`classifier.js`) — the same conflict profile
+> that keeps Epic 8's lint sweep isolated. **Dependency note:** this epic requires **spec 051 (Epic 1) to
+> have shipped and merged** — `correct_cols` must already exist and be populated (generation + backfill)
+> before any consumer can be migrated off the scalar, and the compatibility sync spec 051 ships (FR-017) is
+> exactly what keeps `correct_col` safe to read while this epic's migration work is in flight. This is a
+> between-lanes dependency on 051 specifically, not a within-Lane-A sequencing rule — Epic 9 does **not**
+> need to wait for Epics 2–4 to finish, only for spec 051 to merge. Do not start this epic's `/epics-manager`
+> run until spec 051 has merged and its backfill has run.
+
+**Intent:** Finish the retirement spec 051 deliberately left undone. Spec 051 (Epic 1) introduced
+`correct_cols integer[]` as the computed-once, solver-gated source of truth and — after a same-day owner
+reversal on 2026-07-29 — keeps the legacy scalar `correct_col` **in sync** rather than migrating every
+consumer and dropping it, because the re-derived consumer inventory came back at 105 references across 22
+files, not the 62/11 estimate the original "migrate and drop in the same feature" decision was made on. This
+epic is that migration and drop, done properly and sized on its own: eliminate the last duplicate source of
+truth for a puzzle's/candidate's correct column, without touching the unrelated lesson-JSON field of the
+same camelCase name.
+
+**Issues covered**
+- **OI-81** — Retire the legacy `correct_col` scalar once `correct_cols` is the source of truth. Carries the
+  full 105-reference / 22-file consumer inventory and the rationale for the 2026-07-29 split; this epic is
+  its spec-ready home.
+
+**Settled decisions** (owner, 2026-07-29)
+1. This epic is **split out of spec 051** by owner decision on 2026-07-29, after the consumer inventory —
+   once actually re-derived against the worktree rather than estimated — came back at **105 references
+   across 22 files**, not the 62/11 figure the original "migrate and drop in the same feature" decision had
+   been made on. The scope was judged too large to bolt onto an already-large feature (schema migration +
+   backfill + API contract change).
+2. The **snake_case `correct_col`** (the DB column name) is the unambiguous grep form for finding consumers.
+   The camelCase API/object mirror `correctCol` is **not** unambiguous — see Non-obvious facts.
+3. The authored **lesson-JSON** field `correctCol` (Socratic/confirmation-challenge nodes) is **explicitly
+   out of scope** for this epic — it has nothing to do with the `puzzles`/`candidates` table and must not be
+   touched by any migration script this epic writes.
+4. The column-drop migration **MUST land strictly after every consumer has migrated** to `correct_cols` —
+   dropping the column while a consumer still reads it produces a silent runtime failure, not a migration
+   error — and its migration number **cannot be reserved in advance** (this is a concurrently-edited repo;
+   re-verify the next migration number immediately before writing the drop migration, same as spec 051's own
+   numbering caveat).
+5. This epic **depends on spec 051 having shipped and merged**: `correct_cols` must exist, be populated at
+   generation time, and be backfilled onto every existing row before any consumer migration here can
+   proceed. This is a **between-lanes** dependency on 051 specifically, not on the rest of Lane A — Epic 9
+   does not need Epics 2–4 to finish, only spec 051 to merge.
+6. **Epic 9 is Lane C, not Lane A**, despite depending on Epic 1's output. Lane C is this file's isolated
+   lane: Epic 8 runs alone because its repo-wide lint sweep would conflict with every open branch, and Epic
+   9's 22-file mechanical sweep across server and frontend has the same conflict profile — it touches
+   `server/predicates.js`, `server/answerSetInvariant.js`, and `server/evaluateMoveHandler.js` while Epic 2
+   (Lane A) is still working in `server/classifier.js`/`llmCoachHelpers.js` and Epic 4 (Lane A) in
+   `server/index.js` handlers/`classifier.js` — running Epic 9 concurrently with the rest of Lane A would
+   mean repeatedly hand-merging the same files. Epic 9 runs alone, only after spec 051 merges; it does not
+   wait for all of Lane A to finish.
+
+**Non-obvious facts**
+- The full 105-reference / 22-file inventory table (re-derived 2026-07-29 via `grep -rn "correct_col\b"`,
+  server + frontend, excluding `node_modules`) lives in `docs/open_issues.md` **OI-81** — read it there
+  rather than duplicating it here; re-derive it fresh at pickup time since this repo is concurrently edited
+  and the table will have drifted.
+- **Three call sites consume the API-level `correctCol` mirror with no `correct_col` substring to grep for**
+  and must be found by name, not by grep: `server/evaluateMoveHandler.js` (destructures the legacy
+  client-supplied `correctCol` from `req.body`), `server/predicates.js` (`buildPredicatePuzzle`'s
+  `correctCol` parameter), and `server/answerSetInvariant.js` (`acceptedCols`'s `correctCol` destructure).
+- **The `correctCol` camelCase overload trap**: the same identifier names both the puzzle/candidate scalar
+  this epic retires *and* an unrelated authored lesson-content field
+  (`server/lessonLoader.js`, `server/scripts/verify_lesson_content.mjs`, `SocraticScreen.jsx`'s
+  `col === socratic.correctCol` — memory `project_lesson_interactivity_evaluation`). A naive
+  find-and-replace across every `correctCol` occurrence would silently corrupt lesson content that has
+  nothing to do with the `puzzles`/`candidates` table. Every camelCase call site must be triaged by hand
+  against OI-81's inventory before being touched.
+- **Upstream-only files, migration-time check only, not must-migrate**: `server/gameSampling.js` and
+  `server/debug-claimeven.js` read/produce a `correctCol` value upstream of the DB write; they never
+  themselves read or write the stored column, so they need a migration-time smoke check that they still
+  work once `correct_col` is gone, not inclusion in the must-migrate call-site list.
+- `connect-four/server/migrations/016_correct_col.sql` is the column's origin (`correct_col integer DEFAULT
+  NULL` on both `puzzles` and `candidates`) — this epic's drop migration is its removal.
+
+**Authoritative sources of truth**
+- `docs/open_issues.md` OI-81 — the full inventory table and issue record this epic is built from.
+- `specs/051-pattern-acceptance/spec.md` FR-017 (kept-in-sync requirement this epic supersedes) and FR-019
+  (the compatibility mechanism this epic removes once retirement completes).
+- `connect-four/server/migrations/016_correct_col.sql` — the column's origin.
+- `docs/architecture/data-model.md`, `docs/architecture/db-schema.md` — read before writing the drop
+  migration; both will need updating to remove the "kept in sync" language spec 051 introduces.
+- memory `project_lesson_interactivity_evaluation` — the lesson-JSON `correctCol` carve-out.
+
+**User stories & tasks**
+
+**US9.1 — Fresh inventory + migration plan (5 tasks).** Re-derive the consumer inventory fresh against the
+worktree at pickup time (OI-81's table will have drifted); triage every camelCase `correctCol` call site
+into "puzzle/candidate scalar" vs. "lesson-JSON field, out of scope" (Settled decision 3); order the
+migration plan by dependency (server core → server scripts → frontend → tests, given `evaluateMoveHandler.js`
+and `predicates.js` are read by nearly everything else); confirm spec 051's backfill has actually completed
+against the target DB before starting (Settled decision 5).
+
+**US9.2 — Migrate server-side consumers (9 tasks).** Migrate `server/index.js` (22 refs), `candidate-
+generator.js` (13 refs), `server/scripts/audit_answer_ambiguity.mjs` (7 refs), `server/shapeDescriptor.js`
+(5 refs), `server/classifier.js` (2 refs), and the three no-substring call sites
+(`evaluateMoveHandler.js`, `predicates.js`, `answerSetInvariant.js`) to read/write `correct_cols` instead of
+`correct_col`; re-run `npm run test:fast` after each file group; smoke-check `gameSampling.js` and
+`debug-claimeven.js` per Non-obvious facts (they are not migrated, only verified).
+
+**US9.3 — Migrate frontend + non-test scripts (7 tasks).** Migrate `src/screens/ChallengeScreen.jsx`,
+`src/components/CurationWorkspace.jsx`, `src/components/admin/PuzzlePickerModal.jsx`, `src/lib/devFixtures.js`,
+`src/screens/AdminLessonEditorScreen.jsx`, `scripts/backfill-confirmation-challenges.mjs`, and
+`scripts/verify-undercut-puzzles.mjs` off the scalar; manual QA pass on the admin curation/picker screens
+since they have no test coverage of their own.
+
+**US9.4 — Migrate the test suite (7 tasks).** Update the 8 test files carrying `correct_col`/`correctCol`
+assertions (`tests/integration/claimeven.test.js`, `evaluateMoveMultiSolution.test.js`,
+`figure7_jshape.test.js`, `undercut_overcut.test.js`, `tests/unit/devFixtures.test.js`,
+`tests/classifier/classifier.test.js`, `tests/unit/multiSolutionAcceptance.test.js`,
+`tests/unit/shapeDescriptor.test.js` — the last alone carries 25 references) to assert against
+`correct_cols`; confirm `npm run test:fast` is green with zero remaining `correct_col`/`correctCol`
+references outside the lesson-JSON carve-out.
+
+**US9.5 — Drop the column (6 tasks).** Verify every consumer from US9.2–9.4 is migrated (a repo-wide grep
+for `correct_col\b` outside `migrations/016_correct_col.sql`, lesson-JSON files, and this epic's own
+inventory references should return nothing); write and land the drop migration, numbered sequentially after
+whatever is latest at that point (Settled decision 4); update `docs/architecture/data-model.md`/
+`db-schema.md` to remove the "kept in sync" language; close out OI-81 in `docs/open_issues.md` per the
+closeout convention.
+
+**Acceptance criteria**
+- Zero remaining references to `correct_col` (DB column) or the puzzle/candidate-scalar sense of `correctCol`
+  anywhere in `connect-four/server/`, `connect-four/src/`, `connect-four/scripts/`, or
+  `connect-four/tests/` — verified by a repo-wide grep, excluding the lesson-JSON carve-out and the
+  now-historical `016_correct_col.sql` migration file.
+- The lesson-JSON `correctCol` field (`server/lessonLoader.js`, `verify_lesson_content.mjs`,
+  `SocraticScreen.jsx`) is untouched and its tests still pass.
+- The column-drop migration lands strictly after every consumer migration and `npm run test:fast` is green
+  at every intermediate step, not only at the end.
+- `docs/architecture/data-model.md`/`db-schema.md` document `correct_col` as removed, not kept-in-sync.
+- **OI-81** is closed out in `docs/open_issues.md` in the same change that ships the drop migration, per the
+  Issue closeout convention at the top of this file — resolved-with-date and evidence (the migration file
+  and the zero-reference grep), or a dated `UPDATE` naming exactly what remains open. A shipped fix with a
+  stale backlog entry is an incomplete story.
+
+**NOT included**
+- The authored lesson-JSON `correctCol` field and its consumers (`lessonLoader.js`,
+  `verify_lesson_content.mjs`, `SocraticScreen.jsx`) — a structurally unrelated field that happens to share
+  a name; never in scope for this epic.
+- Anything spec 051 already delivers: the `correct_cols` column itself, its generation-time/backfill
+  population, the stored-set/computed-live grading branches, and the FR-017 sync mechanism this epic
+  supersedes once retirement completes.
+- Re-litigating the relative solver-safety floor, the set-valued acceptance model, or any other Epic 1
+  decision — this epic is pure plumbing retirement, not a second pass at Epic 1's grading semantics.
+
+**Open questions**
+- None at spec time — this epic's scope (migrate every enumerated consumer, then drop the column) is fully
+  determined by OI-81's inventory and spec 051's Settled decisions. The only re-verification needed at
+  pickup time is re-deriving the inventory fresh (US9.1) and confirming spec 051 has actually shipped.
+
+---
+
 ## Traceability
 
 Every open `OI-N` maps to exactly one epic.
@@ -910,6 +1305,7 @@ Every open `OI-N` maps to exactly one epic.
 | 6 | B | OI-19, OI-38, OI-44, OI-46, OI-62, OI-63, OI-68, OI-69, OI-73 |
 | 7 | B | OI-21, OI-35, OI-37 |
 | 8 | C | OI-6, OI-16, OI-29, OI-58, OI-70, OI-71, OI-72 |
+| 9 | C | OI-81 |
 
 † subsumed by OI-65 — the remaining work is identical (generate the clips).
 

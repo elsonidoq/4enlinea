@@ -885,13 +885,18 @@ export function detectZThreat(board, scores, perspective = board.currentPlayer, 
     }
   }
 
-  if (candidates.length !== 1) return { matched: false, cells: [] };
+  // T014 (spec 051 Epic 1, FR-010): additive correctCols field on both branches — the existing
+  // candidates.length !== 1 rejection (FR-010's uniqueness guard) is untouched.
+  if (candidates.length !== 1) {
+    return { matched: false, cells: [], correctCols: candidates.map(c => c.col) };
+  }
   const { col, fromRow, toRow, badgeCount } = candidates[0];
   return {
     matched: true,
     cells: [],
     highlightMetadata: { type: 'capsule', column: col, fromRow, toRow, badgeCount },
     categoryEvidence: {},
+    correctCols: candidates.map(c => c.col),
   };
 }
 
@@ -1017,6 +1022,13 @@ export function detectOvercut(board, scores, perspective = board.currentPlayer) 
   const threats    = board.reachableThreats(perspective);
   const oppThreats = board.reachableThreats(3 - perspective);
 
+  // T015 (spec 051 Epic 1, FR-010): accumulate every matching column instead of returning on the
+  // first — genuinely new control flow (unlike the Tier A conversions). Per research.md
+  // Decision D3, "first qualifying row per column wins" is preserved inside the inner loop (the
+  // `break` below) — only the outer loop's early-return becomes accumulation. The first match's
+  // return shape stays byte-identical (matched/reason/cells/highlightMetadata) for classifyPattern
+  // and every other existing caller; correctCols is a purely additive field.
+  const matches = [];
   for (let col = 0; col < COLS; col++) {
     if (board.colHeights[col] >= ROWS) continue;
     if (!scores || scores[col] <= 0) continue; // overcut requires playing C to be winning
@@ -1034,8 +1046,8 @@ export function detectOvercut(board, scores, perspective = board.currentPlayer) 
         { column: col, row: neutralised, role: 'neutralised_threat' },
         { column: col, row: R,           role: 'major_threat' },
       ];
-      return {
-        matched: true,
+      matches.push({
+        col,
         reason: isT4SameParity(R, neutralised) ? 'same_parity_t4'
               : isT5Exception(R, neutralised) ? 'active_forcing'
               : 'chain_t2',
@@ -1044,11 +1056,21 @@ export function detectOvercut(board, scores, perspective = board.currentPlayer) 
           type: 'cells',
           cells: hCells,
         },
-        categoryEvidence: {},
-      };
+      });
+      break; // first qualifying row per column wins (Decision D3) — move to the next column
     }
   }
-  return { matched: false, cells: [] };
+
+  if (matches.length === 0) return { matched: false, cells: [], correctCols: [] };
+  const first = matches[0];
+  return {
+    matched: true,
+    reason: first.reason,
+    cells: first.cells,
+    highlightMetadata: first.highlightMetadata,
+    categoryEvidence: {},
+    correctCols: matches.map(m => m.col),
+  };
 }
 
 /**
@@ -1341,13 +1363,33 @@ export function detectOddEvenThreat(board, scores, perspective = board.currentPl
 }
 
 /**
- * T006 — Claimeven detection (async — runs solver simulation).
- * Subtype A: exactly 1 odd column → unique equalising move.
- * Subtype B: exactly 2 odd columns → opponent just played in one, current player responds in the other.
+ * T006/T018 — Claimeven detection (async — runs solver simulation).
+ *
+ * T018 (spec 051): every odd-height column is evaluated as an INDEPENDENT standard-Claimeven
+ * candidate — Allis's base rule applies per column, with no cap on how many columns may
+ * simultaneously admit it (docs/knowledge-base/allis-claimeven.md). The code's legacy
+ * "subtype A / subtype B" split is Allis's documented Extended Claimeven cross-pairing special
+ * case (exactly one left-over unpaired odd column paired across columns) — it is preserved below
+ * as an ADDITIONAL candidate-producing path, not a replacement for the per-column sweep. Note the
+ * subtype-B "extended" candidate column is itself always one of the two odd-height columns, so
+ * its simulation (play that column now, then the standard baseinverse-response loop) is IDENTICAL
+ * to that column's own per-column standard check — there is no separate "extra" simulation to
+ * run for it; the subtype only affects which legacy label/evidence is reported for that column
+ * when it is also the byte-identical legacy match.
+ *
+ * `matched`/`correctCol`/`categoryEvidence` are preserved byte-for-byte for the existing
+ * `classifyPattern` live-tagging caller in every case the ORIGINAL code would have matched
+ * (oddCols.length === 1, or oddCols.length === 2 with the last-played column being one of the
+ * two odd columns) — `correctCols` is a purely additive field. Boards with 0 odd columns still
+ * report `matched: false` unchanged. Boards with 2 odd columns whose last-played column is NOT
+ * one of them, or with 3+ odd columns, no longer hit the original's outright rejection (verified
+ * at source to be an implementation gap, not a domain constraint) — they now run the same
+ * per-column sweep and can match via the new "standard" categoryEvidence shape below.
+ *
  * @param {Board} board
  * @param {object} solver  c4solver wrapper instance
  * @returns {Promise<{ matched: boolean, col?: number, metadata?: HighlightMetadata }>}
- * @complexity O(42) + solver queries
+ * @complexity O(42) + up to (odd-column count) solver simulations, each ≤ MAX_PAIRS solver queries
  * @cache not cached
  */
 export async function detectClaimeven(board, solver, perspective = board.currentPlayer) {
@@ -1360,38 +1402,69 @@ export async function detectClaimeven(board, solver, perspective = board.current
     if (board.colHeights[col] < ROWS && board.colHeights[col] % 2 === 1) oddCols.push(col);
   }
 
-  let subtype, correctCol, baseinversePair;
+  if (oddCols.length === 0) return { matched: false, cells: [] };
 
+  // Legacy subtype A/B candidate — computed with the ORIGINAL gating logic so that, when it
+  // applies, its simulation and reported shape are byte-identical to pre-T018 behavior.
+  let legacySubtype = null;
+  let legacyCorrectCol = null;
+  let legacyBaseinversePair = null;
   if (oddCols.length === 1) {
-    subtype = 'A';
-    correctCol = oddCols[0];
-    baseinversePair = [correctCol];
+    legacySubtype = 'A';
+    legacyCorrectCol = oddCols[0];
+    legacyBaseinversePair = [legacyCorrectCol];
   } else if (oddCols.length === 2) {
-    // Subtype B: opponent's last move made one of these columns odd
     const lastCol = parseInt(board.movestring[board.movestring.length - 1], 10);
-    if (!oddCols.includes(lastCol)) return { matched: false, cells: [] };
-    subtype = 'B';
-    baseinversePair = [...oddCols];
-    correctCol = oddCols.find(c => c !== lastCol);
-  } else {
-    return { matched: false, cells: [] };
+    if (oddCols.includes(lastCol)) {
+      legacySubtype = 'B';
+      legacyBaseinversePair = [...oddCols];
+      legacyCorrectCol = oddCols.find(c => c !== lastCol);
+    }
   }
 
-  // Run simulation from position after correct move
-  const newMoves = board.movestring + correctCol.toString();
-  const simResult = await runClaimevenSimulation(newMoves, solver);
-  if (!simResult.yellowWins) return { matched: false, cells: [] };
+  // T018: run one simulation per odd-height column (the legacy candidate, when it exists, is
+  // always a member of oddCols — reuse its result rather than simulating it twice).
+  const simByCol = new Map();
+  for (const col of oddCols) {
+    const newMoves = board.movestring + col.toString();
+    const simResult = await runClaimevenSimulation(newMoves, solver);
+    simByCol.set(col, simResult);
+  }
 
+  const correctCols = oddCols.filter(col => simByCol.get(col).yellowWins);
+  if (correctCols.length === 0) return { matched: false, cells: [] };
+
+  // Byte-identical legacy shape when the original subtype A/B candidate itself confirmed.
+  if (legacyCorrectCol != null && simByCol.get(legacyCorrectCol).yellowWins) {
+    return {
+      matched: true,
+      cells: [],
+      highlightMetadata: null,
+      correctCol: legacyCorrectCol,
+      correctCols,
+      categoryEvidence: {
+        subtype: legacySubtype,
+        baseinverse_pair: legacyBaseinversePair,
+        correct_col: legacyCorrectCol,
+        simulation_trace: simByCol.get(legacyCorrectCol).trace,
+      },
+    };
+  }
+
+  // New match: no legacy subtype applied (or it did but didn't confirm), but at least one
+  // odd-height column independently confirms as a standard Claimeven candidate.
+  const firstCol = correctCols[0];
   return {
     matched: true,
     cells: [],
     highlightMetadata: null,
-    correctCol,
+    correctCol: firstCol,
+    correctCols,
     categoryEvidence: {
-      subtype,
-      baseinverse_pair: baseinversePair,
-      correct_col: correctCol,
-      simulation_trace: simResult.trace,
+      subtype: 'standard',
+      baseinverse_pair: [firstCol],
+      correct_col: firstCol,
+      simulation_trace: simByCol.get(firstCol).trace,
     },
   };
 }

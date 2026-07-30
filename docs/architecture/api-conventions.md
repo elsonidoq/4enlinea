@@ -517,11 +517,72 @@ Three invariants: (1) the DB helpers return `{ error }` rather than throwing —
 
 ### User-Move Path (default, `aiMove` absent or false)
 
-**Request body**: `{ movestring: string, col: number, category?: string, aiMove?: false }`
+**Request body**: `{ movestring: string, col: number, category?: string, aiMove?: false, puzzleId?: string }`
 - `movestring`: position **before** the move (0-indexed, 0–42 chars).
 - `col`: 0-indexed column played.
 - `category`: optional override for the phrase pool key (e.g. `"forced_block"`). When omitted, the classifier derives the pattern tag from the position via `classify()` (synchronous, pre-move board).
 - `aiMove`: absent or `false`.
+- `puzzleId` (spec 051, Epic 1, FR-024/FR-027): optional puzzle row UUID. When present, selects the
+  **stored-set grading branch** — see "Grading branches (`puzzleId` vs. row-less)" below. Sent by
+  `ChallengeScreen.jsx` (`current.id`) alongside `correctCol`/`highlightMetadata`, which remain in
+  the body unconditionally (FR-017 — not removed by this feature).
+
+### Grading branches (`puzzleId` vs. row-less) — spec 051, Epic 1, FR-024/FR-024a/FR-025/FR-026/FR-028
+
+Exactly two branches, selected once, in this order — there is no third "malformed request" case:
+
+```
+if (req.body.puzzleId) {
+  // Stored-set branch.
+  // 1. Look up the row (is_active = true), same query shape as POST /api/puzzles/:id/check,
+  //    extended with correct_cols:
+  //      .select('id, category, move_string, highlight_metadata, correct_col, correct_cols')
+  //      .eq('id', puzzleId).eq('is_active', true).single()
+  // 2. If no row resolves: log a warning and fall through to the Row-less branch below, using
+  //    req.body's own fields as inputs. It does NOT 404 (see Errors, below).
+  // 3. If puzzle.correct_cols is NULL (not yet backfilled — FR-024a): fall through to the
+  //    Row-less branch below, using the ROW's own category/move_string/correct_col/
+  //    highlight_metadata as inputs (fail-open, not an error — a live drill must never grade
+  //    every column wrong just because a row hasn't been backfilled yet).
+  //    Else: accepted = puzzle.correct_cols.includes(colInt) — computed DIRECTLY.
+  //    evaluatePredicate/buildPredicatePuzzle and the seven pattern evaluators (evalZThreat,
+  //    evalClaimeven, evalUndercut, evalOvercut, evalFigure7, evalJShape, evalOddEvenThreat) are
+  //    NOT called on this path at all. req.body's category/correctCol/highlightMetadata are
+  //    ignored once puzzleId resolves to a row with a non-null correct_cols.
+} else {
+  // Row-less branch (unchanged, pre-existing behavior) — builds the predicate object from
+  // req.body's movestring/category/correctCol/highlightMetadata and grades via evaluatePredicate
+  // (whose evaluators are set-membership per FR-003). Serves lesson inline challenges and any
+  // request that omits puzzleId (Decision D2/FR-028 — absence of puzzleId always routes here;
+  // there is no separate malformed-request rejection for "neither shape").
+}
+```
+
+**Safety floor (FR-026)**: both branches are safe under the same `isSolverSafe`/`optimalCols`
+definition in `server/answerSetInvariant.js`, invoked from different points. The row-less branch
+calls it directly, at grading time (via `evaluatePredicate`/`acceptedCols`, unchanged). The
+stored-set branch does **not** call it at grading time — it is safe by construction because the
+`correct_cols` value it reads was produced by a writer (generation or the backfill script) that
+already called `isSolverSafe` when building the set. No branch, and no writer, restates the rule
+independently.
+
+**Response**: unchanged shape on both branches — see "Response Shape" below. **`correct_cols` is
+never added to the response**, on either branch (Decision D2b) — client-side grading was
+considered and explicitly rejected; the server continues to grade every request.
+
+**Errors**: no new error shape. Existing `400`/`500` shapes apply identically to both branches.
+
+An unresolvable `puzzleId` **does not fail the request** — it logs a warning and falls through to
+the row-less branch. This is deliberate, and it is a revision of the original spec-051 design
+(which specified `404 { error: 'puzzle not found' }`): the 404 silently removed grading feedback
+from every lesson confirmation challenge and every DEV-injected board, because `ChallengeScreen`
+commits its phase change before the response lands, so the learner saw no error — just no
+feedback at all (`docs/open_issues.md` OI-84). Falling through costs nothing, since the request
+body still carries everything the row-less branch needs, and it follows the same fail-open
+philosophy FR-024a already applies to a NULL `correct_cols`: a live drill must never be broken by
+a row the server cannot find. Two things keep this from hiding real bugs — the `console.warn`
+on every miss, and `src/lib/syntheticPuzzleId.js`, which stops the client sending ids that could
+never resolve (`dev-…`, `inline-…`) in the first place.
 
 **`correctCol` / `highlightMetadata` (spec 049, Epic 9)**: optional request fields, sent by the
 client when `category` is one of `SINGLE_ANSWER_CATEGORIES` (`z_threat`, `overcut`, `claimeven`,
@@ -569,10 +630,11 @@ The `coachPhraseKey` in the AI-move response is ignored by the client. The clien
 - `badge` and `quality` are derived from the solver score for `col` relative to the best available score.
 - `coachPhraseKey` and `summaryLineKey` are randomly selected from the matching i18n pool; `null` if no pool exists for the pattern.
 - `patternTag` is the classifier's category slug for the position; `null` if the position doesn't match any known pattern.
-- `accepted` (spec 044 US3 FR-015a, widened by spec 049 Epic 9 FR-001–FR-012): additive field, computed via `evaluatePredicate`, present (non-null) for **nine categories total**: the three multi-solution categories (`immediate_threat`, `forced_block`, `double_threat` — correctness allows more than one valid answer column) plus the six single-answer categories via `SINGLE_ANSWER_CATEGORIES` (`z_threat`, `overcut`, `claimeven`, `undercut`, `figure_7`, `j_shape` — correctness has exactly one taught answer column, or in `undercut`'s case, one taught avoid-column). `true` when the played column independently satisfies the category's condition (`evaluatePredicate` result `'correct'` or `'tied'`), `false` otherwise, `null` for every other category (`forced_win`, `forbidden_columns`, `odd_even_threat`). One shared gate expression covers both sets (`server/categories.js`'s `SINGLE_ANSWER_CATEGORIES` is a separate, explicit list — never derived as "not multi-solution"). Recomputed at solve time; not persisted. For the six single-answer categories, computed from the request's `correctCol`/`highlightMetadata` fields (see above) via the shared `buildPredicatePuzzle` helper. See server-conventions.md's "Multi-solution acceptance" note.
+- `accepted` (spec 044 US3 FR-015a, widened by spec 049 Epic 9 FR-001–FR-012, membership updated by spec 051 Epic 1 T005/T006/T007): additive field, computed via `evaluatePredicate` on the row-less branch (see above for the stored-set branch's direct `correct_cols.includes(...)` computation), present (non-null) for **ten categories total**: the three multi-solution categories (`immediate_threat`, `forced_block`, `double_threat` — correctness allows more than one valid answer column) plus the seven single-answer categories via `SINGLE_ANSWER_CATEGORIES` (`z_threat`, `overcut`, `claimeven`, `undercut`, `figure_7`, `j_shape`, `odd_even_threat` — spec 051 closed OI-75 by adding `odd_even_threat` to this set; despite the "single-answer" name, this set now gates only which categories expose `accepted`, not answer-set cardinality — `claimeven` in particular has no upper bound on qualifying columns). `true` when the played column independently satisfies the category's condition (`evaluatePredicate` result `'correct'` or `'tied'`), `false` otherwise, `null` for every other category (`forced_win`, `forbidden_columns`). One shared gate expression covers both sets (`server/categories.js`'s `SINGLE_ANSWER_CATEGORIES` is a separate, explicit list — never derived as "not multi-solution"). Recomputed at solve time on the row-less branch; not persisted. For the seven single-answer categories on that branch, computed from the request's `correctCol`/`highlightMetadata` fields (see above) via the shared `buildPredicatePuzzle` helper. See server-conventions.md's "Multi-solution acceptance" note.
+- `correct_cols` is never included in this response, on either grading branch (spec 051 Epic 1 Decision D2b) — client-side grading was considered and explicitly rejected.
 - No auth required; anonymous calls are accepted.
 
-**Errors**: 400 for invalid `movestring` or `col`, 500 for solver errors.
+**Errors**: 400 for invalid `movestring` or `col`, 500 for solver errors. A `puzzleId` that does not resolve to an active row is **not** an error — it warns and falls through to the row-less branch (see "Grading branches" above).
 
 **Rate limit**: 120 req/min (default).
 
