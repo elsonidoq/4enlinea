@@ -2282,7 +2282,12 @@ tolerates a titleless lesson (e.g. a half-authored draft).
 
 ## OI-91 — `scripts/generate-tts.js --key` / `--all-new` is broken: `synthesize()` called without `lang`
 
-**Status**: open — verified broken 2026-07-31
+**Status**: ✅ RESOLVED 2026-07-31 — `synthesizeAndWrite` now passes `lang` through
+(`synthesize(value, lang)`), and `tests/unit/generateTtsLang.test.js` guards it: one case asserts the
+argument reaches the provider (via an injected fake — no OpenAI call), the other asserts `synthesize`
+still rejects an undefined `lang`, so the first case cannot lose its teeth. Confirmed the test goes RED
+when the fix is reverted. Registered in both `test` and `test:fast`. `synthesizeAndWrite` gained an
+optional `{ synthesizeFn }` injection point used only by that test; production callers are unchanged.
 **Area**: `connect-four/scripts/generate-tts.js` (`synthesizeAndWrite`), `connect-four/server/ttsProvider.js`
 **Discovered**: spec 052 follow-on, 2026-07-31 (pipeline audit)
 
