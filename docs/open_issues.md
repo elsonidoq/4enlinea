@@ -2137,7 +2137,10 @@ detector will re-classify some shipped boards.
 
 ## OI-86 — Spanish `goalPrompt` copy on lesson-12/lesson-14 overflows the coach bubble
 
-**Status**: open — content sizing, surfaced by spec 052 (US2)
+**Status**: ✅ RESOLVED 2026-07-31 — copy shortened and clips regenerated (owner decision to fix
+rather than defer). All 22 `goalPrompt`s now fit the measured ~130-char budget in both locales; the
+11 rewritten prompts had their clips regenerated and the 16 superseded clips pruned. The original
+entry below is kept for the measurement record and the corrected-budget finding.
 **Area**: `connect-four/lessons/lesson-12-overcut.json`, `lesson-14-j-shape.json`, `src/components/CoachDialog.jsx:58`
 **Discovered**: spec 052, 2026-07-30 (code review)
 

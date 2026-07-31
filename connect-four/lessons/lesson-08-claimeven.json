@@ -444,8 +444,8 @@
     {
       "puzzleId": "0a1e6b52-3d18-4a0c-9f5b-2c7d41e8b930",
       "moveString": "333336122241046612122601314",
-      "goalPrompt": "Exactly one open column has an odd number of empty squares left — every other open column is already even. Drop into it, so all of them pair up and Gray's reply-above strategy carries the win.",
-      "goalPrompt_es": "Solo una columna abierta quedó con cantidad impar de casillas vacías —las demás ya son pares. Entrá ahí para emparejarlas todas y que la estrategia de responder-encima de Gris asegure la victoria.",
+      "goalPrompt": "Exactly one open column still has an odd number of empties. Drop in to pair them all up, and reply-above carries Gray's win.",
+      "goalPrompt_es": "Solo una columna abierta quedó impar. Entrá ahí para emparejarlas todas y que responder-encima le dé la victoria a Gris.",
       "goalPredicateType": "claimeven",
       "goalPredicateParams": {},
       "cooperativeAiMoves": [],
@@ -453,14 +453,14 @@
       "highlightMetadata": null,
       "correctCol": 4,
       "userPlayer": 2,
-      "goalPromptAudio_es": "/audio/lessons/2d3013049f6086a0.mp3",
-      "goalPromptAudio": "/audio/lessons/2066679bf8467fa3.mp3"
+      "goalPromptAudio": "/audio/lessons/5de1c51232e058f0.mp3",
+      "goalPromptAudio_es": "/audio/lessons/74ada23bea307a10.mp3"
     },
     {
       "puzzleId": "5a454031-b4c7-43ee-a10a-5dc5d85236fc",
       "moveString": "4313303344010421102",
-      "goalPrompt": "Green just took an even square in column 3 — replying directly above it loses. One column still has an odd empty count. Fill it so every column pairs up and Gray wins with the reply-above strategy.",
-      "goalPrompt_es": "Verde tomó una casilla par en la columna 3 —responder justo encima pierde. Una columna quedó impar. Llenala para que todas emparejen y Gris gane con la estrategia de responder-encima.",
+      "goalPrompt": "Replying directly above Green's new even square loses. One column is still odd — fill it so every column pairs and Gray wins.",
+      "goalPrompt_es": "Responder justo encima de la casilla par de Verde pierde. Una columna sigue impar: llenala para emparejar todo y que gane Gris.",
       "goalPredicateType": "claimeven",
       "goalPredicateParams": {},
       "cooperativeAiMoves": [],
@@ -468,8 +468,8 @@
       "highlightMetadata": null,
       "correctCol": 3,
       "userPlayer": 2,
-      "goalPromptAudio": "/audio/lessons/67616edf71b11449.mp3",
-      "goalPromptAudio_es": "/audio/lessons/0f134232bce89aaf.mp3"
+      "goalPromptAudio": "/audio/lessons/e2a32ae5b105e152.mp3",
+      "goalPromptAudio_es": "/audio/lessons/6a438a480bfb171d.mp3"
     }
   ],
   "order": 8
