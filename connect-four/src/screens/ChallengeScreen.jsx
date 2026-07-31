@@ -14,7 +14,7 @@ import { DeepRevealPane } from '../components/DeepRevealPane.jsx';
 import { pickRandomKey } from '../lib/coachUtils.js';
 import { COACH_PACING_MS } from '../lib/constants.js';
 import { useAudio } from '../lib/useAudio.js';
-import { useCoachSpeech } from '../lib/useCoachSpeech.js';
+import { useCoachSpeech, speakLessonAudio } from '../lib/useCoachSpeech.js';
 import { SINGLE_ANSWER_CATEGORIES, MULTI_SOLUTION_CATEGORIES } from '../lib/categories.js';
 import { DevBoardInjector } from '../components/DevBoardInjector.jsx';
 import { buildDevPuzzle } from '../lib/devFixtures.js';
@@ -82,6 +82,9 @@ export function ChallengeScreen({
   const sessionIdRef = useRef(null);
   const usedPhraseKeysRef = useRef(new Set());
   const lastCoachKeyRef = useRef(null); // T021: for coach speech
+  // Path-addressed narration for a goalPrompt override (see initPuzzle). Mutually
+  // exclusive with lastCoachKeyRef: pool prompts have a key, overrides have a path.
+  const lastLessonAudioRef = useRef(null);
 
   // Stable reference — avoids AnnotatedExplanation re-render loop.
   const userMajorThreats = useMemo(() => {
@@ -124,8 +127,20 @@ export function ChallengeScreen({
 
     const playerDisc = (puzzle.move_string || '').length % 2 === 0 ? 'green' : 'gray';
     const discLabel = t(playerDisc === 'gray' ? 'challenge.playing_gray' : 'challenge.playing_green');
-    lastCoachKeyRef.current = pickedKey;
-    setCoachMessages([{ text: t(pickedKey), mood: 'happy', disc: playerDisc, discLabel }]);
+
+    // Spec 052 US2 (T018/T019, Settled Decision 8): a lesson-authored `goal_prompt`
+    // override replaces the generic pool text when present (FR-006); the pool
+    // mechanism and its outcome-neutral copy are otherwise untouched (FR-007/FR-008).
+    // No pre-generated audio clip matches override text yet (Epic 5 follow-up), so
+    // lastCoachKeyRef is set to null (not pickedKey) in this branch — the narration
+    // effect below reads `if (lastCoachKeyRef.current)` and stays silent (FR-029).
+    const promptText = puzzle.goal_prompt || t(pickedKey);
+    lastCoachKeyRef.current = puzzle.goal_prompt ? null : pickedKey;
+    // The override's clip is path-addressed, so it cannot ride lastCoachKeyRef (which
+    // feeds the strictly key-based speakCoachMessage). Kept in its own ref and played
+    // by the same narration effect — exactly one of the two refs is ever set.
+    lastLessonAudioRef.current = puzzle.goal_prompt ? (puzzle.goal_prompt_audio || null) : null;
+    setCoachMessages([{ text: promptText, mood: 'happy', disc: playerDisc, discLabel }]);
     startTimeRef.current = Date.now();
   }
 
@@ -160,6 +175,14 @@ export function ChallengeScreen({
             highlight_metadata: ch.highlightMetadata ?? null,
             correct_col: ch.correctCol,
             user_player: ch.userPlayer,
+            // Spec 052 US2 (T017): already locale-resolved by localizeLesson's
+            // confirmationChallenges[].goalPrompt merge (server/lessonLoader.js) —
+            // a single, current-locale string, never the raw {goalPrompt, goalPrompt_es} pair.
+            goal_prompt: ch.goalPrompt ?? null,
+            // The narration clip for that override, localized by the same merge.
+            // Path-addressed (/audio/lessons/<sha>.mp3), NOT an i18n key — override text
+            // has no key, which is why it was silent until this clip existed.
+            goal_prompt_audio: ch.goalPromptAudio ?? null,
           }));
           sessionIdRef.current = null;
           setPuzzles(loaded);
@@ -202,6 +225,11 @@ export function ChallengeScreen({
   useEffect(() => {
     if (lastCoachKeyRef.current) {
       speakCoachMessage(lastCoachKeyRef.current);
+    } else if (lastLessonAudioRef.current) {
+      // speakCoachMessage gates on speechEnabled internally; speakLessonAudio does NOT
+      // (see its doc comment in useCoachSpeech.js — the caller owns that check). Gate it
+      // here or a muted learner still hears the override prompt.
+      if (speechEnabled) speakLessonAudio(lastLessonAudioRef.current);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [coachMessages.length]);
@@ -899,12 +927,12 @@ export function ChallengeScreen({
                 transition: 'background .15s',
               }}
             >
-              Submit
+              {t('common.submit', 'Submit')}
             </button>
           ) : (
             <ToolButton
               icon="bulb"
-              label="Hint"
+              label={t('common.hint', 'Hint')}
               onClick={handleHint}
               disabled={hintUsed}
             />

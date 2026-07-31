@@ -1,6 +1,7 @@
 {
   "id": "claimeven",
   "title": "Claimeven",
+  "title_es": "Claimeven",
   "free": true,
   "userPerspective": "yellow",
   "slides": [
@@ -444,27 +445,31 @@
       "puzzleId": "0a1e6b52-3d18-4a0c-9f5b-2c7d41e8b930",
       "moveString": "333336122241046612122601314",
       "goalPrompt": "Exactly one open column has an odd number of empty squares left — every other open column is already even. Drop into it, so all of them pair up and Gray's reply-above strategy carries the win.",
-      "goalPrompt_es": "Exactamente una columna abierta quedó con una cantidad impar de casillas vacías —todas las demás ya son pares. Entrá ahí, para que todas queden emparejadas y la estrategia de responder-encima de Gris asegure la victoria.",
+      "goalPrompt_es": "Solo una columna abierta quedó con cantidad impar de casillas vacías —las demás ya son pares. Entrá ahí para emparejarlas todas y que la estrategia de responder-encima de Gris asegure la victoria.",
       "goalPredicateType": "claimeven",
       "goalPredicateParams": {},
       "cooperativeAiMoves": [],
       "interactionMode": "single_move",
       "highlightMetadata": null,
       "correctCol": 4,
-      "userPlayer": 2
+      "userPlayer": 2,
+      "goalPromptAudio_es": "/audio/lessons/2d3013049f6086a0.mp3",
+      "goalPromptAudio": "/audio/lessons/2066679bf8467fa3.mp3"
     },
     {
       "puzzleId": "5a454031-b4c7-43ee-a10a-5dc5d85236fc",
       "moveString": "4313303344010421102",
-      "goalPrompt": "Green just grabbed an even square in the third column — replying directly above it loses. One column has an odd number of empty squares left. Fill it, so every column pairs up evenly and Gray's reply-above strategy carries the win.",
-      "goalPrompt_es": "Verde acaba de tomar una casilla par en la tercera columna —responder justo encima pierde. Una columna quedó con una cantidad impar de casillas vacías. Llenala, para que todas las columnas queden emparejadas y la estrategia de responder-encima de Gris asegure la victoria.",
+      "goalPrompt": "Green just took an even square in column 3 — replying directly above it loses. One column still has an odd empty count. Fill it so every column pairs up and Gray wins with the reply-above strategy.",
+      "goalPrompt_es": "Verde tomó una casilla par en la columna 3 —responder justo encima pierde. Una columna quedó impar. Llenala para que todas emparejen y Gris gane con la estrategia de responder-encima.",
       "goalPredicateType": "claimeven",
       "goalPredicateParams": {},
       "cooperativeAiMoves": [],
       "interactionMode": "single_move",
       "highlightMetadata": null,
       "correctCol": 3,
-      "userPlayer": 2
+      "userPlayer": 2,
+      "goalPromptAudio": "/audio/lessons/67616edf71b11449.mp3",
+      "goalPromptAudio_es": "/audio/lessons/0f134232bce89aaf.mp3"
     }
   ],
   "order": 8

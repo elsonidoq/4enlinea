@@ -279,8 +279,8 @@ export function reloadLessons() {
 // QA 2026-07-15 finding #2 / decision D1. Spanish lesson text lives in `_es` sibling
 // fields inside the lesson JSON. Merge is PER FIELD: a missing `_es` falls back to
 // English so a partial translation degrades gracefully instead of blanking a slide.
-// `title` is deliberately excluded — `lesson.<id>.title` in en/es.json already owns it
-// via t(..., {defaultValue: lesson.title}), and a title_es would silently lose to it.
+// `title` IS included as of spec 052 (US2): the `lesson.<id>.title` i18n key that used to
+// own titles is deleted, so `title_es` in the lesson JSON is now the sole Spanish source.
 const LOCALIZABLE_SUFFIX = '_es';
 
 function pickLocalized(obj, key, locale) {
@@ -364,6 +364,16 @@ export function localizeLesson(lesson, locale = 'en') {
   const out = stripEsKeys(lesson);
   out.slides = slides;
 
+  // `title` IS localized here as of spec 052 (US2). Before that migration the
+  // `lesson.<id>.title` i18n key owned titles and this merge deliberately skipped
+  // `title` so a `title_es` could not silently lose to it. That key is now deleted and
+  // the lesson JSON is the sole home for the title, so `title_es` is the ONLY source of
+  // a Spanish title — skipping it here shipped 14 of 15 titles in English to Spanish
+  // learners. See docs/architecture/lesson-editor.md §"Lesson titles".
+  if ('title' in lesson || 'title_es' in lesson) {
+    assignLocalized(out, lesson, 'title', locale);
+  }
+
   if (lesson.socratic) {
     const s = stripEsKeys(lesson.socratic);
     if ('goalPrompt' in lesson.socratic || 'goalPrompt_es' in lesson.socratic) {
@@ -389,6 +399,10 @@ export function localizeLesson(lesson, locale = 'en') {
     out.confirmationChallenges = lesson.confirmationChallenges.map((c) => {
       const nc = stripEsKeys(c);
       if ('goalPrompt' in c || 'goalPrompt_es' in c) assignLocalized(nc, c, 'goalPrompt', locale);
+      // The narration clip for that prompt, localized alongside its text. Without this
+      // line stripEsKeys drops goalPromptAudio_es and a Spanish learner gets the English
+      // clip under Spanish text — the same per-field merge infoProseAudio uses.
+      if ('goalPromptAudio' in c || 'goalPromptAudio_es' in c) assignLocalized(nc, c, 'goalPromptAudio', locale);
       return nc;
     });
   }
@@ -403,8 +417,16 @@ export function getLessonsAll() {
  * Returns a summary list of all loaded lessons, sorted ascending by order.
  * @returns {Array<{id: string, title: string, order: number, free: boolean}>}
  */
-export function getLessons() {
-  return _lessons.map(({ id, title, order, free }) => ({ id, title, order, free }));
+export function getLessons(locale = 'en') {
+  return _lessons.map((l) => ({
+    id: l.id,
+    // Locale-scoped as of spec 052 (US2): the Saga list renders this title directly, and
+    // since the `lesson.<id>.title` i18n key was deleted there is no client-side fallback
+    // left to localize it. Callers MUST pass req.locale or Spanish learners get English.
+    title: pickLocalized(l, 'title', locale),
+    order: l.order,
+    free: l.free,
+  }));
 }
 
 /**

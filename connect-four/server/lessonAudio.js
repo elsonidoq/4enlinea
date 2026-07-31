@@ -122,6 +122,32 @@ export function collectMessages(lesson) {
     }
   }
 
+  // Confirmation-challenge goal prompts. Appended LAST, after socratic, because
+  // existing tests assert whole-array exact-order equality on generated/failed
+  // locators — inserting these earlier would renumber every downstream expectation.
+  //
+  // These became narratable in spec 052 (Epic 6), which wired
+  // confirmationChallenges[].goalPrompt to the coach bubble as a per-lesson override
+  // of the shared coach.spoken.* pool. Before that they were authored-but-dead data,
+  // which is why the original walker (Epic 5) did not cover them. Like infoProse,
+  // the text does not live under `text`/`audio`, hence the explicit textKey/audioKey.
+  const challenges = Array.isArray(lesson?.confirmationChallenges) ? lesson.confirmationChallenges : [];
+  for (let ci = 0; ci < challenges.length; ci++) {
+    const prompt = challenges[ci]?.goalPrompt;
+    const promptEs = challenges[ci]?.goalPrompt_es;
+    // Yielded when EITHER language has text — same rule as infoProse, so an
+    // es-only prompt still gets a clip and survives collectReferencedAudio's prune.
+    if ((typeof prompt === 'string' && prompt.trim() !== '')
+      || (typeof promptEs === 'string' && promptEs.trim() !== '')) {
+      out.push({
+        message: challenges[ci],
+        locator: `confirmationChallenges[${ci}].goalPrompt`,
+        textKey: 'goalPrompt',
+        audioKey: 'goalPromptAudio',
+      });
+    }
+  }
+
   return out;
 }
 

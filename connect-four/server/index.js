@@ -670,7 +670,7 @@ app.get('/api/papergames/tournament/open', async (req, res) => {
 });
 
 // ── Lesson routes (FR-033, FR-034, FR-035 — no auth required) ─────────────────
-app.get('/api/lessons', (req, res) => res.json(getLessons()));
+app.get('/api/lessons', (req, res) => res.json(getLessons(req.locale)));
 app.get('/api/lessons/:id', (req, res) => {
   const locale = req.locale ?? 'en';
   const lesson = getLesson(req.params.id, locale);
@@ -940,7 +940,13 @@ app.get('/api/admin/lessons/:id/audio-status', requireLocalhost, requireAdmin, (
   const localized = (key) => (lang === 'es' ? `${key}_es` : key);
   const groupLabel = (locator) => {
     const m = /^slides\[(\d+)\]/.exec(locator);
-    return m ? `Slide ${Number(m[1]) + 1}` : 'Socratic';
+    if (m) return `Slide ${Number(m[1]) + 1}`;
+    // confirmationChallenges[].goalPrompt joined the walker in the spec-052 follow-on;
+    // without its own branch it would fall through to the 'Socratic' default and be
+    // mislabelled in the admin lesson-audio list.
+    const c = /^confirmationChallenges\[(\d+)\]/.exec(locator);
+    if (c) return `Confirmation ${Number(c[1]) + 1}`;
+    return 'Socratic';
   };
 
   const groups = [];

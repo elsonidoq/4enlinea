@@ -1,6 +1,7 @@
 {
   "id": "threat-vocabulary",
   "title": "Threat Vocabulary",
+  "title_es": "Vocabulario de Amenazas",
   "free": true,
   "order": 3,
   "userPerspective": "yellow",

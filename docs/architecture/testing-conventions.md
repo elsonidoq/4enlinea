@@ -211,15 +211,19 @@ Lesson JSON is data, not code, so ordinary unit tests don't cover it. Two gates 
 whether the check needs the solver:
 
 - **`tests/unit/lessonContent.test.js`** — pure **static** invariants over every lesson JSON
-  (`node:test`, registered in **both** `test` and `test:fast`). No solver, no network. It holds a
-  `REMEDIATED` set of lesson ids opted into the strict checks; **add every new lesson id to it** or the
-  lesson ships unchecked. (That gate is now vestigial and inverted-risk — every lesson is in it, so it
-  exempts nothing today but would silently exempt a *future* one. Flipping it to strict-by-default is
-  tracked in `docs/open_issues.md` OI-63.)
+  (`node:test`, registered in **both** `test` and `test:fast`). No solver, no network. **Every check in
+  it is unconditional** — there is no opt-in list and no exemption mechanism, so a new lesson is
+  checked the moment its file lands. (Until 2026-07-30 it held a `REMEDIATED` set of ids opted into
+  the strict checks. Spec 052 **deleted** the set and its three guards rather than emptying them:
+  an exemption list that exempts nothing today still silently exempts whatever a future author adds.
+  Do not reintroduce one — closes `docs/open_issues.md` OI-63 item 4.)
 - **`server/scripts/verify_lesson_content.mjs`** — **solver-gated** content verification: a socratic
   `correctCol` must be the solver's max-scoring column, positions must not be lost for their owner, and
-  every `tg`/`td` overlay must be a real threat of that color (opt out per slide with
-  `_overlayIntent: "annotation"`). A socratic with no `movestring` **FAILs** rather than being skipped.
+  every `tg`/`td` overlay must be a real threat of that color (opt out with
+  `_overlayIntent: "annotation"` on the slide/socratic node, or on an individual `overlays[]` entry to
+  override the node-level default — see `docs/architecture/lesson-editor.md` §"Overlay intent").
+  Every `solver.query` and `Board` construction is isolated, so a malformed movestring yields one FAIL
+  row and the run continues instead of crashing (spec 052 / FR-013). A socratic with no `movestring` **FAILs** rather than being skipped.
 
   **This is a script, not a `node:test` file — it is in neither `test` nor `test:fast`, and nothing runs
   it for you.** Run it by hand (`node server/scripts/verify_lesson_content.mjs`, from `connect-four/`)
@@ -231,7 +235,7 @@ whether the check needs the solver:
   `isStraightLineWindow` geometry predicate (`src/lib/lessonWindows.js`). `lessonContent.test.js`
   applies that same predicate to every authored window, plus known-`type` and `label` ⇒ `label_es`.
 
-  **These window checks are unconditional — deliberately not gated on `REMEDIATED`** (the field is
+  **These window checks are unconditional**, like every other check in that file (the field is
   new, so every use of it is new). They exist because the capsule renderer draws blindly from
   `cells[0]` to `cells[last]`: an unordered, bent, or gapped array produces a plausible-looking
   capsule over the *wrong* squares, which no other layer catches — `verify_lesson_content.mjs` knows

@@ -16,7 +16,31 @@
     "muteSpeech": "Silenciar voz",
     "unmuteSpeech": "Activar voz",
     "speechOn": "Voz activada",
-    "speechOff": "Voz desactivada"
+    "speechOff": "Voz desactivada",
+    "replayNarration": "Repetir narración",
+    "stopNarration": "Detener narración"
+  },
+  "playOnline": {
+    "title": "Jugar en línea",
+    "start": "Jugar en línea",
+    "waitingForOpponent": "Esperando rival…",
+    "opponent": "Rival",
+    "yourTurn": "Tu turno",
+    "opponentThinking": "{{name}} está pensando…",
+    "youWon": "¡Ganaste!",
+    "opponentWon": "Ganó {{name}}",
+    "draw": "Empate",
+    "loginToSave": "Iniciá sesión para guardar tu partida y ver el análisis.",
+    "playAgain": "Jugar de nuevo",
+    "resign": "Abandonar",
+    "registering": "Creando tu cuenta…",
+    "searching": "Buscando rival…",
+    "queueCount_one": " ({{count}} jugador en la fila)",
+    "queueCount_other": " ({{count}} jugadores en la fila)",
+    "found": "¡Rival encontrado! Cargando partida…",
+    "tryAgain": "Reintentar",
+    "errorConnection": "Falló la conexión con el servidor en línea.",
+    "moveMeta": "Jugada {{n}}"
   },
   "game": {
     "title": "Partida",
@@ -130,11 +154,15 @@
     "continue": "Continuar",
     "error": "Algo salió mal.",
     "hint": "Pista",
-    "loading": "Cargando…"
+    "submit": "Enviar",
+    "loading": "Cargando…",
+    "close": "Cerrar",
+    "coach": "Entrenador"
   },
   "games": {
     "title": "Partidas anteriores",
     "empty": "Aún no hay partidas. Jugá una partida de sparring para verla aquí.",
+    "signin_prompt": "Iniciá sesión para ver tus partidas anteriores",
     "load_more": "Cargar más",
     "loading": "Cargando…",
     "filter_all": "Todas",
@@ -900,6 +928,7 @@
     }
   },
   "lesson": {
+    "notFound": "Lección no encontrada.",
     "node": {
       "done": "Completada",
       "current": "En progreso",
@@ -909,51 +938,6 @@
     "confirmation": {
       "header": "{{title}} — Práctica",
       "empty": "Aún no hay puzzles de práctica disponibles."
-    },
-    "immediate-threat": {
-      "title": "Amenazas Inmediatas"
-    },
-    "block-before-build": {
-      "title": "Bloqueá Antes de Construir"
-    },
-    "threat-vocabulary": {
-      "title": "Vocabulario de Amenazas"
-    },
-    "the-fork": {
-      "title": "La Bifurcación"
-    },
-    "odd-rows-belong-to-red": {
-      "title": "Las Filas Impares Son de Verde"
-    },
-    "claimeven": {
-      "title": "Claimeven"
-    },
-    "z-threats": {
-      "title": "Amenazas-Z"
-    },
-    "zugzwang-tempo": {
-      "title": "Zugzwang y Tempo"
-    },
-    "undercut": {
-      "title": "El Undercut"
-    },
-    "overcut": {
-      "title": "El Overcut"
-    },
-    "figure-7": {
-      "title": "La Trampa Figura-7"
-    },
-    "j-shape": {
-      "title": "Forma-J"
-    },
-    "opening-centre": {
-      "title": "Domina el Centro"
-    },
-    "opening-imitate": {
-      "title": "Yo Juego Donde Vos Jugás"
-    },
-    "opening-sharp": {
-      "title": "Aperturas Agudas"
     },
     "windowCounts": {
       "legend": "Cuatro en línea todavía abiertos para vos"

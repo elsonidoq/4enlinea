@@ -1,6 +1,7 @@
 {
   "id": "j-shape",
   "title": "J-Shape",
+  "title_es": "Forma-J",
   "free": false,
   "userPerspective": "yellow",
   "slides": [
@@ -420,7 +421,9 @@
         ]
       },
       "correctCol": 4,
-      "userPlayer": 1
+      "userPlayer": 1,
+      "goalPromptAudio": "/audio/lessons/82e114c798504975.mp3",
+      "goalPromptAudio_es": "/audio/lessons/17e1723a5f74624c.mp3"
     },
     {
       "puzzleId": "9e3c81d7-4a56-4b2f-8c90-6de2f5713a4b",
@@ -452,7 +455,9 @@
         ]
       },
       "correctCol": 4,
-      "userPlayer": 2
+      "userPlayer": 2,
+      "goalPromptAudio": "/audio/lessons/14da1e5485c6f858.mp3",
+      "goalPromptAudio_es": "/audio/lessons/7785bd6aaa713c8b.mp3"
     }
   ],
   "order": 14

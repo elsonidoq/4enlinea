@@ -1,9 +1,12 @@
+import { useTranslation } from 'react-i18next';
+
 export function CoachAvatar({ size = 58, mood = 'happy' }) {
+  const { t } = useTranslation();
   return (
     <svg
       style={{ width: size, height: size, borderRadius: '50%', flexShrink: 0, boxShadow: 'var(--shadow-sm)', border: '2.5px solid #fff' }}
       viewBox="0 0 100 100"
-      aria-label="Coach"
+      aria-label={t('common.coach')}
     >
       <rect width="100" height="100" fill="#dcefff" />
       {/* shoulders / sweater */}

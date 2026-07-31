@@ -4,6 +4,7 @@ import { TopBar } from '../components/TopBar.jsx';
 import { AuthModal } from '../components/AuthModal.jsx';
 import { useStore } from '../store/ProfileStore.jsx';
 import { stashReturnTo } from '../lib/postLoginReturn.js';
+import { langHeaders } from '../lib/apiLang.js';
 
 const API = import.meta.env.VITE_API_BASE_URL || '';
 
@@ -65,7 +66,8 @@ export function StatsScreen({ go, goBack }) {
 
   useEffect(() => {
     if (!isAuthenticated || !patternAccuracy) return;
-    fetch(`${API}/api/lessons`)
+    // Renders recommendedLesson.title below — needs the locale header (spec 052 US2).
+    fetch(`${API}/api/lessons`, { headers: langHeaders() })
       .then(r => r.ok ? r.json() : null)
       .then(lessons => {
         if (!lessons || !lessons.length) return;

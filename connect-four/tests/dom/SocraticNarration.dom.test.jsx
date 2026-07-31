@@ -8,11 +8,10 @@
 // programmatically, via stubbed HTMLMediaElement.play()/.pause() calls, that:
 //   - every phase's bubble narrates its own message (including the reward message
 //     on a correct answer) when Hint is never clicked (run 1), and
-//   - narration still plays for the phases reached when Hint IS clicked at least
-//     once during the run (run 2) — understanding that, per SocraticScreen's own
-//     "sticky hint" design (showHint short-circuits the phase map), triggering
-//     Hint can prevent the reward message from ever narrating; that is a known,
-//     separate defect this story does not fix (spec.md US1 acceptance scenario 6).
+//   - clicking Hint and then playing the taught correct move still narrates the
+//     'correct' reward message, not the hint text (run 2) — per FR-001/FR-002
+//     (spec 052 US1), showHint resets on every phase transition, so hint and
+//     phase messages never coexist in the bubble.
 //   - navigating away (unmounting) mid-narration stops playback (pause() fires).
 //
 // A single combined pass is NOT sufficient per FR-004 — hence two independent runs.
@@ -88,6 +87,7 @@ before(() => {
       this.stores.set(name, store);
       return store;
     }
+    // eslint-disable-next-line no-unused-vars
     transaction(_names, _mode) {
       return { objectStore: (name) => this.stores.get(name) };
     }
@@ -200,7 +200,7 @@ test('run 1 (Hint never clicked): every phase narrates its own message, includin
   assert.ok(pauseCalls.some((src) => src.endsWith(CORRECT_AUDIO)), `expected the still-playing reward clip to be paused on unmount; got ${JSON.stringify(pauseCalls)}`);
 });
 
-test('run 2 (Hint clicked at least once): narration still plays for the phases reached', async () => {
+test('run 2 (Hint clicked, then correct move played): the reward message narrates, not the hint text (FR-001/FR-002)', async () => {
   const { screen, cleanup, fireEvent, waitFor } = await renderSocratic();
 
   // 'ask' phase narration is already confirmed by renderSocratic()'s own waitFor.
@@ -214,17 +214,19 @@ test('run 2 (Hint clicked at least once): narration still plays for the phases r
     assert.ok(pauseCalls.some((src) => src.endsWith(ASK_AUDIO)), `expected the ask-phase clip to be paused when Hint fires; got ${JSON.stringify(pauseCalls)}`);
   });
 
-  // Answering correctly still advances the board/phase state machine — narration
-  // for the phases actually reached (ask, then hint) already happened above.
-  // Per SocraticScreen's own "sticky hint" design (showHint stays true), the
-  // bubble — and therefore its narration — stays pinned to the hint message even
-  // after the phase machine reaches 'correct'; this is a known, separate defect
-  // (spec.md US1 acceptance scenario 6) this story does not fix, so this test
-  // does not assert the reward message narrates in this run.
+  // Answer correctly (lesson-01's correctCol is 0 -> "column 1"). Per FR-001,
+  // showHint resets on the phase transition to 'correct', so the reward
+  // message — not the lingering hint text — renders and narrates.
   fireEvent.click(screen.getByRole('button', { name: 'column 1' }));
+
+  await waitFor(() => {
+    assert.ok(playCalls.some((src) => src.endsWith(CORRECT_AUDIO)), `expected the reward message to narrate after Hint; got ${JSON.stringify(playCalls)}`);
+    assert.ok(pauseCalls.some((src) => src.endsWith(HINT_AUDIO)), `expected the hint clip to be paused on the transition to 'correct'; got ${JSON.stringify(pauseCalls)}`);
+  });
 
   // Navigating away mid-narration still stops playback.
   const pauseCallsBeforeUnmount = pauseCalls.length;
   cleanup();
   assert.ok(pauseCalls.length > pauseCallsBeforeUnmount, 'expected unmount to call pause() (stopSpeech on cleanup) even in the Hint-triggered run');
+  assert.ok(pauseCalls.some((src) => src.endsWith(CORRECT_AUDIO)), `expected the still-playing reward clip to be paused on unmount; got ${JSON.stringify(pauseCalls)}`);
 });

@@ -25,6 +25,22 @@ export function SocraticScreen({ go, goBack, goReplace, lessonId }) {
   const [loadState, setLoadState] = useState('loading'); // 'loading' | 'error' | 'ready'
   const [phase, dispatch] = useReducer(socraticReducer, 'ask');
   const [showHint, setShowHint] = useState(false);
+  // FR-001: a hint must never persist into a later phase's message (e.g. the
+  // 'correct' reward) — reset it on every phase transition. The reset is issued
+  // directly by the dispatch site (handleColumnClick) so it batches into the same
+  // commit as the phase change; this effect is the structural backstop that keeps
+  // FR-001 true for any future dispatch site that forgets. In the common path it
+  // is a no-op (setting `false` on `false` bails out without a re-render).
+  //
+  // The direct call is load-bearing, not an optimization: resetting only here
+  // would let React commit the new phase while `showHint` is still true, so the
+  // narration effect below re-fires on the *hint* text and audibly restarts that
+  // clip before cutting it a tick later. See SocraticHintPhase.dom.test.jsx case
+  // (a), which asserts the hint clip narrates exactly once.
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setShowHint(false);
+  }, [phase]);
   const [board, setBoard] = useState(null);
   const [heights, setHeights] = useState(null);
   const [lastDrop, setLastDrop] = useState(null);
@@ -103,6 +119,9 @@ export function SocraticScreen({ go, goBack, goReplace, lessonId }) {
     setBoard(newBoard);
     setHeights(newHeights);
     setLastDrop({ c: col, r: row });
+    // Batches with the dispatch below into one commit, so the phase message never
+    // renders (or narrates) alongside a stale hint — see the showHint effect above.
+    setShowHint(false);
     dispatch({ type: correct ? 'CORRECT' : 'WRONG' });
   }
 
@@ -113,8 +132,10 @@ export function SocraticScreen({ go, goBack, goReplace, lessonId }) {
   // lesson.socratic.messages — no longer assembled client-side from i18n keys, which
   // put it outside both TTS pipelines and left the bubble permanently silent. Shape is
   // identical to slides[].coachMessages, so CoachDialog and getNarrationQueue consume
-  // it verbatim. `showHint` short-circuits the phase map (it is sticky by design — see
-  // the plan's D2), so it selects the message set alongside `phase`.
+  // it verbatim. `showHint` short-circuits the phase map, but it is reset on every
+  // phase transition (FR-001, spec 052) so a hint can never persist into and block a
+  // later phase's message (e.g. the 'correct' reward) — hint and phase messages never
+  // coexist in the bubble.
   const currentMessages = socratic?.messages?.[showHint ? 'hint' : phase] ?? [];
 
   // Narrate the current bubble, mirroring ConceptScreen's slide narration.
@@ -198,7 +219,7 @@ export function SocraticScreen({ go, goBack, goReplace, lessonId }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
       <TopBar
-        title={t(`lesson.${lessonId}.title`, { defaultValue: '' })}
+        title={lesson.title}
         onBack={() => go('saga')}
         onLogoClick={() => go('home')}
       />

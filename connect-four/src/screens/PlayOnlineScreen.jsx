@@ -1,4 +1,8 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
+import { useTranslation } from 'react-i18next';
+// The shared i18next instance — used inside the `useCallback([])` websocket closure,
+// where a `t` captured at first render could resolve against a stale language.
+import i18n from '../i18n/index.js';
 import { useBoardState } from '../lib/useBoardState.js';
 import { TopBar } from '../components/TopBar.jsx';
 import { Toolbar } from '../components/Toolbar.jsx';
@@ -41,9 +45,13 @@ function emit(ws, event, payload, msgId) {
 // ── Component ──────────────────────────────────────────────────────────────
 
 export function PlayOnlineScreen({ go, goBack }) {
+  const { t } = useTranslation();
   const [phase, setPhase] = useState('idle');
   const [queueCount, setQueueCount] = useState(null);
   const [roomUid, setRoomUid] = useState(null);
+  // i18n: hold the *key*, not the resolved string. `setErrorMsg` fires from inside a
+  // useCallback([]) closure, so a `t()` captured there could resolve against a stale
+  // language; translating at render time keeps the message in the learner's locale.
   const [errorMsg, setErrorMsg] = useState('');
 
   // Game-level React state (triggers re-render)
@@ -302,7 +310,7 @@ export function PlayOnlineScreen({ go, goBack }) {
               // Find opponent in players list
               const opponent = (payload?.players || []).find(p => p.id !== g.ourUserId);
               if (opponent) {
-                setOpponentName(opponent.name || 'Opponent');
+                setOpponentName(opponent.name || i18n.t('playOnline.opponent'));
                 if (!g.opponentSymbol && opponent.symbol) {
                   g.opponentSymbol = opponent.symbol;
                   g.ourSymbol = opponent.symbol === 'circle-dark' ? 'circle-light' : 'circle-dark';
@@ -376,7 +384,7 @@ export function PlayOnlineScreen({ go, goBack }) {
       };
 
       ws.onerror = () => {
-        setErrorMsg('WebSocket connection failed');
+        setErrorMsg('playOnline.errorConnection');
         setPhase('error');
       };
 
@@ -384,7 +392,8 @@ export function PlayOnlineScreen({ go, goBack }) {
         if (wsRef.current === ws) wsRef.current = null;
       };
     } catch (err) {
-      setErrorMsg(err.message || 'Something went wrong');
+      console.error('[playOnline] start failed', err);
+      setErrorMsg('common.error');
       setPhase('error');
     }
     // saveAndReview is accessed via boardApiRef.current inside the ws closure,
@@ -425,9 +434,9 @@ export function PlayOnlineScreen({ go, goBack }) {
     return (
       <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
         <TopBar
-          title="Play Online"
+          title={t('playOnline.title')}
           onBack={goBack}
-          meta={`Move ${moveHistory.length}`}
+          meta={t('playOnline.moveMeta', { n: moveHistory.length })}
           onLogoClick={() => go('home')}
         />
 
@@ -435,7 +444,7 @@ export function PlayOnlineScreen({ go, goBack }) {
         <div style={{ padding: '8px 16px', textAlign: 'center', fontSize: 14, color: 'var(--ink-secondary)', minHeight: 36 }}>
           {opponentName
             ? <><span>vs </span><strong>{opponentName}</strong></>
-            : <span style={{ opacity: 0.5 }}>Waiting for opponent…</span>
+            : <span style={{ opacity: 0.5 }}>{t('playOnline.waitingForOpponent')}</span>
           }
         </div>
 
@@ -455,17 +464,17 @@ export function PlayOnlineScreen({ go, goBack }) {
 
         {/* Status line */}
         <div style={{ padding: '4px 16px', textAlign: 'center', fontWeight: 600, minHeight: 24 }}>
-          {gameStatus === 'your-turn' && 'Your turn'}
-          {gameStatus === 'opponent-turn' && `${opponentName || 'Opponent'} is thinking…`}
-          {gameStatus === 'you-win' && 'You won!'}
-          {gameStatus === 'you-lose' && `${opponentName || 'Opponent'} won`}
-          {gameStatus === 'draw' && 'Draw'}
+          {gameStatus === 'your-turn' && t('playOnline.yourTurn')}
+          {gameStatus === 'opponent-turn' && t('playOnline.opponentThinking', { name: opponentName || t('playOnline.opponent') })}
+          {gameStatus === 'you-win' && t('playOnline.youWon')}
+          {gameStatus === 'you-lose' && t('playOnline.opponentWon', { name: opponentName || t('playOnline.opponent') })}
+          {gameStatus === 'draw' && t('playOnline.draw')}
         </div>
 
         {/* Anonymous user — shown when the save returned 401 instead of navigating */}
         {showLoginPrompt && (
           <p style={{ margin: '4px 16px', textAlign: 'center', color: 'var(--ink-secondary)', fontSize: 14 }}>
-            Log in to save your game and see analysis.
+            {t('playOnline.loginToSave')}
           </p>
         )}
 
@@ -494,7 +503,7 @@ export function PlayOnlineScreen({ go, goBack }) {
                 color: '#fff',
               }}
             >
-              Play again
+              {t('playOnline.playAgain')}
             </button>
           ) : (
             <button
@@ -508,7 +517,7 @@ export function PlayOnlineScreen({ go, goBack }) {
                 color: 'var(--red)',
               }}
             >
-              Resign
+              {t('playOnline.resign')}
             </button>
           )}
         </Toolbar>
@@ -519,7 +528,7 @@ export function PlayOnlineScreen({ go, goBack }) {
   // Non-playing phases wrapped in TopBar chrome
   return (
     <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
-      <TopBar title="Play Online" onBack={goBack} onLogoClick={() => go('home')} />
+      <TopBar title={t('playOnline.title')} onBack={goBack} onLogoClick={() => go('home')} />
       <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1rem', textAlign: 'center' }}>
         {phase === 'idle' && (
           <button
@@ -535,24 +544,24 @@ export function PlayOnlineScreen({ go, goBack }) {
             }}
             onClick={start}
           >
-            Play online
+            {t('playOnline.start')}
           </button>
         )}
 
-        {phase === 'registering' && <p>Setting up your account…</p>}
+        {phase === 'registering' && <p>{t('playOnline.registering')}</p>}
 
         {phase === 'searching' && (
           <p>
-            Looking for opponent…
-            {queueCount != null && ` (${queueCount} player${queueCount === 1 ? '' : 's'} in queue)`}
+            {t('playOnline.searching')}
+            {queueCount != null && t('playOnline.queueCount', { count: queueCount })}
           </p>
         )}
 
-        {phase === 'found' && <p>Match found! Loading game…</p>}
+        {phase === 'found' && <p>{t('playOnline.found')}</p>}
 
         {phase === 'error' && (
           <div>
-            <p style={{ color: 'var(--error, #e57373)' }}>{errorMsg}</p>
+            <p style={{ color: 'var(--error, #e57373)' }}>{t(errorMsg)}</p>
             <button
               style={{
                 padding: '0.75rem 2rem',
@@ -566,7 +575,7 @@ export function PlayOnlineScreen({ go, goBack }) {
               }}
               onClick={retry}
             >
-              Try again
+              {t('playOnline.tryAgain')}
             </button>
           </div>
         )}

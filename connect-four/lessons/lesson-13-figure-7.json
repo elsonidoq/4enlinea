@@ -1,6 +1,7 @@
 {
   "id": "figure-7",
   "title": "Figure-7 Trap",
+  "title_es": "La Trampa Figura-7",
   "free": false,
   "userPerspective": "yellow",
   "slides": [
@@ -599,7 +600,9 @@
         ]
       },
       "correctCol": 0,
-      "userPlayer": 1
+      "userPlayer": 1,
+      "goalPromptAudio": "/audio/lessons/facf77d8512a09a6.mp3",
+      "goalPromptAudio_es": "/audio/lessons/a5d2b2bc54a84e1a.mp3"
     },
     {
       "puzzleId": "b4d7b8d8-8feb-48a7-96fc-2baa51abcb65",
@@ -636,7 +639,9 @@
         ]
       },
       "correctCol": 3,
-      "userPlayer": 2
+      "userPlayer": 2,
+      "goalPromptAudio": "/audio/lessons/27803c92cd8591d4.mp3",
+      "goalPromptAudio_es": "/audio/lessons/e7cc60a11c5401d5.mp3"
     }
   ],
   "order": 13

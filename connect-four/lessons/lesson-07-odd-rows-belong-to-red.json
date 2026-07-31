@@ -1,6 +1,7 @@
 {
   "id": "odd-rows-belong-to-red",
   "title": "Odd Rows Belong to Green",
+  "title_es": "Las Filas Impares Son de Verde",
   "free": true,
   "userPerspective": "red",
   "slides": [
@@ -261,7 +262,9 @@
       "interactionMode": "single_move",
       "highlightMetadata": null,
       "correctCol": 3,
-      "userPlayer": 1
+      "userPlayer": 1,
+      "goalPromptAudio": "/audio/lessons/12182dc67130a6fc.mp3",
+      "goalPromptAudio_es": "/audio/lessons/7b31aadb060300a3.mp3"
     },
     {
       "puzzleId": "2055cbeb-e5f6-41dc-8e1d-2a13f8c4dbb6",
@@ -274,7 +277,9 @@
       "interactionMode": "single_move",
       "highlightMetadata": null,
       "correctCol": 2,
-      "userPlayer": 1
+      "userPlayer": 1,
+      "goalPromptAudio": "/audio/lessons/581d65b3423ba98f.mp3",
+      "goalPromptAudio_es": "/audio/lessons/dc997e51ddd5be9e.mp3"
     }
   ],
   "order": 7

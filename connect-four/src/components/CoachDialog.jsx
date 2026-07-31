@@ -1,4 +1,5 @@
 import { useRef, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import { CoachAvatar } from './CoachAvatar.jsx';
 
 /** Shared styling for the 🔁 / ⏹ narration controls. */
@@ -26,6 +27,7 @@ const NARRATION_BUTTON_STYLE = {
  * in — otherwise a prose-only slide would render no narration controls.
  */
 export function CoachDialog({ messages, size = 58, fixed = false, onReplay, onStop, hasNarration }) {
+  const { t } = useTranslation();
   const mood = messages[messages.length - 1]?.mood ?? 'happy';
   const bubblesRef = useRef(null);
   const narrationAvailable = hasNarration ?? messages.some(
@@ -112,8 +114,8 @@ export function CoachDialog({ messages, size = 58, fixed = false, onReplay, onSt
             <button
               type="button"
               onClick={onReplay}
-              aria-label="Replay narration"
-              title="Replay narration"
+              aria-label={t('audio.replayNarration')}
+              title={t('audio.replayNarration')}
               style={NARRATION_BUTTON_STYLE}
             >
               🔁
@@ -123,8 +125,8 @@ export function CoachDialog({ messages, size = 58, fixed = false, onReplay, onSt
             <button
               type="button"
               onClick={onStop}
-              aria-label="Stop narration"
-              title="Stop narration"
+              aria-label={t('audio.stopNarration')}
+              title={t('audio.stopNarration')}
               style={NARRATION_BUTTON_STYLE}
             >
               ⏹

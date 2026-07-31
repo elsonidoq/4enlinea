@@ -15,6 +15,14 @@
 //                                       ariaDisabled: true (FR-006: non-playable column stays a
 //                                       button for AT purposes, but is removed from Tab order and
 //                                       reports its disabled state)
+// Known, deliberately-unaddressed limitation (OI-69 item 2; spec 052 FR-022, decided 2026-07-30):
+// `ariaLabel` is board-local ("column 1".."column 7"), so a page rendering several boards at once
+// — only the admin lesson editor does, with three concept slides plus the socratic board — gives a
+// screen reader four identical sets of seven "column N" targets. Fixing it means threading a
+// board-scope label through this function, which changes the locked spec-043 a11y contract shared
+// by every game screen. Spec 052 did NOT commission a broader accessibility pass, and the ambiguity
+// is confined to an admin-only surface, so it is left as-is by decision rather than oversight.
+// Revisit it as part of a real a11y pass, not as a drive-by.
 export function getColumnA11yProps({ col, canPlay, colFull }) {
   if (!canPlay) {
     return {

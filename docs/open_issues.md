@@ -413,7 +413,61 @@ translate to Argentinian voseo per `docs/architecture/frontend-conventions.md` (
 
 ## OI-19 — Hardcoded-English UI strings bypass the i18n key-parity guard
 
-**Status**: deferred (several instances fixed during spec 049 QA; audit for the rest outstanding; 2026-07-13)
+**Status**: ✅ RESOLVED 2026-07-30 (spec `052` / Epic 6, US5 T048–T050) — see the **UPDATE** below:
+the first closeout was premature and a browser pass the same day found five more.
+
+> **UPDATE 2026-07-30 (spec 052 browser QA).** This entry was marked resolved on the strength of a
+> `grep` inventory, and that inventory missed strings a human sees immediately:
+>
+> - `ChallengeScreen.jsx` rendered a literal **"Hint"** button (and **"Submit"** for multi-column
+>   categories) on every challenge screen, in English, beside otherwise fully-Spanish content —
+>   while its sibling `SocraticScreen` already used `t('common.hint')`. Fixed: both now route
+>   through `common.hint` / a new `common.submit` key.
+> - `PlayOnlineScreen.jsx` — the very file this entry names — still had three literals
+>   (`'Opponent'`, `'WebSocket connection failed'`, `'Something went wrong'`). They sat inside a
+>   `useCallback([])` websocket closure where the component's `t` isn't naturally reachable, which
+>   is why the sweep skipped them. Fixed: `errorMsg` now stores a translation *key* resolved at
+>   render (which also avoids a stale-language `t` captured in that closure), and the opponent-name
+>   fallback uses the shared `i18n` singleton.
+>
+> **Lesson for the next sweep**: a grep for `title=`/`aria-label=`/`placeholder=` does not catch a
+> bare JSX text child (`>Submit<`), a `label=` prop, or a string literal inside a closure. Confirm
+> an i18n sweep in the browser with the app set to Spanish before closing it.
+
+The audit called for below was run (T048 inventory: `grep` over `src/screens` + `src/components` for
+`title=`, `aria-label=`, `placeholder=`, and bare JSX text children not wrapped in `t()`). Findings
+and disposition:
+
+- **Fixed — learner-facing.** `PlayOnlineScreen.jsx` was un-i18n'd end to end (it did not even
+  import `useTranslation`); all 16 of its user-visible literals now route through a new
+  `playOnline.*` namespace in both locales — the two `title="Play Online"` TopBars named in this
+  issue plus "Waiting for opponent…", "Your turn", "`<name>` is thinking…", "You won!",
+  "`<name>` won", "Draw", "Log in to save your game and see analysis.", "Play again", "Resign",
+  "Play online", "Setting up your account…", "Looking for opponent…" (+ its hand-rolled
+  `player/players in queue` plural, now `queueCount_one`/`_other`), "Match found! Loading game…",
+  and "Try again".
+- **Fixed — learner-facing.** `CoachDialog.jsx` "Replay narration"/"Stop narration"
+  (`audio.replayNarration`/`audio.stopNarration`), `PastGamesListScreen.jsx` "Sign in to see your
+  past games" (`games.signin_prompt`), `CLChallengeScreen.jsx` "Loading…"×2 / "Lesson not found."
+  (`common.loading`, new `lesson.notFound`), `KbTermPopup.jsx` `aria-label="Close"`
+  (`common.close`), `CoachAvatar.jsx` `aria-label="Coach"` (`common.coach`).
+- **Already fixed before this pass.** `ReviewScreen.jsx`'s `title="Review"`, listed above as
+  known-remaining, reads `t('review.title')` today — re-verified at source, no change needed.
+- **Scoped out by owner decision (spec 052 Decision 2, 2026-07-30) — NOT an oversight.** The
+  admin-only literals stay English: `CandidateDashboard.jsx` (`title="Puzzles need reindexing"`,
+  `placeholder="Count (1–100)"`, `placeholder="Seed (optional)"`),
+  `admin/PuzzlePickerRow.jsx` (`title="Move up"/"Move down"/"Remove"` + their `aria-label`s),
+  `admin/SlideEditor.jsx` / `admin/LessonMetaForm.jsx` / `AdminLessonListScreen.jsx` /
+  `AdminLessonEditorScreen.jsx` labels and `aria-label`s, and `RejectModal.jsx`'s
+  `placeholder="Describe the issue..."`. The project treats admin tooling as English-only; the
+  owner ruled translating it out of scope to keep this P3 story small. Revisit only if admin
+  tooling is ever handed to non-English authors.
+- **Deliberately left as-is.** `PlayOnlineScreen.jsx`'s "Open room on papergames ↗" link is marked
+  `DEBUG-ONLY … Remove/hide before launch` in the source — translating a link scheduled for
+  deletion would be waste.
+- **Still not done (the lint idea below).** No automated "flag hardcoded JSX text" check exists;
+  that remains a nice-to-have, not tracked here.
+
 **Area**: `connect-four/src/screens/*.jsx` (TopBar titles, button labels, aria-labels not wired to `t()`)
 **Discovered**: spec 049 QA (2026-07-13)
 
@@ -820,12 +874,29 @@ Whether a 100%-accuracy badge should still be visually softened, annotated, or p
 
 ## OI-38 — KB term popup summary body has no Spanish fallback for entries missing `short_summary_es`
 
-**Status**: deferred / open (surfaced during Batch B task 13, finding 10 — explicitly out of scope for that task)
+**Status**: deferred / **OPEN** (surfaced during Batch B task 13, finding 10 — explicitly out of scope for that task; count re-verified and corrected 2026-07-30 by spec `052` T056, translation still not done — see the UPDATE at the end of this entry)
 **Area**: `docs/knowledge-base/*.md` (KB content); wherever `/api/explain-move-llm`'s `terms` map is built server-side
 
 Task 13 fixed the KbTermPopup UI leaks: the popup header no longer shows a raw KB slug (now `kb.term.<kbId>` i18n-driven, humanized fallback for anything not yet keyed) and the CTA buttons ("Go to lesson"/"Go to practice") are now localized. The popup **body** (the 1-2 sentence summary) is a different, non-UI gap: it is sourced directly from each KB entry's `short_summary` (English) or `short_summary_es` (Spanish) field in `docs/knowledge-base/<id>.md`. Entries without a populated `short_summary_es` silently render the English `short_summary` in Spanish mode — this is KB *content* coverage, not a UI hardcoding bug (compare OI-36, the same shape of gap for lesson content). Batch D item 34 confirmed the ones that do have `short_summary_es` render correctly.
 
-If picked up: audit which of the 45 KB entries have `short_summary_es` populated vs falling back to English, and extend the same reviewed-translation-batch approach used for OI-36 (voseo, verde/gris, no silent fabrication).
+If picked up: audit which of the KB entries have `short_summary_es` populated vs falling back to English, and extend the same reviewed-translation-batch approach used for OI-36 (voseo, verde/gris, no silent fabrication).
+
+**UPDATE 2026-07-30 (spec `052` / Epic 6, US5 T056) — count corrected, issue stays OPEN.** The
+"45 of 49" figure quoted above was stale and conflated file count with entry count. Re-counted at
+source in `docs/knowledge-base/`:
+
+```
+ls docs/knowledge-base/*.md | wc -l                                  # 49 files
+ls *.md | grep -v '^README.md$' | grep -v '^_sketches.md$' | wc -l    # 47 entries
+grep -la short_summary_es *.md | grep -v README | grep -v _sketches   # 4 entries
+```
+
+**47 entries** (`README.md` and `_sketches.md` are not entries), **4** carry a `short_summary_es`
+(`allis-claimeven.md`, `community-immediate-threat.md`, `community-double-threat.md`,
+`community-figure-7.md`), **43 missing**. Spec 052 corrected the count only — the bulk translation
+of those 43 short summaries was explicitly **deferred to a standalone content spec** and was NOT
+performed. Until it is, Spanish KB-term popups keep falling back to the English `short_summary` for
+43 of 47 entries. This entry stays **open**.
 
 ## OI-39 — `getSubscriptionStatus` (paymentProcessor.js) has no production call site; three (soon four) tier-gate sites read the client-cached tier directly
 
@@ -948,15 +1019,69 @@ It falls between both TTS pipelines: the coach pipeline only sees `coach.spoken.
 
 ## OI-44 — More lesson content assembled from i18n keys: `lesson.<id>.title` duplicates the lesson JSON's own `title`, and `socratic.goalPrompt` is authored but rendered nowhere
 
-**Status**: deferred / open (surfaced 2026-07-16 while diagnosing OI-43; deliberately left out of that fix to avoid inflating it)
-**Area**: `connect-four/lessons/*.json`, `connect-four/src/i18n/{en,es}.json` (`lesson.<id>.title`), `connect-four/server/lessonLoader.js` (`localizeLesson`)
+**Status**: ✅ RESOLVED 2026-07-30 (spec 052 "Lesson learning surface & authoring polish" US2, both halves)
+**Area**: `connect-four/lessons/*.json`, `connect-four/src/i18n/{en,es}.json` (`lesson.<id>.title`), `connect-four/server/lessonLoader.js` (`localizeLesson`), `connect-four/src/screens/ChallengeScreen.jsx`
 
 Two more instances of the same "lesson content built from i18n keys" pattern OI-43 rejects:
 
 1. **`lesson.<id>.title`** resolves via `t()` with a `defaultValue`, while **every lesson JSON also carries its own `title` field**. Two homes for one string; unclear which is authoritative.
 2. **`socratic.goalPrompt`** is authored in **9 of 13** lesson JSONs (English only — no `goalPrompt_es` anywhere) and `localizeLesson` has a dedicated branch localizing it — but **nothing renders it**. The only `goalPrompt` hits in `src/` are the unrelated `GOAL_PROMPTS` map in `CandidateDashboard.jsx` (puzzle generation). It is authored dead data with live localization plumbing.
 
-**If picked up**: fold into the OI-43 mechanism once it lands — decide that lesson content lives in the lesson JSON, migrate `title`, and either wire up `goalPrompt` or delete it plus its `localizeLesson` branch. Verify `goalPrompt`'s deadness at source first; it is a negative claim.
+**Resolution — title (US2 title half)**: `lesson.title` is now the sole source of truth. `SagaScreen.jsx`,
+`ConceptScreen.jsx`, and `SocraticScreen.jsx` all read `lesson.title` directly (no `t()` call); the
+full `lesson.<id>` i18n subtrees (all 15 lesson ids) were removed from `en.json`/`es.json`. Regression
+guard: `connect-four/tests/dom/LessonTitleConsolidation.dom.test.jsx` mounts all three screens against a
+real lesson fixture with **empty** i18n resources and asserts the title still renders.
+
+> **Correction, same day (2026-07-30), found in this spec's own code review.** The step above, shipped
+> alone, was a **learner-facing regression**: the deleted `es.json` subtree was the only thing
+> localizing lesson titles, so 14 of 15 titles silently rendered in English for Spanish learners
+> (`"Immediate Threats"` for `"Amenazas Inmediatas"`, `"I Play Where You Play"` for `"Yo Juego Donde
+> Vos Jugás"`, …). Nothing threw — the classic graceful-fallback trap.
+>
+> The spec's own T016 rule ("do NOT localize `title`; no `title_es`") caused it. That rule's stated
+> justification was that the i18n key owned titles and a `title_es` would silently lose to it — a
+> justification this very migration deleted. The rule outlived its reason.
+>
+> **Fixed by** (owner decision, overriding T016): `title_es` restored on all 15 lesson JSONs with the
+> exact Spanish strings from the deleted `es.json` block; `title` added to `localizeLesson`'s `_es`
+> merge; `getLessons()` made locale-scoped (`GET /api/lessons` now passes `req.locale`) because the
+> Saga list renders the title directly; `langHeaders()` added to the list fetches in `SagaScreen.jsx`
+> and `StatsScreen.jsx` and to `CLChallengeScreen.jsx`'s cold-boot lesson fetch. Guarded by a new
+> `tests/unit/lessonContent.test.js` case asserting every lesson carries a non-empty `title_es`.
+> Docs corrected: `docs/architecture/lesson-editor.md` and `api-conventions.md` both asserted the now
+> false "title is deliberately NOT localized".
+
+**Resolution — `goalPrompt` (US2 prompt half, Settled Decision 4/8)**: `confirmationChallenges[].goalPrompt`
+is now wired as a per-lesson **override** of the confirmation challenge's coach-bubble prompt.
+`ChallengeScreen.jsx`'s `initPuzzle` uses `puzzle.goal_prompt` (threaded through from `ch.goalPrompt`
+in the lesson-mode inline-challenge mapping) as the displayed text when present, falling back to the
+existing random `coach.spoken.<category>.prompt.{0,1,2}` pool pick when absent — the shared pool stays
+untouched and outcome-neutral (it also serves DB-drawn practice boards). Per Settled Decision 8, no
+pre-generated audio clip exists for override text yet, so the same branch sets
+`lastCoachKeyRef.current = null` instead of the picked pool key — the coach bubble goes silent for
+that message instead of playing the old, now-mismatched `coach.spoken.<category>.prompt.N` clip
+(FR-029). `socratic.goalPrompt` remains **unrendered by design** — the interactive Socratic phase's
+prompt is already served by `socratic.messages.ask`, which plays that per-lesson-prompt role; see
+`docs/architecture/lesson-editor.md` (rewritten "Fields the learner UI ignores" table + "To change a
+challenge prompt" paragraph + the audio-silence note).
+
+**Counts, re-measured 2026-07-30** (grepped fresh — supersedes the stale "9 of 13, English only" above,
+which described `socratic.goalPrompt`, not the field this fix wires):
+- `confirmationChallenges[].goalPrompt`: **24/24** confirmation challenges across the 10 lessons that
+  have any (`confirmationChallenges.length > 0`) carry a `goalPrompt`, and **24/24** also carry a
+  `goalPrompt_es` — full English+Spanish coverage on the field that now renders.
+- `socratic.goalPrompt` (still dead, unaffected by this fix): present in **15/15** lesson files;
+  `socratic.goalPrompt_es` present in only **13/15** (2 lessons fall back to the English text per
+  `localizeLesson`'s per-field fallback — harmless since the field is never rendered either way).
+
+**Acceptance evidence**: closes both `agentic_QA_2026-07-25-0015.md` `[major]` findings — "Claimeven
+confirmation-challenge copy calls a WON position a draw" (the claimeven lesson's `goalPrompt` already
+stated the win correctly pre-fix; it is now actually rendered, and was reshaped to fit the ~205-char
+coach-bubble cap) and "Undercut challenge prompt tells the learner to 'Find the undercut' — but the
+grader marks the undercut column WRONG" (the undercut lesson's `goalPrompt` already said "play any
+other column" pre-fix, generically, naming no column; it too is now rendered, reshaped to fit the cap).
+New regression test: `connect-four/tests/dom/ChallengeScreenGoalPrompt.dom.test.jsx`.
 
 ## OI-45 — Regenerating an approved coach clip puts the new take live, unapproved
 
@@ -984,10 +1109,19 @@ landed.
 
 ## OI-46 — `SocraticScreen`'s `showHint` is sticky, so the `correct` message can never render (and now, never narrates)
 
-**Status**: deferred / open (surfaced 2026-07-16 by the plan critique for OI-43; consciously not fixed there)
+**Status**: ✅ RESOLVED 2026-07-30 (spec 052 Epic 6 US1, FR-001/FR-002)
 **Area**: `connect-four/src/screens/SocraticScreen.jsx`
 
-`showHint` is `useState(false)`, set `true` by the Hint toolbar button, and **never reset** — not on a phase transition, not on a drop. The coach-message selector short-circuits the phase map entirely:
+**Resolution**: `showHint` now resets on every phase transition via
+`useEffect(() => { setShowHint(false); }, [phase])`, so hint and phase messages never
+coexist in the bubble — see `docs/architecture/lesson-editor.md` §"Hint yields to phase"
+for the documented decision and rationale. Regression tests:
+`connect-four/tests/dom/SocraticHintPhase.dom.test.jsx` (new; three cases — hint-then-correct,
+hint-then-wrong, no-hint-then-correct) and `connect-four/tests/dom/SocraticNarration.dom.test.jsx`'s
+rewritten "run 2" case; both confirmed RED against the pre-fix `showHint` (sticky) before the fix
+landed. Both registered in `test:dom`.
+
+`showHint` was `useState(false)`, set `true` by the Hint toolbar button, and previously **never reset** — not on a phase transition, not on a drop. The coach-message selector short-circuits the phase map entirely:
 
 ```js
 const currentMessages = socratic?.messages?.[showHint ? 'hint' : phase] ?? [];
@@ -999,7 +1133,10 @@ So once the student clicks Hint, the bubble is pinned to the hint text for the r
 
 **Testing consequence, already applied**: the OI-43 plan's V7 browser pass is deliberately split in two — a Hint-free run that verifies `correct` narration, then a separate Hint run — because a single linear pass that clicks Hint can never reach `correct`. Do not "simplify" it back into one pass.
 
-**If picked up**: the likely fix is one line — `useEffect(() => { setShowHint(false); }, [phase])` — so each phase narrates its own message. Confirm first that hint-then-wrong-move should really drop the hint; the alternative is to let hint and phase messages coexist in the bubble rather than one replacing the other. Related: OI-43, [[project_lesson_progression_audio_traps]].
+**Fix applied**: exactly the one-line fix anticipated above —
+`useEffect(() => { setShowHint(false); }, [phase])` — with hint-then-wrong-move confirmed
+(via `SocraticHintPhase.dom.test.jsx` case (b)) to drop the hint rather than let it coexist
+with the wrong-move message. Related: OI-43, [[project_lesson_progression_audio_traps]].
 
 ## OI-47 — `GET /api/games` predates the offset-pagination `id`-tiebreaker finding and is unaudited
 
@@ -1205,7 +1342,20 @@ isolation from that decision.
 
 ## OI-62 — KB touch-ups from the lesson remediation: `3334434` now solver-verified; figure-7 `gravity_top>=2` filter note
 
-**Status**: deferred / open (small doc edits, 2026-07-24)
+**Status**: ✅ RESOLVED 2026-07-30 (spec `052` / Epic 6, US5 T053–T055) — both edits made and synced.
+1. `allen-j-configuration.md`'s `3334434` worked example: `solver_verified: PENDING` → `true`, but
+   **re-verified from scratch first** rather than stamped on the 2026-07-24 claim. `./visualize_board.sh
+   3334434` shows Gray (Black/P2) to move with column scores `[-5, -3, -4, -5, -4, -5, -5]` — every
+   column negative, so Black loses whatever he plays, which is exactly what the example asserts. The
+   canonical J cells ({D1, D3, E2, E3} for Green) and the claimed triple threat (F3, G3, G4, all
+   Green minor threats, no major threat on the board) were confirmed on the same render. The
+   verification evidence is written into the example's `notes` block, not just the boolean.
+2. `community-figure-7.md`: the `gravity_top_count >= 2` branch (and the redundant `== 2` follow-up)
+   is now annotated as dead code with the reason — both threat cells are in the same column `x+3` at
+   adjacent rows `y+2`/`y+3`, and only one row per column can be the gravity top, so
+   `gravity_top_count ∈ {0, 1}` structurally. The live check is `above_gravity == 0`.
+3. `npm run sync-kb` re-run; `git diff --stat connect-four/server/kb/` shows both files updated
+   (`allen-j-configuration.md` +15/-1, `community-figure-7.md` +9); `tests/unit/kbSync.test.js` green.
 **Area**: `docs/knowledge-base/allen-j-configuration.md`, `docs/knowledge-base/community-figure-7.md`
 **Discovered**: lesson-content remediation (2026-07-24)
 
@@ -1217,7 +1367,34 @@ isolation from that decision.
 
 ## OI-63 — Lesson verifier/finder robustness gaps (solver crash on bad movestring, coarse `_overlayIntent`, unscanned i18n titles, vestigial REMEDIATED gate)
 
-**Status**: deferred / open (tooling hardening backlog, 2026-07-24)
+**Status**: ✅ RESOLVED 2026-07-30 (spec 052 / Epic 6, US3). All six items closed:
+1. **Solver crash on bad input** → `verify_lesson_content.mjs` now routes every `solver.query` and
+   every `new Board(...)` through `safeQuery`/`safeBoard`, and wraps per-lesson `JSON.parse` +
+   `checkLesson`; a malformed movestring produces one FAIL row and the run continues (T027).
+   Demonstrated by temporarily injecting `"999999999"` as a socratic movestring plus an illegal
+   over-long challenge movestring: both printed FAIL rows, all 15 lessons were still reported. The
+   injected fixture was reverted, not committed.
+2. **Per-overlay `_overlayIntent`** → `overlayIntent(node, overlay)` resolves
+   `overlay._overlayIntent ?? node._overlayIntent`, so an individual overlay overrides the
+   node-level default in either direction; all 8 shipped node-level usages are untouched (T036).
+   Documented in `docs/architecture/lesson-editor.md` §"Overlay intent (`_overlayIntent`)" (T037).
+3. **Unscanned i18n titles** → `lessonContent.test.js` now asserts no `lesson.<id>.title` survives in
+   `en.json`/`es.json` for any current lesson id, complementing `i18nKeyParity.test.js`'s symmetry
+   check (which a title re-added to *both* files would pass). Confirmed RED by re-adding one (T038).
+4. **Vestigial REMEDIATED gate** → the set and all three `if (!REMEDIATED.has(...)) continue;` guards
+   are **deleted**, not emptied — there is no longer a place to add an exemption. It listed all 15
+   lesson ids, so the deletion was behaviour-neutral (T035, FR-018).
+5. **No `--help`** → `find_lesson_boards.mjs --help` / `-h` (and a bare invocation) prints purpose,
+   spec list, `tag:` form, option defaults and exit codes, then exits 0 as the **first** statement in
+   `main()` — before `createSolverProcess()`, verified by solver process count (T028).
+6. **Matcher/detector divergence** → every matcher now carries a "Production detector / side" doc
+   comment (T029), the overcut pair carries an explicit "deferred pending OI-76" decision (T030), and
+   the solver-optimal gate was widened to every matcher except that pair (T031). The remaining
+   duplication is NOT resolved here — it is tracked as **OI-85**, and the shipped boards the widened
+   gate flags are tracked as **OI-84**; both were filed by this same story as new backlog rather than
+   fixed inside it.
+
+Was: deferred / open (tooling hardening backlog, 2026-07-24)
 **Area**: `connect-four/server/scripts/verify_lesson_content.mjs`, `server/scripts/find_lesson_boards.mjs`, `connect-four/tests/unit/lessonContent.test.js`
 **Discovered**: lesson-content remediation final review (2026-07-24)
 
@@ -1346,7 +1523,16 @@ owner rather than an agent's default.
 
 ## OI-68 — `windowHighlights` visual + content review items
 
-**Status**: open — cosmetic / editorial, no functional impact (2026-07-28)
+**Status**: ✅ RESOLVED 2026-07-30 (spec `052` / Epic 6, US4 T045) — **closed as a recorded product
+decision, not as a code fix. No rendering code changed.** The owner ruled capsule/disc tinting out
+of spec 052's scope entirely: `windowHighlights` capsules are kept exactly as they render today
+(SVG at `zIndex: 2` above the discs, opacity as shipped), on the explicit stated assumption that
+authored slides do not have overlapping overlays. `Board.jsx`'s `zhSvg` and every authored
+`windowHighlights` payload are untouched by spec 052; the two options sketched below (dropping the
+capsule below the discs, or an outline-only variant) were considered and deliberately not taken.
+Item 2 (the sparse `opening-centre` slide-1 window) is likewise left as authored — it matches its
+prose and is not wrong. If disc colour ever becomes the teaching point of a slide *and* reads
+wrong in a real browser, reopen with that slide as the motivating example.
 **Area**: `connect-four/src/components/Board.jsx` (`zhSvg`), `connect-four/lessons/lesson-04-opening-centre.json`
 **Discovered**: browser spot-checks of the 48 authored windows
 
@@ -1367,7 +1553,17 @@ Two things noticed while reviewing the rendered capsules, neither worth blocking
 
 ## OI-69 — Admin lesson-editor cosmetic + a11y nits left after the `windowHighlights` control
 
-**Status**: open — cosmetic, no functional impact (2026-07-28)
+**Status**: ✅ RESOLVED 2026-07-30 (spec `052` / Epic 6, US4 T043/T044/T046)
+- Item 1 **fixed**: the `infoProse` `<textarea>` in `SlideEditor.jsx` now sets
+  `fontFamily: 'inherit', lineHeight: 1.4`, matching the adjacent coach-message textarea. Confirmed
+  by source inspection that the shared `input` style object (`SlideEditor.jsx`, `const input = …`)
+  sets no `font-family`, so the bare textarea really was falling back to the UA monospace default
+  while its neighbour already set `fontFamily: 'inherit'`.
+- Item 2 **left unaddressed by decision, and the reason is now recorded in-repo** (spec 052 FR-022):
+  see the comment above `getColumnA11yProps` in `connect-four/src/components/boardA11y.js`. Board
+  `aria-label`s stay board-local; fixing the multi-board ambiguity would change the locked spec-043
+  a11y contract used by every game screen, spec 052 commissioned no broader accessibility pass, and
+  the ambiguity is confined to the admin-only lesson editor. Revisit during a real a11y pass.
 **Area**: `connect-four/src/components/admin/SlideEditor.jsx`, `connect-four/src/components/Board.jsx`
 **Discovered**: shipping the `windowHighlights` control and the coach-message textarea change
 
@@ -1449,7 +1645,18 @@ only so a future reader knows it was a decision, not an oversight.
 
 ## OI-73 — `lesson.windowCounts` shares the i18n namespace with per-lesson-id keys
 
-**Status**: open — latent, currently harmless (observed 2026-07-28)
+**Status**: ✅ RESOLVED 2026-07-30 (spec `052` / Epic 6, US5 T051–T052) — the guard option was taken.
+`tests/unit/i18nKeyParity.test.js` now carries "no lesson id collides with a reserved `lesson.*` i18n
+sub-key", which reads every `lessons/lesson-*.json`'s `id` and fails if any equals a child of
+`en.json`'s `lesson` object. The reserved set is **derived at run time**, not hardcoded, so new
+chrome keys are covered automatically; it also asserts `en.json`/`es.json` agree on that set. As of
+this closeout the derived set is `["confirmation", "node", "notFound", "windowCounts"]` — spec 052's
+FR-011 had already removed every per-lesson `lesson.<id>` object, so every remaining child really is
+shared chrome. Demonstrated RED before shipping: a temporary `lessons/lesson-16-node.json` with
+`"id": "node"` made the test fail with `Colliding: [{"file":"lesson-16-node.json","id":"node"}]`
+(temp file deleted, never committed). The heavier `lessonUi.*` re-namespacing was considered and not
+taken — the guard is the two-line-sized fix this entry itself recommended. Already registered in
+`test:fast`, so no `package.json` change was needed.
 **Area**: `connect-four/src/i18n/en.json`, `es.json`
 
 Lesson-scoped UI copy lives under `lesson.<something>`, where `<something>` is normally a **lesson
@@ -1808,3 +2015,262 @@ confirm each of the 5 actually exercises its assertions and would go red on a re
 has never run once is not known to work. Read `docs/architecture/reason-INVARIANTS.md` (esp. I12) and
 `reason-DECISIONS.md` before changing anything under `reason_engine/`. Related: OI-81 (another test
 registered nowhere / running nowhere — same class of silently-absent coverage).
+
+## OI-83 — The lesson editor never checks that puzzles exist for the chosen confirmation category
+
+**Status**: deferred (admin-only authoring-tool scope, explicitly scoped out of spec 052 / FR-020)
+**Area**: `connect-four/src/screens/AdminLessonEditorScreen.jsx` (`confirmationCategory` /
+`confirmationCount` fields), `docs/architecture/lesson-editor.md` §"Confirmation Challenges"
+**Discovered**: spec 052 / Epic 6, 2026-07-30
+
+An author can pick any `confirmationCategory` in the lesson editor and save. Nothing — not the
+editor, not `saveLessonFile`, not `validateLesson` — checks that the `puzzles` table actually holds
+`confirmationCount` promoted puzzles for that category. The lesson saves clean and the gap only
+surfaces at runtime, when the learner reaches the confirmation gate and the pool comes back short
+or empty. This is the same class of trap as memory `feedback_generate_puzzles_for_local_qa`: the
+local `puzzles` table is empty for most categories, so a locally-authored lesson looks fine.
+
+`docs/architecture/lesson-editor.md` previously claimed this was "Epic 6 scope"; that pointer was
+stale and has been corrected (spec 052 / T040) to point here.
+
+**Why deferred**: admin-only authoring surface with a single internal user; it costs a lesson
+author one manual check, and no learner-facing behaviour is wrong today.
+**If picked up**: an existence probe at save time (count promoted puzzles for the category, warn —
+do not block, since a category can legitimately be populated after authoring). Note the endpoint
+must not be a new localhost-only route if the editor is ever used against staging — read
+`docs/architecture/api-conventions.md` and memory `project_admin_localhost_directive` first.
+
+## OI-84 — Lesson boards flagged by the widened solver-optimal gate — human review pending
+
+**Status**: open — awaiting a human content decision (filed 2026-07-30 by spec 052 / T032–T033)
+**Area**: `connect-four/lessons/lesson-{08,09,11,13,14}-*.json` (concept slides only),
+`connect-four/server/scripts/find_lesson_boards.mjs`
+**Discovered**: spec 052 / Epic 6, US3 (2026-07-30)
+
+Spec 052 widened `find_lesson_boards.mjs`'s solver-optimal gate (previously only on
+`undercut_t2_adjacent`) to every matcher except the overcut pair: a candidate is now rejected
+unless the pattern owner is the side to move **and** the taught column is in the solver's argmax
+set. **The gate governs candidate search only. No lesson board content was altered by this work** —
+this entry is the flag, per FR-017 ("flag for human review, never auto-rewrite").
+
+**Method (so this is reproducible, not a spot check)**: every board (all concept slides + the
+socratic node) of the six lessons whose concept maps to a gated matcher was re-checked with
+`node server/scripts/find_lesson_boards.mjs <matcher> --check <movestring>` — **51 (board, matcher)
+pairs over 26 distinct boards**, covering `z_threat_gap3`, `z_threat_stacked`, `z_threat_socratic`,
+`tag:z_threat`, `undercut_t2_adjacent`, `same_parity_pair`, `fork_socratic_clean`, `tag:claimeven`,
+`tag:figure_7`, `tag:j_shape`. Each pair was then re-run against a temporary copy of the script with
+the gate disabled, so the flags below are exactly the boards the **new** gate rejects — not
+long-standing mismatches. (`overcut_active` / `overcut_shared_cell` and lesson-12 are out of scope:
+deferred pending OI-76.)
+
+**Headline: zero socratic boards are flagged.** Every board where a taught column actually exists
+(the socratic answer) still passes: `the-fork`, `z-threats`, `undercut` (both matchers) and
+`figure-7`. All flags are **concept-slide illustration boards**, which have no taught move at all.
+
+| Lesson | Node | Movestring | Matcher(s) | Taught col | True best col (score) |
+|---|---|---|---|---|---|
+| `claimeven` (L08) | slides[1] | `32332533350` | `tag:claimeven` | 0 (score 2) | 5 (score 4) |
+| `z-threats` (L09) | slides[0] & slides[1] | `22343321` | `z_threat_gap3` | 4 (score −5), owned by Gray while **Green** is to move | 2 or 3 (score −2) |
+| `z-threats` (L09) | slides[3] | `33332422213100002524` | `z_threat_gap3`, `z_threat_stacked` | 4 — **already the argmax** (score −2 = max); fails only the owner-to-move half of the gate (Gray owns the threat, Green is to move) | 4 |
+| `undercut` (L11) | slides[3] | `326223332522553365501` | `same_parity_pair` | 4 (score −1) | 1 (score 7) |
+| `figure-7` (L13) | slides[1] | `43222430403555` | `tag:figure_7` | pattern spans cols 1–4 | 5 (score 14) |
+| `j-shape` (L14) | slides[2] | `43344032` | `tag:j_shape` | pattern spans cols 3–4 | 1 (score 5) |
+
+**How to read these before "fixing" anything.** Board provenance is not recorded per slide, so this
+sweep is a superset: it checks every board of a matching lesson, not only boards actually curated by
+that matcher. A flag therefore means *"today's matcher would not produce this board"*, which for a
+concept slide is often fine — a slide that illustrates the shape of a pattern does not have to sit
+on a position where playing it is best, and several of these boards are deliberately positions where
+the pattern's owner is NOT on move. The `z-threats` slides[3] row is the clearest example: its column
+IS the best move; only the owner-to-move clause rejects it.
+
+**Decision needed from a human**: for each row, either (a) accept the board as an intentional
+illustration and record that, or (b) re-curate it with the gated matcher. Do not batch-replace.
+
+**Related**: OI-85 (the matcher/detector duplication that made this sweep necessary), OI-76 (why the
+overcut matchers are excluded), OI-74 (the precedent for a matcher declaring its detector and side).
+
+## OI-85 — `find_lesson_boards.mjs`'s SPECS matchers are independent re-implementations of `classifier.js` concepts and measurably diverge from them
+
+**Status**: deferred — owner-requested tracked follow-up (filed 2026-07-30 by spec 052 / T034)
+**Area**: `connect-four/server/scripts/find_lesson_boards.mjs` (`SPECS`, `TAUGHT_COLUMNS`),
+`connect-four/server/classifier.js` (the detector table inside `classifyPattern`)
+**Discovered**: lesson-content remediation review 2026-07-28 (as OI-63 item 6); split out and
+scoped by spec 052
+
+Most matchers in `find_lesson_boards.mjs` do **not** call the production detector for the concept
+they curate — they re-derive it from `board.reachableThreats()` geometry. One concept therefore has
+two implementations that can disagree, and they do:
+
+- `z_threat_socratic`: the taught z-threat column was in the solver's optimal set in only **25 of 50**
+  sampled candidates (measured 2026-07-28).
+- `undercut_t2_adjacent`: of 50 candidates only 13 were recognised by `detectUndercut` — that one was
+  fixed in 2026-07-28 by pointing it at `detectUndercutBeneficiary` (OI-74), and it is the model.
+- `figure_7` / `j_shape` taught columns cannot be derived from production output at all:
+  `classifyPattern` stores only `{ cells }` per tag, and those `cells` are the pattern's OCCUPIED
+  disc cells. `detectFigure7` at least exposes `threatCells`; `detectJShape` exposes no equivalent.
+  Spec 052's gate for these two is consequently **loose** (best move must lie in a column the pattern
+  occupies or completes) — weaker than every other matcher's gate, and recorded here rather than
+  hidden.
+
+**What spec 052 did and deliberately did not do.** It hardened the matchers *in place*: every one now
+carries a "Production detector / side" doc comment naming the classifier.js detector and the player
+it validates against (FR-015), the overcut pair carries an explicit OI-76 deferral (FR-016), and the
+solver-optimal gate was widened to all but the overcut pair (FR-017). It did **not** unify the two
+implementations — that is out of scope for a lesson-surface spec and is this entry.
+
+**Proposal**: one detector per concept. Move whatever a matcher genuinely needs beyond the production
+detector (ply windows, cleanliness caps, "latent, not gravity-top", the specific sub-shape a slide
+illustrates) into *filters layered on top of* the detector's output, so the pattern definition itself
+exists exactly once. Where a detector cannot supply the taught column (`figure_7`, `j_shape`), fix
+that at the detector — expose the completing cells the way `detectFigure7` already does — rather than
+guessing in the script.
+
+**Why deferred**: unification touches `classifier.js`, which is production code behind the puzzle
+categories and the blunder pipeline; the finder is a disposable curation script. The two must not be
+refactored together under a content spec's schedule.
+**If picked up**: do `figure_7`/`j_shape` first (they expose the real gap), keep OI-74's shape — each
+matcher declares detector **and side** — and re-run the OI-84 sweep afterwards, since a unified
+detector will re-classify some shipped boards.
+
+---
+
+## OI-86 — Spanish `goalPrompt` copy on lesson-12/lesson-14 overflows the coach bubble
+
+**Status**: open — content sizing, surfaced by spec 052 (US2)
+**Area**: `connect-four/lessons/lesson-12-overcut.json`, `lesson-14-j-shape.json`, `src/components/CoachDialog.jsx:58`
+**Discovered**: spec 052, 2026-07-30 (code review)
+
+`confirmationChallenges[].goalPrompt` began rendering to learners in spec 052. Only the two lessons
+named in the QA findings (claimeven, undercut) had their copy reshaped to the ~205-char coach-bubble
+budget. Measured lengths elsewhere (en / es):
+
+| Lesson | Challenge | en | es |
+|---|---|---|---|
+| lesson-12-overcut | ch0 | 244 | 275 |
+| lesson-14-j-shape | ch0 | 230 | 252 |
+| lesson-12-overcut | ch1 | 199 | 217 |
+| lesson-13-figure-7 | ch0 | 191 | 210 |
+
+`CoachDialog` caps the bubble at `maxHeight: 120, overflowY: 'auto'`; with the disc-label header row
+consuming ~25px, roughly 3–4 lines are visible while a 275-char Spanish prompt needs ~7. It
+**scrolls rather than clips**, so nothing is silently truncated — but it is the case
+`specs/052-lesson-learning-surface-polish/spec.md` line 155 flagged ("Spanish longer than English …
+must still fit … or the copy must be shortened"). These prompts were never rendered before spec 052,
+so this is new exposure, not a pre-existing defect.
+
+**UPDATE 2026-07-30 (spec 052 browser QA)** — measured in Chrome against the running dev app, not
+from char counts. The bubble's own `scrollHeight` vs its `clientHeight` (the 120px cap) on the
+**first** confirmation challenge of each lesson, Spanish locale:
+
+| Lesson | 390×844 mobile (sh/ch) | 1512×900 desktop (sh/ch) |
+|---|---|---|
+| immediate-threat | 64 / 64 ✓ | — |
+| block-before-build | 83 / 83 ✓ | — |
+| the-fork | 83 / 83 ✓ | — |
+| z-threats | 103 / 103 ✓ | — |
+| odd-rows-belong-to-red | **142 / 120** | **122 / 120** |
+| claimeven | **161 / 120** | **142 / 120** |
+| undercut | **161 / 120** | **142 / 120** |
+| figure-7 | **180 / 120** | **142 / 120** |
+| j-shape | **200 / 120** | **161 / 120** |
+| overcut | **219 / 120** | **161 / 120** |
+
+Two corrections to the entry above: (a) **claimeven and undercut do NOT fit** — their reshaped copy
+(183–197 chars) still overflows at both viewports, so the "~205-char budget" is wrong; the bubble
+also carries the "Estás jugando con Gris/Verde" side-label row, leaving roughly **≤130 chars** of
+real budget. (b) **lesson-07 odd-rows-belong-to-red** overflows too and was not previously listed.
+Six of the ten lessons with confirmation challenges are affected, on desktop as well as mobile.
+
+**Why deferred**: rewriting teaching copy for 4 challenges in two languages is a content pass with
+its own review bar (voseo, colour terms, no fabricated claims), not a code fix.
+**If picked up**: target ≤130 chars per locale (measured, not the stale ~205 figure) and re-measure
+in the browser with the side-label row present, for all six lessons in the table above. See
+`docs/architecture/frontend-conventions.md` §text length limits.
+
+---
+
+## OI-87 — Coach audio is unassertable in jsdom, so FR-029's automated tier is a smoke check only
+
+**Status**: open — test-infrastructure gap
+**Area**: `connect-four/src/lib/useCoachSpeech.js`, `tests/dom/ChallengeScreenGoalPrompt.dom.test.jsx`
+**Discovered**: spec 052, 2026-07-30 (code review)
+
+`useCoachSpeech` imports the **module singleton** `src/i18n/index.js` rather than receiving an i18n
+instance via context. In a DOM test that mounts with its own `I18nextProvider` instance,
+`speakCoachMessage` parks the key in `pendingKeyRef` and the `lang === i18n.language` gate never
+opens, so **no coach clip can play at all** — verified by building a control that mounts the pool
+(non-override) path under the same harness and serving a real manifest from the fetch stub: it still
+records zero `/audio/coach/` plays.
+
+Consequence: the FR-029 assertion "no clip plays when `goal_prompt` overrides" is **not
+differential** — it passes against reverted code too. It is documented as such in the test file.
+FR-029's real evidence remains T024 (a manual audio-ON browser session), which is **still
+outstanding**.
+
+**Why deferred**: fixing it means changing production audio wiring (inject i18n via context/param)
+under a spec whose scope is lesson content, not the audio layer.
+**If picked up**: parameterise `useCoachSpeech`'s i18n dependency, then convert the control described
+above into a passing differential test. Related memory: `project_tts_audio_cached_by_text`,
+`project_lesson_progression_audio_traps`.
+
+---
+
+## OI-88 — DOM-test fixture boilerplate is copy-pasted across 4–6 files
+
+**Status**: open — test maintainability
+**Area**: `connect-four/tests/dom/*.dom.test.jsx`
+**Discovered**: spec 052, 2026-07-30 (code review)
+
+The ~40-line in-memory IndexedDB fake (`FakeRequest`/`FakeObjectStore`/`FakeDB` + `indexedDB.open`,
+needed because `ProfileStoreProvider` opens IndexedDB synchronously in its constructor) is duplicated
+verbatim across `SocraticNarration`, `SocraticHintPhase`, `LessonTitleConsolidation`, and
+`ChallengeScreenGoalPrompt` — each copy's own comment says it "mirrors" another. Separately, the
+`i18next.createInstance()` + `init({...})` block is hand-rolled in 6 files. `tests/dom/setup.js`
+registers jsdom and the JSX loader but exposes no shared fixtures.
+
+Each `.dom.test.jsx` runs in its own child process, so **process isolation is not a reason** to
+re-type these — an importable factory called from each file's own `before()` gives every file a fresh
+instance with zero duplication.
+
+**Why deferred**: touches 6 files at the tail of a feature; pure refactor with no behaviour change.
+**If picked up**: extract `tests/dom/fakeIndexedDB.js` (`installFakeIndexedDB()`) and
+`tests/dom/testI18n.js` (`createTestI18n(resources)`), then point all callers at them. The 3-line
+`ResizeObserver` stub is sanctioned per-file boilerplate in
+`docs/architecture/testing-conventions.md` and should be left alone.
+
+---
+
+## OI-89 — `promptKeyRef` in `ChallengeScreen` is write-only dead state
+
+**Status**: open — dead code
+**Area**: `connect-four/src/screens/ChallengeScreen.jsx:80,123`
+**Discovered**: spec 052, 2026-07-30 (code review)
+
+`promptKeyRef` is declared and assigned (`promptKeyRef.current = pickedKey`) but **read nowhere** in
+the file — confirmed by grep. It predates spec 052. It matters more now: spec 052 made
+`lastCoachKeyRef` diverge from `pickedKey` (it is `null` on the `goal_prompt` override path), so the
+two refs look like a pair tracking "the current prompt key" while one silently does nothing and the
+other no longer agrees with it — an inviting misread for the next person in this function.
+
+**Why deferred**: spec 052's task T019 explicitly instructed "leave `promptKeyRef` unaffected";
+deleting it was outside that task's mandate.
+**If picked up**: delete the `useRef` and its single assignment, or, if it is a deliberate hook for
+future work, add a comment saying so.
+
+---
+
+## OI-90 — Admin and learner surfaces disagree on whether `lesson.title` can be absent
+
+**Status**: open — minor inconsistency
+**Area**: `connect-four/src/screens/AdminLessonListScreen.jsx:104`, `AdminLessonEditorScreen.jsx:248,431`
+**Discovered**: spec 052, 2026-07-30 (code review)
+
+Spec 052 consolidated learner-facing lesson titles onto a direct `lesson.title` read (no fallback,
+since the field is now required and gated by `tests/unit/lessonContent.test.js`). The admin screens
+still use `lesson.title || lesson.id`, a fallback the learner surface no longer has. Harmless today,
+but it encodes two different beliefs about whether `title` is optional.
+
+**Why deferred**: cosmetic, admin-only, no learner impact.
+**If picked up**: drop the `|| lesson.id` fallback to match the learner surface, or document why admin
+tolerates a titleless lesson (e.g. a half-authored draft).

@@ -14,13 +14,25 @@ and preview in the real lesson flow without a server restart.
 
 Spanish lesson content lives in `_es` **sibling fields** inside the same lesson JSON, not a separate
 file: `infoProse_es`, `infoProseAudio_es`, `coachMessages[].text_es`, `coachMessages[].audio_es`, `legendItems[].label_es`,
-`windowHighlights[].label_es`, `socratic.goalPrompt_es`, `confirmationChallenges[].goalPrompt_es`. `getLesson(id, locale)` merges them
+`windowHighlights[].label_es`, `socratic.goalPrompt_es`, `confirmationChallenges[].goalPrompt_es`,
+`confirmationChallenges[].goalPromptAudio_es`. `getLesson(id, locale)` merges them
 **per field** with English fallback (`lessonLoader.js#localizeLesson`) and strips all `_es` keys from the
 client response — so a partial translation degrades gracefully instead of blanking a slide. `GET
 /api/admin/lessons/:id` deliberately reads **raw** (`getLessonsAll()`), keeping `_es` intact for editing.
 
-**Do NOT localize `title`.** The `lesson.<id>.title` i18n key (en/es.json) already owns titles via
-`t(..., {defaultValue})` and wins; a `title_es` would be a second, silently-losing source.
+**`title` lives in the lesson JSON and IS localized there, via `title_es`.** The lesson JSON is the
+sole source of truth for every lesson-title call site (`SagaScreen.jsx`, `ConceptScreen.jsx`,
+`SocraticScreen.jsx` all read `lesson.title` directly — no i18n key involved). `title_es` is the
+sibling that carries the Spanish title, merged by `lessonLoader.js#localizeLesson` exactly like
+every other translatable lesson field.
+
+> **Corrected 2026-07-30 (spec 052 US2).** An earlier draft of this section said "Do NOT localize
+> `title`; a `title_es` would be redundant." That rule was inherited from the era when the
+> `lesson.<id>.title` i18n key owned titles and a `title_es` really would have lost to it. Spec 052
+> deleted that key — which made "no `title_es`" mean "no Spanish titles at all", silently regressing
+> 14 of 15 titles to English for Spanish learners. `title_es` is now REQUIRED on every lesson;
+> `tests/unit/lessonContent.test.js` gates it. Both `GET /api/lessons/:id` and `GET /api/lessons`
+> (the list) are locale-scoped, and every client fetch of either must send `langHeaders()`.
 
 The editor has an **en/es language toggle** (`lang` state) that swaps which sibling fields the
 translatable inputs show/edit; an absent `_es` field shows **empty** (not the English text) so a missing
@@ -28,8 +40,12 @@ translation is visible. Non-translatable fields (`movestring`, `boardSpec`, `ove
 `userPerspective`, `_boardInstructions`) are language-independent and do not change with the toggle.
 
 **Traps:**
-- **`goalPrompt` / `goalPrompt_es` are edited and localized here but never reach the learner** — see
-  "Fields the learner UI ignores" below. Translating them is harmless but changes nothing on screen.
+- **`confirmationChallenges[].goalPrompt` / `goalPrompt_es` now DO reach the learner** (spec 052 US2,
+  2026-07-30) — they are a per-lesson override of the challenge coach-bubble text; see "Fields the
+  learner UI ignores" below for the current, corrected behavior. **`socratic.goalPrompt` /
+  `goalPrompt_es` remain dead** — the interactive Socratic phase's prompt is served by
+  `socratic.messages.ask` instead, and editing/translating `socratic.goalPrompt` still changes
+  nothing on screen.
 - `lessonToJsonPayload` (the PUT body builder) rebuilds `slides`/`socratic` from whitelists — it must
   spread the source object *then* override derived fields (`boardSpec`), or it silently drops `_es`
   (and, historically, the un-suffixed `socratic.goalPrompt`) on every save.
@@ -237,7 +253,7 @@ the slide's text names a line/window as a *unit* ("the window from the second co
 |---|---|
 | `validateLesson` (`server/lessonLoader.js`) | Structure only — array, objects, ≥2 on-board integer cells. Deliberately permissive: the loader **excludes an invalid file entirely**, so an over-strict rule would silently drop a lesson from the app. |
 | `localizeLesson` | Merges `label_es` over `label` per field and strips `_es`, same as `legendItems`. |
-| `tests/unit/lessonContent.test.js` | Geometry (contiguous/collinear/ordered/2–4/on-board), known `type`, and `label` ⇒ `label_es`. Unconditional — not gated on `REMEDIATED`. |
+| `tests/unit/lessonContent.test.js` | Geometry (contiguous/collinear/ordered/2–4/on-board), known `type`, and `label` ⇒ `label_es`. Unconditional — as is every check in that file since spec 052 deleted its `REMEDIATED` exemption set. |
 | `tests/unit/lessonWindows.test.js` | The pure JSON → `zhCells` mapping and the geometry predicate. |
 | `verify_lesson_content.mjs` | **Nothing, by design** — a window asserts no solver-checkable fact the way a `tg`/`td` cell does. |
 
@@ -268,6 +284,71 @@ the `lang` toggle, *Edit cells* / *✕*) and a **+ Add window** button.
 
 Covered by `tests/unit/windowDraft.test.js` (order/validity helpers) and
 `tests/dom/SlideEditorWindows.dom.test.jsx` (what the admin sees, plus the SocraticEditor guard).
+
+---
+
+## Confirmation-prompt narration (`goalPromptAudio`)
+
+`confirmationChallenges[].goalPrompt` is narrated, like every other piece of lesson text. Its clip
+lives in `goalPromptAudio` / `goalPromptAudio_es`, path-addressed as `/audio/lessons/<sha256[:16]>.mp3`
+— the standard lesson-audio scheme, **not** the i18n-keyed `coach.spoken.*` scheme.
+
+That distinction is the whole reason this exists. `ChallengeScreen`'s pooled prompts are addressed by
+i18n key and played through `speakCoachMessage`, which is strictly key→slug→manifest→mp3 and cannot
+speak arbitrary text. A `goalPrompt` override has no key, so spec 052 (Epic 6) shipped it **silent**
+rather than let the stale pool clip play under corrected text. This section is the follow-on that
+gave the override text its own clip.
+
+Three consequences worth knowing:
+
+- **`collectMessages` yields it last**, after socratic (`server/lessonAudio.js`). Existing tests assert
+  whole-array exact-order equality on `generated`/`failed[].locator`, so it must stay appended.
+- **`ChallengeScreen` gates playback itself.** `speakLessonAudio(path)` does *not* check
+  `speechEnabled` (its doc comment says the caller owns that); `speakCoachMessage` does. The screen
+  keeps two mutually-exclusive refs — `lastCoachKeyRef` for a pooled key, `lastLessonAudioRef` for an
+  override path — and only one is ever set.
+- **There is no approve step.** Unlike coach audio, lesson audio has no manifest or approval gate:
+  generating a clip ships it. The invariants are `tests/lessons/lessonAudioCoverage.test.js` (every
+  collected text has an on-disk clip) and its prune-parity companion (no orphans on disk). Adding a
+  field to the walker therefore makes the suite immediately demand clips for **every** instance of it.
+
+Generate via `/admin/audio` (Lesson Audio Manager) or:
+
+```
+curl -X POST localhost:$API_PORT/api/admin/lessons/<id>/generate-audio \
+  -H 'Content-Type: application/json' \
+  -d '{"lang":"es","locator":"confirmationChallenges[0].goalPrompt"}'
+```
+
+Omitting `locator` regenerates every message in the lesson — identical text hashes to the same
+filename, so it is wasteful rather than destructive. Prefer the targeted form.
+
+## Overlay intent (`_overlayIntent`) — opting a cell out of the solver overlay check
+
+Not to be confused with **Window highlights** above (`slides[].windowHighlights`), which is a
+*rendering* feature and is deliberately checked by nothing solver-side. `_overlayIntent` is the
+opposite kind of thing: an **authoring escape hatch consumed only by
+`server/scripts/verify_lesson_content.mjs`** (`overlayRows()`), never by the app. It renders
+nothing and changes no behaviour for the learner.
+
+The verifier asserts that every `tg` / `td` overlay sits on a cell that is a *real* completing cell
+for that colour (`board.reachableThreats(player)`). Some slides legitimately place a `tg`/`td`
+marker as pure teaching annotation — labelling a square the prose is talking about, on a board where
+no such threat exists yet. `_overlayIntent: "annotation"` tells the verifier to skip that check.
+
+**Two levels, added in spec 052 (FR-019):**
+
+| Where | Effect |
+|---|---|
+| On the **node** (a `slides[i]` object or `socratic`) | The inherited **default** for every overlay on that node. `"annotation"` here skips the check for all of them. This is the original, pre-052 behaviour and the form all 8 shipped usages (`lesson-01`, `lesson-02`, `lesson-07`, `lesson-08` ×4, `lesson-09`) still use — none needed editing. |
+| On an **individual overlay** (`{ "c": 3, "r": 0, "type": "tg", "_overlayIntent": "annotation" }`) | **Overrides** the node-level default for that one cell. Both directions work: a per-overlay `"annotation"` exempts one cell on an otherwise-checked slide, and a per-overlay value other than `"annotation"` (e.g. `"threat"`) re-enables the check for one cell on a node whose default is `"annotation"`. |
+
+Resolution is `overlay._overlayIntent ?? node._overlayIntent`, so omitting it everywhere means
+"check everything", which is the desired default.
+
+Use the per-overlay form when a single slide mixes real threat markers with annotation markers —
+before 052 that slide had to exempt *all* of its overlays, silently losing the check on the real
+ones.
 
 ---
 
@@ -382,27 +463,82 @@ like a no-op.
 
 ## Fields the learner UI ignores (editor ≠ app)
 
-The editor is a faithful view of the **JSON**, not of the **app**. Three fields render in the editor
-(or merely look authoritative in the file) but are never read by the learner screens. Verified at
-source 2026-07-25; re-verify by grepping the screen before trusting any of it.
+The editor is a faithful view of the **JSON**, not of the **app**. Two of the three fields below are
+genuinely dead; `confirmationChallenges[].goalPrompt` was moved OFF this list 2026-07-30 (spec 052
+US2) — it now overrides the challenge prompt. Verified at source 2026-07-30; re-verify by grepping
+the screen before trusting any of it.
 
 | Field | Editor | Learner app | What actually drives it |
 |---|---|---|---|
-| `socratic.goalPrompt`, `confirmationChallenges[].goalPrompt` (+ `_es`) | editable | **never rendered** | `ChallengeScreen.jsx:116-118` picks a **random** key from `coach.spoken.<category>.prompt.{0,1,2}`; the socratic prompt comes from `socratic.messages.ask` |
+| `socratic.goalPrompt` (+ `_es`) | editable | **never rendered** | The interactive Socratic phase's prompt is served by `socratic.messages.ask` instead — that field already carries the per-lesson-prompt role `socratic.goalPrompt` looks like it should play, which is why the latter stays unrendered |
 | `socratic.overlays` | **rendered** | **ignored** | `SocraticScreen.jsx:151` derives its own overlays (`win` ring on the dropped cell at `correct`, on the correct cell at `wrong2`) and never reads the authored array. `slides[].overlays` **are** rendered — this is socratic-only |
 | `userPerspective` | shown as non-translatable | **not consulted** | `SocraticScreen.jsx:96`: `movestring.length % 2 === 0 ? 'red' : 'yellow'` — **movestring length parity** decides the learner's disc color (even → P1/GREEN, odd → P2/GRAY) |
 
+`confirmationChallenges[].goalPrompt` (+ `_es`), by contrast, now **is** rendered: `ChallengeScreen.jsx`'s
+`initPuzzle` uses it as the coach-bubble text for that challenge instead of a random
+`coach.spoken.<category>.prompt.{0,1,2}` pool pick, when present (FR-006); when absent, the random
+pool pick is unchanged (FR-007). **No pre-generated audio clip exists for override text** — the
+pool's `coach.spoken.<category>.prompt.N` clips are keyed to the pool copy they replace, so
+`ChallengeScreen.jsx` sets `lastCoachKeyRef.current = null` in the override branch and the coach
+bubble goes silent for that message rather than play a clip whose words contradict what's on screen
+(FR-029). Generating a matching clip for override text is out of scope until Epic 5 synthesizes it.
+
 Consequences to design around:
 
-- **To change a challenge prompt, edit i18n, not the lesson.** A whole round of `goalPrompt`
-  corrections once shipped into dead fields and was reported as fixed.
+- **To change a challenge prompt, edit `confirmationChallenges[].goalPrompt` in the lesson JSON, not
+  i18n.** Before spec 052 US2, the rendered prompt came only from `coach.spoken.<category>.prompt.*`
+  in `en.json`/`es.json` and the lesson's `goalPrompt` was silently ignored — a whole round of
+  `goalPrompt` corrections once shipped into that dead field and was reported as fixed. That is now
+  reversed for `confirmationChallenges[].goalPrompt` specifically: it is the per-lesson override, and
+  editing i18n no longer helps a single lesson's copy. `socratic.goalPrompt` is unaffected — still
+  edit `socratic.messages.ask` for the Socratic phase.
 - **`coach.spoken.<category>.*` is shared by every puzzle in the category**, including DB-drawn
-  practice boards. Keep it outcome-neutral and mechanism-accurate — never assert a board-specific
-  verdict ("Gray is winning here"), and make sure it points the same direction as the **grader**
-  (`evalUndercut` marks the *killing* column wrong, so "find the undercut" instructs a Blunder).
+  practice boards, and remains the fallback when a lesson has no `goalPrompt`. Keep it
+  outcome-neutral and mechanism-accurate — never assert a board-specific verdict ("Gray is winning
+  here"), and make sure it points the same direction as the **grader** (`evalUndercut` marks the
+  *killing* column wrong, so "find the undercut" instructs a Blunder).
 - **An authored socratic overlay on the answer cell looks like a spoiler in the editor** and is
   invisible in the app — the two surfaces disagree, so judge spoilers against the app.
 - **Copy that names the learner's color must match movestring parity**, not `userPerspective`.
+
+## Hint yields to phase (`SocraticScreen.jsx` — `showHint`, spec 052 US1, FR-001/FR-002)
+
+Added 2026-07-30, closes OI-46. `SocraticScreen`'s coach-message selector picks between the
+hint message set and the phase's own message set:
+
+```js
+const currentMessages = socratic?.messages?.[showHint ? 'hint' : phase] ?? [];
+```
+
+`showHint` (`useState(false)`, set `true` by the Hint toolbar button) **resets on every phase
+transition**:
+
+```js
+useEffect(() => { setShowHint(false); }, [phase]);
+```
+
+So a learner who clicks Hint and then plays the taught correct move sees and hears the
+`correct` reward message, not the lingering hint text — and a learner who clicks Hint then
+plays a wrong column sees the `wrong1` message, not the hint text. **Hint and phase messages
+must never coexist in the coach bubble.** This is a deliberate design decision, not just a
+bug fix: the 120px coach-bubble cap that applies on every screen (see "Text length limits"
+below) would truncate exactly the `correct` reward text if hint and reward copy were ever
+concatenated or stacked — the two message sets are mutually exclusive by construction, never
+merged.
+
+The reset is keyed on `phase` alone (not on a drop or a timer), so the edge case of a learner
+clicking Hint, phase changing away from it, then navigating back to the same slide later
+(e.g. via back/forward) also resets it freshly for that visit — there is no cross-visit
+persistence of `showHint` to begin with (component state, not stored).
+
+The Continue button (`phase === 'correct' || phase === 'wrong2'`) keys off `phase` directly,
+never `showHint`, so this fix changes nothing about slide-advancement gating.
+
+Regression coverage: `tests/dom/SocraticHintPhase.dom.test.jsx` (three cases: hint-then-correct,
+hint-then-wrong, no-hint-then-correct) and `tests/dom/SocraticNarration.dom.test.jsx`'s "run 2"
+case (narration side of the same contract). Both registered in `test:dom`.
+
+---
 
 ## Curriculum ordering and the free/paid boundary
 
@@ -417,8 +553,9 @@ in sync anyway — it is the field a reader trusts, and the curriculum now asser
 - **Tier contiguity is a product requirement**: all `free: true` lessons precede all paid ones, giving
   **exactly one free→paid transition**. As of 2026-07-25 that is 15 lessons, free 1–10 / paid 11–15,
   with the opening lessons early (4–5). An insertion that interleaves tiers is a regression.
-- Titles come from the i18n key `lesson.<id>.title` in **both** `en.json` and `es.json`; a new lesson
-  needs both or `i18nKeyParity` fails. There is no `title_es`.
+- Titles come from the lesson JSON's own `title` field, sourced directly (no i18n key) at every
+  screen that displays it, with `title_es` carrying the Spanish title (required on every lesson —
+  gated by `tests/unit/lessonContent.test.js`). See §"`title` lives in the lesson JSON" above.
 
 ## Socratic Solver Verification
 
@@ -459,9 +596,11 @@ grader.** Check with `node server/scripts/audit_answer_ambiguity.mjs`; source re
 
 **Traps when replacing a board:**
 
-- **`goalPrompt` / `goalPrompt_es` are usually board-specific prose.** They are never rendered to
-  the learner (see "Fields the learner UI ignores"), but leaving them describing the *old* position
-  is how a file starts lying to its next reader. Rewrite or genericise them with the board.
+- **`goalPrompt` / `goalPrompt_es` are usually board-specific prose.** `confirmationChallenges[].goalPrompt`
+  is now rendered to the learner as the challenge's coach-bubble text (see "Fields the learner UI
+  ignores") — leaving it describing the *old* position ships stale, board-contradicting copy, not
+  just a file that lies to its next reader. `socratic.goalPrompt` is still never rendered, but
+  rewrite or genericise both with the board regardless, so the file stops lying either way.
 - **`highlightMetadata` for `figure_7` / `j_shape` lists only the pattern pieces already on the
   board**, excluding the empty completing cell — the detector's raw output includes it, and copying
   that verbatim spoils the puzzle.
@@ -484,8 +623,10 @@ flow draws `confirmationCount` puzzles from the DB for that category and
 presents them as the final gate. Setting category to "None" skips confirmation
 entirely (reading-only lesson, like Lesson 4).
 
-The editor does NOT verify that puzzles exist for the chosen category — that is
-Epic 6 scope.
+The editor does NOT verify that puzzles exist for the chosen category. An author can
+save a lesson whose confirmation gate has no puzzles to draw from and find out only at
+runtime. Tracked as **OI-83** in `docs/open_issues.md` (admin-only authoring-tool scope,
+explicitly deferred out of spec 052) — not "Epic 6 scope", which was a stale pointer.
 
 ---
 
@@ -525,3 +666,24 @@ Epic 6 scope.
 8. **`Board` component color inversion.** `'red'` renders as a green disc,
    `'yellow'` renders as gray. This is intentional — do not change the mapping
    in `boardSpecToBoard` or `boardToSpec`.
+
+9. **Multi-board `aria-label`s repeat, by decision.** The editor renders several
+   `Board`s on one page (three concept slides plus the socratic board), and each
+   emits the same board-local `"column 1"`..`"column 7"` labels from
+   `getColumnA11yProps`, so a screen reader hears the same seven targets several
+   times over. This is **left unaddressed on purpose** (OI-69 item 2, closed
+   2026-07-30 under spec 052 FR-022): scoping the labels per board would change
+   the locked spec-043 a11y contract shared by every game screen, spec 052
+   commissioned no broader accessibility pass, and the ambiguity is confined to
+   this admin-only surface. The rationale also lives next to the code, in the
+   comment above `getColumnA11yProps` in
+   `connect-four/src/components/boardA11y.js`. Every `aria-label` `SlideEditor`
+   itself emits is already index-scoped (`Slide N …`) and unique.
+
+10. **Admin editor copy is English-only, deliberately.** Nothing in
+    `SlideEditor.jsx` / `LessonMetaForm.jsx` / `AdminLesson*Screen.jsx` goes
+    through `t()`. That is the owner's recorded scope boundary from spec 052
+    (Decision 2, 2026-07-30, closing OI-19): learner-facing strings are
+    translated, admin tooling is not. Don't "fix" it as an oversight — but do
+    keep new *learner-facing* strings routed through `t()` in both `en.json` and
+    `es.json`, since a missing Spanish key ships English silently.

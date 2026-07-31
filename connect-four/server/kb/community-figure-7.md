@@ -57,9 +57,18 @@ formal_predicate: |
               # Gravity-top check: count how many threats are immediately playable
               h = board.height(x+3)   # current top of col x+3
               gravity_top_count = sum(1 for t in [t_horiz, t_diag] if t[1] == h + 1)
+              # DEAD CODE (noted 2026-07-30, spec 052 / OI-62): this branch can never be
+              # taken. Both threat cells live in the SAME column x+3 at ADJACENT rows
+              # (t_horiz = (x+3, y+2), t_diag = (x+3, y+3)), and only one row per column can
+              # equal the gravity top h+1 — so gravity_top_count is structurally in {0, 1}
+              # and never reaches 2. Kept verbatim because it is the source's own wording;
+              # do NOT treat "direct fork rejected here" as a live rule when porting this
+              # predicate to code. The check that actually does the work is the
+              # `above_gravity == 0` test below.
               if gravity_top_count >= 2:
                   continue    # direct fork, not Figure-7 zugzwang — skip
               # Above-gravity requirement: at least one threat is latent
+              # (Also dead, for the same reason — see the note above.)
               if gravity_top_count == 2:
                   continue    # already rejected above
               above_gravity = sum(1 for t in [t_horiz, t_diag] if t[1] > h + 1)

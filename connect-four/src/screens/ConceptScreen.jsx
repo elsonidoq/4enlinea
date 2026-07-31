@@ -180,7 +180,7 @@ export function ConceptScreen({ go, goBack, goReplace, lessonId }) {
     // dynamic viewport; this codebase already uses it unconditionally elsewhere.
     <div style={{ display: 'flex', flexDirection: 'column', height: '100dvh' }}>
       <TopBar
-        title={t(`lesson.${lessonId}.title`, { defaultValue: lesson.title })}
+        title={lesson.title}
         onBack={() => go('saga')}
         meta={`${slideIndex + 1} / ${lesson.slides.length}`}
         onLogoClick={() => go('home')}

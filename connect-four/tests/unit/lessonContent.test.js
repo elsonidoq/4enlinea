@@ -1,6 +1,10 @@
 // tests/unit/lessonContent.test.js — invariants from docs/lesson-content-critique-2026-07-22.md
 // (CRIT X1 placeholders, X5 indexing language, X8 legend/overlay drift, boardSpec derivation).
-// Strict checks apply only to lessons in REMEDIATED; each remediation task adds its lesson id.
+// Every check here is UNCONDITIONAL: it runs for every lesson file on disk, with no exemption
+// list. There used to be a `REMEDIATED` set gating the strict checks, one id added per remediation
+// task; it was deleted in spec 052 (FR-018) once it listed all 15 lessons, because an exemption
+// mechanism that exempts nothing today still silently exempts whatever a future author adds to it.
+// Deleting it — rather than emptying it — is the point: there is now no place to add an id.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -15,28 +19,6 @@ const LESSONS_DIR = path.join(__dirname, '../../lessons');
 const lessons = fs.readdirSync(LESSONS_DIR)
   .filter(f => /^lesson-\d+-.*\.json$/.test(f))
   .map(f => ({ file: f, lesson: JSON.parse(fs.readFileSync(path.join(LESSONS_DIR, f), 'utf8')) }));
-
-// Lessons whose content has been through the remediation plan. Tasks 3-12 each add one id.
-// Initial membership = lessons that already pass the strict checks (verify empirically in
-// Step 3; expected: immediate-threat, block-before-build, the-fork, opening-centre,
-// opening-imitate — opening-sharp is excluded until Task 11 removes its "(0-indexed)" copy).
-const REMEDIATED = new Set([
-  'immediate-threat',
-  'block-before-build',
-  'the-fork',
-  'opening-centre',
-  'opening-imitate',
-  'claimeven',
-  'z-threats',
-  'undercut',
-  'overcut',
-  'figure-7',
-  'j-shape',
-  'odd-rows-belong-to-red',
-  'opening-sharp',
-  'threat-vocabulary',
-  'zugzwang-tempo',
-]);
 
 // Task 12 emptied this allowlist: every socratic ask is now lesson-specific, and the
 // legacy-template assertion below applies to all lessons. Never re-add an id here.
@@ -85,11 +67,10 @@ test('lessonContent: every overlay cell is on the board', () => {
   }
 });
 
-// ---- Strict invariants (REMEDIATED lessons only) ----
+// ---- Strict invariants (every lesson, no exemptions — see the header comment) ----
 
 test('lessonContent[strict]: no placeholders or 0-indexed language in user-visible text', () => {
   for (const { file, lesson } of lessons) {
-    if (!REMEDIATED.has(lesson.id)) continue;
     for (const [where, text] of userVisibleStrings(lesson)) {
       assert.ok(!text.includes('<board instructions'), `${file} ${where}: contains "<board instructions"`);
       assert.ok(!/0-index/i.test(text), `${file} ${where}: contains 0-indexed language`);
@@ -99,7 +80,6 @@ test('lessonContent[strict]: no placeholders or 0-indexed language in user-visib
 
 test('lessonContent[strict]: boardSpec is derived from movestring everywhere', () => {
   for (const { file, lesson } of lessons) {
-    if (!REMEDIATED.has(lesson.id)) continue;
     const nodes = (lesson.slides ?? []).map((s, i) => [`slides[${i}]`, s]);
     if (lesson.socratic) nodes.push(['socratic', lesson.socratic]);
     for (const [where, node] of nodes) {
@@ -112,7 +92,6 @@ test('lessonContent[strict]: boardSpec is derived from movestring everywhere', (
 
 test('lessonContent[strict]: legends match overlays; tg/td/claim sit on empty cells', () => {
   for (const { file, lesson } of lessons) {
-    if (!REMEDIATED.has(lesson.id)) continue;
     for (const [i, s] of (lesson.slides ?? []).entries()) {
       const overlayTypes = new Set((s.overlays ?? []).map(o => o.type));
       for (const li of s.legendItems ?? [])
@@ -130,7 +109,7 @@ test('lessonContent[strict]: legends match overlays; tg/td/claim sit on empty ce
 // array therefore draws a plausible-looking capsule over the WRONG cells and nothing
 // else catches it — not the solver script (which knows only about tg/td overlays) and
 // not the eye, unless someone opens that exact slide. This is that gate. It is
-// unconditional (not gated on REMEDIATED): the field is new, so every use of it is new.
+// unconditional, like every check here: the field is new, so every use of it is new.
 test('lessonContent: windowHighlights are contiguous straight lines, ordered along the line', () => {
   for (const { file, lesson } of lessons) {
     for (const [i, s] of (lesson.slides ?? []).entries()) {
@@ -177,7 +156,7 @@ test('lessonContent[strict]: socratic ask is lesson-specific (legacy template re
 // edits a movestring by hand (or the recompute is ever bypassed), the board would render a
 // stale, confidently-wrong number that nothing else catches — the value looks plausible and
 // only a person opening that exact slide and recounting 69 windows would notice. This is
-// that gate. Unconditional, not gated on REMEDIATED: the field is new, so every use is new.
+// that gate. Unconditional, like every check here: the field is new, so every use is new.
 test('lessonContent: windowCounts equals a fresh recompute from the slide movestring', () => {
   for (const { file, lesson } of lessons) {
     for (const [i, s] of (lesson.slides ?? []).entries()) {
@@ -225,6 +204,38 @@ test('lessonContent: the two opening lessons opt in the correct set of concept s
       [...opted].sort(),
       [...expected].sort(),
       `${id}: expected showWindowCounts on movestrings ${JSON.stringify(expected)}, got ${JSON.stringify(opted)}`,
+    );
+  }
+});
+
+// ---- Static scan: no lesson content survives in the i18n bundles (spec 052 / FR-019) ----
+
+// US2 moved lesson titles to a single home: the lesson JSON's own `title`, rendered directly by
+// SagaScreen / ConceptScreen / SocraticScreen with no `t()` call. The old `lesson.<id>.title` keys
+// were deleted from both locale files. Nothing else catches their return: a resurrected key is
+// simply dead weight that renders nowhere, and `i18nKeyParity.test.js` only checks en/es SYMMETRY —
+// a title re-added to BOTH files passes it. This is that gate.
+test('lessonContent: no lesson.<id>.title key survives in the i18n bundles', () => {
+  const I18N_DIR = path.join(__dirname, '../../src/i18n');
+  for (const locale of ['en.json', 'es.json']) {
+    const bundle = JSON.parse(fs.readFileSync(path.join(I18N_DIR, locale), 'utf8'));
+    for (const { file, lesson } of lessons) {
+      const node = bundle.lesson?.[lesson.id];
+      assert.equal(node?.title, undefined,
+        `${locale}: lesson.${lesson.id}.title is back — lesson titles live only in ${file} (spec 052 US2)`);
+    }
+  }
+});
+
+// The other half of that migration. Deleting the i18n keys removed the ONLY thing that was
+// localizing lesson titles, so `title_es` in the lesson JSON is now the sole Spanish source —
+// a lesson without one silently ships an English title to Spanish learners (the graceful-
+// fallback trap: nothing throws, nothing logs). This caught exactly that regression once.
+test('lessonContent: every lesson carries a title_es (spec 052 US2 — sole Spanish title source)', () => {
+  for (const { file, lesson } of lessons) {
+    assert.ok(
+      typeof lesson.title_es === 'string' && lesson.title_es.length > 0,
+      `${file}: missing title_es — Spanish learners would see the English "${lesson.title}"`,
     );
   }
 });
