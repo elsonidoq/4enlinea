@@ -2277,3 +2277,66 @@ but it encodes two different beliefs about whether `title` is optional.
 **Why deferred**: cosmetic, admin-only, no learner impact.
 **If picked up**: drop the `|| lesson.id` fallback to match the learner surface, or document why admin
 tolerates a titleless lesson (e.g. a half-authored draft).
+
+---
+
+## OI-91 — `scripts/generate-tts.js --key` / `--all-new` is broken: `synthesize()` called without `lang`
+
+**Status**: open — verified broken 2026-07-31
+**Area**: `connect-four/scripts/generate-tts.js` (`synthesizeAndWrite`), `connect-four/server/ttsProvider.js`
+**Discovered**: spec 052 follow-on, 2026-07-31 (pipeline audit)
+
+`synthesizeAndWrite(entry, value, lang = 'en')` calls `synthesize(value)` — dropping its `lang`
+argument. `synthesize(text, lang)` requires it and validates it, so every synthesis path through this
+script throws:
+
+```
+synthesize: invalid lang 'undefined' — must be one of: en, es
+```
+
+Verified by running it, not inferred. This breaks `--key` and `--all-new` for **every** language,
+including `en`. The registry/manifest/sync subcommands are unaffected and still work.
+
+**Consequence**: coach audio is currently generatable **only** through `/admin/audio`
+(`POST /api/admin/audio/generate` / `generate-all`), which do pass `lang` correctly. Anyone reaching
+for the documented CLI will hit an opaque throw and may conclude their API key or env is wrong.
+
+**Why deferred**: not on spec 052's path — that work used the lesson-audio endpoint, which is a
+different code path entirely. Filed rather than fixed to avoid unrelated scope in an epic closeout.
+**If picked up**: pass `lang` through (`synthesize(value, lang)`) and add a smoke test — the bug is a
+one-word fix that no test covers, which is why it survived. Related memory:
+`project_lesson_audio_generation_traps`, `project_tts_audio_cached_by_text`.
+
+---
+
+## OI-92 — `saveLessonFile` read-modify-write race silently loses a generate-audio write
+
+**Status**: open — reproduced 2026-07-31
+**Area**: `connect-four/server/index.js` (`POST /api/admin/lessons/:id/generate-audio`), `saveLessonFile`
+**Discovered**: spec 052 follow-on, 2026-07-31
+
+Two `generate-audio` calls against the **same lesson** in quick succession (the natural
+`lang:'en'` then `lang:'es'` pair) can lose the second write while still returning a success body:
+
+```
+undercut ch0/es: 1 gen 0 fail        ← reported success
+$ jq '.confirmationChallenges[0].goalPromptAudio_es' lessons/lesson-11-undercut.json
+null                                  ← never persisted
+```
+
+`saveLessonFile` is read-modify-write with no locking or compare-and-swap, so the second handler can
+read a copy of the lesson from before the first handler's write and clobber it. Reproduced on 1 of 10
+lessons while voicing `confirmationChallenges[].goalPrompt`; re-running the losing call with a delay
+persisted correctly.
+
+**Impact**: a caller that trusts the `200 {generated:[...], failed:[]}` response records success for a
+field that was never written. Only the `lessonAudioCoverage` gate caught it here; a script without that
+gate would ship a silently-missing clip. Same family as OI-tracked lesson-write clobbering (see memory
+`project_lesson_disk_edit_cache_clobber`).
+
+**Why deferred**: the workaround (serialise per-lesson calls, verify by re-reading the JSON) is cheap
+and is now documented in `docs/architecture/api-conventions.md`; a proper fix means adding locking or
+CAS to the lesson-write path, which is broader than this epic.
+**If picked up**: serialise writes per lesson id (a simple in-process mutex keyed by id would cover the
+admin single-writer case), or make `saveLessonFile` re-read-and-merge under a lock. Add a test that
+fires two concurrent generate-audio calls for different langs and asserts both fields persist.

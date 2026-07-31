@@ -957,8 +957,19 @@ while it runs.
 
 **Response** (`200 OK`): `{ lesson, generated: [<locator>, ...], failed: [{ locator, error }, ...] }` —
 `generated` lists every message synthesized this run (locators such as
-`slides[0].coachMessages[0]`, `slides[0].infoProse`, `socratic.messages.ask[0]`); `failed` lists messages
-whose synthesis failed this run.
+`slides[0].coachMessages[0]`, `slides[0].infoProse`, `socratic.messages.ask[0]`,
+`confirmationChallenges[0].goalPrompt`); `failed` lists messages whose synthesis failed this run.
+
+> **Two operational traps, measured 2026-07-31.**
+> 1. **Omitting `locator` re-synthesizes the entire lesson** (15–17 clips), not just the missing ones.
+>    Identical text hashes to the same filename so it overwrites in place — but TTS is not
+>    byte-deterministic, so every previously-committed mp3 comes back byte-different. Ten lessons
+>    produced 142 modified binaries against 30 genuinely-new clips. Prefer the targeted `locator` form
+>    for anything but a deliberate full re-voice.
+> 2. **`saveLessonFile` is read-modify-write with no locking**, so two calls against the same lesson in
+>    quick succession (e.g. `lang:'en'` immediately followed by `lang:'es'`) can lose the second write
+>    while still returning `200 {generated:[...], failed:[]}`. Do not parallelise per-lesson calls, and
+>    verify the field landed by re-reading the lesson JSON rather than trusting the response.
 
 **Errors**: `403` (non-localhost or non-admin), `404` (lesson not found), `500` (unexpected write error
 — per-message TTS errors are non-fatal, see above).

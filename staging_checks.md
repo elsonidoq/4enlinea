@@ -1012,3 +1012,45 @@ confirmed anywhere.
   - **Source**: Epic 5 / spec 051 FR-022/FR-023, SC-005; owner decision 2026-07-30 to sample before bulk
     spend. Blocking gate for closing **OI-32**, which stays open until this is signed off.
   - [ ] Signed off (tester / date):
+
+---
+
+## Epic 6 — Lesson Learning Surface & Authoring Polish (open-issues-epics.md, spec 052) — added 2026-07-31
+
+- [ ] **`GET /api/lessons` (the list) is now locale-varying — confirm no cross-locale cache bleed.**
+  - **What**: In staging, request the lesson list twice through the real edge/proxy path — once with
+    `Accept-Language: es`, once with `en` — and confirm each returns its own titles ("Amenazas
+    Inmediatas" vs "Immediate Threats"). Then load the Saga screen in Spanish in a fresh session
+    *after* an English session has warmed any cache, and confirm titles are still Spanish. If a CDN or
+    reverse proxy caches this route, verify it emits/honours `Vary: Accept-Language`.
+  - **Why staging**: spec 052 changed this route from locale-independent to locale-scoped
+    (`getLessons(req.locale)`), because the `lesson.<id>.title` i18n keys that used to localize titles
+    client-side were deleted. Local dev has no CDN or shared cache in front of the API, so a
+    missing `Vary` header is structurally invisible there — the failure only appears once something
+    caches the response for more than one user.
+  - **Expected**: Each locale gets its own titles; no session ever sees the other locale's titles.
+  - **Source**: Spec 052 US2 / FR-004, FR-005. Regression caught in code review (see `docs/open_issues.md` OI-44 correction note).
+
+- [ ] **New `goalPrompt` narration clips are actually served in staging.**
+  - **What**: In staging with audio on, open a lesson confirmation challenge in **both** locales
+    (claimeven is the reference case) and confirm the coach prompt narrates, with the Spanish clip
+    differing from the English one. Spot-check that `/audio/lessons/<hash>.mp3` returns `200
+    audio/mpeg` and not an SPA HTML fallback.
+  - **Why staging**: verified locally only against the Vite dev server, which serves `public/`
+    directly. The deployed build serves these through Express/static with an SPA catch-all, so a
+    misrouted path returns `200 text/html` rather than a 404 — which an `<audio>` element fails
+    silently on. Automation Chrome also fakes autoplay, so audible confirmation cannot be scripted.
+  - **Expected**: Both locales narrate; the two clips are audibly different; direct clip URLs return
+    `audio/mpeg`.
+  - **Source**: Spec 052 follow-on (`confirmationChallenges[].goalPromptAudio`), FR-029's successor.
+
+- [ ] **Spanish lesson titles render on every screen that shows one.**
+  - **What**: In staging, set the app to Spanish and walk Saga list → Concept slides → Socratic screen
+    → confirmation challenge for at least three lessons, confirming a Spanish title on each screen and
+    no blank titles.
+  - **Why staging**: local verification used the dev server with a hand-restarted API; the deployed
+    build additionally depends on every client fetch sending `langHeaders()` through the real origin
+    (`SagaScreen`, `StatsScreen`, `ConceptScreen`, `SocraticScreen`, `CLChallengeScreen`). A single
+    missing header degrades silently to English rather than erroring.
+  - **Expected**: Spanish titles everywhere; zero blank or English titles.
+  - **Source**: Spec 052 US2 / SC-002, SC-009.

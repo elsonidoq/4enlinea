@@ -217,6 +217,20 @@ whether the check needs the solver:
   the strict checks. Spec 052 **deleted** the set and its three guards rather than emptying them:
   an exemption list that exempts nothing today still silently exempts whatever a future author adds.
   Do not reintroduce one — closes `docs/open_issues.md` OI-63 item 4.)
+  Two gates added by spec 052 live here: **no `lesson.<id>.title` key may reappear** in `en.json`/`es.json`
+  (the migration that moved titles into the lesson JSON), and **every lesson must carry a non-empty
+  `title_es`** — that one exists because deleting the i18n keys removed the only thing localizing
+  titles, silently shipping 14 of 15 in English to Spanish learners with every other test green.
+- **`tests/unit/i18nKeyParity.test.js`** also holds the **lesson-id namespace-collision guard**: no
+  lesson `id` may collide with a reserved `lesson.*` sub-key. The reserved set is **derived at run time**
+  from `en.json`'s `lesson` object (today `confirmation`, `node`, `notFound`, `windowCounts`), never
+  hardcoded, so a newly-added chrome key joins the guard automatically.
+- **`tests/lessons/lessonAudioCoverage.test.js`** has **two independent halves** and a run can pass one
+  while failing the other: every collected text has an on-disk clip, *and* prune-parity (no orphaned
+  clip on disk). Both walk `collectMessages`, so **adding a field to that walker immediately demands
+  clips for every instance of it in both languages** — there is no single-lesson version that stays
+  green. Editing already-voiced text orphans its old clip (lesson audio is text-hashed, so the filename
+  changes); clear it with `POST /api/admin/lessons/prune-audio`.
 - **`server/scripts/verify_lesson_content.mjs`** — **solver-gated** content verification: a socratic
   `correctCol` must be the solver's max-scoring column, positions must not be lost for their owner, and
   every `tg`/`td` overlay must be a real threat of that color (opt out with
