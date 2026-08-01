@@ -70,23 +70,60 @@ async function buildEvaluationResponse({ movestring, colInt, category, isAiMove,
   const { badge, quality, bestCol: _bestCol } = scoreMove(scores, colInt);
 
   let patternTag;
+  let classifyPhrasePoolKey = null;
   if (isAiMove) {
     patternTag = await classifyAiMove(movestring, colInt, solver);
   } else {
     const classifyResult = classify(movestring, colInt, scores);
     patternTag = classifyResult?.tag ?? null;
+    // US3 (spec 052): classify() surfaces a distinct phrasePoolKey (e.g. 'forfeited_win') when
+    // this drawing_move forfeited a forced win, without changing `tag` itself (contracts C5).
+    classifyPhrasePoolKey = classifyResult?.phrasePoolKey ?? null;
   }
 
-  // Category takes priority over the classifier's tag.
-  const phrasePoolKey = category || patternTag;
+  // classify()'s Category 3/4/6 tags (double_threat, forced_win, figure_7, j_shape) fire ONLY on
+  // an absent→present transition — the tag itself already asserts "this move just built the
+  // pattern", regardless of how `quality` (a pure score-rank comparison against the best-scoring
+  // column) happens to land. Their coach.spoken/eval pools are shared with other callers
+  // (ChallengeScreen's "did you pick the correct completing cell" semantics for figure_7/j_shape;
+  // the historical double_threat/forced_win praise-on-best-move-only semantics) where
+  // 'suboptimal'/'blunder' mean "you did NOT build it" — reusing those tiers verbatim for a
+  // creation-tag would tell a player who just built the pattern that a different column would
+  // have built it instead (verified live: playing a fork/figure_7-creating move that still scored
+  // below some unrelated best column rendered "Good move, but a different column creates two
+  // threats at once" / "...builds the Figure-7").
+  //
+  // Resolution depends on how bad the move actually is, because these categories are NOT
+  // score-gated — a move can create a fork and still throw the game (verified: `060550303021255625`
+  // col 3 creates a double_threat scoring -12 against a +12 best; `34510362124443001124000` col 1
+  // is a losing j_shape):
+  //   - suboptimal: the move DID build the pattern and is genuinely good, just not top-scoring —
+  //     promote to the 'optimal' pool so the copy stops contradicting itself.
+  //   - blunder: never praise a game-losing move. Drop the pattern-specific pool entirely and fall
+  //     back to the generic blunder pool, which is score-truthful and makes no claim about the
+  //     pattern either way.
+  // POOL SELECTION only — `quality`/`badge` in the response stay score-based for any other
+  // consumer (e.g. move-quality stats).
+  const CREATION_ONLY_TAGS = new Set(['double_threat', 'forced_win', 'figure_7', 'j_shape']);
+  const isCreationTag = !isAiMove && CREATION_ONLY_TAGS.has(patternTag);
+  const suppressCreationPraise = isCreationTag && quality === 'blunder';
+  const poolQuality = (isCreationTag && !suppressCreationPraise) ? 'optimal' : quality;
+
+  // Category takes priority over the classifier's tag; classify()'s own phrasePoolKey signal
+  // (forfeited-win) takes priority over the plain patternTag fallback, ahead of the generic
+  // 'drawing_move' pool key it would otherwise resolve to.
+  const phrasePoolKey = suppressCreationPraise
+    ? (category || 'generic')
+    : (category || classifyPhrasePoolKey || patternTag);
+
   const coachPhraseKey = phrasePoolKey
-    ? pickFromPool(i18nTranslations, `coach.spoken.${phrasePoolKey}.${quality}`)
+    ? pickFromPool(i18nTranslations, `coach.spoken.${phrasePoolKey}.${poolQuality}`)
     : null;
   const summaryLineKey = phrasePoolKey
-    ? pickFromPool(i18nTranslations, `eval.${phrasePoolKey}.${quality}.summary`)
+    ? pickFromPool(i18nTranslations, `eval.${phrasePoolKey}.${poolQuality}.summary`)
     : null;
   const coachMoodMap = { optimal: 'happy', suboptimal: 'think', blunder: 'oops' };
-  const coachMood = coachMoodMap[quality] ?? 'think';
+  const coachMood = coachMoodMap[poolQuality] ?? 'think';
 
   // `scores` is returned for the caller's own `accepted` derivation; it is NOT part of the
   // response body (see api-conventions.md — the stored set and raw scores never ship to a client).

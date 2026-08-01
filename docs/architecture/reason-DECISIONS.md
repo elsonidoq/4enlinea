@@ -736,3 +736,377 @@ the coach-voice A5 axis in `grade-fv-sufficiency`.
 `reason_engine/causalLinks.mjs`, `compute.mjs`. Docs updated: `reason-render-grounded-prompt.md`
 §10 (TODO), `.claude/skills/grade-fv-sufficiency/SKILL.md` (G7c). Invariants: I0 (render-only, no
 vector/schema change).
+
+### D36 — the codebase now carries two competing solutions to the same perspective problem
+
+**Context.** OI-76/OI-74's underlying defect — a detector reading one player's board threats
+crossed with the *other* player's `scores` sign — has now been resolved twice, by two different
+mechanisms, and no artifact previously said so out loud:
+
+1. **Role-split (undercut, and now overcut, spec 052 US1).** Drop the `perspective` parameter
+   entirely; export two role-named functions (`detectXVictim`/`detectXBeneficiary`) that each
+   resolve their own role from `board.currentPlayer` — the mover. There is no non-mover-perspective
+   case to support; a caller who wants the opponent's-eye view constructs the child board and asks
+   again. Used by `detectUndercutVictim`/`detectUndercutBeneficiary` (shipped) and
+   `detectOvercutVictim`/`detectOvercutBeneficiary` (spec 052 T005).
+2. **FR-033 solver recursion (`detectZThreat`, `detectOddEvenThreat`, `detectForcedBlock`,
+   `detectForbiddenColumns`, `classifier.js:849/1220/1615/1716` respectively).** Keep the
+   `perspective` parameter; when `perspective !== board.currentPlayer && solver`, recurse into
+   every child position (playing each legal column) asking the *same* perspective-mismatched
+   question one ply down, until the recursion terminates. No role split — one function, one
+   parameter, a solver-driven escape hatch for the mismatch case.
+
+**Why this matters.** These are not interchangeable: the role-split makes "which player" a
+compile-time-fixed concept (resolved once, from the mover, no ambiguity possible), while the
+FR-033 route keeps `perspective` first-class and pushes the cost of reconciling it into runtime
+solver calls — and, per OI-89, silently produces an unsound answer instead of reconciling
+anything when the `&& solver` conjunct is false (no solver supplied, non-mover perspective
+requested). Spec 052's Settled decision 1 explicitly chose the role-split for `detectOvercut` and
+explicitly declined to migrate the four FR-033 detectors to it (T003A is audit-only) — so the
+divergence is intentional-for-now, not an oversight, but until this entry nothing recorded that
+the codebase deliberately carries both patterns side by side.
+
+**Decision.** Record the divergence; do not reconcile it in this epic. If a future defect surfaces
+in one of the four FR-033 detectors that role-split would prevent structurally (as it did for
+undercut/overcut), that is the trigger to migrate them — not a standalone cleanup task.
+
+**Source:** spec 052 (Epic 2) planning + T003A audit, 2026-07-30. Modules: `classifier.js`
+(`detectZThreat`, `detectOddEvenThreat`, `detectForcedBlock`, `detectForbiddenColumns`,
+`detectUndercutVictim`/`Beneficiary`, `detectOvercutVictim`/`Beneficiary`). Related: OI-74
+(resolved, role-split precedent), OI-76 (resolved by role-split, this epic), OI-89 (the FR-033
+route's latent unsound fall-through, deferred).
+
+---
+
+### D37 — `classifyPattern`'s Phase-C `'overcut'` detector-list entry calls `detectOvercutVictim`, not `Beneficiary`
+
+**Context.** Spec 052 (Epic 1, US1) split `detectOvercut(board, scores, perspective)` into
+`detectOvercutVictim`/`detectOvercutBeneficiary` (T005), each resolving its role from
+`board.currentPlayer` (D36). Both are now legal candidates to wire into `classifyPattern`'s
+detector list (`classifier.js:1854`), and `tagBlunder`'s Phase C calls `classifyPattern` on the
+**post-move board after the correct/best move** — not the pre-move blunder board — so the side to
+move on that board is whichever player did *not* just move (i.e., for a `missed_own` blunder, the
+opponent of the blunderer). Picking the wrong one of the pair is a silent wrong-role wiring bug
+that a bare unit test on either function cannot catch (FR-003) — it only shows up as cells that
+belong to the wrong player once wired into the pipeline.
+
+**Decision.** The `'overcut'` entry calls `detectOvercutVictim(board, scores)` (`classifier.js:1854`),
+never `detectOvercutBeneficiary`. Rationale: on the Phase-C board, the side to move is the
+opponent, and `detectOvercutVictim` resolves the *mover's* role — so it reports the opponent as the
+victim (their own threat dies) and the **non-mover** (the blunderer) as holding the killing
+threat that neutralises it. That is exactly the reading `tagBlunder`'s `MISSED_OWN` phase needs:
+"the overcut you, the blunderer, just let stand/landed" — the blunderer's threat is the one doing
+the killing, not the one dying. Wiring `detectOvercutBeneficiary` at this call site instead would
+report the *mover* (opponent) as benefiting, attributing the blunderer's own overcut cells to the
+wrong player — reintroducing OI-76 under the new function names.
+
+`candidate-generator.js`'s `checkOvercutPredicate` is the other caller and correctly uses
+`detectOvercutBeneficiary` instead (T008) — that call site evaluates a board where the *puzzle's
+own solver* is the mover benefiting from the overcut (a puzzle-pool candidate, not a
+blunder-attribution question), so the role need is inverted from Phase-C's. The two call sites are
+not parallel; each needs the opposite half of the split.
+
+**Verification.** `tests/integration/undercut_overcut.test.js`'s `tagBlunder Phase C — overcut
+cells belong to the blunderer (spec 052 T007)` describe block (T010) runs the full `tagBlunder`
+pipeline on harvested board `33341302254244423366` (blunderer plays col 5 instead of col 6) and
+asserts the reported killing-threat cell is in the blunderer's own `reachableThreats` — this is the
+regression that would fail if this call site were ever rewired to `Beneficiary`.
+
+**Status:** LOCKED — this is the load-bearing call-site mapping for spec 052 US1's FR-003.
+
+**Source:** spec 052 (Epic 1) T005/T007/T010, 2026-07-30. Modules: `classifier.js:1854`
+(`classifyPattern`), `candidate-generator.js:372` (`checkOvercutPredicate`). Supersedes nothing;
+extends D36 (which records the cross-detector pattern-divergence, not this specific
+same-pattern-different-call-site mapping).
+
+---
+
+### D38 — Open Question 1 resolved: `'active_forcing'` is reserved for the new KB-matching branch; the existing T5-exception branch is renamed `'t5_row3_row6'`
+
+**Context.** Spec 052 (Epic 2) US2/FR-008. `detectOvercutCore`'s `isT5Exception`-driven rescue
+branch (`classifier.js`, inside `detectOvercutCore`) has, since before this epic, emitted
+`reason: 'active_forcing'` — but `isT5Exception` fires only for the specific row pair `{2, 5}`
+(0-indexed; Allen rows 3/6), regardless of column parity or row adjacency, and has nothing to do
+with the community-overcut KB's actual "active forcing" mechanism (`docs/knowledge-base/
+community-overcut.md`, precondition (e): odd-empty-count column, mover's turn, mover's threat
+immediately above the opponent's blocked threat). This mislabeling is OI-60's motivating defect:
+lesson 12 teaches the KB's real active-forcing shape, but no detector branch matched it under that
+name (or at all) — the label was already spoken for by an unrelated branch.
+
+**Decision (Option (b), per research.md Decision D3 and the epic's own documented leaning in
+`open-issues-epics.md`):**
+1. Rename the `isT5Exception` branch's emitted `reason` from `'active_forcing'` to
+   `'t5_row3_row6'` — logic unchanged, label only.
+2. Reserve `'active_forcing'` for a new, distinct rescue branch added in the same change,
+   matching community-overcut.md's case (e): the mover's threat `R` sits immediately above the
+   opponent's threat `Rp` (`R === Rp + 1`), the column has an odd number of empty cells, and
+   — because the geometric shape alone does not guarantee a game win (community-overcut.md's own
+   false-positive board `331324244556605142` has the identical local shape yet the mover still
+   loses; see `known_limitations`: "Overcut does not guarantee a full game win") — the branch also
+   requires `scores[col] > 0` directly, not merely inherited from the caller's role-based
+   `scoreOk` gate (T5/T4/chain-T2 are theorems that hold independent of the rest of the board;
+   active-forcing is not, so its score check cannot be delegated to the shared gate the way the
+   other three are).
+
+**Rationale.**
+- This is the epic's own stated "likely resolution" (`open-issues-epics.md` § Non-obvious facts) —
+  not a fresh naming guess.
+- It converges the code's vocabulary with the KB's own (`community-overcut.md`'s
+  `formal_predicate` names the T5 branch `"t5_exception"` and the true active-forcing case
+  `"active_forcing"` — distinct strings for distinct mechanisms).
+- Keeping `'active_forcing'` on the T5 branch (Option (a)) would perpetuate OI-60's exact
+  confusion on the *unrelated* branch instead of resolving it on the branch lesson 12 and the
+  community's own term actually describe.
+- Grep-verified before renaming (per T018): `active_forcing` appears in production code only at
+  the `detectOvercutCore` reason string; no lesson JSON, deep-reveal renderer, i18n string, or
+  test asserts on the *old* T5-branch meaning of the string other than the two now-updated
+  `undercut_overcut.test.js` assertions — see the grep transcript in the T018 commit/handoff notes.
+
+**Consequence for FR-009/FR-010/FR-011.** `docs/knowledge-base/community-overcut.md`,
+`allen-t2.md`, `allen-t4.md`, `allen-t5.md` gain cross-references naming both branches
+(`t5_row3_row6`, `active_forcing`) plus the new `minor_threat` branch (Decision D2, the
+structurally-unreachable-today minor-threat exception, now wired via
+`getMinorThreatWindows`/`categorizeThreats`). Lesson 12's copy is updated to use `active_forcing`
+only for the new branch.
+
+**Source:** spec 052 (Epic 2) T017–T021, 2026-07-30. Modules: `classifier.js` (`detectOvercutCore`,
+new `isActiveForcing` helper). Related: OI-60 (resolved by this decision + T021's branch), D2/D3
+(research.md, the planning-phase resolution this entry executes), D36/D37 (the role-split this
+branch is added inside of).
+
+### D39 — Open Question 2 resolved: a forfeited forced win refines `direction`, not a new `pattern_category`; live-path phrase-pool key is a separate mechanism; `eval.forfeited_win.*` is out of scope; FR-017's premise corrected
+
+**Context.** Spec 052 (Epic 1) US3/FR-014–FR-017. Before this change, a played move that forfeited
+a forced win (`preScore > 0 && postScore === 0`) and matched no named tactical pattern fell through
+`tagBlunder`'s Phase E score-based fallback to `{ tag: 'drawing_move', direction: 'missed_own',
+reason: '...' }` — indistinguishable, by tag or direction, from a genuine draw-to-draw position
+where the best achievable outcome really was a draw. A player who blew a forced win and a player
+who correctly navigated to the only available draw saw identical labels.
+
+**Decision (Option: refine `direction`, mint no new `pattern_category`).**
+1. `tagBlunder`'s Phase E gate (`classifier.js`) now checks `preScore > 0 && postScore === 0` and
+   emits `{ tag: 'drawing_move', direction: 'forfeited_win', reason: 'forced win dropped to draw,
+   no pattern detected' }` for that case only. `classify()`'s independent fallback (used by the
+   live `/api/evaluate-move` path) computes the same `bestScore > 0` condition and returns
+   `phrasePoolKey: 'forfeited_win'` — **no `direction` field**, since `classify()`'s return shape
+   never carried one; `phrasePoolKey` is a distinct, parallel mechanism (see point 3).
+2. No new `pattern_category` value was minted. `blunderTags.js`'s `VALID_BLUNDER_TAGS` already
+   contained `'drawing_move'` and tracks `pattern_category` only — it has no concept of `direction`
+   at all, so it required no change (T033A). The `direction` column carries no CHECK constraint
+   (`migrations/034_blunders_direction.sql`: "deliberately unconstrained to allow future extensions
+   without a migration"), so `forfeited_win` required no migration either (T033B). The separate
+   `pattern_category` CHECK constraint (`migrations/052_blunders_parity_threat_tags.sql`) is
+   unaffected.
+3. **The live sparring path (`FR-014`'s explicit second half) does not reuse `direction` at all.**
+   `evaluateMoveHandler.js` resolves `phrasePoolKey = category || classifyPhrasePoolKey ||
+   patternTag`, where `classifyPhrasePoolKey` comes from `classify()`'s own `phrasePoolKey` field —
+   a mechanism independent of `tagBlunder`'s `direction`. Both mechanisms key on the same
+   `bestScore > 0 && postScore === 0` condition but are separate code paths with separate return
+   shapes; a future reader must not assume `classify()`'s output carries `direction` because
+   `tagBlunder`'s does.
+4. **`blunderReasons.js`'s composite `tag:direction` keying** (FR-014's closing clause) gains one
+   new key, `'drawing_move:forfeited_win'`, alongside the pre-existing `'drawing_move:missed_own'`.
+   The latter is now **dead on the stored path**: re-reading the pre-change `tagBlunder` (`git show
+   HEAD:connect-four/server/classifier.js` at the time of this decision) shows Phase E's gate was
+   *already* `preScore > 0 && postScore === 0` before this epic touched it — a genuine draw-to-draw
+   position (`preScore === 0`) never reached `drawing_move` at all; it fell through to
+   `{ tag: 'suboptimal_move', direction: 'missed_own' }`, both before and after this change.
+   `'drawing_move:missed_own'` is kept in `REASON_TEMPLATES` as a defensive fallback (harmless dead
+   entry, cheap insurance against a future Phase-E refactor that widens the gate) — it is not
+   deleted, but no architecture doc may describe it as a live, reachable case.
+5. **`eval.forfeited_win.*` is explicitly out of scope for this decision.** `evaluateMoveHandler.js`
+   drives two independent lookup families from one `phrasePoolKey`: `coach.spoken.<key>.<quality>`
+   (populated for `forfeited_win` in both locales) and `eval.<key>.<quality>.summary` (left absent).
+   `drawing_move` never had an `eval.*` entry before this epic either — `pickFromPool` returns
+   `null` and the summary line is simply omitted, matching pre-existing behavior for every other
+   score-fallback tag. Adding one is a separate, future decision, not a regression of this one.
+6. **FR-017 premise correction.** FR-017 states "a genuine draw-to-draw position MUST continue to
+   receive its current tag unchanged" as if `drawing_move` were ever the tag for that case on the
+   stored path. It was not (see point 4) — there is no behavior change to preserve for that case
+   because it never reached `drawing_move`. FR-017 is satisfied trivially and by construction (the
+   Phase E gate's condition is unchanged, only its emitted `direction` is refined), but the spec's
+   premise that a "current tag" needed preserving on this path was factually wrong; this entry
+   records the correction so a future reader does not go looking for a `drawing_move`
+   draw-to-draw case that never existed. (The live `classify()` fallback path's pre-change behavior
+   — plain `{ tag: 'drawing_move' }` with no `phrasePoolKey` for both sub-cases — is the one place
+   where "unchanged for the draw-to-draw case" is a real, non-trivial claim: `classify()`'s fallback
+   now sets `phrasePoolKey: 'forfeited_win'` only under the same `bestScore > 0` gate, so a genuine
+   draw-to-draw live evaluation still returns plain `{ tag: 'drawing_move' }` with no
+   `phrasePoolKey`, unchanged.)
+
+**Rationale.** A new `pattern_category` would have required six touchpoints (CHECK constraint,
+`blunderTags.js`, three architecture docs, both locales' display + reason vocabulary, the
+`explainContext.js` tag list, the glossary) for a distinction that is purely about *why* a score
+fallback fired, not a new tactical shape — `drawing_move` already means "no named pattern matched,
+judged by score alone," and `forfeited_win`/`missed_own` are two reasons a score-only judgment can
+land on the same `pattern_category`. Refining `direction` is the same pattern D34–D38 already use
+for other pattern-vs-role distinctions, costs zero migration/CHECK-constraint surface (`direction`
+is deliberately unconstrained), and keeps `pattern_category`'s CHECK-constraint set stable.
+
+**Source:** spec 052 (Epic 1) T027–T041, 2026-07-30. Modules: `classifier.js` (`tagBlunder` Phase E,
+`classify()` fallback), `evaluateMoveHandler.js`, `blunderReasons.js`, `blunderTags.js` (verified
+unchanged), `src/i18n/en.json`/`es.json` (`coach.spoken.forfeited_win`, `mistakes.pattern.drawing_move`
+label correction). Related: FR-012–FR-017, D34–D38 (citation format precedent).
+
+### D40 — Open Question 3 resolved: only `figure_7` and `j_shape` are admitted to live-coach recognition; `z_threat`/`odd_even_threat`/`claimeven`/`undercut`/`overcut` are explicitly excluded, not silently deferred
+
+**Context.** Spec 052 (Epic 2) US5/FR-022–FR-025, T052–T057. Of the seven tactical patterns the
+offline pipeline (`classifyPattern`) recognizes but the live sparring path (`classify()`) never
+does — `figure_7`, `j_shape`, `z_threat`, `undercut`, `overcut`, `odd_even_threat`, `claimeven` —
+decide which are added to `classify()`'s priority chain for live praise (OI-30).
+
+**T052 measurements (real, against a running server on this worktree's `$API_PORT`, harvested
+mid-game position `333331111555551`, 16-ply, via `server/gameSampling.js`'s `playGame`):**
+
+| Measurement | Value |
+|---|---|
+| Baseline `POST /api/evaluate-move` end-to-end latency (15 samples, real server) | median 4.6ms, mean 15.0ms, min 3.3ms, max 155.9ms (one solver-jitter outlier) |
+| Explanation Engine's existing target (plan.md §Technical Context) | 2000ms |
+| **Headroom** | **≈1995ms typical (2000 − 4.6), ≈1844ms worst-observed-case (2000 − 155.9)** |
+| `detectFigure7` (pure geometry, mover perspective) | median 0.00ms, max 0.19ms |
+| `detectJShape` (pure geometry, mover perspective) | median 0.00ms, max 0.39ms |
+| `detectUndercutVictim` / `detectUndercutBeneficiary` | median 0.00ms, max 0.30ms / 0.02ms |
+| `detectOvercutVictim` / `detectOvercutBeneficiary` | median 0.00ms, max 0.21ms / 0.02ms |
+| `detectZThreat` (mover perspective, no solver call) | median 0.00ms, max 0.08ms |
+| `detectOddEvenThreat` (mover perspective, no solver call) | median 0.07ms, max 0.37ms |
+| `detectZThreat`/`detectOddEvenThreat` evaluated on `nextBoard` at the ORIGINAL mover's perspective (required for an absent→present gate — this recurses through the solver, since the mover is no longer `nextBoard.currentPlayer`) | median 0.2ms, one 12ms spike (6 samples) |
+| `detectClaimeven` (real solver, `runClaimevenSimulation` per odd-height column, always solver-calling) | median 1.07ms, mean 5.93ms, max 40.41ms (8 samples) |
+
+**Finding: latency is not the binding constraint for any of the seven.** Every candidate's
+measured marginal cost — even the solver-calling ones, even including a second solver round-trip
+for the "after" half of a transition gate — is at most tens of milliseconds against ≈1844–1995ms
+of headroom. A pure latency-knapsack read of T052 would admit all seven. The actual constraint
+that separates the two admitted patterns from the other five is **structural/architectural
+soundness of the FR-023 transition-gate shape**, not the budget:
+
+- `detectFigure7`/`detectJShape` (`classifier.js` — unchanged by FR-004 of spec 052 Epic 2)
+  **retain an explicit `perspective` parameter** (`(board, _scores, perspective =
+  board.currentPlayer)`). That means they can be called as `detectFigure7(nextBoard, null,
+  mover)` — passing the ORIGINAL mover explicitly, not `nextBoard.currentPlayer` (which has
+  flipped to the opponent once the move is played) — reproducing the exact absent→present shape
+  Category 3/4 already use (`if (hasX(nextBoard, player) && !hasX(board, player))`) with zero
+  solver cost and zero interface change.
+- `detectOvercutVictim`/`detectOvercutBeneficiary` **deliberately dropped their `perspective`
+  parameter** as part of this epic's own US1/US2 (FR-001–FR-003): role is resolved *only* from
+  `board.currentPlayer` (who is to move), never from a caller-supplied argument — the exact fix
+  for OI-76. That invariant makes it impossible to ask "does the ORIGINAL mover still have this
+  pattern on `nextBoard`" at all: `nextBoard.currentPlayer` is the opponent, so
+  `detectOvercutBeneficiary(nextBoard, nextScores)` necessarily describes the **opponent's**
+  situation, not a retroactive fact about the mover's move. Reintroducing a caller-supplied
+  perspective to make the gate possible would directly reopen OI-76 (the unsound branch FR-002
+  explicitly forbids: "A caller wanting the non-mover's overcut status MUST NOT be served by
+  silently flipping the score sign"). `detectUndercutVictim`/`Beneficiary` share the identical
+  shipped design (`docs/architecture/server-conventions.md` §"Undercut has two sides") and
+  inherit the same incompatibility. **Excluded: structurally incompatible with FR-023's gate
+  shape given an invariant this same epic just locked down; not a latency finding.**
+- `detectZThreat`/`detectOddEvenThreat` (`classifier.js`) DO retain an explicit `perspective`
+  parameter (untouched by the overcut/undercut work) and so ARE structurally gateable — but
+  correctly evaluating the "after" half for the mover's perspective on `nextBoard` triggers each
+  function's own solver-recursion branch (`if (perspective !== board.currentPlayer && solver)`),
+  because the mover is no longer `nextBoard.currentPlayer`. Admitting either therefore requires
+  converting `classify()` — today a synchronous, solver-free pure function
+  (`server/classifier.js`, no external process dependency) — into an `async` function with a
+  live `solver` instance threaded through `evaluateMoveHandler.js`'s `buildEvaluationResponse`,
+  for the first time introducing a per-move external-process failure mode into this exact path
+  (the Edge Case's "solver temporarily unavailable or slow" scenario, which today simply cannot
+  happen inside `classify()`). Measured marginal cost is low, but the risk/benefit is asymmetric:
+  new architectural surface area and a new failure mode requiring graceful-degradation handling,
+  for benefit that is additional praise variety rather than correctness. **Excluded: deferred, not
+  because the numbers are bad, but because the "few patterns, honestly justified" outcome this
+  epic's own judgment guidance sanctions is preferred over the sync→async refactor's risk for a
+  nice-to-have.** Revisitable cheaply — the measured numbers above stand.
+- `detectClaimeven` is unconditionally solver-calling (no board-only fast path exists in its
+  implementation, unlike `detectZThreat`/`detectOddEvenThreat`'s mover-perspective shortcut) and
+  is Yellow/Player-2-only, halving its live applicability. Same `classify()` sync→async
+  architecture cost as above applies, for a narrower-scope pattern. **Excluded, same rationale as
+  z_threat/odd_even_threat, compounded by the Player-2-only scope narrowing.**
+
+**Decision.** Admit `figure_7` and `j_shape` only. Exclude `z_threat`, `odd_even_threat`,
+`claimeven`, `undercut`, `overcut` — each for the specific, written reason above, not a blanket
+"solver cost too high" (the measurements show it is not).
+
+**Where slotted.** `classifier.js`'s `classify()` gained a new **Category 6** (figure_7/j_shape
+creation), placed after Category 5 (`forbidden_columns`) and before the score-based Fallback.
+Rationale for the position: Categories 1–5 all carry genuine move-urgency (an immediate win, a
+fork, a forced win, a forced/failed block, a forbidden column) that must outrank a "you built a
+shape" compliment; Category 1 firing first forecloses figure_7/j_shape recognition on any move
+that is ALSO an immediate win, which is accepted (an immediate win is always more urgent feedback
+than shape praise). Placing the new category before the Fallback means specific pattern
+recognition still outranks the generic `best_move`/`drawing_move`/`suboptimal_move` labels when
+no higher-urgency category fires.
+
+**`eval.*` decision (FR-025).** Both `figure_7` and `j_shape` had complete `coach.spoken.*` pools
+in both locales already (research.md D6, re-verified) but **no** `eval.<tag>.*.summary` entries in
+either locale. Decision: **author them** (not "out of scope") — `eval.figure_7.{optimal,
+suboptimal,blunder}.summary` and `eval.j_shape.{optimal,suboptimal,blunder}.summary`, in both
+`en.json` and `es.json`, following the existing `z_threat`/`claimeven` three-quality-bucket
+convention. Unlike D39's `forfeited_win` (a Fallback-path sub-reason with no natural score-quality
+bucketing), figure_7/j_shape are ordinary named-pattern tags for which the existing convention
+already has a direct template — authoring them is strictly additive and keeps this small feature
+complete end-to-end (spoken line + written summary) rather than leaving a known half-populated
+pool for a future epic to notice.
+
+**Graceful degradation (Edge Case).** Not applicable — no solver-calling detector was admitted, so
+`classify()` remains fully synchronous with zero external-process dependency, and the Edge Case's
+"solver unavailable/slow" scenario cannot occur for either admitted pattern.
+
+**Source:** spec 052 (Epic 2) T052–T057, 2026-07-30. Modules: `classifier.js` (`classify()`
+Category 6), `src/i18n/en.json`/`es.json` (`eval.figure_7`, `eval.j_shape`),
+`tests/integration/liveCoachFigure7JShape.test.js`. Measurements captured against `$API_PORT`
+(this worktree) with a live c4solver process; raw sample scripts not committed (ad hoc,
+scratchpad-only per CLAUDE.md). Related: FR-022–FR-025, OI-30, D36–D39 (numbering continuity).
+
+### D41 — US4's forced-win `blockCol` diff is a correctness hardening with no observable behavior change today; do not "fix" it back to a boolean gate
+
+**Context.** Spec 052 (Epic 2) US4/FR-019, T044–T045, T048. `classify()`'s Category 4 gate was
+changed from a boolean `.matched` transition to a `blockCol`-identity diff on `detectForcedWin`'s
+return shape, mirroring Category 3's column-set diff for `double_threat` (FR-018). Acceptance
+Scenario 3 (spec.md) describes this as catching "a genuinely new forced-win opportunity... even if
+the mover already had a DIFFERENT forced win before the move" — i.e., `detectForcedWin` matching
+both before and after the move, with a different `blockCol` each time.
+
+**Finding.** That transition is unreachable via a single `classify()` move. Proof sketch: whenever
+`detectForcedWin(board, player)` matches with `blockCol = X`, column X's winning window already has
+its other three cells filled (board cells are never unfilled, so this is permanent for the rest of
+the game), so X remains a threat on `nextBoard` regardless of which *different* column the mover
+plays. The mover can never play at X itself and have the move land in Category 3/4 at all, because
+playing the immediate-threat column X would win outright — that is Category 1 (`immediate_threat`),
+which is checked first and forecloses reaching Category 4 for that move. So if `nextBoard` is also
+singly-matched (`myThreats.length === 1`), its one threat must still be X — `blockCol` cannot
+change across one `classify()` move once it was already matched pre-move. Consequently the
+`blockCol`-before vs. `blockCol`-after diff and the old boolean `.matched`-transition gate always
+agree on every reachable single-move transition: **this diff changes no live-observed classify()
+output today.**
+
+**Verified empirically, not just by proof.** An exhaustive harvest attempt found zero
+counterexamples across ~3,400 solver-guided self-play games (via `gameSampling.js`'s `playGame`)
+plus ~21.8M solver-free random-walk plies directly probing `detectForcedWin` for a single move
+transition with "both matched, different `blockCol`." See
+`connect-four/tests/classifier/classifier.test.js` (the `describe('detectForcedWin() blockCol
+identity (US4 T048 — mechanism-level...)')` block) for the full proof-sketch comment and the two
+independently-harvested boards (`'0064323135'`, `blockCol=3`; `'052236'`, `blockCol=1`) used to
+exercise the identity-diff mechanism directly (not via a move transition, since none exists), each
+solver-verified via `./visualize_board.sh`.
+
+**Consequence — do not revert this.** T048 (FR-019, Acceptance Scenario 3) is therefore satisfied
+by a mechanism-level test plus this proof, not a harvested single-move transition test — that is
+expected and correct, not a gap to fill later. A future reader auditing this diff against
+production traffic will find it never fires differently from the old boolean gate and may conclude
+it is dead code or a regression risk to simplify away — it is neither. The diff is real correctness
+hardening (it removes an *assumption* — "no two distinct forced-win instances can ever need
+distinguishing" — that the boolean gate baked in silently) and stands ready for the day
+`detectForcedWin`'s matching logic changes (e.g. to support multiple simultaneous major threats,
+which would break the single-cell-immutability argument above). Do not simplify the gate back to
+`.matched` on the grounds that "the diff never differs in practice" — the equivalence is a proven
+property of *today's* `detectForcedWin`, not an accident to clean up.
+
+Separately, OI-90 records a genuinely distinct residual this diff does **not** close: two different
+forced-win *lines* sharing the same anchoring `blockCol` (same first forcing move, different
+continuation) are still conflated as one instance — that is a real, accepted scope limit of the
+minimal `blockCol`-only identity (research.md Decision D5), orthogonal to this entry's finding that
+the *shipped* diff has no observable behavior change on the single-value-mismatch case Acceptance
+Scenario 3 describes.
+
+**Source:** spec 052 (Epic 2) T042–T048, T064b, 2026-07-30. Modules: `classifier.js`
+(`detectForcedWin`'s `blockCol` field, `classify()` Category 4), `tests/classifier/classifier.test.js`.
+Related: FR-018–FR-021, research.md Decision D5, OI-33, OI-90.

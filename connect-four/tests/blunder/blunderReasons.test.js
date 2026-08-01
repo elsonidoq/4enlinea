@@ -2,8 +2,10 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { REASON_TEMPLATES, POSITIVE_TEMPLATES } from '../../server/blunderReasons.js';
 
-// Expected entries for REASON_TEMPLATES (25 entries). odd_even_threat:* removed
-// 2026-06-25; replaced by the parity-aware threat tags.
+// Expected entries for REASON_TEMPLATES (26 entries). odd_even_threat:* removed
+// 2026-06-25; replaced by the parity-aware threat tags. drawing_move:forfeited_win added
+// spec 052 US3 T032 — distinguishes "forfeited a forced win" from the genuine
+// best-is-a-draw case (drawing_move:missed_own, unchanged).
 const EXPECTED_REASON_KEYS = [
   'immediate_threat:missed_own',
   'immediate_threat:enabled_opponent',
@@ -29,6 +31,7 @@ const EXPECTED_REASON_KEYS = [
   'claimeven:missed_own',
   'claimeven:enabled_opponent',
   'drawing_move:missed_own',
+  'drawing_move:forfeited_win',
   'suboptimal_move:missed_own',
 ];
 
@@ -49,8 +52,8 @@ const EXPECTED_POSITIVE_KEYS = [
   'drawing_move',
 ];
 
-test('REASON_TEMPLATES has exactly 25 entries', () => {
-  assert.equal(REASON_TEMPLATES.size, 25);
+test('REASON_TEMPLATES has exactly 26 entries', () => {
+  assert.equal(REASON_TEMPLATES.size, 26);
 });
 
 test('REASON_TEMPLATES — all keys map to non-empty strings', () => {
@@ -75,6 +78,14 @@ test('REASON_TEMPLATES spot-check: drawing_move:missed_own', () => {
     REASON_TEMPLATES.get('drawing_move:missed_own'),
     "You had a move that would have held at least a draw, and this move gave that balance up."
   );
+});
+
+test('REASON_TEMPLATES spot-check: drawing_move:forfeited_win distinct from drawing_move:missed_own', () => {
+  const forfeited = REASON_TEMPLATES.get('drawing_move:forfeited_win');
+  const missedOwn = REASON_TEMPLATES.get('drawing_move:missed_own');
+  assert.ok(typeof forfeited === 'string' && forfeited.length > 0);
+  assert.notEqual(forfeited, missedOwn);
+  assert.match(forfeited, /forced win/i);
 });
 
 test('POSITIVE_TEMPLATES has exactly 13 entries', () => {

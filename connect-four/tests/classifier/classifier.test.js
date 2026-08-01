@@ -8,7 +8,7 @@ import {
   Board,
   detectImmediateThreat, detectDoubleThreat, detectForcedBlock,
   detectForcedWin, detectForbiddenColumns,
-  detectZThreat, detectUndercutVictim, detectOvercut,
+  detectZThreat, detectUndercutVictim, detectOvercutVictim, detectOvercutBeneficiary,
   detectFigure7, detectJShape, detectClaimeven,
   detectOddEvenThreat,
 } from '../../server/classifier.js';
@@ -171,6 +171,32 @@ describe('classify() double_threat transition gating', () => {
     const result = classify('3344', 2, [-4, -3, 18, 2, 2, 18, -3]);
     assert.equal(result.tag, 'double_threat');
   });
+
+  // Spec 052 (Epic 2) US4 T046 — FR-018/SC-005/Acceptance Scenario 1: mover already holds a fork
+  // (0-indexed cols 1 & 4, gravity-top) and creates a genuinely DISTINCT second fork (col 5 is new,
+  // col1/col4 persist) with their move. Harvested via server/gameSampling.js's playGame (not
+  // hand-constructed; movePlayed=5, solver scores queried live at this movestring), confirmed with
+  // ./visualize_board.sh, and does NOT hit Category 1 (playing col5 is not itself a win).
+  //
+  // Demonstrated RED against the OLD boolean gate (`hasDoubleThreat(next) && !hasDoubleThreat(before)`):
+  // both before (cols [1,4]) and after (cols [1,4,5]) have an ACTIVE fork, so the old boolean gate
+  // evaluates true && !true = false and returns 'best_move' instead — verified by temporarily
+  // reverting classify()'s Category 3 gate to the old boolean form and re-running this exact
+  // classify() call, which returned { tag: 'best_move' }, not 'double_threat'.
+  test('3332363356002460024262246611 col5 → double_threat (second, distinct fork created alongside an existing one)', () => {
+    const result = classify('3332363356002460024262246611', 5, [6, 7, -1000, -1000, 7, 6, -1000]);
+    assert.equal(result.tag, 'double_threat');
+  });
+
+  // Spec 052 (Epic 2) US4 T047 — FR-020/Acceptance Scenario 2 (no regression): mover already holds
+  // a fork (0-indexed cols 0 & 5) and plays a move that does NOT change which columns hold it —
+  // colsAfter === colsBefore, so the diff is empty and 'double_threat' must not fire. Harvested via
+  // playGame (movePlayed=6, live solver scores at this movestring), confirmed with
+  // ./visualize_board.sh.
+  test('42442343253231013316641411622605 col6 → NOT double_threat (fork persists in the same columns)', () => {
+    const result = classify('42442343253231013316641411622605', 6, [5, -1000, -1000, -1000, -1000, 5, 4]);
+    assert.notEqual(result.tag, 'double_threat');
+  });
 });
 
 describe('classify() edge cases', () => {
@@ -253,6 +279,63 @@ describe('classify() forced_win transition gating', () => {
   test('662345230545562635000001 col6 → forced_win (newly established — regression)', () => {
     const result = classify('662345230545562635000001', 6, [-1000, -9, 9, -9, -9, -9, 6]);
     assert.equal(result.tag, 'forced_win');
+  });
+});
+
+// Spec 052 (Epic 2) US4 T048 — FR-019/Acceptance Scenario 3: "a genuinely new forced-win
+// opportunity is recognized as a creation even if the mover already had a DIFFERENT forced win
+// before the move" — i.e. detectForcedWin matched BOTH before and after, with a DIFFERENT
+// blockCol. This CANNOT be harvested as a single classify(moves, candidateCol, scores) move
+// transition — proven, not merely unsearched (exhaustive harvest attempted: ~3,400 solver-guided
+// self-play games via gameSampling.js's playGame, plus ~21.8M solver-free random-walk plies
+// directly probing detectForcedWin, found ZERO instances of "both matched, different blockCol"
+// across a single move). The reason is structural: whenever detectForcedWin(board, player) matches
+// with blockCol=X, X's winning window has its other 3 cells already filled (immutable — cells are
+// never unfilled), so X remains a threat on ANY nextBoard reached by playing a DIFFERENT column
+// (and playing AT X itself would win outright, i.e. Category 1 (`immediate_threat`) fires first —
+// candidateCol can never equal a real pre-move blockCol by the time Category 3/4 is reached). So if
+// nextBoard is ALSO singly-matched (myThreats.length === 1), that one threat must still be X —
+// blockCol cannot change across one classify() move once it was already matched. See
+// docs/open_issues.md OI-90 for the accepted-limitation writeup this implies for a *different*
+// scenario (same blockCol, different underlying forcing line).
+//
+// Given that, this test exercises the blockCol IDENTITY MECHANISM directly — two INDEPENDENT
+// boards, each solver-verified via detectForcedWin to be matched with a different blockCol
+// (harvested by directly scanning detectForcedWin(board, player) over random boards, not via a
+// move transition; confirmed with ./visualize_board.sh) — and replicates classify()'s exact
+// Category 4 identity-diff formula inline to show it recognizes them as distinct instances,
+// whereas the OLD `.matched`-only boolean gate would have suppressed it (both already matched).
+describe('detectForcedWin() blockCol identity (US4 T048 — mechanism-level, see note above)', () => {
+  // '0064323135', player 1 (Green) to move: sole gravity-top major threat at col3 (0-indexed).
+  const boardX = new Board('0064323135');
+  // '052236', player 1 (Green) to move: sole gravity-top major threat at col1 (0-indexed).
+  const boardY = new Board('052236');
+
+  test('boardX matches with blockCol=3; boardY matches with blockCol=1 (genuinely different anchors)', () => {
+    const fwX = detectForcedWin(boardX, 1);
+    const fwY = detectForcedWin(boardY, 1);
+    assert.equal(fwX.matched, true);
+    assert.equal(fwX.blockCol, 3);
+    assert.equal(fwY.matched, true);
+    assert.equal(fwY.blockCol, 1);
+    assert.notEqual(fwX.blockCol, fwY.blockCol);
+  });
+
+  test('treating X as "before" and Y as "after": OLD boolean gate suppresses, NEW blockCol diff fires', () => {
+    const fwBefore = detectForcedWin(boardX, 1);
+    const fwAfter = detectForcedWin(boardY, 1);
+
+    // OLD gate (pre-spec-052, classify()'s literal Category 4 condition before this batch):
+    // `detectForcedWin(nextBoard, player).matched && !detectForcedWin(board, player).matched`
+    const oldGateFires = fwAfter.matched && !fwBefore.matched;
+    assert.equal(oldGateFires, false, 'old boolean gate must suppress — both are already matched');
+
+    // NEW gate (classify()'s actual Category 4 condition, this batch): identity is
+    // `matched ? blockCol : null`, fires when after's identity is non-null and differs from before's.
+    const idBefore = fwBefore.matched ? fwBefore.blockCol : null;
+    const idAfter = fwAfter.matched ? fwAfter.blockCol : null;
+    const newGateFires = idAfter !== null && idAfter !== idBefore;
+    assert.equal(newGateFires, true, 'new blockCol-diff gate must recognize this as a creation');
   });
 });
 

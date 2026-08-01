@@ -448,6 +448,29 @@
           "3": "Eso entrega la ventaja. Evitá la columna del undercut y mantené vivas tus propias amenazas."
         }
       },
+      "forfeited_win": {
+        "prompt": {
+          "0": "Tenés una victoria forzada en el tablero — ¿podés encontrar la línea que la mantiene?",
+          "1": "Una columna asegura la victoria. Cualquier otra jugada desde acá solo empata."
+        },
+        "hint": {
+          "0": "No toda jugada que parece segura mantiene la victoria. Buscá la columna que fuerza la victoria hasta el final.",
+          "1": "El empate está disponible en casi todas partes acá — la victoria vive en exactamente una columna."
+        },
+        "optimal": {
+          "0": "Mantuviste la victoria forzada — no hacía falta conformarse con un empate.",
+          "1": "Correcto — eso mantiene viva la victoria en vez de derivar en un empate."
+        },
+        "suboptimal": {
+          "0": "Todavía tenés la victoria, pero esta jugada hace que sea más difícil sostenerla.",
+          "1": "La victoria sigue ahí, aunque esta jugada devuelve parte de la ventaja."
+        },
+        "blunder": {
+          "0": "Eso entregó una victoria forzada — desde acá solo podés empatar.",
+          "1": "Tenías la victoria asegurada, y esta jugada dejó que se te escape hacia un empate.",
+          "2": "Eso no es solo un pequeño error — cambiaste una victoria forzada por un empate."
+        }
+      },
       "generic": {
         "optimal": {
           "0": "Buena jugada.",
@@ -748,6 +771,40 @@
           "0": "Al menos una de tus columnas marcadas era segura para jugar."
         }
       }
+    },
+    "figure_7": {
+      "optimal": {
+        "summary": {
+          "0": "Construiste el patrón Figura-7."
+        }
+      },
+      "suboptimal": {
+        "summary": {
+          "0": "Jugable, pero otra columna construye la Figura-7."
+        }
+      },
+      "blunder": {
+        "summary": {
+          "0": "Esa jugada dejó pasar la oportunidad de la Figura-7."
+        }
+      }
+    },
+    "j_shape": {
+      "optimal": {
+        "summary": {
+          "0": "Construiste el patrón J-Shape."
+        }
+      },
+      "suboptimal": {
+        "summary": {
+          "0": "Jugable, pero otra columna construye el J-Shape."
+        }
+      },
+      "blunder": {
+        "summary": {
+          "0": "Esa jugada dejó pasar la oportunidad del J-Shape."
+        }
+      }
     }
   },
   "deepReveal": {
@@ -891,7 +948,7 @@
       "major_threat_nonparity": "Amenaza fuera de paridad",
       "minor_threat": "Amenaza menor",
       "suboptimal_move": "Jugada subóptima",
-      "drawing_move": "Jugada de empate"
+      "drawing_move": "Victoria cedida"
     },
     "to_review": "{{count}} para repasar",
     "cat": {

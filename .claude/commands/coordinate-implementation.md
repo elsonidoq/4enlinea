@@ -141,6 +141,19 @@ Include:
 - Key decisions or patterns you established that the next batch must follow (naming, structure, APIs)
 - Anything incomplete, deferred, or left as a stub for the next batch to finish
 - Non-obvious constraints the next agent will hit if it doesn't know about them
+- **Deploy prerequisites** — anything that must happen *around* a deploy rather than inside it, or
+  "None" if genuinely nothing. Working code is not the same as a shippable change. Ask specifically:
+  - **Schema migration** — did you add a file to `server/migrations/`?
+  - **Data migration / backfill** — did you change the *meaning* of data already stored? A new enum
+    or `direction` value, a renamed tag, a changed detector output, a new non-null column. Rows
+    written under the old behavior do not update themselves.
+  - **Content pools** — did you change a predicate or detector that puzzle/candidate rows were
+    generated under? Existing rows were derived by the old code and may now be stale or invalid.
+  - **Secrets / env vars** — does any new code read an env var that does not yet exist in Railway?
+  - **Caches** — can `explanation_cache`, TTS/audio artifacts, or any keyed cache serve content
+    generated under the old behavior?
+  - **Ordering** — must the step run before or after the code deploy?
+  Say what you verified versus what you only reasoned about; if you measured, give the numbers.
 ```
 
 ---
@@ -153,6 +166,9 @@ After all batches have run, output a summary with:
 2. **Tasks completed** — list of task IDs marked done
 3. **Open items** — anything a sub-agent flagged as incomplete, skipped, deferred, or stubbed (drawn from each batch's `## Handoff context`)
 4. **Verification steps** — the acceptance scenarios the user should spot-check manually
+5. **Deploy prerequisites** — every step that must happen around the deploy (collected from each
+   batch's `## Handoff context`), or an explicit "none — this ships with the code alone". Do not
+   omit this section; "nothing to do" is a finding that should be stated, not an absence.
 
 ### Persist open issues to `docs/open_issues.md`
 
@@ -303,3 +319,74 @@ For each bug:
 After the QA sub-agent returns, take any entry from its `### Remaining issues` section that is a **genuine deferred/latent issue** (same qualifies / does-not-qualify test as Step 4's "Persist open issues") and append it to `docs/open_issues.md` using the same `OI-N` entry format. Read the file first and skip anything already tracked. Pre-existing issues the QA agent flags as "out of scope / not a regression" still belong here if they're real latent bugs — that is exactly what this backlog is for.
 
 Report to the user which `OI-N` entries were added (or "no new open issues" if none qualified).
+
+---
+
+## Step 8 — Capture deployment prerequisites in `docs/deployment_steps.md`
+
+A green test suite means the code works. It does not mean the change can ship. Anything that alters
+the *meaning* of already-stored data leaves every existing row wrong until something migrates it,
+and that step is invisible to every check performed so far — tests run against fixtures, QA runs
+against local. This step exists because that gap is systematically missed.
+
+**Do not skip this step when you believe there is nothing to do.** Reaching "none required" by
+actually checking is the point; reaching it by not looking is the failure mode.
+
+### 1. Collect
+
+Gather the **Deploy prerequisites** section from every batch's `## Handoff context`, plus anything
+you or the QA agent found later. Then walk the checklist yourself against the accumulated branch
+diff — sub-agents see only their own slice, so a prerequisite created by the *interaction* of two
+batches (batch 2 widens a predicate; batch 4 stores rows derived from it) appears in neither handoff:
+
+- **Schema migration** — new files in `server/migrations/`?
+- **Data migration / backfill** — new enum/`direction`/tag value, changed detector or predicate
+  output, renamed field, new non-null column? Rows written under the old behavior do not fix
+  themselves.
+- **Content pools** — did a predicate change that `puzzles` / `candidates` rows were generated
+  under? Existing rows came from the old code.
+- **Secrets / env vars** — new env var read by server code, absent from Railway?
+- **Caches** — `explanation_cache`, TTS/audio artifacts, or anything keyed by text or i18n key that
+  can serve pre-change content.
+
+### 2. Measure, don't assume
+
+For every candidate prerequisite, **get the number against the real environments** (local, staging,
+production) rather than reasoning about it. Use the connection conventions in memory
+`reference_supabase_connection.md`.
+
+Two failure modes to avoid, both observed in practice:
+
+- **A count taken mid-epic is stale by the end of it.** If a later batch changes the predicate, an
+  earlier "0 rows affected, no-op" measurement is worthless. Re-measure against the **final** code.
+- **"Already verified / no repair needed" is the highest-risk claim available here** — it asserts
+  something about live data while doing the least checking. Re-run it yourself.
+
+If an environment is unreachable, **record that explicitly** — never assume its count matches
+another environment's or is zero.
+
+### 3. Write the runbook
+
+Append an entry to `docs/deployment_steps.md` (create it from the template at the bottom of that
+file if it does not exist) for each prerequisite: status, when it runs relative to the code deploy,
+what it blocks, the exact command, the verification command **and its success condition**, and
+rollback (or an explicit "not reversible — back up first").
+
+If the step needs a script that does not exist, **write it**, and follow the house conventions:
+a real `--help` that exits 0 before any required-arg validation; `--dry-run` as the default posture;
+an explicit target flag with no default so the environment is always named; a guard that the env
+file's project ref matches the environment named; a typed confirmation before writing, twice for
+production; and a distinct exit code for "drift found" so it can gate a deploy.
+
+**Never write to staging or production yourself.** Measuring is read-only and yours to do; mutating
+live data is the user's call. Dry-run it, report what it would change, and stop.
+
+### 4. Report
+
+Tell the user plainly whether the epic is **implemented** (code complete and verified) and whether
+it is **deployable** (no outstanding prerequisites). These are different questions and the honest
+answer is often "yes and no". Any prerequisite that will not be run now also gets an `OI-N` entry so
+it survives past this conversation.
+
+If you added an entry, ensure `docs/index.md` has a pointer to `docs/deployment_steps.md` under
+"Other".

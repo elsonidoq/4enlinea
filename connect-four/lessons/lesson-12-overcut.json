@@ -144,7 +144,7 @@
     },
     {
       "movestring": "33335414510",
-      "_boardInstructions": "Same board as slide 1 (overcut_active find 33335414510), same overlays — backdrop for naming the other two detector-recognized overcut cases in prose (same-parity / T4 and chain / T2, classifier.js detectOvercut). No new board claims are made about cases the board does not show; the copy explicitly says this board shows the forcing shape.",
+      "_boardInstructions": "Same board as slide 1 (overcut_active find 33335414510), same overlays — backdrop for naming the other detector-recognized overcut cases in prose (same-parity / T4 and chain / T2; the taught shape on this board is the detector's `active_forcing` reason, `detectOvercutBeneficiary` in classifier.js — spec 052 Epic 2 US2 renamed the T5 rows-3/6 branch to `t5_row3_row6` and added a `minor_threat` branch, neither named in this lesson's copy; see reason-DECISIONS.md D38). No new board claims are made about cases the board does not show; the copy explicitly says this board shows the forcing shape.",
       "boardSpec": [
         "g",
         "gd",

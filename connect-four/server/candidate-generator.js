@@ -3,7 +3,7 @@ import { answerSetHolds, isSolverSafe } from './answerSetInvariant.js';
 import {
   classify, checkWin, getImmediateThreats, parseBoardState,
   hasActiveDoubleThreat, Board, hasWon,
-  detectZThreat, detectClaimeven, detectUndercutVictim, detectOvercut,
+  detectZThreat, detectClaimeven, detectUndercutVictim, detectOvercutBeneficiary,
   detectFigure7, detectJShape, detectOddEvenThreat,
   detectDoubleThreat, detectForcedWin, detectForcedBlock,
 } from './classifier.js';
@@ -365,10 +365,14 @@ export function checkUndercutPredicate(ms, scores) {
 }
 
 export function checkOvercutPredicate(ms, scores) {
-  const result = detectOvercut(new Board(ms), scores);
+  // Beneficiary, not Victim (spec 052 T008, verified at plan review): this call already runs as
+  // the side to move (two args, no perspective) and consumes result.correctCols — the closest
+  // direct migration of the original detectOvercut loop (contracts C2). Behavior-preserving by
+  // construction since the mover-wins framing is unchanged.
+  const result = detectOvercutBeneficiary(new Board(ms), scores);
   if (!result.matched) return { passes: false, correctCols: [] };
-  // T016: consume detectOvercut's own correctCols field (T015) rather than re-deriving the
-  // single column from highlightMetadata.cells.
+  // T016: consume detectOvercutBeneficiary's own correctCols field (T015) rather than re-deriving
+  // the single column from highlightMetadata.cells.
   // T032 (Finding F1, FR-010 sub-decision): a board with 2+ structurally valid overcut columns
   // must not silently enter the pool with only the first-found column recorded — the aggregate
   // answerSetHolds check never sees the second column to catch it. Mirrors detectZThreat's own

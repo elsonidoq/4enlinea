@@ -149,6 +149,8 @@ The set contains exactly 16 tags (as of 2026-06-25): `immediate_threat`, `forced
 **MUST NOT** duplicate the tag set locally — always import from `blunderTags.js`.
 **MUST NOT** conflate `VALID_BLUNDER_TAGS` with `VALID_CATEGORIES` — they serve different purposes.
 
+**`VALID_BLUNDER_TAGS` tracks `pattern_category` only, never `direction`** (verified 2026-07, spec 052 T033A): the Set holds `pattern_category` values (e.g. `'drawing_move'`, already a member) — it has no concept of `direction` at all. Decision D39 (the forfeited-forced-win refinement) mints a new `direction` value (`forfeited_win`), not a new `pattern_category`, so `blunderTags.js` required no change. Do not fold a `direction`-only change into this registry.
+
 ## Classifier vs Predicate Evaluator — Explicit Separation
 
 **MUST NOT** conflate these two systems — they are independent:
@@ -337,9 +339,28 @@ Consequences worth stating outright, because each has been mistaken for a defect
   is dead as soon as *any* lower threat neutralises it under Allen T2/T4/T5, and an adjacent T2
   killer routinely sits above a same-parity T4 pair.
 
-`detectOvercut` still takes a `perspective` while gating on the mover's score — the same
-unsoundness, not yet fixed. See OI-76. (`detectFigure7` / `detectJShape` are *not* affected: their
-second parameter is `_scores` and is unused.)
+**Overcut follows the same role-split precedent (spec 052 Epic 1 US1, resolving OI-76), with one
+structural difference from undercut worth stating explicitly: in overcut, cell ownership does NOT
+swap between the two roles.** The mover always owns the upper threat (row R); the opponent always
+owns the lower threat. What differs between `detectOvercutBeneficiary` and `detectOvercutVictim` is
+only the rescue-boolean and the score gate — not who holds which cell.
+
+| detector | side to move is… | condition | score gate | cell roles | used by |
+|---|---|---|---|---|---|
+| `classifier.js#detectOvercutBeneficiary` | the beneficiary | rescued (T4/T5/chain-T2 applies) | `scores[C] > 0` | `neutralised_threat` / `major_threat` | `candidate-generator.js#checkOvercutPredicate` (puzzle-pool path — the puzzle's own solver is the mover benefiting) |
+| `classifier.js#detectOvercutVictim` | the victim | not rescued (default T2 kill) | `scores[C] < 0` | `killing_threat` / `dead_threat` | `classifyPattern`'s `'overcut'` Phase-C detector-list entry (`classifier.js:1854`) |
+
+The two call sites need *opposite* halves of the split, and mixing them up is the exact wrong-role
+wiring bug this precedent exists to prevent (see `reason-DECISIONS.md` D37): `tagBlunder`'s Phase C
+calls `classifyPattern` on the board **after** the correct/best move, where the side to move is the
+opponent of the blunderer — `detectOvercutVictim` resolves *that* mover's role (the opponent, as
+victim) so the killing threat lands on the non-mover, i.e. the blunderer. `checkOvercutPredicate`
+evaluates a puzzle candidate where the mover directly benefits from pressing the overcut, so it
+needs `detectOvercutBeneficiary` instead. A regression at the `tagBlunder`-pipeline level (not a
+bare detector unit test) is required to catch a correct function wired to the wrong call site — see
+`tests/integration/undercut_overcut.test.js`'s `tagBlunder Phase C — overcut cells belong to the
+blunderer` describe block. (`detectFigure7` / `detectJShape` are *not* affected by any of this:
+their second parameter is `_scores` and is unused.)
 
 ### Generation-time candidate guards — color casting & stray forced-block (spec 044 US1/US2)
 
@@ -492,9 +513,17 @@ asserts against this builder, so a regression in either route is a test failure.
 
 ### `classify(moves, candidateCol, scores)`
 
-Synchronous. Returns exactly one `{ tag }` from the 8-tag set: `immediate_threat`, `double_threat`, `forced_win`, `forced_block`, `forbidden_columns`, `best_move`, `drawing_move`, `suboptimal_move` (the last three are score-based fallbacks when no structural pattern matches). No `perspective` parameter — always evaluates from the mover's own point of view. Used by `POST /api/evaluate-move` (via `evaluateMoveHandler.js`), `POST /api/evaluate-move/inline`, `POST /api/explain-move`, and `candidate-generator.js`.
+Synchronous. Returns exactly one `{ tag }` from the 10-tag set: `immediate_threat`, `double_threat`, `forced_win`, `forced_block`, `forbidden_columns`, `figure_7`, `j_shape`, `best_move`, `drawing_move`, `suboptimal_move` (the last three are score-based fallbacks when no structural pattern matches). No `perspective` parameter — always evaluates from the mover's own point of view. Used by `POST /api/evaluate-move` (via `evaluateMoveHandler.js`), `POST /api/evaluate-move/inline`, `POST /api/explain-move`, and `candidate-generator.js`.
 
-This is a much narrower scope than `classifyPattern` below (8 tags, sync, one winner) vs. `classifyPattern` (15 detectors, async, all matches).
+This is a much narrower scope than `classifyPattern` below (10 tags, sync, one winner) vs. `classifyPattern` (15 detectors, async, all matches).
+
+**The return may carry a second field, `phrasePoolKey`** (spec 052 US3). The `drawing_move` fallback returns `{ tag: 'drawing_move', phrasePoolKey: 'forfeited_win' }` when the position's `bestScore > 0` — i.e. the mover gave up a forced win rather than facing a genuine best-is-a-draw. The `tag` itself is unchanged either way; the extra key exists because the live path never reads the stored `direction` field that the `tagBlunder` path uses for the same distinction. `classify()` deliberately does **not** emit `direction`.
+
+**Category 6 — `figure_7`/`j_shape` live recognition** (spec 052 US5, Decision D40). Of seven offline-only candidates, only these two were admitted to live play; the other five (`z_threat`, `undercut`, `overcut`, `odd_even_threat`, `claimeven`) were excluded — `undercut`/`overcut` because this epic deliberately locked their perspective to the side to move (so they cannot be evaluated for the original mover on `nextBoard`), and the rest because admitting any of them would convert `classify()` from sync/solver-free to async. `detectFigure7`/`detectJShape` keep their explicit `perspective` parameter, so they *can* be evaluated for the original mover on `nextBoard` after `currentPlayer` flips — which is why the standard absent→present transition-gate shape works verbatim here. Category 6 sits after every urgency-bearing category (1–5) and before the generic fallback.
+
+**Creation tags are not score-gated — never map one straight to praise copy.** Categories 1, 3, 4 and 6 read the board only, so a move can earn a creation tag *and* be a game-losing blunder (verified: `060550303021255625` col 3 creates a `double_threat` scoring −12 against a +12 best). `evaluateMoveHandler.js` therefore keys the phrase pool off a derived `poolQuality`, not raw `quality`: for `double_threat`/`forced_win`/`figure_7`/`j_shape` it promotes `suboptimal` → the `optimal` pool (those pools' `suboptimal`/`blunder` tiers were authored for ChallengeScreen's "you did NOT build it" semantics, which is always false once the creation gate has fired), but on `blunder` it drops the pattern pool entirely and falls back to `coach.spoken.generic.blunder`. `quality`/`badge` in the response stay score-based for downstream consumers.
+
+**`double_threat`/`forced_win` are creation-gated, by identity, not just presence** (spec 052 US4). Both tags fire only when the move creates a genuinely new instance of the pattern — a persisting instance that merely survives the move must not re-fire it every subsequent turn. The gate diffs *identity*, not a boolean: `double_threat`'s identity is the **set** of columns holding the fork (private `doubleThreatColumnSet`/`getDoubleThreatIdentity` helpers over `hasDoubleThreat`'s internals — Case A: `>=2` gravity-top columns, identity = those columns; Case B: a stacked pair, identity = the single stacked column); a non-empty `colsAfter \ colsBefore` diff fires. `forced_win`'s identity is `detectForcedWin`'s single `blockCol` field (the anchoring immediate-threat column, `myThreats[0]`) — fires when matched after and `blockCol` differs from before (covering both "no forced win before" and "a different forced win before"). Neither diff threads the full per-branch forcing-column recursion through as identity (research.md Decision D5) — two distinct forced-win lines sharing the same anchoring `blockCol` are not distinguished (see `docs/open_issues.md` OI-90).
 
 ### `classifyPattern(ms, perspective, solver)`
 
@@ -539,6 +568,7 @@ Tags a blunder with the tactical pattern involved, from the perspective of the p
 - `'defensive_miss'` — the **opponent already had** an immediate winning threat at `moves` and the blunderer failed to take it off the board (tag is always `forced_block`).
 - `'missed_own'` — the blunderer either had an immediate win available, or **playing `correctCol` would have built** pattern X for them while `playedCol` did not.
 - `'enabled_opponent'` — the played move let the opponent build a pattern (an immediate threat, or a pattern on the opponent's best continuation that the correct line avoided).
+- `'forfeited_win'` (spec 052 Decision D39, 2026-07) — narrower sub-case of Phase E's score-based fallback: `tag === 'drawing_move'` AND `preScore > 0` (the position was a forced win) AND `postScore === 0` (the played move dropped it to a draw). This is a refinement of `direction`, not a new `pattern_category` — no CHECK constraint or `blunderTags.js` change was needed (see `db-schema.md`'s `direction` note and `reason-DECISIONS.md` D39). A genuine draw-to-draw position (`preScore === 0`) is unaffected and still falls through to `{ tag: 'suboptimal_move', direction: 'missed_own' }` — it never reached `drawing_move` even before this change.
 
 **New missed_own semantics** (changed): a pattern tag is `missed_own` when `correctCol` *builds* it and `playedCol` does not — i.e. `patterns(moves+correctCol, blunderer) ∋ X` and `patterns(moves+playedCol, blunderer) ∌ X` — NOT the old "had X at `moves`, lost it". `double_threat`/`figure_7` carry an undercut guard.
 
@@ -561,7 +591,7 @@ When `perspective !== board.currentPlayer && solver !== null`, each detector rec
 
 This IIFE (`(async () => { ... })()`) returns a Promise, so these five detectors become async when the perspective changes. The IIFE shields against terminal child positions (where the solver rejects) by returning `{ matched: false }` — a terminal game cannot exhibit tactical patterns.
 
-Detectors that do NOT depend on solver scores (`detectImmediateThreat`, `detectDoubleThreat`, `detectFigure7`, `detectJShape`, `detectClaimodd`) never enter the IIFE — they only use board geometry, which is perspective-independent for threat analysis. `detectFigure7` and `detectJShape` take a second argument but it is `_scores`, unused; do not mistake their three-argument shape for a score dependency. `detectUndercutVictim` and `detectOvercut` genuinely read `scores` while sitting in the sync branch: `detectUndercutVictim` resolves this by taking no perspective at all (see § "Undercut has two sides"), `detectOvercut` is still unsound — OI-76. `detectClaimeven` uses the solver independently via its simulation, not via the FR-033 IIFE.
+Detectors that do NOT depend on solver scores (`detectImmediateThreat`, `detectDoubleThreat`, `detectFigure7`, `detectJShape`, `detectClaimodd`) never enter the IIFE — they only use board geometry, which is perspective-independent for threat analysis. `detectFigure7` and `detectJShape` take a second argument but it is `_scores`, unused; do not mistake their three-argument shape for a score dependency. `detectUndercutVictim`/`detectUndercutBeneficiary` and `detectOvercutVictim`/`detectOvercutBeneficiary` genuinely read `scores` while sitting in the sync branch: all four resolve this by taking no `perspective` parameter at all, each resolving its own role from `board.currentPlayer` (see § "Undercut has two sides", extended to overcut; OI-76 resolved by spec 052 Epic 1 US1). `detectClaimeven` uses the solver independently via its simulation, not via the FR-033 IIFE.
 
 ### `detectClaimeven` — parity rule and simulation
 

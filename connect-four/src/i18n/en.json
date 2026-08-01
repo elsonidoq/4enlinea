@@ -448,6 +448,29 @@
           "3": "That drops the advantage. Avoid the undercut column and keep your own threats alive."
         }
       },
+      "forfeited_win": {
+        "prompt": {
+          "0": "You have a forced win on the board — can you find the line that keeps it?",
+          "1": "One column locks in the win. Any other move only draws from here."
+        },
+        "hint": {
+          "0": "Not every safe-looking move keeps the win. Look for the column that forces the win through to the end.",
+          "1": "A draw is available almost everywhere here — the win lives in exactly one column."
+        },
+        "optimal": {
+          "0": "You held onto the forced win — no need to settle for a draw.",
+          "1": "Right — that keeps the win alive instead of drifting into a draw."
+        },
+        "suboptimal": {
+          "0": "You still have the win, but this move makes it harder to hold onto.",
+          "1": "The win is still there, though this move gives back some of it."
+        },
+        "blunder": {
+          "0": "That gave up a forced win — from here you can only draw.",
+          "1": "You had a win locked in, and this move let it slip to a draw.",
+          "2": "That's not just a missed edge — you traded a forced win for a draw."
+        }
+      },
       "generic": {
         "optimal": {
           "0": "Good move.",
@@ -748,6 +771,40 @@
           "0": "At least one of your tagged columns was safe to play."
         }
       }
+    },
+    "figure_7": {
+      "optimal": {
+        "summary": {
+          "0": "You built the Figure-7 pattern."
+        }
+      },
+      "suboptimal": {
+        "summary": {
+          "0": "Playable, but a different column builds the Figure-7."
+        }
+      },
+      "blunder": {
+        "summary": {
+          "0": "That move missed the Figure-7 opportunity."
+        }
+      }
+    },
+    "j_shape": {
+      "optimal": {
+        "summary": {
+          "0": "You built the J-Shape pattern."
+        }
+      },
+      "suboptimal": {
+        "summary": {
+          "0": "Playable, but a different column builds the J-Shape."
+        }
+      },
+      "blunder": {
+        "summary": {
+          "0": "That move missed the J-Shape opportunity."
+        }
+      }
     }
   },
   "deepReveal": {
@@ -891,7 +948,7 @@
       "major_threat_nonparity": "Off-parity threat",
       "minor_threat": "Minor threat",
       "suboptimal_move": "Suboptimal move",
-      "drawing_move": "Drawing move"
+      "drawing_move": "Forfeited win"
     },
     "to_review": "{{count}} to review",
     "cat": {

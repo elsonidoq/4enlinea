@@ -31,7 +31,10 @@ const fixtures = JSON.parse(
   readFileSync(join(__dir, 'fixtures', 'tagBlunderFixtures.json'), 'utf8')
 );
 
-const VALID_DIRECTIONS = new Set(['missed_own', 'enabled_opponent', 'defensive_miss']);
+// 'forfeited_win' added spec 052 US3 (Decision D4): a refinement of 'drawing_move's
+// direction field, distinguishing "forfeited a forced win" from the genuine
+// best-is-a-draw case ('missed_own', unchanged) — no new pattern_category, no migration.
+const VALID_DIRECTIONS = new Set(['missed_own', 'enabled_opponent', 'defensive_miss', 'forfeited_win']);
 
 // blunderer = whoever is to move at boardState (even move count → Red opens)
 const blundererOf = (boardState) => (boardState.length % 2 === 0 ? 1 : 2);

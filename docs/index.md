@@ -30,6 +30,8 @@
 
 [open_issues.md](open_issues.md) — triageable backlog of known-but-deferred bugs and quality gaps (latent issues we've consciously scoped out) — checking or updating what's known-broken before starting related work
 
+[deployment_steps.md](deployment_steps.md) — runbook of steps that must happen around a deploy rather than inside it (schema migrations, data migrations/backfills, secrets, content-pool repairs, cache invalidations) — before deploying anything, and whenever a change alters the meaning of already-stored data
+
 [lesson-content-critique-2026-07-22.md](lesson-content-critique-2026-07-22.md) — full review of all 13 lessons (factuality vs KB, deep-reveal completeness, pedagogic order, board/text coherence, ES coverage) with solver-verified findings and a prioritized P0–P3 remediation plan — before editing lesson JSON or planning lesson fixes
 
 [best_practices_spec_driven_development.md](best_practices_spec_driven_development.md) — spec-driven development methodology using SpecKit + Claude Code for solo founders — understanding the workflow that drives this project's spec → plan → tasks pipeline

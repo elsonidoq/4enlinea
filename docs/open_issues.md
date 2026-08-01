@@ -646,6 +646,51 @@ all persist-across-moves "creation" patterns, so without transition-gating they 
 identical repeat bug from day one. Cross-ref: the creation-pattern transition design; memory
 `docs/knowledge-base/` (tactical pattern predicates).
 
+**UPDATE 2026-07-30 (spec 052, Epic 2, US5) — PARTIALLY closed: 2 of 7 candidates admitted, 5
+excluded with a dated, per-pattern rationale. Not marked RESOLVED — this is an intentional partial
+closure, not a defect.**
+
+T052 measured real end-to-end `POST /api/evaluate-move` latency (median 4.6ms / mean 15.0ms against
+the Explanation Engine's 2000ms budget, ≈1844–1995ms headroom) and every candidate detector's
+marginal cost individually — all seven of `figure_7`, `j_shape`, `z_threat`, `undercut`, `overcut`,
+`odd_even_threat`, `claimeven` are cheap enough on a pure latency reading that all seven could fit.
+**Latency was not the binding constraint for any of them.** Per
+`docs/architecture/reason-DECISIONS.md` D40 (full measurements table + per-candidate rationale
+there), the actual admission gate was structural compatibility with the existing absent→present
+transition-gate shape:
+
+- **Admitted: `figure_7`, `j_shape`.** Both retain an explicit `perspective` parameter untouched by
+  this epic's US1/US2 overcut/undercut work, so they can be called as `detectX(nextBoard, null,
+  mover)` — reproducing the exact transition-gate shape Category 3/4 already use, zero solver cost,
+  zero interface change. Shipped as `classify()`'s new Category 6, with `eval.figure_7.*.summary` /
+  `eval.j_shape.*.summary` pools newly authored in both locales (not just `coach.spoken.*`).
+- **Excluded: `undercut`, `overcut`.** Structurally incompatible, not a latency finding — this
+  epic's own US1/US2 (FR-001–FR-003) *deliberately dropped* their `perspective` parameter so role is
+  resolved only from `board.currentPlayer` (the fix for OI-76). That invariant makes it impossible
+  to ask "does the ORIGINAL mover still have this pattern on `nextBoard`" at all, since
+  `nextBoard.currentPlayer` is the opponent once the move is played. Reintroducing a caller-supplied
+  perspective to enable the gate would directly reopen OI-76.
+- **Excluded: `z_threat`, `odd_even_threat`, `claimeven`.** Cheap in isolation, but correctly
+  evaluating the "after" half of a transition gate for the ORIGINAL mover's perspective on
+  `nextBoard` triggers each detector's own solver-recursion branch (the mover is no longer
+  `nextBoard.currentPlayer`), which requires converting `classify()` from a synchronous, solver-free
+  pure function into an `async` function with a live solver threaded through — for the first time
+  importing a per-move external-process failure mode into a path that today cannot have one.
+  `claimeven` is additionally Player-2-only, narrowing scope further. Judged not worth the
+  sync→async architectural risk for praise-variety benefit; explicitly revisitable, the measured
+  numbers already stand in D40.
+
+**Verified**: `test:fast` green; a dedicated round-trip test
+(`tests/integration/liveCoachFigure7JShape.test.js`) exercises the real `POST /api/evaluate-move`
+endpoint and confirms each admitted pattern fires exactly once on creation and does not re-fire on a
+subsequent persistence-only move. Full rationale, measurements table, and the `eval.*` authoring
+decision: `docs/architecture/reason-DECISIONS.md` D40.
+
+**Remains open**: `z_threat`, `odd_even_threat`, `claimeven`, `undercut`, `overcut` are still
+unreachable from live sparring praise — closing that gap requires either the `classify()`
+sync→async conversion (for the three solver-recursion detectors) or a perspective-preserving
+redesign of the overcut/undercut role-split (for the other two), neither undertaken here.
+
 ## OI-31 — Staging `.env.staging` DATABASE_URL uses the transaction pooler (6543); `migrate.js` needs the session pooler (5432)
 
 **Status**: latent risk (surfaced 2026-07-14 while building `reset-staging-db.js`; not yet observed to break because no multi-statement DDL was run against staging via this file)
@@ -688,6 +733,49 @@ Two low-severity residuals were deliberately left when the transition gate shipp
 **Why deferred**: both are same-direction (more accurate, fires on creation not persistence) and carry no production risk per the final review. Fixing #1 would require tracking *which* fork columns are new (per-column diff, not a boolean), i.e. more state than the boolean gate; #2 needs a `test:fast`-safe candidate-generator path or a targeted non-hanging fixture.
 
 **If picked up**: for #1, diff pre/post threat *columns* (or gravity-top cells) rather than the boolean `hasDoubleThreat`, so a genuinely-new fork alongside an existing one still counts as creation; for #2, add a non-solver-hanging regression that runs `candidate-generator`'s classify path under `test:fast`. Cross-ref: memory [[project_coach_creation_transition_gate]], [[OI-30]].
+
+**UPDATE 2026-07-30 (spec 052, Epic 2, US4) — item 2 RESOLVED; item 1 split: fork half RESOLVED
+with real behavior change, forced-win half shipped but proven to have NO observable behavior
+change today; a further residual on the forced-win half is tracked as a new standalone entry,
+OI-90. Overall status stays open, not resolved — see below for exactly what remains.**
+
+- **Item 2 (`candidate-generator.js` classify-consumer not in `test:fast`) — RESOLVED.** T050 added
+  a `test:fast`-safe regression exercising `candidate-generator.js`'s `cls.tag` consumer (`:668`,
+  `if (cls?.tag) tags.push(cls.tag)`) via a fixture board that exercises `classify()`'s pure-geometry
+  Category 3 gate directly, with no live solver process. It fails on the old boolean gate and passes
+  on the new diff — this residual is closed.
+- **Item 1, fork half (`hasDoubleThreat`/Category 3) — RESOLVED with a real, observable behavior
+  change.** `classify()`'s Category 3 gate now diffs `colsAfter \ colsBefore` (T042/T043) instead of
+  the boolean `!hasDoubleThreat(board, player)` gate. T046 harvested a board where the mover already
+  holds a fork in columns A/B and creates a second, distinct fork in columns C/D; `classify()` now
+  returns `'double_threat'` for that move where it was previously suppressed — a genuine, verified
+  behavior change through the production path.
+- **Item 1, forced-win half (`detectForcedWin`/Category 4) — code shipped, but proven to change NO
+  live behavior today.** T044/T045 replaced the boolean `.matched` transition with a `blockCol`-diff
+  (mirroring the fork half). Per `docs/architecture/reason-DECISIONS.md` D41 (Finding B): a rigorous
+  proof plus an exhaustive empirical search (~3,400 solver-guided self-play games +
+  ~21.8M solver-free random-walk plies, zero counterexamples) shows a single `classify()` move can
+  **never** produce "matched both before and after, with a different `blockCol`" — whenever
+  `detectForcedWin` matches pre-move with `blockCol = X`, X's winning window is permanently filled
+  save its threat cell, so X remains a threat on any `nextBoard` reached by a *different* column
+  (playing AT X itself would be Category 1, `immediate_threat`, which fires first). So the new diff
+  and the old boolean gate agree on every reachable transition — spec.md's Acceptance Scenario 3 (a
+  move creating a *different* forced win while an old one persists) describes an unreachable
+  position. T048 was satisfied by a mechanism-level test proving the identity-diff logic is correct
+  (two independently-harvested boards fed directly to `detectForcedWin`, not via a move transition,
+  since none exists) plus this proof — not a harvested single-move counterexample, because none
+  exists to harvest. This is correctness hardening with zero live impact today, not a defect.
+- **New residual on the forced-win half, tracked separately as OI-90 (do not fold in here per
+  FR-026).** Independent of the "no observable change" finding above: two distinct forced-win
+  *lines* sharing the *same* anchoring `blockCol` (same first forcing move, different continuation)
+  are still conflated as one instance by the minimal `blockCol`-only identity — a narrower version
+  of item 1's original "conflates all forced-win instances" gap, not fully closed by this fix
+  (research.md Decision D5 deliberately scoped the fix to the anchoring column only).
+
+**Net**: item 2 is closed. Item 1 is closed for the fork sub-case (real behavior change, verified)
+and shipped-but-behaviorally-inert for the forced-win sub-case (proven unreachable today), with a
+narrower residual on the forced-win sub-case tracked at OI-90. This entry is not marked RESOLVED
+because OI-90's residual means item 1 is only partially addressed on the forced-win side.
 
 ## OI-34 — Fallback-only checkout activations do not record the `upgrade_completed` analytics track
 
@@ -901,12 +989,41 @@ So once the student clicks Hint, the bubble is pinned to the hint text for the r
 
 ## OI-48 — Reason engine "Fix 6": a win-forfeiting move is still tagged `drawing_move` upstream
 
-**Status**: deferred / open
-**Area**: blunder-tagging pipeline (upstream of `server/llmCoachHelpers.js`'s `drawing_move` grounding-rule branch)
+**Status**: ✅ RESOLVED 2026-07-30 (spec 052, Epic 1, US3)
+**Area**: `connect-four/server/classifier.js` (`tagBlunder` Phase E, `classify()`), `evaluateMoveHandler.js`, `blunderReasons.js`, `src/i18n/en.json`/`es.json`
+**Discovered**: reason-engine Fix-4/Fix-6 backlog (pre-2026-06-25)
 
-The `drawing_move` blunder tag is applied whenever the **played** move only draws, even when the **better** move was a forced win — conflating "best draws" with "best WINS". Repro: on an empty/near-empty board, center (col 4, 0-idx 3) is a first-player forced win while col 3/col 5 only draw; playing a drawing column gets tagged `drawing_move`. A text-level patch (Fix 4, 2026-06-25) reworded the grounding rule to stop asserting "not a win for either side," but the tag itself is still assigned by the upstream tagging pipeline without distinguishing "forfeited a win" from "played a genuine draw."
+**What shipped**: per `docs/architecture/reason-DECISIONS.md` D39, `tagBlunder`'s Phase E gate now
+emits `direction: 'forfeited_win'` (not `'missed_own'`) when `preScore > 0 && postScore === 0` —
+a forced win that was forfeited is now distinguishable, by `direction`, from a genuine best-is-a-draw
+position. The live `/api/evaluate-move` path gets an independent, parallel mechanism: `classify()`
+computes `bestScore` and returns `phrasePoolKey: 'forfeited_win'` under the same condition (no
+`direction` field — `classify()`'s shape never carried one), and `evaluateMoveHandler.js`'s
+`phrasePoolKey` derivation consults it ahead of the `category || patternTag` fallback. New
+`coach.spoken.forfeited_win.*` phrase pools shipped in both `en.json`/`es.json`; a new
+`'drawing_move:forfeited_win'` key was added to `blunderReasons.js`'s `REASON_TEMPLATES`. No new
+`pattern_category` was minted and no migration/CHECK-constraint change was needed (`direction` is
+deliberately unconstrained — verified, not assumed, at `migrations/034_blunders_direction.sql`).
 
-**If picked up**: Fix 6 — categorize a move that forfeits a forced win as a missed-win / outcome-flip case in the upstream blunder-tagging pipeline, not `drawing_move`.
+**Finding A — FR-017's premise was factually wrong, recorded so it doesn't mislead a future
+reader.** Re-reading the pre-change `tagBlunder` (`git show HEAD:connect-four/server/classifier.js`
+at the point this fix started) shows Phase E's gate was **already** `preScore > 0 && postScore ===
+0` before this epic touched anything — a genuine draw-to-draw position (`preScore === 0`) never
+reached `drawing_move` at all on the stored path; it fell through to `{ tag: 'suboptimal_move',
+direction: 'missed_own' }`, both before and after this change. So `'drawing_move:missed_own'` is now
+a **dead key** on the stored path (kept in `REASON_TEMPLATES` only as a defensive fallback, not
+deleted) — FR-017's "a genuine draw-to-draw position MUST continue to receive its current tag
+unchanged" describes a `drawing_move` draw-to-draw case that never existed on that path. The one
+place "unchanged for draw-to-draw" is a real, non-trivial claim is the live `classify()` fallback:
+a genuine draw-to-draw live evaluation still returns plain `{ tag: 'drawing_move' }` with no
+`phrasePoolKey`, confirmed unchanged. Full writeup: `docs/architecture/reason-DECISIONS.md` D39
+point 6.
+
+**Verified**: harvested boards exercised both the full live path (`POST /api/evaluate-move` →
+`phrasePoolKey: 'forfeited_win'`, rendering in both `en`/`es`) and the full stored path (`tagBlunder`
+→ `direction: 'forfeited_win'` persisted), plus a genuine draw-to-draw board confirming `direction`
+stays `'missed_own'` and the live path does NOT divert to `'forfeited_win'` (I12: both directions
+validated). `test:fast` green (only the 5 known-unrelated `ENOENT` failures).
 
 ## OI-49 — `/api/puzzles/draw` has no solved/revealed filter; `puzzle_attempts.outcome` enum is partly aspirational
 
@@ -1053,14 +1170,13 @@ After a real sandbox test purchase completed on staging (the same purchase that 
 
 ## OI-60 — `detectOvercut` taxonomy mismatch: taught gravity-top-adjacent overcut is never tagged; `active_forcing` label actually means T5
 
-**Status**: deferred / open — needs a classifier-owner decision (surfaced by the lesson-content final whole-branch review, 2026-07-24)
-**Area**: `connect-four/server/classifier.js` (`detectOvercut`, ~lines 959–985), lesson 07 (overcut) copy, deep-reveal shape naming
+**Status**: ✅ RESOLVED 2026-07-30 (spec 052, Epic 2, US2)
+**Area**: `connect-four/server/classifier.js` (`detectOvercutCore`, `detectOvercutVictim`/`Beneficiary`), `connect-four/lessons/lesson-12-overcut.json` copy, `docs/knowledge-base/community-overcut.md`/`allen-t2.md`/`allen-t4.md`/`allen-t5.md`
 **Discovered**: lesson-content remediation final review (2026-07-24)
 
-The overcut lesson teaches the gravity-top-adjacent shape (opponent threat directly under yours, immediately playable), but `detectOvercut` never tags that case: its match requires one of `isT4SameParity`/`isT5Exception`/`isT2Blocking`, and the `reason` it labels `'active_forcing'` is in fact the T5 rows-3/6 helper (`isT5Exception` branch). So deep reveals may name shapes the lesson only covers as "family", and the label text misdescribes what matched.
+The overcut lesson teaches the gravity-top-adjacent shape (opponent threat directly under yours, immediately playable), but `detectOvercut` never tagged that case: its match required one of `isT4SameParity`/`isT5Exception`/`isT2Blocking`, and the `reason` it labeled `'active_forcing'` was in fact the T5 rows-3/6 helper (`isT5Exception` branch). So deep reveals could name shapes the lesson only covered as "family", and the label text misdescribed what matched.
 
-**Why deferred**: fixing it means either extending the detector's case set or renaming/re-scoping the reason labels — a taxonomy decision for the classifier owner, not a copy fix.
-**If picked up**: decide whether the taught adjacent case should be a first-class overcut match (new T-rule branch) or whether the lesson should be re-scoped to the detector's actual cases; rename `active_forcing` to say T5 either way. Validate per reason-INVARIANTS I12 (full case-space + counterexample per case, through the production detector).
+**What shipped**: per `docs/architecture/reason-DECISIONS.md` D38, the misapplied `'active_forcing'` reason was renamed to `'t5_row3_row6'` on the `isT5Exception` branch (logic unchanged), and a new first-class `'active_forcing'` branch was added to `detectOvercutCore` matching `community-overcut.md`'s case (e) exactly (odd-empty-count column, mover's threat immediately above the opponent's blocked threat) — gated additionally on the actual `scores[col] > 0` since, unlike T4/T5/chain-T2, this mechanism is not a standalone theorem (the KB's own false-positive board `331324244556605142` has the identical local shape yet the mover still loses). A structurally-separate `'minor_threat'` branch (research.md Decision D2) was also added: `board.reachableThreats` only ever returned MAJOR threats, so a minor opposing threat below the mover's major threat could never be recognized as a rescue before this batch. All 5 mechanisms (minor-threat, T4, T5, chain-T2, active-forcing) now have dedicated counterexample tests through the production `detectOvercutBeneficiary` in `tests/integration/undercut_overcut.test.js`, plus both documented false positives verified to still fail to match. KB cross-references added to all four files; lesson 12's `_boardInstructions` corrected to name the current branch/function names.
 
 ## OI-61 — Challenge grader semantics: `evalUndercut` accepts losing non-killing columns; single-answer categories mark solver-tied/positive alternatives wrong
 
@@ -1456,8 +1572,45 @@ byte-identical `highlight_metadata` under the new detector, so **the pool needed
 
 ## OI-76 — `detectOvercut` has the same unsound `perspective` that OI-74 removed from undercut
 
-**Status**: open — latent (observed 2026-07-28)
-**Area**: `connect-four/server/classifier.js#detectOvercut`
+**Status**: ✅ RESOLVED 2026-07-30 (spec 052 Epic 1 US1)
+**Area**: `connect-four/server/classifier.js`, `docs/architecture/server-conventions.md` § "Undercut
+has two sides", `docs/architecture/reason-DECISIONS.md` D37
+
+**Resolution**: applied the OI-74 role-split shape (see below), same as undercut. `detectOvercut`'s
+`perspective` param is gone; it is replaced by `detectOvercutBeneficiary` (`scores[C] > 0`, rescued)
+and `detectOvercutVictim` (`scores[C] < 0`, not rescued) over a shared `detectOvercutCore`. Unlike
+undercut, cell ownership does **not** swap between the two roles: the mover always owns the upper
+threat, the opponent always owns the lower one — only the rescue-boolean and score gate differ.
+`classifyPattern`'s `'overcut'` Phase-C entry now calls `detectOvercutVictim` (the post-move board's
+mover is the opponent of the blunderer, so Victim correctly reports the blunderer as holding the
+killing threat — see D37); `candidate-generator.js#checkOvercutPredicate` calls
+`detectOvercutBeneficiary` (the puzzle's own solver-side mover benefits directly).
+
+**Verified**: a Phase-C-level regression (not a bare unit test) in
+`tests/integration/undercut_overcut.test.js` (`tagBlunder Phase C — overcut cells belong to the
+blunderer`) runs the full `tagBlunder` pipeline on harvested board
+`33341302254244423366` (blunderer plays col 5 instead of col 6) and asserts the killing-threat cell
+belongs to the blunderer's own `reachableThreats`, not the opponent's. `test:fast` green (only the 5
+known-unrelated `ENOENT` failures on gitignored coverage corpora). The two pre-existing
+`overcut`-tagged fixture rows in `tests/blunder/fixtures/tagBlunderFixtures.json` were re-derived and
+individually reviewed: both were OI-76 false positives (the old `detectOvercut` mixed the blunderer's
+threats with the opponent's score sign) and now correctly fall through to `suboptimal_move`
+(confirmed via direct `tagBlunder` calls: both boards now return `reason: 'no pattern detected'`);
+two new sound `overcut` rows appeared in their place (games 6 and 30), each independently checked
+against `./visualize_board.sh` and `reachableThreats` — the killing_threat cell belongs to the
+blunderer in both.
+
+Re-measured the live `overcut` puzzle/candidate pool against the current DB (not assumed from the
+prior zero measurement): **local** 0 active puzzles / 0 approved candidates (30 pending); **staging**
+10 active puzzles + 10 approved candidates (20 rows); **production** 11 active puzzles + 11 approved
+candidates (22 rows) — 42 live rows total, all reachable. Re-derived `highlight_metadata` for every
+one of the 42 under `detectOvercutBeneficiary` (the puzzle-pool path): all 42 re-derive
+byte-identical `highlight_metadata` (JSONB key-order normalized) and the predicate still passes for
+every row — **the pool needed no repair**. This is expected: the candidate-generation path already
+used the Beneficiary role/gate before this fix; OI-76's unsoundness only manifested at the
+`classifyPattern`/`tagBlunder` (Victim) call site, which does not persist rows to the DB.
+
+**Original report follows, preserved for context:**
 
 ```js
 export function detectOvercut(board, scores, perspective = board.currentPlayer) {
@@ -2182,3 +2335,214 @@ one-line-per-detector change with its own regression surface.
 a loud failure instead of a wrong tag. Note this also leaves the codebase with **two** competing
 solutions to the perspective problem (the role-split used by undercut/overcut, and this solver
 recursion); spec 052 T003A records that divergence in `reason-DECISIONS.md`.
+
+## OI-90 — `detectForcedWin`'s `blockCol` identity does not distinguish two forced-win lines sharing the same anchoring column
+
+**Status**: accepted / knowingly-left (2026-07-30, spec 052 (Epic 2) US4 — the minimal per-instance
+identity fix for FR-019)
+**Area**: `connect-four/server/classifier.js` — `detectForcedWin` (`blockCol` field), `classify()`'s
+Category 4 gate
+
+Spec 052 US4 replaced `classify()`'s Category 4 (`forced_win`) creation gate's boolean
+`.matched` transition with a per-instance diff on `detectForcedWin`'s new `blockCol` field — the
+anchoring immediate-threat column (`myThreats[0]`) that starts the forcing sequence. This correctly
+recognizes a forced win newly anchored on a *different* column as a genuine creation (mirroring the
+`double_threat` column-set diff for Category 3). Per research.md Decision D5, the fix is
+deliberately scoped to **only** the anchoring column — it does not thread the full per-branch
+forcing-column recursion (the continuation-move loop inside `detectForcedWin`) through as an
+identity.
+
+Consequence: if the mover already has a forced win anchored on column X, and their move replaces it
+with a **different** forced-win *line* that happens to still be anchored on the same column X (same
+first forcing move, but a different/incompatible continuation sequence from there on), the `blockCol`
+diff sees no change and does not recognize the second line as a new creation — the same
+under-recognition shape as the pre-fix boolean gate, just narrowed from "any forced win" down to
+"forced wins sharing an anchor column." This is a known, accepted residual of the minimal fix, not a
+regression: it is strictly better than the pre-fix behavior (which conflated ALL forced-win
+instances, not just same-anchor ones), and per Decision D5 the full-recursion identity needed to
+close it entirely was explicitly ruled out of scope (more solver-adjacent recursion state than the
+gate warrants for a P3 story).
+
+**Why deferred**: same-anchor-column, different-continuation forced-win replacement is a narrow edge
+case (the anchoring immediate threat is itself usually the scarce resource in these positions); no
+production report of it firing incorrectly. Closing it fully would require carrying an identity for
+the *entire* forcing chain (e.g. the continuation column sequence), which reintroduces the
+"how much state should the gate track" question research.md's D5 deliberately closed for this batch.
+
+**If picked up**: extend `detectForcedWin`'s return shape with a chain identity beyond `blockCol`
+(e.g. the sequence of continuation columns actually taken to reach a terminal), and diff that in
+`classify()`'s Category 4 gate instead of (or in addition to) `blockCol`. Cross-ref: spec
+052 `research.md` Decision D5; spec 052 `spec.md` Edge Cases (User Story 4); FR-026.
+
+---
+
+## OI-91 — `generate_tagblunder_fixtures.mjs` destroys the fixture corpus when invoked with `--help` (or any non-numeric arg)
+
+**Status**: open (discovered 2026-07-30 during spec 052 (Epic 2) US2; not fixed — out of that spec's scope)
+**Area**: `connect-four/server/scripts/generate_tagblunder_fixtures.mjs`,
+`connect-four/tests/blunder/fixtures/tagBlunderFixtures.json`
+
+The script takes positional args (`maxGames`, `seed`) and has **no `--help` handling** — it does not
+recognize the flag, parses it as `maxGames`, coerces to `NaN`/0, generates zero fixtures, and then
+**overwrites `tests/blunder/fixtures/tagBlunderFixtures.json` with an empty array**. There is no
+confirmation prompt, no backup, and no dry-run.
+
+Concrete repro (this actually happened mid-epic):
+
+```
+node server/scripts/generate_tagblunder_fixtures.mjs --help
+# → tests/blunder/fixtures/tagBlunderFixtures.json is now []
+```
+
+Recovery was only possible because the file was committed at HEAD; `git checkout --` restored the
+committed version but **silently discarded uncommitted working-tree fixture rows** (4 rows were lost
+this way and had to be reproduced by a ~5-minute full regeneration run). Had the corpus contained
+un-committed human-reviewed rows — exactly the state spec 052's FR-005 review workflow creates —
+they would have been unrecoverable.
+
+This also violates the house convention that every script prints purpose + options + defaults and
+exits 0 *before* required-arg validation (same convention `find_lesson_boards.mjs` violates, tracked
+separately in OI-61 item 5 — that one only errors, this one destroys data).
+
+**Why deferred**: spec 052 was a detector/tag-taxonomy epic; hardening an unrelated dev script was
+outside its scope, and the immediate risk was mitigated by documenting the hazard in every batch
+handoff. It is a data-loss footgun for the next person who runs it, not a production defect.
+
+**If picked up**: add a real `--help`/`-h` that prints purpose, both positional args and their
+defaults, and exits 0 before any work; validate that `maxGames` parses to a positive integer and
+exit non-zero otherwise; and refuse to write a fixture file with fewer rows than the existing one
+unless `--force` is passed. Cross-ref: memory `feedback_scripts_meaningful_help.md`; OI-61 item 5.
+
+---
+
+## OI-92 — 18 of 42 live `overcut` puzzle/candidate rows are stale under spec 052's widened detector
+
+**Status**: open — **blocks deploying spec 052 (Epic 2) to staging/production** (measured 2026-07-30
+against the final post-US2 code; NOT fixed — writing to live data was left for the epic owner)
+**Area**: `public.puzzles` / `public.candidates` rows with `category='overcut'` on **staging and
+production**; `connect-four/server/candidate-generator.js` (`checkOvercutPredicate`),
+`connect-four/server/classifier.js` (`detectOvercutBeneficiary`)
+
+Spec 052 US2 added two new match branches to the overcut detector (`minor_threat`, `active_forcing`)
+and US1 split it into role-named functions. The FR-006 re-measurement was performed **mid-epic,
+after US1 but before US2's new branches landed**, and correctly concluded "all 42 rows re-derive
+identically, no repair needed." That conclusion is now **stale**. Re-measured against the final code:
+
+| Env | table | rows | identical | metadata differs | fails predicate |
+|---|---|---|---|---|---|
+| local | puzzles / candidates | 0 / 0 | — | — | — |
+| staging | puzzles | 10 | 6 | 2 | 2 |
+| staging | candidates | 10 | 6 | 2 | 2 |
+| production | puzzles | 11 | 6 | 4 | 1 |
+| production | candidates | 11 | 6 | 4 | 1 |
+
+**24 identical, 12 with differing `highlight_metadata`, 6 no longer passing the predicate.**
+
+Why it matters — `evalOvercut` grades a player's answer against the **stored**
+`highlight_metadata`'s `major_threat` column (overcut sets `correct_col: null` and derives the
+accepted answer from the metadata). So:
+
+- **The 6 predicate failures** now report `correctCols` of length 2 (e.g. `333334444630006042121406226`
+  → `[1,5]`, `322233353155505310161125` → `[0,4]`), tripping `checkOvercutPredicate`'s singleton
+  guard. These boards were *always* ambiguous; the old, narrower detector simply could not see the
+  second valid column. They are invalid puzzles under the project's own unique-answer rule.
+- **The 12 differing rows** now match an earlier column via a new mechanism (e.g. staging
+  `33333444406104511006` → col 2 via `minor_threat`; `3334443433425240110660012222` → col 5 via
+  `active_forcing`). A player who plays the newly-valid overcut column is graded **wrong** against
+  the stale stored cells.
+
+This is a latent data problem **surfaced** by the more-correct detector, not one created by it —
+but it is player-facing the moment spec 052 ships.
+
+**Why deferred**: repairing it means writing to live staging and production data. That is an
+outward-facing, hard-to-reverse action and belongs to the epic owner, not to the implementing
+agent. The measurement was read-only; no writes were made.
+
+**If picked up**: (1) re-derive `highlight_metadata` for the 12 differing rows and `UPDATE` them in
+place; (2) decide the 6 ambiguous rows — either retire them (`is_active=false` / reject the
+candidate) or accept multi-column answers for `overcut`, which is a product decision, not a code
+one; (3) re-run the measurement to confirm 42/42 identical before deploying. The read-only
+re-measurement script pattern is in this epic's session scratchpad; it walks
+`.env` / `.env.staging` / `.env.production`, calls `checkOvercutPredicate` per row, and compares
+with key-order-canonicalized JSON (raw `JSON.stringify` false-flags every row on JSONB key order —
+see memory `project_lesson_answer_set_invariant.md`). Cross-ref: spec 052 FR-006, T003, T013.
+
+---
+
+## OI-93 — Lesson 12's player-facing copy does not teach the two new overcut sub-cases
+
+**Status**: deferred (scoped out of spec 052 (Epic 2) US2 — text/audio desync risk)
+**Area**: `connect-four/lessons/lesson-12-overcut.json` (`infoProse` + its narration `.mp3`)
+**Discovered**: spec 052, 2026-07-30
+
+Spec 052 US2 added two first-class overcut branches (`minor_threat`, `active_forcing`) and renamed
+the T5 branch's reason to `t5_row3_row6`. FR-010 required lesson 12's copy to match the new
+labelling; only the **dev-only** `_boardInstructions` field was corrected. The player-facing
+`infoProse` still says game reviews recognize "two more" mechanisms (T4, chain-T2) and names neither
+`active_forcing` nor `minor_threat` — an undercount, now that freshly-generated overcut content is
+**~72% `minor_threat` + `active_forcing`** (measured over 40 locally generated candidates).
+
+**Why deferred**: lesson narration `.mp3` files are generated from the prose verbatim and are keyed
+by text hash, so editing the prose without regenerating audio ships a lesson whose spoken and
+written versions disagree — a worse defect than the undercount. See memory
+`project_lesson_progression_audio_traps.md` and `project_tts_audio_cached_by_text.md`.
+
+**If picked up**: rewrite `infoProse` to name all five mechanisms, regenerate the lesson's narration
+audio in the same change, and verify both locales render and speak the new text (Spanish degrades to
+English *silently* — see `project_spanish_output_silent_fallback.md`). Cross-ref: spec 052 FR-010,
+T024; `docs/architecture/reason-DECISIONS.md` D38.
+
+---
+
+## OI-94 — Nothing prevents a sixth entitlement source: the "no raw `.tier` read" invariant is enforced by a manual grep, not a lint rule
+
+**Status**: deferred (surfaced while planning spec 053 (Epic 3), 2026-08-01 — not yet implemented)
+**Area**: `connect-four/src/` (all screens/components), `specs/053-entitlement-payments-consolidation/tasks.md` T027
+**Discovered**: spec 053 planning, plan/tasks critique
+
+Spec 053 US2 consolidates five independent `profile.tier` reads (`SettingsScreen.jsx`,
+`SagaScreen.jsx`, `PostSetSummaryScreen.jsx`, `DeepRevealPane.jsx`, `useLessonLockGuard.js`) behind a
+single `getEntitlement()` helper. The invariant that keeps it consolidated — *no component reads
+`.tier` directly ever again* — is verified by **T027, a manual grep step with no automated test
+backing it**. Nothing fails if a future PR reintroduces a raw read.
+
+This is a real recurrence risk, not a theoretical one: the list of tier-read sites had *already*
+drifted once. OI-39 recorded four call sites; a fresh grep during spec 053's epic review found
+**five**, and two of OI-39's four were not tier readers at all. The count went stale precisely
+because nothing enforced it.
+
+**Why deferred**: T028a updates `docs/architecture/frontend-conventions.md` to mandate the new
+pattern, which addresses the *documentation* half; the manual grep matches this project's existing
+precedent for CSP verification. A lint rule is a net-new tooling seam that spec 053 did not scope.
+
+**If picked up**: add an ESLint rule (or a `test:fast`-registered assertion) banning
+`.tier` member access outside the entitlement module and its tests, and delete T027's manual step in
+the same change. Cross-ref: OI-39, spec 053 FR-011/FR-014, memory
+`feedback_plan_file_map_is_coverage_frontier.md`.
+
+---
+
+## OI-95 — A locked lesson cannot tell a signed-out visitor from a signed-in free user, so both see the same "Upgrade" prompt
+
+**Status**: deferred (explicit owner decision, 2026-08-01 — product call not yet made)
+**Area**: `GET /api/lessons/:id` response contract; `ConceptScreen.jsx`, `SocraticScreen.jsx`,
+`CLChallengeScreen.jsx`
+**Discovered**: spec 053 tasks critique
+
+Spec 053's ratified locked-lesson contract is exactly `200 { id, title, order, free, locked: true }`
+with `slides` absent. During task generation an `authenticated` flag was added to that body by
+inference; the owner ratified **dropping it** (2026-08-01), keeping it only on
+`GET /api/user/entitlement`, where the session-lapse logic in FR-033 actually consumes it.
+
+Consequence: the three lesson screens receive an identical stub whether the caller is signed out or
+signed in on the free tier, so both audiences get the same upgrade affordance. A signed-out visitor
+arguably wants "Sign in" first — they may already have paid on another device.
+
+**Why deferred**: showing distinct prompts is a product decision nobody has made, and making it would
+have widened an API contract the owner had already settled verbatim. The entitlement endpoint already
+carries the signal, so the client *could* answer the question with a second call if it ever matters.
+
+**If picked up**: decide whether the two audiences deserve different copy; if yes, either re-add
+`authenticated` to the lesson stub (amending spec 053 FR-002, its "Lesson (locked view)" entity, and
+the epic's Settled decision #7 together — do not amend just one) or have the screens consult the
+entitlement endpoint. Cross-ref: spec 053 FR-002/FR-033.

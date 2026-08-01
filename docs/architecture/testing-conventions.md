@@ -80,6 +80,17 @@ never fabricated. The flow:
   and writes `tests/blunder/fixtures/tagBlunderFixtures.json`. Deterministic given
   `(maxGames, seed)`: seeded RNG + deterministic solver → reproducible output. Regenerate
   and commit; the test reads the static file.
+
+  ⚠️ **Always pass both arguments (e.g. `500 12345`), and never `--help`.** The script has no flag
+  handling: any non-numeric first argument parses as `maxGames = NaN`, generates zero fixtures, and
+  **overwrites the committed fixture file with an empty array** — no prompt, no backup. Recovery is
+  `git checkout -- tests/blunder/fixtures/tagBlunderFixtures.json`, which discards any *uncommitted*
+  reviewed rows. Tracked as OI-91. A full run is ~90s–5min; run it in the background.
+
+- **Changing `tagBlunder`'s emitted tags or `direction` values requires a regeneration pass.** The
+  bin enumeration derives from `REASON_TEMPLATES.keys()`, so a newly-unreachable bin (e.g.
+  `drawing_move:missed_own` after spec 052) means the generator can never early-exit on it and will
+  always burn the full `maxGames`.
 - `tests/blunder/tagBlunderFixtures.test.js` checks two layers: (1) **golden/regression** —
   `tagBlunder` reproduces each recorded `tag`+`direction` (shared solver via `before`/`after`);
   (2) **structural invariants** — properties provable from board geometry alone, no solver

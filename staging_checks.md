@@ -1039,7 +1039,14 @@ Spec 051 was implemented, backfilled and QA'd entirely against the **local** dat
 
 ## Epic 2 — Detector Perspective Soundness & Blunder Tag Taxonomy (spec 052) — added 2026-07-30
 
-- [ ] **Re-measure the active `overcut` puzzle pool before trusting the "no repair needed" conclusion.**
+- [x] **Re-measure the active `overcut` puzzle pool before trusting the "no repair needed" conclusion.**
+  — **RAN 2026-07-30 (read-only, from local against staging + production). RESULT: FAILED — repair
+  required.** Of 42 live rows: 24 identical, **12 stale metadata, 6 ambiguous** (two valid columns,
+  tripping `checkOvercutPredicate`'s singleton guard). Staging 12/4/4, production 12/8/2, local 0
+  active. Note the sequencing trap this exposed: the in-epic measurement ran after US1 but *before*
+  US2 widened the detector, and its "all identical, no repair needed" was true when taken and wrong
+  at merge. Converted into **OI-92** + a runbook in `docs/deployment_steps.md`; the repair itself is
+  unrun (writing to live data is the owner's call). **Superseded by the post-repair check below.**
   - **What**: In staging (and production), count active `overcut` puzzle rows and re-derive their
     `highlight_metadata` after the `detectOvercut` victim/beneficiary split lands. Confirm each row's
     stored metadata still matches what the new detector produces.
@@ -1064,3 +1071,54 @@ Spec 051 was implemented, backfilled and QA'd entirely against the **local** dat
     opponent's is the pre-fix defect and needs a backfill.
   - **Source**: Spec 052 FR-003/T010; epic acceptance criterion "every changed blunder tag has a
     read-and-approved fixture diff".
+
+### Added 2026-07-30 (spec 052 implementation + QA close-out)
+
+- [ ] **Run the overcut pool repair, then confirm the pool is clean.**
+  - **What**: After the spec-052 code is deployed, run
+    `node server/scripts/repair-overcut-highlight-metadata.js --env staging` (dry run) → `--apply`
+    → `--apply --retire`, then production with `--i-understand-this-is-production`. Re-run the dry
+    run afterwards.
+  - **Why staging**: The stale rows exist only in staging/production; the local pool had zero active
+    overcut rows. The repair must run *after* the new detector is deployed, so it cannot be
+    exercised as part of local development.
+  - **Expected**: Final dry run prints "Pool is in sync with the current detector" and **exits 0**
+    (exit 2 = drift remains). Any row reported as "no longer matches at all" is left untouched by
+    design and needs manual triage.
+  - **Source**: OI-92; `docs/deployment_steps.md` § "Spec 052 — overcut pool repair"; spec 052 FR-006.
+
+- [ ] **Decide the fate of the 6 ambiguous legacy overcut boards.**
+  - **What**: Either retire them (`--retire`, the recommended default) or change the `overcut`
+    category to accept multiple correct columns (which also means relaxing
+    `checkOvercutPredicate`'s singleton guard).
+  - **Why staging**: It is a product decision about live content, not a code fix, and it only
+    affects rows that exist in staging/production.
+  - **Expected**: A recorded decision. Supporting datum: freshly generated overcut content shows a
+    **0% ambiguity rate** (0 of 40 locally generated candidates), so these are legacy artifacts
+    rather than a systemic property of the category — retirement is the smaller change.
+  - **Source**: OI-92; spec 052 US1/US2.
+
+- [ ] **Confirm the `drawing_move` → "Forfeited win" relabel reads correctly on real stored rows.**
+  - **What**: On the staging review/mistake-detail screen, open real `blunders` rows whose
+    `pattern_category` is `drawing_move` and confirm the label reads **"Forfeited win"** /
+    **"Victoria cedida"**, and that the row genuinely describes a forfeited forced win.
+  - **Why staging**: Verified locally only against freshly-generated rows. Rows stored *before*
+    spec 052 carry `direction: 'missed_own'` under the same `pattern_category`; the relabel is
+    correct for the tag's current meaning, but pre-existing rows were written under the old wording
+    and only real staging data shows how the mix reads.
+  - **Expected**: Label is correct and non-misleading for every sampled row; no raw key
+    (`mistakes.pattern.drawing_move`) and no English string on the Spanish UI.
+  - **Source**: Spec 052 US3, FR-015; reason-DECISIONS D39.
+
+- [ ] **Confirm live-coach `figure_7`/`j_shape` praise behaves in real sparring.**
+  - **What**: In staging sparring, create a figure-7 and a J-shape and confirm the coach praises
+    each **once** on creation and stays silent while it merely persists. Separately, make a move
+    that creates one of these patterns but is a losing blunder, and confirm the coach gives generic
+    blunder feedback rather than pattern praise.
+  - **Why staging**: Locally verified via the dev board injector and a scripted endpoint test, not
+    through an organic game. The creation-tag-on-a-blunder case in particular was found by scanning
+    rather than by play, so its real-game frequency is unknown.
+  - **Expected**: Praise fires exactly once per creation; a losing creation move never draws praise
+    or a happy coach mood.
+  - **Source**: Spec 052 US5, FR-023/FR-025; reason-DECISIONS D40; memory
+    `project_creation_tags_not_score_gated.md`.

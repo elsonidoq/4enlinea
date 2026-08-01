@@ -1,5 +1,41 @@
 [
   {
+    "bin": "claimeven:enabled_opponent",
+    "expectedTag": "claimeven",
+    "expectedDirection": "enabled_opponent",
+    "boardState": "3334413346",
+    "playedCol": 6,
+    "correctCol": 2,
+    "source": "harvestBlunders seed=12345 game=373"
+  },
+  {
+    "bin": "claimeven:enabled_opponent",
+    "expectedTag": "claimeven",
+    "expectedDirection": "enabled_opponent",
+    "boardState": "452423221261",
+    "playedCol": 1,
+    "correctCol": 4,
+    "source": "harvestBlunders seed=12345 game=100"
+  },
+  {
+    "bin": "claimeven:missed_own",
+    "expectedTag": "claimeven",
+    "expectedDirection": "missed_own",
+    "boardState": "3345203133502",
+    "playedCol": 6,
+    "correctCol": 0,
+    "source": "harvestBlunders seed=12345 game=101"
+  },
+  {
+    "bin": "claimeven:missed_own",
+    "expectedTag": "claimeven",
+    "expectedDirection": "missed_own",
+    "boardState": "3402223433063222355",
+    "playedCol": 6,
+    "correctCol": 5,
+    "source": "harvestBlunders seed=12345 game=96"
+  },
+  {
     "bin": "double_threat:enabled_opponent",
     "expectedTag": "double_threat",
     "expectedDirection": "enabled_opponent",
@@ -36,18 +72,18 @@
     "source": "harvestBlunders seed=12345 game=30"
   },
   {
-    "bin": "drawing_move:missed_own",
+    "bin": "drawing_move:forfeited_win",
     "expectedTag": "drawing_move",
-    "expectedDirection": "missed_own",
+    "expectedDirection": "forfeited_win",
     "boardState": "",
     "playedCol": 4,
     "correctCol": 3,
     "source": "harvestBlunders seed=12345 game=1"
   },
   {
-    "bin": "drawing_move:missed_own",
+    "bin": "drawing_move:forfeited_win",
     "expectedTag": "drawing_move",
-    "expectedDirection": "missed_own",
+    "expectedDirection": "forfeited_win",
     "boardState": "",
     "playedCol": 2,
     "correctCol": 3,
@@ -246,10 +282,10 @@
     "bin": "major_threat_nonparity:missed_own",
     "expectedTag": "major_threat_nonparity",
     "expectedDirection": "missed_own",
-    "boardState": "33322552233413156",
+    "boardState": "3333334512",
     "playedCol": 4,
-    "correctCol": 5,
-    "source": "harvestBlunders seed=12345 game=6"
+    "correctCol": 2,
+    "source": "harvestBlunders seed=12345 game=7"
   },
   {
     "bin": "major_threat_parity:enabled_opponent",
@@ -327,19 +363,19 @@
     "bin": "overcut:missed_own",
     "expectedTag": "overcut",
     "expectedDirection": "missed_own",
-    "boardState": "3256553633622325055",
-    "playedCol": 1,
-    "correctCol": 0,
-    "source": "harvestBlunders seed=12345 game=280"
+    "boardState": "33322552233413156",
+    "playedCol": 4,
+    "correctCol": 5,
+    "source": "harvestBlunders seed=12345 game=6"
   },
   {
     "bin": "overcut:missed_own",
     "expectedTag": "overcut",
     "expectedDirection": "missed_own",
-    "boardState": "3333352122246255454014",
-    "playedCol": 3,
-    "correctCol": 0,
-    "source": "harvestBlunders seed=12345 game=282"
+    "boardState": "334432613522146233",
+    "playedCol": 5,
+    "correctCol": 4,
+    "source": "harvestBlunders seed=12345 game=30"
   },
   {
     "bin": "suboptimal_move:missed_own",

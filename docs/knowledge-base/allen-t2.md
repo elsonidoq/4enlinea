@@ -111,8 +111,15 @@ related:
   - "[[allen-t5]] — row 3 + row 6 special case (no interaction, though different parity; see T5 known_limitations)"
   - "[[allen-t7]] — cross-column odd-threat cancellation (different mechanism: zugzwang, not undercut)"
   - "[[allen-v3]] — surviving Red odd-row threat after T2 neutralizations is a V3 win"
+  - "[[community-overcut]] — implementation: `detectOvercutCore` (`classifier.js`) applies T2's
+    bottom-up chain logic via `isT2Blocking` (`reason: 'chain_t2'`); when NO rescue mechanism
+    applies, T2's default kill is what `detectOvercutVictim` reports as `reason: 't2_kill'`. The
+    `detectOvercutVictim`/`detectOvercutBeneficiary` role-split (spec 052 Epic 1/2) mirrors
+    `detectUndercutVictim`/`Beneficiary`, which implement this same T2 mechanism for the undercut
+    (upper-threat-dies) side; see `docs/architecture/server-conventions.md` §\"Undercut has two
+    sides\" and `reason-DECISIONS.md` D36/D38"
 
-last_verified: 2026-05-17
+last_verified: 2026-07-30
 ---
 
 ## Verbatim source

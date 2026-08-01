@@ -334,12 +334,14 @@ all — so it fell through).
 | `claimeven` | Claimeven parity control. | No |
 | `major_threat_parity` / `major_threat_nonparity` | A major (3-of-4) threat, parity-aligned or not. | No |
 | `minor_threat` | A minor (2-of-4) latent threat. | No |
-| `drawing_move` | Score fallback: a win dropped to a draw with no named pattern. | No |
+| `drawing_move` (`direction: missed_own`) | **Dead on the stored path as of spec 052** (2026-07): the pre-change Phase E gate already required `preScore > 0 && postScore === 0` to emit `drawing_move`, so a genuine draw-to-draw position (`preScore === 0`) never reached this tag — it falls through to `suboptimal_move:missed_own` instead. Kept in `blunderReasons.js`'s `REASON_TEMPLATES` only as a defensive fallback; no producer emits it. | No |
+| `drawing_move` (`direction: forfeited_win`) | Score fallback, forced-win-forfeited sub-case (spec 052, Decision D39): `preScore > 0` (position was a forced win) and `postScore === 0` (the played move dropped it to a draw). This is now the **only** case that reaches `pattern_category: drawing_move` on the stored path — do not read `drawing_move` as "best outcome was a draw." | No |
 | `suboptimal_move` | Score fallback: sub-optimal with no named pattern. | No |
 
 `direction` values across the whole vocabulary: `missed_own`, `enabled_opponent`, `defensive_miss`,
-and `enabled_self` (the last used only by `undercut`, which is never routed). On a `realized_denied`
-vector `direction` is always one of the first three.
+`enabled_self` (used only by `undercut`, which is never routed), and `forfeited_win` (used only by
+`drawing_move`, see above). On a `realized_denied` vector `direction` is always one of the first
+three.
 
 ### Worked reading — a `defensive_miss` (board `3321234543`, you = player 1, played col 0, best col 3)
 

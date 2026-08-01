@@ -263,7 +263,7 @@ Indexes:
 
 **`reason`**: Free-text explanation of why the blunder was tagged this way, e.g. `"matched missed_own: forced_win"`. Populated by `tagBlunder()`. Nullable — older records or batch-inserted blunders may not have a reason.
 
-**`direction`**: One of three known values (`missed_own`, `enabled_opponent`, `defensive_miss`) with no CHECK constraint for forward compatibility — future directions may be added. Nullable for older records.
+**`direction`**: One of three known values (`missed_own`, `enabled_opponent`, `defensive_miss`), plus a fourth, narrower value `forfeited_win` (added 2026-07, spec 052 Decision D39) — emitted only by `tagBlunder`'s Phase E score-based fallback when `tag === 'drawing_move'` and the position was a forced win (`preScore > 0`) that dropped to a draw (`postScore === 0`). No CHECK constraint governs this column (verified: `migrations/034_blunders_direction.sql` is a bare `ALTER TABLE ... ADD COLUMN direction TEXT` with an explicit "deliberately unconstrained" comment), so `forfeited_win` required no migration. Nullable for older records.
 
 ---
 

@@ -231,7 +231,37 @@ related:
   - "[[community-z-threat]] — odd-column parity underpins the active-forcing sub-case; Z-threat columns give the current player first-move advantage"
   - "[[community-undercut]] — mirror concept: the upper threat is the dead one (T2 fires normally)"
 
-last_verified: 2026-05-19
+implementation:
+  status: "shipped 2026-07-30 — spec 052 (Epic 2) US1/US2, see docs/architecture/reason-DECISIONS.md D36/D38"
+  notes: |
+    `connect-four/server/classifier.js`'s single-role `detectOvercut(board, scores, perspective)`
+    (which took a caller-supplied `perspective` that could diverge from the side to move — OI-76)
+    was replaced by a role-split pair, mirroring `detectUndercutVictim`/`Beneficiary`:
+      - `detectOvercutBeneficiary(board, scores)` — the mover's threat R survives (a rescue
+        mechanism applies), `scores[col] > 0`.
+      - `detectOvercutVictim(board, scores)` — no rescue applies (default T2 kill), `scores[col] < 0`.
+    Both share a private kernel, `detectOvercutCore`, which now recognizes all five mechanisms this
+    entry documents, each with its own `reason` string:
+      - `'minor_threat'` — mechanism (a); the opponent has NO major threat below R at all, only a
+        minor one, sourced via `getMinorThreatWindows`/`minorThreatRowsInColumn` (research.md
+        Decision D2 — structurally unreachable before spec 052 Epic 2 US2, since
+        `board.reachableThreats` only returns major threats).
+      - `'same_parity_t4'` — mechanism (b), `isT4SameParity`.
+      - `'t5_row3_row6'` — mechanism (c), `isT5Exception`. **Renamed** from the misapplied
+        `'active_forcing'` (D38) — this branch is the Allen T5 rows-3/6 pair, unrelated to the
+        mechanism below despite the prior shared label.
+      - `'chain_t2'` — mechanism (d), `isT2Blocking` applied bottom-up.
+      - `'active_forcing'` — mechanism (e), the NEW branch added by spec 052 Epic 2 US2
+        (`isActiveForcing`: `R === Rp + 1` and the column has an odd empty-cell count). Unlike the
+        other four, this is NOT a standalone theorem — the false-positive board
+        `331324244556605142` below has the identical local shape yet the mover still loses, so the
+        production branch additionally requires `scores[col] > 0` directly (not merely the
+        caller's role-based score gate) before treating the geometric match as a genuine rescue.
+    `classifyPattern`'s `'overcut'` entry calls `detectOvercutVictim` (Phase-C blunder attribution);
+    `candidate-generator.js`'s `checkOvercutPredicate` calls `detectOvercutBeneficiary` (puzzle-pool
+    candidates) — see D37 for why the two call sites need opposite halves of the split.
+
+last_verified: 2026-07-30
 ---
 
 ## Verbatim source

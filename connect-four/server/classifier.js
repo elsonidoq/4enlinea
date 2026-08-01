@@ -378,6 +378,67 @@ export function isT2Blocking(colThreats, Rp) {
 }
 
 /**
+ * Returns true when the STRUCTURAL preconditions of `community-overcut.md`'s "active forcing"
+ * sub-case (e) hold: the current player's threat R sits immediately above the opponent's threat
+ * Rp (so blocking Rp is the mover's very next placement in the column — R === Rp + 1), and the
+ * column has an ODD number of empty cells, which is what puts the mover — not the opponent — on
+ * the cell that blocks Rp (KB: "the current player plays into the column voluntarily with
+ * odd-column parity, blocking the opponent's lower threat and immediately threatening from R").
+ *
+ * Unlike `isT4SameParity`/`isT5Exception`/`isT2Blocking`, this is NOT a standalone theorem: the
+ * KB's own false-positive board (`331324244556605142`) has this exact local shape (R=4, Rp=3,
+ * 3 empty cells, mover to move) yet the mover still loses everywhere (all columns score -12) —
+ * see `community-overcut.md`'s `known_limitations`: "Overcut does not guarantee a full game win —
+ * it guarantees the current player wins by playing column C. Other threats or zugzwang conditions
+ * must still resolve favorably." So this predicate is necessary but not sufficient for a rescue;
+ * callers MUST additionally require `scores[col] > 0` before treating it as one (see
+ * `detectOvercutCore`, which does — that extra conjunct is what keeps the false-positive board
+ * from misfiring as `active_forcing` under `detectOvercutVictim`, where the outer scoreOk gate
+ * alone would not have excluded it).
+ * @param {number} colEmptyCount  empty cells remaining in the column
+ * @param {number} R   current player's threat row (0-indexed)
+ * @param {number} Rp  opponent's threat row (0-indexed)
+ * @returns {boolean}
+ * @complexity O(1)
+ * @cache not cached
+ * @see community-overcut
+ */
+export function isActiveForcing(colEmptyCount, R, Rp) {
+  return colEmptyCount % 2 === 1 && R === Rp + 1;
+}
+
+/**
+ * Returns the opponent's MINOR-threat rows (2 discs + 2 empties, per `getMinorThreatWindows`)
+ * that fall within column `col`, strictly below `belowRow` when given. T2 never applies to a
+ * minor threat (it can only neutralize a MAJOR threat via placement), so any minor opposing
+ * threat below the mover's major threat R is an automatic overcut rescue — Decision D2
+ * (research.md), `community-overcut.md` precondition (a).
+ * @param {Board} board
+ * @param {number} opponent  1 or 2
+ * @param {number} col
+ * @param {number} belowRow  exclusive upper bound (0-indexed); rows must be strictly less
+ * @returns {number[]}  ascending, so the caller's "nearest below R" is the LAST element
+ * @complexity O(ROWS × COLS) (getMinorThreatWindows scan)
+ * @cache not cached
+ * @see community-overcut
+ */
+export function minorThreatRowsInColumn(board, opponent, col, belowRow) {
+  const windows = getMinorThreatWindows(board.board, opponent);
+  const rows = new Set();
+  for (const window of windows) {
+    // A minor window is 2 discs + 2 EMPTIES; only the empty cells are threat cells. Iterating
+    // all four would return the rows of already-placed discs, which are not threats at all —
+    // that emitted a filled cell as `neutralised_threat` on 54.5% of matches, and produced
+    // false matches in columns whose only "minor row" was a disc below the column height.
+    // Same empty-cells-only rule as `emptyCellsFromWindows`.
+    for (const [r, c] of window) {
+      if (c === col && r < belowRow && board.board[r][c] === 0) rows.add(r);
+    }
+  }
+  return [...rows].sort((a, b) => a - b);
+}
+
+/**
  * Returns true if the current player already has an active double threat —
  * either ≥2 immediate winning columns, or a single winning column with a
  * major threat stacked directly above it (same column, one row higher).
@@ -614,11 +675,14 @@ export class Board {
 }
 
 /**
- * True if `player` has a double threat on `board`, evaluated as-is (no candidate move).
+ * Computes the column identity of a `player` double threat on `board`, evaluated as-is
+ * (no candidate move).
  *
  * Extracted verbatim from the inline logic classify() has always used for its post-move
  * double_threat check, so the SAME predicate can also run on the PRE-move board for transition
- * gating (praise only an absent→present creation).
+ * gating. Spec 052 US4 (FR-018/FR-020): the gate needs to know not just WHETHER a fork exists,
+ * but WHICH columns hold it, so a genuinely new/distinct fork is recognized as a creation even
+ * when a different fork of the same TYPE already existed before the move.
  *
  * NOTE: this intentionally differs from the exported detectDoubleThreat() in Case B. This loose
  * variant matches ANY two consecutive-row reachable threats in a column; detectDoubleThreat()
@@ -630,34 +694,69 @@ export class Board {
  *
  * @param {Board} board
  * @param {number} player  1 or 2
- * @returns {boolean}
+ * @returns {{ active: boolean, gravityTopCols: Set<number>, stackedCol: number|null }}
  */
-function hasDoubleThreat(board, player) {
+function getDoubleThreatIdentity(board, player) {
   const threatCells = [];
   for (const [col, rows] of board.reachableThreats(player)) {
     for (const row of rows) threatCells.push({ col, row });
   }
 
-  // Case A: two or more distinct columns each have a threat at their gravity-top
+  // Case A: two or more distinct columns each have a threat at their gravity-top.
+  // Identity = the set of gravity-top columns bearing a threat.
   const gravityTopCols = new Set(
     threatCells.filter(t => t.row === board.colHeights[t.col]).map(t => t.col)
   );
-  if (gravityTopCols.size >= 2) return true;
 
-  // Case B: two consecutive-row threats in the same column (opponent needs 2 turns to block)
+  // Case B: two consecutive-row threats in the same column (opponent needs 2 turns to block).
+  // Identity = that single stacked column.
+  let stackedCol = null;
   const byCol = {};
   for (const t of threatCells) {
     if (!byCol[t.col]) byCol[t.col] = [];
     byCol[t.col].push(t.row);
   }
-  for (const rows of Object.values(byCol)) {
-    const sorted = rows.sort((a, b) => a - b);
+  outer:
+  for (const [colStr, rows] of Object.entries(byCol)) {
+    const sorted = [...rows].sort((a, b) => a - b);
     for (let i = 0; i < sorted.length - 1; i++) {
-      if (sorted[i + 1] === sorted[i] + 1) return true;
+      if (sorted[i + 1] === sorted[i] + 1) {
+        stackedCol = Number(colStr);
+        break outer;
+      }
     }
   }
 
-  return false;
+  const active = gravityTopCols.size >= 2 || stackedCol !== null;
+  return { active, gravityTopCols, stackedCol };
+}
+
+/**
+ * Boolean-compatible check for `player` having an active double threat on `board`.
+ * Thin wrapper over getDoubleThreatIdentity() for callers that only need the boolean.
+ * @param {Board} board
+ * @param {number} player  1 or 2
+ * @returns {boolean}
+ */
+export function hasDoubleThreat(board, player) {
+  return getDoubleThreatIdentity(board, player).active;
+}
+
+/**
+ * Returns the set of columns that identify the currently active double-threat instance (if any),
+ * for use as the diffable "which columns hold the pattern" identity described in FR-018/FR-020.
+ * Case A (>=2 gravity-top columns): identity = those columns. Case B (stacked pair): identity =
+ * the single stacked column, represented as a one-element set so Case A/B diffs compose. No
+ * active fork: empty set (so a diff against it is "fully new", never a false "retained" match).
+ * @param {Board} board
+ * @param {number} player  1 or 2
+ * @returns {Set<number>}
+ */
+function doubleThreatColumnSet(board, player) {
+  const { active, gravityTopCols, stackedCol } = getDoubleThreatIdentity(board, player);
+  if (!active) return new Set();
+  if (gravityTopCols.size >= 2) return gravityTopCols;
+  return new Set([stackedCol]);
 }
 
 /**
@@ -688,20 +787,36 @@ export function classify(moves, candidateCol, scores) {
     const nextBoard = board.withMove(candidateCol);
 
     // ── Category 3: Double Threat ───────────────────────────────────────────
-    // Only praise a double threat this move CREATED: present on the post-move board AND
-    // absent on the pre-move board, both from the mover's perspective. A double threat that
-    // was already present and merely persists is not "created" here — fall through so the
-    // coach does not repeat "you created the double threat" on every subsequent move.
+    // Spec 052 US4 (FR-018/FR-020): praise a double threat only when the move creates a
+    // genuinely NEW/distinct instance — diff the COLUMN IDENTITY of the fork before vs. after,
+    // not just the boolean "any fork present". A mover who already holds a fork in columns A/B
+    // and creates a second, distinct fork in C/D (or even a partial-overlap C/A) must still be
+    // recognized as having created something new; a fork that merely persists in the same
+    // columns must not re-fire "you created the double threat" on every subsequent move.
     const player = board.currentPlayer;
-    if (hasDoubleThreat(nextBoard, player) && !hasDoubleThreat(board, player)) {
+    const colsBefore = doubleThreatColumnSet(board, player);
+    const colsAfter = doubleThreatColumnSet(nextBoard, player);
+    const newCols = [...colsAfter].filter(c => !colsBefore.has(c));
+    if (newCols.length > 0) {
       return { tag: 'double_threat' };
     }
 
     // ── Category 4: Forced Win ──────────────────────────────────────────────
-    // Same transition rule as double_threat: only when this move ESTABLISHED the forced win
-    // (present after, absent before). A forced win, once made, persists under optimal play, so
-    // without this gate every subsequent move would re-fire "you have a forced win".
-    if (detectForcedWin(nextBoard, player).matched && !detectForcedWin(board, player).matched) {
+    // Spec 052 US4 (FR-019): same per-instance idea as double_threat, but forced_win's identity
+    // is a single value — its anchoring immediate-threat column (blockCol) — rather than a set.
+    // Praise only when the move establishes a forced win anchored on a DIFFERENT blockCol than
+    // before (covers both "no forced win before" and "a different forced win before"); a forced
+    // win that persists on the SAME blockCol must not re-fire every subsequent move. Known
+    // limitation (accepted, documented in docs/open_issues.md): two distinct forced-win lines
+    // sharing the same anchoring blockCol are not distinguished by this diff.
+    const forcedWinBefore = detectForcedWin(board, player);
+    const forcedWinAfter = detectForcedWin(nextBoard, player);
+    // Identity is only meaningful when matched — an unmatched result's blockCol may still hold
+    // the anchoring column of a chain that ultimately failed (e.g. opponent regains a threat
+    // after the block), which must NOT count as "the same forced win persisting".
+    const forcedWinIdBefore = forcedWinBefore.matched ? forcedWinBefore.blockCol : null;
+    const forcedWinIdAfter = forcedWinAfter.matched ? forcedWinAfter.blockCol : null;
+    if (forcedWinIdAfter !== null && forcedWinIdAfter !== forcedWinIdBefore) {
       return { tag: 'forced_win' };
     }
   }
@@ -732,9 +847,42 @@ export function classify(moves, candidateCol, scores) {
     }
   }
 
+  // ── Category 6: Figure-7 / J-Shape creation ──────────────────────────────
+  // Spec 052 US5 (FR-022–FR-025, D40): of the seven live-recognition candidates, only
+  // figure_7 and j_shape were admitted — see docs/architecture/reason-DECISIONS.md D40 for the
+  // measured latency table and the full per-candidate rationale. Both retain an explicit
+  // `perspective` parameter (FR-004 of this spec forbids changing that), so — unlike
+  // detectOvercutVictim/Beneficiary, whose perspective was deliberately locked to the side to
+  // move by FR-001–FR-003 of this same epic — they can be evaluated for the ORIGINAL mover on
+  // `nextBoard` even though nextBoard.currentPlayer has flipped to the opponent. That is what
+  // makes the standard absent→present transition-gate shape (`classifier.js` Category 3/4)
+  // reusable here verbatim, with an explicit `mover` argument standing in for the default.
+  // Placed after every score/urgency-bearing category (1–5) and before the generic fallback:
+  // an immediate threat, a fork, a forced win, a forced block, or a forbidden column is more
+  // urgent feedback than "you built a figure-7", but specific shape recognition is still more
+  // informative than the generic best_move/drawing_move/suboptimal_move fallback.
+  if (board.colHeights[candidateCol] < ROWS) {
+    const mover = board.currentPlayer;
+    const nextBoard = board.withMove(candidateCol);
+    if (detectFigure7(nextBoard, null, mover).matched && !detectFigure7(board, null, mover).matched) {
+      return { tag: 'figure_7' };
+    }
+    if (detectJShape(nextBoard, null, mover).matched && !detectJShape(board, null, mover).matched) {
+      return { tag: 'j_shape' };
+    }
+  }
+
   // ── Fallback ──────────────────────────────────────────────────────────────
   if (score > 0) return { tag: 'best_move' };
-  if (score === 0) return { tag: 'drawing_move' };
+  if (score === 0) {
+    // US3 (spec 052): distinguish "you forfeited a forced win" (bestScore > 0, this move only
+    // draws) from a genuine best-is-a-draw position, WITHOUT emitting a `direction` field —
+    // classify()'s sole consumer (evaluateMoveHandler.js) never reads one (contracts C5). Surface
+    // a distinct phrasePoolKey instead; the `tag` itself stays 'drawing_move' either way.
+    const bestScore = Math.max(...scores.filter((s, c) => board.colHeights[c] < ROWS));
+    if (bestScore > 0) return { tag: 'drawing_move', phrasePoolKey: 'forfeited_win' };
+    return { tag: 'drawing_move' };
+  }
   return { tag: 'suboptimal_move' };
 }
 
@@ -1008,19 +1156,37 @@ export function detectUndercutBeneficiary(board, scores) {
 }
 
 /**
- * T008 — Overcut detection.
- * Same structural pattern as undercut but playing in C is WINNING (scores[C] > 0).
- * Opponent's lower threat is neutralised by current player's upper threat.
+ * Shared core of the two overcut sides (spec 052, Epic 2, US1 — replaces the removed
+ * `detectOvercut(board, scores, perspective)`, which took a caller-supplied `perspective` that
+ * could diverge from the side to move — see OI-76). Both sides anchor on the MOVER: the mover
+ * always owns the upper major threat row R in the column (`threats`), and the opponent always
+ * owns the lower threat row that would neutralise it (`oppThreats`) — unlike undercut, overcut
+ * does not swap which player owns which row between its two sides; only the rescue condition and
+ * the score gate differ:
+ *   - BENEFICIARY: at least one rescue mechanism (minor-threat exception / T4 same-parity / T5
+ *     rows-3-6 / chain-T2 / active-forcing — spec 052 Epic 2 US2, Decision D2/D38) rescues the
+ *     mover's upper threat from the opponent's lower one, so the mover's threat survives and
+ *     entering C wins for the mover (`scores[C] > 0`).
+ *   - VICTIM: none of those mechanisms rescue it — the default T2 kill applies — so the mover's
+ *     own upper threat genuinely dies and entering C loses for the mover (`scores[C] < 0`),
+ *     because the opponent's threat below it stands.
+ * The minor-threat exception is structurally different from the other four: it fires when the
+ * opponent has NO major threat below R at all, only a minor one (T2 cannot neutralize a minor
+ * threat by definition) — see the `else` branch below and Decision D2 (research.md).
  * @param {Board} board
- * @param {number[]} scores  c4solver scores per column
- * @returns {{ matched: boolean, col?: number, metadata?: HighlightMetadata }}
+ * @param {number[]} scores  c4solver scores per column, from the side to move's perspective
+ * @param {object} roles
+ * @param {(s: number) => boolean} roles.scoreOk    gate on the mover's score for the column
+ * @param {boolean} roles.wantRescue  true = Beneficiary (a rescue mechanism saves the upper
+ *                                    threat), false = Victim (no rescue — default T2 kill)
  * @complexity O(42)
  * @cache not cached
  */
-export function detectOvercut(board, scores, perspective = board.currentPlayer) {
-  // @see allen-t4, allen-t5, allen-t2
-  const threats    = board.reachableThreats(perspective);
-  const oppThreats = board.reachableThreats(3 - perspective);
+function detectOvercutCore(board, scores, { scoreOk, wantRescue }) {
+  // @see allen-t4, allen-t5, allen-t2, community-overcut
+  const mover = board.currentPlayer;
+  const threats    = board.reachableThreats(mover);
+  const oppThreats = board.reachableThreats(3 - mover);
 
   // T015 (spec 051 Epic 1, FR-010): accumulate every matching column instead of returning on the
   // first — genuinely new control flow (unlike the Tier A conversions). Per research.md
@@ -1031,26 +1197,66 @@ export function detectOvercut(board, scores, perspective = board.currentPlayer) 
   const matches = [];
   for (let col = 0; col < COLS; col++) {
     if (board.colHeights[col] >= ROWS) continue;
-    if (!scores || scores[col] <= 0) continue; // overcut requires playing C to be winning
-    const colRows    = threats.get(col) ?? [];
-    const oppColRows = oppThreats.get(col) ?? [];
+    if (!scores || !scoreOk(scores[col])) continue;
+    const colRows       = threats.get(col) ?? [];
+    const oppColRows    = oppThreats.get(col) ?? [];
+    const colEmptyCount = ROWS - board.colHeights[col];
 
     for (const R of colRows) {
       const neutralised = oppColRows.find(rp => rp < R);
-      if (neutralised === undefined) continue;
-      // O1: match only if at least one T-rule neutralization holds @see allen-t2, allen-t4, allen-t5
-      if (!isT4SameParity(R, neutralised) &&
-          !isT5Exception(R, neutralised) &&
-          !isT2Blocking(colRows, neutralised)) continue;
-      const hCells = [
-        { column: col, row: neutralised, role: 'neutralised_threat' },
-        { column: col, row: R,           role: 'major_threat' },
-      ];
+
+      if (neutralised === undefined) {
+        // No MAJOR opposing threat below R at all. Per Decision D2 (research.md), the mover's
+        // threat may still be rescued if the opponent has a MINOR threat strictly below R — T2
+        // can only neutralize a major threat, so a minor one below R is an automatic rescue.
+        // Only relevant to the Beneficiary role: Victim's default T2 kill requires a MAJOR
+        // opposing threat to do the killing, so there is nothing to report here for Victim.
+        // Per FR-009, this branch MUST NOT match merely because no opposing threat exists at all
+        // (hence the `.length === 0` bail — no minor threat found is a non-match, same as today).
+        if (!wantRescue) continue;
+        const minorRowsBelow = minorThreatRowsInColumn(board, 3 - mover, col, R);
+        if (minorRowsBelow.length === 0) continue;
+        const minorRow = minorRowsBelow[minorRowsBelow.length - 1]; // nearest below R
+        const hCells = [
+          { column: col, row: minorRow, role: 'neutralised_threat' },
+          { column: col, row: R,        role: 'major_threat' },
+        ];
+        matches.push({
+          col,
+          reason: 'minor_threat',
+          cells: hCells.map(c => `c${c.column + 1}r${c.row + 1}`),
+          highlightMetadata: { type: 'cells', cells: hCells },
+        });
+        break; // first qualifying row per column wins (Decision D3) — move to the next column
+      }
+
+      // O1: at least one rescue mechanism holds @see allen-t2, allen-t4, allen-t5, community-overcut
+      // Active-forcing is NOT a standalone theorem like the other three (see `isActiveForcing`'s
+      // doc comment) — it requires the actual score to confirm the rescue, not merely the
+      // caller's role-based `scoreOk` gate (which would let it misfire under Victim's `s < 0`
+      // gate on the KB's own false-positive board, `331324244556605142`).
+      const rescued = isT4SameParity(R, neutralised) ||
+                      isT5Exception(R, neutralised) ||
+                      isT2Blocking(colRows, neutralised) ||
+                      (isActiveForcing(colEmptyCount, R, neutralised) && scores[col] > 0);
+      if (rescued !== wantRescue) continue;
+      const hCells = wantRescue
+        ? [
+            { column: col, row: neutralised, role: 'neutralised_threat' },
+            { column: col, row: R,           role: 'major_threat' },
+          ]
+        : [
+            { column: col, row: neutralised, role: 'killing_threat' },
+            { column: col, row: R,           role: 'dead_threat' },
+          ];
       matches.push({
         col,
-        reason: isT4SameParity(R, neutralised) ? 'same_parity_t4'
-              : isT5Exception(R, neutralised) ? 'active_forcing'
-              : 'chain_t2',
+        reason: wantRescue
+          ? (isT4SameParity(R, neutralised) ? 'same_parity_t4'
+            : isT5Exception(R, neutralised) ? 't5_row3_row6'
+            : isT2Blocking(colRows, neutralised) ? 'chain_t2'
+            : 'active_forcing')
+          : 't2_kill',
         cells: hCells.map(c => `c${c.column + 1}r${c.row + 1}`),
         highlightMetadata: {
           type: 'cells',
@@ -1071,6 +1277,51 @@ export function detectOvercut(board, scores, perspective = board.currentPlayer) 
     categoryEvidence: {},
     correctCols: matches.map(m => m.col),
   };
+}
+
+/**
+ * T008 — Overcut, BENEFICIARY side: the mover's own major threat in column C survives the
+ * opponent's lower threat in the same column via a minor-threat / T4 / T5 / chain-T2 /
+ * active-forcing rescue (spec 052 Epic 2 US2 added minor-threat and active-forcing; see
+ * `reason-DECISIONS.md` D38), and entering C wins for the mover (`scores[C] > 0`). This is the
+ * direct migration of the original single-role
+ * `detectOvercut` (removed, per FR-002 — its old `perspective` parameter could diverge from the
+ * side to move; see OI-76) — mirrors `detectUndercutBeneficiary`
+ * (docs/architecture/server-conventions.md § "Undercut has two sides").
+ *
+ * There is deliberately NO `perspective` parameter — role is fixed by who is to move.
+ *
+ * @param {Board} board
+ * @param {number[]} scores  c4solver scores per column
+ * @returns {{ matched: boolean, reason?: string, cells: string[], highlightMetadata?: object,
+ *             categoryEvidence?: object, correctCols: number[] }}
+ * @complexity O(42)
+ * @cache not cached
+ */
+export function detectOvercutBeneficiary(board, scores) {
+  return detectOvercutCore(board, scores, { scoreOk: s => s > 0, wantRescue: true });
+}
+
+/**
+ * T008 — Overcut, VICTIM side: the mover's own major threat in column C is neutralized — none of
+ * minor-threat / T4 same-parity / T5 rows-3-6 / chain-T2 / active-forcing rescues it, so the
+ * default T2 kill applies — and entering C is losing for the mover (`scores[C] < 0`), because the
+ * opponent's own major threat
+ * below it in the column stands (the opponent's overcut stands). New predicate, built from the
+ * `detectUndercutVictim`/`detectUndercutCore` template (contracts/detector-signatures.md C1) — no
+ * existing code characterized this losing-mover case before spec 052.
+ *
+ * There is deliberately NO `perspective` parameter — role is fixed by who is to move.
+ *
+ * @param {Board} board
+ * @param {number[]} scores  c4solver scores per column
+ * @returns {{ matched: boolean, reason?: string, cells: string[], highlightMetadata?: object,
+ *             categoryEvidence?: object, correctCols: number[] }}
+ * @complexity O(42)
+ * @cache not cached
+ */
+export function detectOvercutVictim(board, scores) {
+  return detectOvercutCore(board, scores, { scoreOk: s => s < 0, wantRescue: false });
 }
 
 /**
@@ -1653,34 +1904,44 @@ export function detectForcedBlock(board, scores, perspective = board.currentPlay
 /**
  * Detects forced-win (opponent is winning) columns: all scores ≤ 0 and the column
  * has the best (least-negative) score while strictly worse alternatives exist.
+ *
+ * Spec 052 US4 (FR-019): `blockCol` identifies the anchoring immediate-threat column that
+ * starts the forcing sequence (`myThreats[0]` below), exposed so classify()'s Category 4 gate
+ * can diff instances by identity instead of by boolean `.matched` transition. Per research.md
+ * Decision D5, this is scoped to ONLY the anchoring column — the full per-branch forcing-column
+ * recursion (the `col` loop below) is intentionally NOT threaded through; two distinct
+ * forced-win lines sharing the same anchoring blockCol are not distinguished (see
+ * docs/open_issues.md for the accepted-limitation entry).
+ *
+ * NOTE: the JSDoc `@returns` below intentionally omits `blockCol` from nowhere — every actual
+ * return statement in the body now includes it; do not "fix" the body to match a stale comment.
  * @param {Board} board
- * @param {number[]} scores
  * @param {number} [perspective]  1 or 2 (default: board.currentPlayer)
- * @param {object} [solver]  c4solver wrapper (required for FR-033 perspective mismatch)
- * @returns {{ matched: boolean, cols?: number[] }}
+ * @param {number} [maxDepth]
+ * @returns {{ matched: boolean, cells: string[], blockCol: number|null }}
  * @complexity O(7)
  * @cache not cached
  */
 export function detectForcedWin(board, perspective = board.currentPlayer, maxDepth = 8) {
-  if (maxDepth <= 0) return { matched: false, cells: [] };
+  if (maxDepth <= 0) return { matched: false, cells: [], blockCol: null };
 
   // Do not match if the board already has a double_threat — that's Category 3.
   // forced_win requires at least one forcing step before the terminal condition.
-  if (detectDoubleThreat(board, perspective).matched) return { matched: false, cells: [] };
+  if (detectDoubleThreat(board, perspective).matched) return { matched: false, cells: [], blockCol: null };
 
   // Need exactly 1 immediate threat to force the opponent's response.
   // 0 = no forcing pressure; ≥2 = already a double_threat (caught above).
   const myThreats = board.immediateThreats(perspective);
-  if (myThreats.length !== 1) return { matched: false, cells: [] };
+  if (myThreats.length !== 1) return { matched: false, cells: [], blockCol: null };
 
   const blockCol = myThreats[0];
-  if (board.colHeights[blockCol] >= ROWS) return { matched: false, cells: [] };
+  if (board.colHeights[blockCol] >= ROWS) return { matched: false, cells: [], blockCol };
 
   const afterBlock = board.withMove(blockCol);
   const opponent = 3 - perspective;
 
   // If opponent gains an immediate threat after blocking, the chain is broken.
-  if (afterBlock.immediateThreats(opponent).length > 0) return { matched: false, cells: [] };
+  if (afterBlock.immediateThreats(opponent).length > 0) return { matched: false, cells: [], blockCol };
 
   // Try all user continuation moves.
   for (let col = 0; col < COLS; col++) {
@@ -1690,16 +1951,16 @@ export function detectForcedWin(board, perspective = board.currentPlayer, maxDep
     const afterUser = afterBlock.withMove(col);
 
     // Terminal 1: user wins immediately with this continuation.
-    if (afterUser.checkWin(row, col, perspective)) return { matched: true, cells: [] };
+    if (afterUser.checkWin(row, col, perspective)) return { matched: true, cells: [], blockCol };
 
     // Terminal 2: user creates a double_threat with this continuation.
-    if (detectDoubleThreat(afterUser, perspective).matched) return { matched: true, cells: [] };
+    if (detectDoubleThreat(afterUser, perspective).matched) return { matched: true, cells: [], blockCol };
 
     // Recurse: continue the forcing chain.
-    if (detectForcedWin(afterUser, perspective, maxDepth - 2).matched) return { matched: true, cells: [] };
+    if (detectForcedWin(afterUser, perspective, maxDepth - 2).matched) return { matched: true, cells: [], blockCol };
   }
 
-  return { matched: false, cells: [] };
+  return { matched: false, cells: [], blockCol };
 }
 
 /**
@@ -1781,7 +2042,13 @@ export async function classifyPattern(ms, perspective, solver) {
     // enter", for the player who just moved it reads "the undercut you just landed". Passing a
     // perspective here mixed one player's threats with the other's score sign (OI-74).
     ['undercut',          () => detectUndercutVictim(board, scores)],
-    ['overcut',           () => detectOvercut(board, scores, perspective)],
+    // overcut mirrors the undercut precedent immediately above: Victim, not Beneficiary. Phase C
+    // (tagBlunder) calls classifyPattern on `moves + correctCol` — a board where the blunderer has
+    // already moved and the side to move is the OPPONENT, not the blunderer. Both
+    // detectOvercutVictim/Beneficiary resolve role from board.currentPlayer (the mover), so
+    // Beneficiary here would report the opponent's overcut and misfile it as the blunderer's own
+    // missed chance — the exact wrong-player defect OI-76 exists to fix (research.md Decision D1).
+    ['overcut',           () => detectOvercutVictim(board, scores)],
     ['figure_7',          () => detectFigure7(board, scores, perspective)],
     ['j_shape',           () => detectJShape(board, scores, perspective)],
     // Parity-aware threats (geometry-only; first-class, flow through the look-ahead pipeline)
@@ -2060,8 +2327,8 @@ export async function tagBlunder(moves, playedCol, correctCol, solver) {
     const postScore  = Math.max(...postScores);
 
     if (preScore > 0 && postScore === 0) {
-      return { tag: 'drawing_move', direction: 'missed_own',
-               reason: 'win dropped to draw, no pattern detected' };
+      return { tag: 'drawing_move', direction: 'forfeited_win',
+               reason: 'forced win dropped to draw, no pattern detected' };
     }
 
     return { tag: 'suboptimal_move', direction: 'missed_own', reason: 'no pattern detected' };
