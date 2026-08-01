@@ -101,8 +101,13 @@ related:
   - "[[allen-t3]] — row-2+row-5 same player (opposite conclusion: double zugzwang control)"
   - "[[allen-t4]] — same-parity non-interaction (T4 is the parity-based version; T5 is the playability-based version)"
   - "[[allen-t6]] — Red even-row threats worthless; T5 specializes this for row-6 in the presence of row-3"
+  - "[[community-overcut]] — implementation: `detectOvercutCore`'s `isT5Exception` rescue branch
+    emits `reason: 't5_row3_row6'` (renamed from the misapplied `'active_forcing'` — spec 052 Epic 2
+    US2, `docs/architecture/reason-DECISIONS.md` D38); do not confuse this branch with the KB's own
+    distinct `'active_forcing'` mechanism (case (e) in `community-overcut.md`'s `formal_predicate`),
+    which is a different, non-theorem sub-case gated additionally on `scores[col] > 0`"
 
-last_verified: 2026-05-17
+last_verified: 2026-07-30
 ---
 
 ## Verbatim source

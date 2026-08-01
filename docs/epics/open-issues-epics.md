@@ -602,31 +602,104 @@ locales; add per-tag round-trip tests.
 
 ## Epic 3 — Entitlement & Payments Consolidation
 
-**Intent:** Make "is this user entitled to this?" one answer, computed server-side, and close the funnel's
-loose ends — a paid lesson that `curl` returns for free, four independent tier reads, a client-supplied
-identity on the money path, and a pricing page whose numbers are hand-maintained.
+**Intent:** Make "is this user entitled to this?" one answer, computed server-side by a new
+`GET /api/user/entitlement` endpoint, and close the funnel's loose ends — a paid lesson that `curl` returns
+for free, five independent tier reads, and a pricing page whose numbers are hand-maintained. The first-payment
+identity-forgery window on the money path is deliberately left open (accepted risk, ratified 2026-07-31 —
+see Settled decision #4); this epic's payments work is limited to documenting that ratification and closing
+out OI-34.
 
 **Issues covered:** OI-66 (paid lesson JSON served to unauthenticated callers), OI-39 (`getSubscriptionStatus`
-has no production call site; four tier-gate sites read the client-cached tier), OI-55 (Paddle tier-grant
-identity is client-supplied; the hardening was a unilateral judgment call needing review), OI-34
-(fallback-only activations skip the `upgrade_completed` track), OI-41 (bare static pricing page + price
-drift), OI-25 (paying from `/summary` loses the summary).
+has no production call site; five tier-gate sites read the client-cached tier — OI-39's text says four and is
+stale, see Non-obvious facts), OI-55 (Paddle tier-grant identity is client-supplied; the hardening was a
+unilateral judgment call needing review), OI-34 (fallback-only activations skip the `upgrade_completed`
+track), OI-41 (bare static pricing page + price drift), OI-25 (paying from `/summary` loses the summary).
 
 **Settled decisions**
-1. **Design the single tier-check interface first, then migrate all four call sites together.** OI-39 is
-   explicit: do not refactor the call sites piecemeal to "close the issue".
+1. **Design the single tier-check interface first, then migrate all five call sites together.** OI-39 is
+   explicit: do not refactor the call sites piecemeal to "close the issue". (OI-39's own text says four sites;
+   a source-level grep found five — see Non-obvious facts. Treat the grep, not the OI text, as authoritative.)
 2. Any replacement pricing surface reads prices from the live config endpoint (`GET /api/paddle/config` /
    Paddle.js `PricePreview`), never from static text.
 3. The Merchant-of-Record clause, the 14-day refund statement, and the `/terms` link are **Paddle
    domain-review requirements** and must survive any redesign verbatim.
-4. Treat OI-55's shipped hardening as a **proposal to sanity-check**, not settled policy — it was taken
-   non-interactively with no human review, and it does not close the first-payment forgery window.
+4. **(2026-07-31 owner ratification)** The first-payment forgery window (OI-55) is **accepted, not closed**.
+   The current model — repeat payments cross-checked against the stored `users.paddle_customer_id`, first
+   payments trusted — is adequate for this app's risk profile, because an attacker must spend real money to
+   upgrade a stranger's account. This replaces the earlier "proposal to sanity-check" disclaimer; the
+   accepted residual risks (grief-granting; laundering a chargeback-able payment onto a third-party account)
+   must be named explicitly where the decision is recorded. No code change to the identity binding.
+5. **(2026-07-31)** The tier-check interface (Settled decision #1) is a **single server module** that computes
+   the entitlement answer from `users.tier`. **`GET /api/user/entitlement` is a thin wrapper over that
+   module**, and the `GET /api/lessons/:id` handler (US3.1) calls the same module **directly** — there is no
+   HTTP hop between the two server handlers, and the endpoint is not itself "the code path the lesson gate
+   uses." This supersedes the epic's earlier "implement on top of `getSubscriptionStatus`" framing:
+   `getSubscriptionStatus` (`connect-four/server/paymentProcessor.js`) is a pure, synchronous
+   `tier === 'paid'` ternary with no I/O, so building on it verbatim would gain no new authority. The
+   endpoint is backed by a short-TTL client cache with explicit invalidation on checkout return.
+   `docs/architecture/server-conventions.md` §PaymentProcessor Seam must be updated in the same change that
+   ships the endpoint.
+6. **(2026-07-31, superseded same day by the owner's domain-approval ratification below)** ~~The pricing page
+   is rebuilt as an in-app React route at `/pricing`... `connect-four/server/pricing.html` stays in place
+   until Paddle domain-review compatibility of a JS-rendered route is verified.~~ **Current decision:** Paddle
+   has already verified and approved this domain, and approval is granted per domain, not per page — changing
+   what `/pricing` serves does not trigger a new review. The pricing page is rebuilt as an **in-app React
+   route that takes over `/pricing`** (the SPA catch-all serves it; the existing `res.sendFile` handler for
+   `/pricing` in `connect-four/server/index.js` is removed or re-pointed), reusing `src/lib/usePaddlePrices.js`,
+   `src/components/UpgradeModal.jsx`'s toggle/savings-badge treatment, the i18n layer, and
+   `src/lib/useUpgradeCheckout.js`. `connect-four/server/pricing.html` is **retained** (not deleted) and moves
+   to **`/pricing-legal`**, linked from the footer alongside `/terms`, preserving a server-rendered copy of the
+   Merchant-of-Record clause, the 14-day refund statement, and the `/terms` link on the approved domain in case
+   a future Paddle spot-check does not execute JavaScript. Its hardcoded price literals (`$2.99` / `$21.99` /
+   `39%` / `$1.83`) must still be de-hardcoded or removed on both surfaces (closes OI-41's drift risk). The
+   `paddle-docs` MCP verification of SPA-route domain-review compatibility (US3.4) drops from a blocking gate
+   to a confirmatory note, since no re-submission is required for a content change on an already-approved
+   domain.
+7. **(2026-07-31)** An unentitled caller of `GET /api/lessons/:id` gets **200 with a redacted stub**:
+   `{ id, title, order, free, locked: true }`, with no `slides`. The lesson list endpoint already publishes
+   exactly that metadata to every caller, so the stub leaks nothing new, and it lets a locked-lesson screen
+   render a real title plus an upgrade CTA instead of an error. `locked: true` is part of the API contract
+   US3.1's integration test asserts; document it in `docs/architecture/api-conventions.md`.
 
 **Non-obvious facts**
 - Sandbox vs live is selected from the **key prefix**, not `NODE_ENV`/`MODE` (memory
   `project_paddle_integration`).
-- The four tier reads are `sagaLock.js:13`, `PostSetSummaryScreen.jsx:55`, `CheckoutReturnBanner.jsx:72`, and
-  `SettingsScreen`'s Subscription section (added later — OI-39 says four, not three).
+- OI-39's "four tier-gate sites" text is **stale** — it predates `SagaScreen`/`DeepRevealPane`/
+  `useLessonLockGuard` in their current form. A source-level grep of every `.tier` read in `connect-four/src/`
+  gives **five** verified sites: `src/screens/SettingsScreen.jsx` (`setTier(profile.tier === 'paid' ? 'paid' :
+  'free')`), `src/screens/PostSetSummaryScreen.jsx` (`setIsFreeUser(!profile || profile.tier === 'free')`),
+  `src/screens/SagaScreen.jsx` (`.then(p => setTier(p?.tier ?? 'free'))`), `src/components/DeepRevealPane.jsx`
+  (`tier: profile?.tier`, feeds `describeQuota`), and `src/lib/useLessonLockGuard.js`
+  (`store.getProfile().then(p => p?.tier ?? 'free')`). Locate by symbol, not line — this repo has concurrent
+  sessions. **Verified NOT tier readers** (do not re-add these from OI-39's stale text): `src/screens/
+  sagaLock.js` (note: `src/screens/`, NOT `src/lib/`) exports pure functions — `deriveLockReason(lesson,
+  lessons, progress, tier)` receives tier as a **parameter**, it does not read it; `src/store/
+  CheckoutReturnBanner.jsx` (note: `src/store/`, NOT `src/components/`) contains **zero** `.tier` references.
+  **Do not conflate the five-site set above with `UpgradeModal`'s five call sites**
+  (`SettingsScreen.jsx`, `SetPickerScreen.jsx`, `SagaScreen.jsx`, `PostSetSummaryScreen.jsx`,
+  `DeepRevealPane.jsx`) — same size, different purpose (opening the upgrade modal, not reading the tier).
+- This app has **no router library** (`react-router`/`wouter` are absent from `connect-four/package.json`).
+  Navigation is hand-rolled: a `URL_MAP` table in `src/lib/urlMapping.js`, a `SCREENS` registry in
+  `src/lib/screenRegistry.jsx`, and `window.history.pushState` in `src/App.jsx`. Adding the in-app `/pricing`
+  route (Settled decision #6) means touching all three files, not just the hooks/components the epic
+  otherwise names.
+- `connect-four/server/index.js` registers routes in order and Express matches on registration order.
+  Whichever handler is registered first at a given path wins — this is why the static `/pricing`
+  `res.sendFile` handler had to be removed/re-pointed for the React route to take over the path (Settled
+  decision #6), not merely added alongside it.
+- `app.use(loadUser)` is registered **globally** in `connect-four/server/index.js`, well before the lesson
+  routes, so `req.user.tier` is **already available** on `GET /api/lessons/:id` despite that route's "no auth
+  required" comment — US3.1 needs no new auth wiring.
+- `getLessons()` in `connect-four/server/lessonLoader.js` already projects to `{ id, title, order, free }`
+  only, so the saga list's "keep metadata public" requirement is **already satisfied** by the list endpoint.
+  Only `getLesson(id)` leaks `slides` to unentitled callers — US3.1 is scoped to that function.
+- `getSubscriptionStatus` (`connect-four/server/paymentProcessor.js`) is `export function
+  getSubscriptionStatus({ tier }) { return { status: tier === 'paid' ? 'paid' : 'free' }; }` — pure,
+  synchronous, no DB read, `customerId` ignored. It is not a server-authoritative check; the new entitlement
+  module (Settled decision #5) must actually read `users.tier` from the DB.
+- `/api/paddle/*` routes — including the public `GET /api/paddle/config` — all return 503 when
+  `PADDLE_API_KEY` is unset. Any surface that depends on that endpoint (the pricing route, US3.4) needs a
+  defined degraded state for this case.
 - `useLessonLockGuard` closed the **UI** hole in PR #19; the endpoint is untouched, so `curl` still returns
   paid content. With the free 1–10 / paid 11–15 split, five lessons are exposed.
 - OI-41's drift is **not currently manifesting** (verified 2026-07-18: `pricing.html`, `en.json`'s
@@ -651,27 +724,60 @@ drift), OI-25 (paying from `/summary` loses the summary).
 
 **User stories & tasks**
 
-**US3.1 — Server-side lesson entitlement (8 tasks).** Decide the unentitled response shape (404 / 402 /
-redacted stub); gate `GET /api/lessons/:id` on the caller's tier reusing the same `free`-flag/tier source
-`deriveLockReason` uses so client and server cannot drift; keep metadata (title, `free`, `order`) public so
-the saga list renders; add an integration test that a signed-out fetch of a paid id returns no `slides`;
-verify the saga screen and `useLessonLockGuard` still behave; document in `api-conventions.md`.
+**US3.1 — Server-side lesson entitlement (8 tasks).** Gate `getLesson(id)` in
+`connect-four/server/lessonLoader.js` (the only leak — `getLessons()` already projects to public metadata
+only) on the caller's tier by calling the shared entitlement module (Settled decision #5) directly — no new
+auth wiring needed, since `req.user.tier` is already available via the globally-registered `loadUser`
+middleware. Unentitled callers get **200 with a redacted stub**: `{ id, title, order, free, locked: true }`,
+no `slides` (Settled decision #7 below). Add an integration test that a signed-out fetch of a paid id returns
+this stub with no `slides`; verify the saga screen and `useLessonLockGuard` still behave with `locked: true`;
+document the response contract, including `locked: true`, in `api-conventions.md`.
 
-**US3.2 — One tier-check interface (8 tasks).** Design the interface (server-authoritative, with a defined
-client caching/refresh story); implement on top of `getSubscriptionStatus`; migrate all four call sites in
-one change; delete the "test-only in production wiring" comment; add a test per call site; document the
-seam.
+**US3.2 — One tier-check interface (9 tasks).** Implement the shared server entitlement module (Settled
+decision #5); add `GET /api/user/entitlement` as a thin wrapper over it; have the `GET /api/lessons/:id`
+handler (US3.1) call the module directly, not the HTTP endpoint; define the fail-open vs fail-closed policy
+when the endpoint is unreachable; define the client cache TTL and every invalidation trigger (checkout
+return, at minimum); migrate all five call sites (`src/screens/SettingsScreen.jsx`,
+`src/screens/PostSetSummaryScreen.jsx`, `src/screens/SagaScreen.jsx`, `src/components/DeepRevealPane.jsx`,
+`src/lib/useLessonLockGuard.js` — see Non-obvious facts) to the new client helper in one change; update
+`docs/architecture/server-conventions.md` §PaymentProcessor Seam in the same change to reflect that
+`getSubscriptionStatus` is superseded (for production reads) by the DB-backed module, and to state precisely
+what remains of its "test-only" scoping; delete the "test-only in production wiring" comment; add a test per
+call site plus a test for the module and the endpoint wrapper; document the seam in `api-conventions.md`.
 
-**US3.3 — Payment identity & analytics (7 tasks).** Review OI-55's shipped `paddle_customer_id` cross-check
-and decide whether the first-payment window is accepted or closed with a server-minted customer id; record
-the decision in `server-conventions.md` either way; re-map or close OI-34 against the Paddle fallback; if
-kept, add the idempotent `upgrade_completed` write keyed on the transaction id; extend
-`paddleProcessor.test.mjs`.
+**US3.3 — Payment identity ratification & analytics (5 tasks).** Record the owner's 2026-07-31 ratification
+of OI-55's existing `paddle_customer_id` cross-check as settled policy in `server-conventions.md` §"Identity
+binding on `transaction.completed` (OI-55)", replacing the "unilateral judgment call, treat as a proposal"
+disclaimer with the dated ratification and explicitly naming the accepted residual risks (grief-granting;
+laundering a chargeback-able payment onto a third-party account) — no change to the identity-binding code.
+Re-map OI-34 against Paddle's `verifyTransaction` sync-activation fallback and close it if obsolete, or (if
+still applicable) keep it and add the idempotent `upgrade_completed` write keyed on the transaction id. Extend
+`paddleProcessor.test.mjs` to cover whichever of those lands.
 
-**US3.4 — Designed pricing page (8 tasks).** Build a real pricing surface (plan comparison, annual/monthly
-toggle, CTA into the existing checkout, Rioplatense voseo copy); source every number from the live config
+**US3.4 — Designed pricing page (10 tasks).** Build the pricing surface as an in-app React route that **takes
+over `/pricing`** (Settled decision #6), reusing `src/lib/usePaddlePrices.js` (live `GET /api/paddle/config`
+prices, `formatPrice`, `computeAnnualSavings`), the monthly/annual toggle and savings-badge treatment from
+`src/components/UpgradeModal.jsx`, the i18n layer (Rioplatense voseo), and `src/lib/useUpgradeCheckout.js` for
+the CTA into the existing checkout. Wiring the route requires touching the three structural navigation files
+(no router library exists — see Non-obvious facts): add an entry to the `URL_MAP` table in
+`src/lib/urlMapping.js`, register the screen in the `SCREENS` registry in `src/lib/screenRegistry.jsx`, and
+wire the nav entry point via `window.history.pushState` in `src/App.jsx`. Remove or re-point the static
+`res.sendFile('/pricing', ...)` handler in `connect-four/server/index.js` so the SPA catch-all serves the
+React route instead (Express matches on registration order — see Non-obvious facts). Move
+`connect-four/server/pricing.html` to serve at `/pricing-legal` instead, linked from the footer alongside
+`/terms`; de-hardcode or remove its price literals (`$2.99` / `$21.99` / `39%` / `$1.83`) on both surfaces.
+One verification task and one blocking task gate the rest of the story:
+- **Note, not a blocker:** confirm via the `paddle-docs` MCP server (per `CLAUDE.md`: never rely on training
+  data for Paddle) that no re-submission is required for a content change on an already-approved domain — the
+  domain is already Paddle-approved, so this is confirmatory, not gating (Settled decision #6).
+- **Blocking:** re-verify CSP for any new script/style origin against the Express-served `dist/` build, never
+  `npm run dev` (Vite dev enforces no CSP — memory `project_csp_helmet_traps`; Paddle CSP took five rounds of
+  discovery — memory `project_paddle_integration`).
+
+Also: define the page's degraded state when `/api/paddle/*` 503s because `PADDLE_API_KEY` is unset (this
+includes the public `GET /api/paddle/config` the page depends on); source every number from the live config
 endpoint and `FREE_DEEP_REVEAL_WEEKLY_LIMIT`; preserve the MoR clause, refund statement, and `/terms` link
-verbatim; re-verify CSP for any new script/style origin; confirm the page is publicly reachable for domain
+verbatim on `/pricing-legal`; confirm both `/pricing` and `/pricing-legal` are publicly reachable for domain
 review.
 
 **US3.5 — Checkout return continuity (6 tasks).** Persist the set `results` to sessionStorage keyed by a
@@ -680,9 +786,21 @@ nonce; include the nonce in the return path; rehydrate `/summary` on cold boot; 
 outcome leaks into a later modal open (the OI-59 replay-on-subscribe fix must keep holding).
 
 **Acceptance criteria**
-- A signed-out `curl` of a paid lesson id returns no `slides`.
-- Exactly one code path answers "is this user paid"; all four gates call it.
-- Every price and quota figure shown to a user is derived from a live source.
+- A signed-out `curl` of a paid lesson id returns `200` with `{ id, title, order, free, locked: true }` and no
+  `slides` (Settled decision #7).
+- Exactly one server module answers "is this user paid" — `GET /api/user/entitlement` is a thin wrapper over
+  it, and `GET /api/lessons/:id` calls the module directly — and it backs both US3.1's lesson gate and all
+  five tier-gate call sites (Settled decision #5).
+- Every price and quota figure shown to a user on `/pricing` is derived from a live source. `/pricing-legal` is
+  exempt: its pre-existing hand-typed price and quota figures are retained unchanged, as a knowingly accepted
+  drift risk, because the page stays static and JavaScript-free (the reason it was retained in the first
+  place) and the payment provider has already reviewed its current wording.
+- The in-app React route serves `/pricing`; `connect-four/server/pricing.html` is retained and serves
+  `/pricing-legal`, linked from the footer alongside `/terms` (Settled decision #6). A confirmatory
+  `paddle-docs` MCP check records that no domain re-submission is required.
+- CSP for the new pricing route is verified against the Express-served `dist/` build, never `npm run dev`.
+- The OI-55 ratification and its named residual risks are recorded in `server-conventions.md`.
+- `locked: true` on `GET /api/lessons/:id` is documented in `docs/architecture/api-conventions.md`.
 - `npm run test:fast` green; staging-only checks appended to `staging_checks.md` under this epic.
 - Every `OI-N` under this epic's **Issues covered** is closed out in `docs/open_issues.md` per the
   Issue closeout convention at the top of this file — resolved-with-date, or still open with a dated
@@ -692,10 +810,15 @@ outcome leaks into a later modal open (the OI-59 replay-on-subscribe fix must ke
 - Migrating off Paddle, or changing the plan/price catalog.
 - Adding new paywall entry points beyond the pricing page (the Settings CTA already shipped).
 - Backfilling historical `upgrade_completed` analytics.
+- Closing the first-payment forgery window with a server-minted Paddle customer id — accepted as residual
+  risk per Settled decision #4.
+- Deleting `connect-four/server/pricing.html` — it moves to `/pricing-legal`, it does not disappear
+  (Settled decision #6).
 
 **Open questions**
-- Unentitled response shape for `GET /api/lessons/:id`: 404, 402, or a redacted stub?
-- Is the first-payment forgery window accepted, or closed with a server-minted Paddle customer id?
+
+None remaining — the epic's sole open question (unentitled response shape for `GET /api/lessons/:id`) was
+resolved 2026-07-31; see Settled decision #7.
 
 ---
 

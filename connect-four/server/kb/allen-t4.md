@@ -123,8 +123,11 @@ related:
   - "[[allen-t7]] — cross-column odd-threat cancellation (Black/Red threats in *separate* columns; T4 explicitly does not perform this cancellation within a single column)"
   - "[[allen-v1]] — uses T4's simplification when counting odd-threated columns"
   - "[[allen-v3]] — applies when T4 has collapsed a same-parity pair to a single effective odd-row threat"
+  - "[[community-overcut]] — implementation: `detectOvercutCore`'s `isT4SameParity` rescue branch
+    emits `reason: 'same_parity_t4'` (`detectOvercutVictim`/`detectOvercutBeneficiary`, spec 052
+    Epic 2, `docs/architecture/reason-DECISIONS.md` D38 for the sibling branches' taxonomy)"
 
-last_verified: 2026-05-17
+last_verified: 2026-07-30
 ---
 
 ## Verbatim source
