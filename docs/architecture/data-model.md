@@ -256,7 +256,7 @@ Games imported from papergames.io via `scripts/import_papergames_blunders.mjs`. 
 | `opponent_avatar` | `text` | nullable — UUID; avatar URL = `https://papergames.io/en/assets/images/avatars/{uuid}.svg` |
 | `opponent_country_code` | `text` | nullable — ISO 2-letter code |
 | `opponent_elo` | `integer` | nullable — Elo rating at time of game |
-| `finish_reason` | `text` | nullable — e.g. `'connect4'`, `'time-up'` |
+| `finish_reason` | `text` | nullable — observed values are `'winner'`, `'time-up'`, `'resignation'` (see note below) |
 | `duration_ms` | `integer` | nullable — total game duration |
 | `tournament_uid` | `text` | nullable — papergames tournament identifier |
 | `played_at` | `timestamptz` | NOT NULL — `createdAt` from the papergames room |
@@ -277,6 +277,18 @@ The `blunders` table has `papergames_game_id uuid nullable FK → papergames_gam
 No historical-data repair was performed (Out of Scope for spec 041 — the production DB had no real users at the time). `upsertGame()` (`server/papergamesImporter.js`) was updated in the same change to upsert with `onConflict: 'user_id,papergames_room_uid'`; this single change point covers both `importForUser` (self-service batch import) and `saveLiveGame` (live-game save), which share the function. `insertGameBlunder()` (`server/insertGameBlunder.js`) required no code change — it already inserts `user_id` on every row and treats `23505` as success; only the underlying index's column scope changed.
 
 `import_papergames_blunders.mjs` computes accuracy in the same solver pass as blunder extraction (optimal/scored plies ratio), then upserts it into the game row. Re-import is required to populate accuracy for rows created before migration 039.
+
+**`finish_reason` values and their relationship to `result`** (measured over a 342-row import, 2026-08-01). The stored value comes straight from `replayData.game.outcome.finishReason`; the three values that actually occur are:
+
+| `finish_reason` | Meaning | `result` values seen |
+|---|---|---|
+| `'winner'` | Decided on the board — a four-in-a-row, **or a full-board draw** | `win`, `loss`, `draw` |
+| `'time-up'` | Decided by the clock | `win`, `loss` |
+| `'resignation'` | A player resigned | `win`, `loss` |
+
+Two traps. First, a **full-board draw carries `finish_reason = 'winner'`** with `result = 'draw'` — the column names the *termination rule*, not the existence of a winner, so `finish_reason === 'winner'` is exactly the predicate for "decided on the board" (wins, losses, and drawn full boards alike). Second, the doc previously listed `'connect4'` as a value; that string appears in the importer's API-shape comment but is **not** what papergames stores.
+
+**`scored` is computed at import and then discarded.** `extractBlunders()` derives `accuracy = optimalCount / scored` and returns only the ratio; there is no `scored_moves` column on `papergames_games`. Any consumer needing the denominator must either add a column plus a backfill, or derive an upper bound from `moves` and `side` (`side === 'first' ? ceil(len/2) : floor(len/2)`) — an *upper* bound because the importer skips forced plies (`legalCount <= 1`) from scoring. Contrast the in-app path, where `GameAnalysis.scored` is available directly to the client.
 
 ## GameAnalysis (ephemeral — not persisted)
 

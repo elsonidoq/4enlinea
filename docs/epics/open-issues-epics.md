@@ -945,26 +945,123 @@ autoplay on a cold onboarding load), OI-37 (100% accuracy beside a lost game).
 **Settled decisions**
 1. **`agentic_QA_2026-07-15-1321.md` at the repo root is the authoritative work-list** for OI-35 — this epic
    is a pointer, not a re-listing. Read the file (per-finding severity, code location, repro) before speccing.
-2. **Do not fold resignation into the accuracy calculation** (OI-37). It measures board-move optimality and is
-   correct on its own terms; conflating it with "did you finish the game" destroys both answers. The copy fix
-   already shipped; what remains is a presentation question.
-3. OI-21's runtime bug is **fixed** — the greeting plays on first interaction. What remains is designing an
-   entry that elicits a gesture, and it must not reintroduce a flash of the sparring game or break
-   `shouldAutoRouteToOnboarding`'s anonymous-only semantics.
+   Confirmed present (83,360 bytes) but **untracked**: `git status --short` reports `?? agentic_QA_2026-07-15-1321.md`
+   and `git log --diff-filter=A -- agentic_QA_2026-07-15-1321.md` returns empty — no commit on any branch has
+   ever added it. US7.1 must (a) commit the file so the work-list stops being a single-machine artifact, and
+   (b) write the durable triage result into `docs/open_issues.md` under OI-35 — updating the findings file
+   in place is not sufficient on its own.
+2. **Do not fold game outcome into the accuracy calculation** (OI-37). It measures board-move optimality and
+   is correct on its own terms; conflating it with "did you finish the game" destroys both answers. **Scoped
+   finding, not a full correction**: in the 342-game Papergames import measured during this brainstorm (see
+   Non-obvious facts), every accuracy-100% loss is a `time-up` (clock) loss and real `resignation` losses top
+   out at 89%. That is a statement about one imported dataset, not a general refutation of the epic's original
+   "resigns after playing perfectly" framing — the findings file (`agentic_QA_2026-07-15-1321.md`, Batch A,
+   "[minor] Lost games report 'No mistakes' / 100% accuracy") contains an explicit **in-app** repro of the
+   resignation case that this import did not exercise, and the in-app resign path remains unmeasured. The
+   rationale for leaving the calculation untouched still holds regardless of which trigger produces the badge.
+   The copy fix (`review.cleanButLost`) already shipped; what remains is reproducing the in-app repro (US7.3's
+   first accuracy-half task, before any close-as-not-a-bug claim) and then closing OI-37 with evidence covering
+   **both** triggers.
+3. **OI-21: accept first-interaction playback (status quo).** No new splash screen, no welcome card, no
+   routing change, no speaker affordance. The greeting plays on whatever the user first touches; the epic's
+   own acceptance criterion already permits this ("... or the accepted alternative is documented"). What
+   remains is documenting the alternative and its rationale, verifying the coach's **text bubble** fully
+   conveys the greeting in English and Spanish (so a user who never hears the audio loses nothing), signing
+   off the `staging_checks.md` item, and closing OI-21. `shouldAutoRouteToOnboarding`'s anonymous-only
+   semantics and the no-flash-of-the-sparring-game constraint still apply and are not being touched.
+4. **OI-37 short-game half: a minimum-scored-moves threshold was considered and rejected.** All 7 observed
+   accuracy-100% losses are very short, 1–6 user-move `time-up` (clock) losses (movestring lengths 2, 5, 5, 8,
+   11, 13, 13), and a threshold of 7 user moves would have suppressed the badge on all 7 of them at a cost of
+   48 / 342 games (14.0%, see Non-obvious facts for the full trade-off table). The owner rejected building it:
+   the change touches multiple render surfaces (in-app Review, Past Games, and — if a Papergames derivation
+   were added — the imported-game badge) for a narrow cosmetic case, and carries more regression risk than the
+   problem is worth. Nothing is shipped for the short-game half; the measured trade-off data is kept for the
+   record, not as a spec-phase pick.
+5. **US7.3's deep-reveal spend policy is already decided — record-and-close, ship no gate.** Approved
+   2026-07-16 (`docs/superpowers/specs/2026-07-16-qa-remediation-decisions-design.md` §D2): retire the
+   "blunders only" constraint from the anon design doc, ship no code. A server-side gate isn't cleanly
+   implementable (the anon gate is keyed by position+column, which maps ambiguously to stored rows); a
+   client-only gate is theatre (`/api/blunders/:id` is a public no-auth permalink); and blocking a click the
+   user deliberately made costs conversion. This also avoids contradicting shipped spec-042's invariant that
+   severity is "label + color only, never gates an action." Because `docs/superpowers/` is throwaway by repo
+   convention, D2's substance is restated here and must also land in `docs/open_issues.md`, not left as a
+   pointer.
 
 **Non-obvious facts**
 - Browsers block `audio.play()` until a user gesture; the mission screen is reached by an **auto-route** with
   no prior gesture. This is a hard browser rule, not a code bug.
 - OI-35's headline unfixed item is a **cold-load-specific** nav bug: `/mistakes ↔ /stats` infinite-toggles on
-  a cold-loaded `/mistakes` (empty nav stack); in-session navigation unwinds correctly.
+  a cold-loaded `/mistakes` (empty nav stack); in-session navigation unwinds correctly. This was **not**
+  re-verified during the brainstorm — check it live before sizing US7.1.
 - OI-35's "lesson content is English-only in Spanish mode" finding is **stale** — all 15 lessons now carry
-  `text_es`; only audio remains (Epic 5). Re-triage the file against the current tree before speccing.
+  `text_es`; only audio remains (Epic 5). Re-triage the file against the current tree before speccing: much of
+  the 23-finding backlog (25 `####` blocks minus 2 `[passes]` entries, which record successes rather than
+  findings; plus 4 additional `❌ fail` checklist rows outside any `####` header that must be separately
+  swept) has shipped since 2026-07-16 (verified at source: `review.cleanButLost` is live in
+  `ReviewScreen.jsx:293` and in both `en.json`/`es.json` at line 1005; `server/index.js:577` now reads
+  `FREE_DEEP_REVEAL_WEEKLY_LIMIT` from `quotaLimits.js` rather than the old hardcoded `5`) — **US7.1's first
+  task is a re-triage, not a fix sweep.** `docs/superpowers/plans/2026-07-16-qa-2026-07-15-remediation.md`
+  (§"Finding Inventory → Workstream Map", lines ~51–83) holds a 25-item workstream map useful as a
+  cross-check, but the findings file remains the authority and 23 is the correct disposition count (the map's
+  25 counts 2 `[passes]` entries that are not findings). The `/api/scores` 500 on a malformed movestring
+  and the remaining English-in-Spanish leaks were also not re-verified — check live before sizing US7.1.
 - The candidate-generation "fetch failed" finding was **reclassified as an environmental flake**, not a bug
   (memory `project_generate_candidates_fetch_failed_flake`) — do not re-open it.
+- **OI-37 finish-reason evidence (342-game Papergames import, run during this brainstorm):** account
+  `69e773d36bf9938bffc1509a` was imported to 342 rows (171 wins / 160 losses / 11 draws;
+  `node --env-file=server/.env server/scripts/import_papergames_blunders.mjs --user-id 4b8dac6d-c8db-4c01-9458-cb5781f3df56 --limit 300`,
+  292 imported / 8 skipped / 171.6s). Across the 160 losses with a non-null accuracy:
+
+  | loss `finish_reason` | n | max accuracy | losses at exactly 100% |
+  |---|---|---|---|
+  | `winner` (decided on the board) | 144 | 94% | 0 |
+  | `resignation` | 4 | 89% | 0 |
+  | `time-up` | 12 | 100% | 7 |
+
+  All 7 accuracy-100% losses are `time-up` (clock) losses; the evidence is Papergames-only, the in-app
+  (non-imported) resign path was not measured and US7.3 must verify it separately before closing OI-37. The
+  full observed `finish_reason` enum across the 342-row dataset is exactly three values: `winner`, `time-up`,
+  `resignation`. Full-board draws also carry `finish_reason = 'winner'` (with `result = 'draw'`, n=11) — a
+  "decided on the board" filter, if one were ever needed, is exactly `finish_reason === 'winner'`. This is
+  recorded as a measured fact only; no such filter is being built by this epic.
+- **`StatsScreen`'s "avg accuracy" card is puzzle accuracy, not game accuracy.** Verified at source:
+  `StatsScreen.jsx:37` sets `accuracy` from `store.getStats()`, which aggregates `puzzle_attempts`
+  (`server/statsAggregate.js:64,72`; `server/userRoutes.js:57,83`) — `stats.avg_accuracy` is only an i18n
+  label key (`grep -rn avg_accuracy src/ server/ server/migrations/` returns exactly that one hit), not a data
+  field. There is no average-game-accuracy metric anywhere in the app; `PastGamesListScreen.jsx:91-92,102-103`
+  renders per-game badges only, with no aggregate. Do not re-derive an aggregate-accuracy threshold question
+  from `StatsScreen` — there is nothing there to threshold.
+- **OI-37 threshold trade-off (measured over all 342 games; kept for the record — see Settled decision #4,
+  the threshold itself was considered and rejected):**
+
+  | threshold (user moves) | games whose badge is suppressed | of the 7 perfect losses caught |
+  |---|---|---|
+  | 4 | 22 / 342 (6.4%) | 3 / 7 |
+  | 5 | 27 / 342 (7.9%) | 4 / 7 |
+  | 6 | 32 / 342 (9.4%) | 5 / 7 |
+  | **7** | **48 / 342 (14.0%)** | **7 / 7** |
+  | 8 | 65 / 342 (19.0%) | 7 / 7 |
+  | 10 | 103 / 342 (30.1%) | 7 / 7 |
+
+  The 7 perfect-loss user-move counts were 1, 2, 2, 4, 5, 6, 6 (movestring lengths 2, 5, 5, 8, 11, 13, 13).
+  Genuinely-earned 100% scores exist at 13, 17, and 18 user moves and must **not** be suppressed.
+- **Scored-count facts, verified at source (kept for the record; no rule needed now the threshold is
+  rejected):** the in-app Review screen has the real scored count client-side —
+  `ReviewScreen.jsx:299` reads `analysis && analysis.scored > 0`, and `ReviewScreen.jsx:145` computes accuracy
+  from `data.scored`. The Papergames path does **not** store a scored count: `papergamesImporter.js:167`
+  computes `const accuracy = scored > 0 ? Math.round(optimalCount / scored * 100) : null` and discards
+  `scored`; `papergames_games` (migration `038_papergames_games.sql`, accuracy added in
+  `039_papergames_accuracy.sql`) has no such column, and `papergamesImporter.js:112`
+  (`if (legalCount <= 1) continue`) skips forced moves from scoring, so any moves-string-derived count would
+  only ever be an upper bound on the real `scored`. This in-app-exact vs. derived-upper-bound mismatch was
+  part of why a cross-surface threshold was rejected as more regression risk than the problem is worth — no
+  `scored_moves` column, no migration, no backfill is being built.
 - The anon free deep reveal being spendable on a *suboptimal* move contradicts the "blunders only" design
-  intent and is a **product call**, not a mechanical fix.
+  intent — this is now a **closed** product call (see Settled decision #5), not an open one.
 - Automation Chrome fakes autoplay permission, so audio can ship silent and pass an agentic QA pass
   (memory `project_app_qa_setup_gotchas`) — verify onboarding audio in a real browser.
+- `agentic_QA_2026-07-25-0015.md` at the repo root is a **lessons-only** run belonging to Epic 6 — do not
+  mistake it for the 2026-07-15 general run this epic is scoped to.
 
 **Authoritative sources of truth**
 - `agentic_QA_2026-07-15-1321.md` (repo root) — the full findings list
@@ -976,42 +1073,88 @@ autoplay on a cold onboarding load), OI-37 (100% accuracy beside a lost game).
 
 **User stories & tasks**
 
-**US7.1 — Re-triage and fix the QA backlog (9 tasks).** Walk `agentic_QA_2026-07-15-1321.md` against the
-current tree and mark each finding fixed / stale / open; fix the cold-load `/mistakes ↔ /stats` nav loop and
-add a cold-boot nav-stack test; fix `/api/scores`'s 500 on a malformed movestring; confirm the anon
-challenge-progress 401 fix still holds; sweep the remaining English-in-Spanish leaks; update the findings
-file in place with the triage result.
+**US7.1 — Re-triage, commit, and route the QA backlog (8 tasks).** This is a **triage-and-route** story, not
+a fix sweep: commit `agentic_QA_2026-07-15-1321.md` to the repo (it is currently untracked); re-triage every
+finding against the current tree and give each one exactly one of five dispositions — **fixed** (already
+shipped, cite the evidence), **stale** (no longer applicable), **fix-here** (in scope for this epic — limited
+to the three live-check items below), **owned-by-Epic-N** (record a pointer only, do not edit — see NOT
+included for the two known cross-epic findings), or **new `OI-N`** (confirmed still open, not fixed here —
+file it in `docs/open_issues.md`); live-check the three items not yet re-verified (`/mistakes ↔ /stats`
+cold-load nav loop, `/api/scores`'s 500 on a malformed movestring, and any remaining English-in-Spanish leak
+**not** already owned by Epic 6 US6.5) and fix only those three if still confirmed open; confirm the anon
+challenge-progress 401 fix still holds; update the findings file in place with the triage result; write the
+durable triage outcome (including every owned-by-Epic-N pointer and every new `OI-N`) into `docs/open_issues.md`
+under OI-35.
 
-**US7.2 — Gesture-first onboarding entry (7 tasks).** Brainstorm the entry (splash CTA vs
-tap-to-enter auto-route vs speaker affordance vs accepting first-interaction playback); prototype the chosen
-one; ensure no flash of the sparring game before the gesture; keep the anonymous-only auto-route semantics;
-verify in a **real** browser, not automation Chrome; sign off the `staging_checks.md` item.
+**US7.2 — Document the accepted onboarding alternative (4 tasks).** Write up the accepted alternative
+(first-interaction playback, status quo) and its rationale in `docs/open_issues.md` under OI-21; verify the
+coach's text bubble fully conveys the onboarding greeting in English and Spanish with no audio; sign off the
+`staging_checks.md` item; close OI-21. No prototyping, no routing change — the design question is resolved,
+this story only records and verifies it. Four tasks is correct for its scope, not a floor to pad to — this
+epic is deliberately mostly record-and-close.
 
-**US7.3 — Product calls on the review surface (9 tasks).** Two decisions that share one screen and one
-session, taken and shipped together:
-- *Deep-reveal spend policy* — decide whether the anonymous free reveal may be spent on a suboptimal move or
-  only on a blunder; implement the gate; message the user when it is withheld; test both paths; document in
-  `api-conventions.md`.
-- *Accuracy vs outcome* — decide whether a 100% accuracy badge is softened, annotated, or paired with an
-  explicit "you resigned" note on a lost game; implement the chosen presentation; leave the metric's
-  calculation untouched (a Settled decision); add a test for the lost-but-clean case; verify the
-  already-shipped `review.cleanButLost` copy still reads correctly alongside it.
+**US7.3 — Verify-and-close on the review surface (5 tasks).** Two independent halves that share one screen,
+both landing as record-and-close (no threshold, no gate — see NOT included). Five tasks is correct for its
+scope, not a floor to pad to:
+- *Deep-reveal spend policy* — record D2's already-approved outcome (retire the "blunders only" constraint,
+  ship no gate) in this epic and in `docs/open_issues.md`; delete the stale "blunders only" line from the
+  anon design doc, noting the documented reversal trigger (evidence anonymous users routinely spend the
+  reveal on suboptimal moves); close the issue. Ship no gate code.
+- *Accuracy vs outcome* — **first**, before any close-as-not-a-bug claim, reproduce the findings file's
+  in-app repro: play a sparring game with only optimal board moves, then resign — check whether Review still
+  shows "Clean game. Nothing to revisit." / Accuracy 100%. If it still reproduces, that is a live bug and this
+  story fixes it. Either way, close OI-37's finish-reason question in `docs/open_issues.md` with evidence
+  covering **both** triggers — the 342-game Papergames clock-loss breakdown and the in-app verification
+  result; verify the already-shipped `review.cleanButLost` copy still reads correctly.
 
 **Acceptance criteria**
 - Every finding in `agentic_QA_2026-07-15-1321.md` is marked fixed, stale, or explicitly deferred with a
-  reason — none silently unaddressed.
+  reason — none silently unaddressed — and the file itself is committed to the repo.
 - Back navigation from a cold-loaded `/mistakes` reaches Home.
-- The onboarding greeting is audible on arrival in a real browser, or the accepted alternative is documented.
+- The onboarding greeting text bubble fully conveys the greeting in English and Spanish, and the accepted
+  first-interaction-playback alternative is documented in `docs/open_issues.md` and `staging_checks.md`.
+- The findings file's in-app resign repro has been reproduced (or found not to reproduce) before OI-37 is
+  closed, and the OI-37 closeout text in `docs/open_issues.md` records evidence covering **both** triggers —
+  the 342-game Papergames `finish_reason` breakdown and the in-app verification result — before the issue is
+  closed.
+- No accuracy-badge threshold or suppression logic is added on any surface; the accuracy calculation and its
+  display are unchanged from before this epic.
+- The deep-reveal spend-policy decision (D2) is recorded in this epic and in `docs/open_issues.md`, and the
+  stale "blunders only" line is removed from the anon design doc.
 - Every `OI-N` under this epic's **Issues covered** is closed out in `docs/open_issues.md` per the
   Issue closeout convention at the top of this file — resolved-with-date, or still open with a dated
   UPDATE naming exactly what remains. A shipped fix with a stale backlog entry is an incomplete story.
 
 **NOT included**
-- Lesson content or audio work (Epics 3 and 4).
+- Lesson content or audio work (audio is Epic 5, lessons are Epic 6).
 - Re-running a full `/app-qa` pass (that is a separate session, not this epic).
 - Re-opening the candidate-generation "fetch failed" finding.
+- Implementing any anonymous deep-reveal spend gate — Settled decision #5 rules this out; the story is
+  record-and-close only.
+- Any onboarding entry redesign (splash, welcome card, routing change, speaker affordance) — Settled
+  decision #3 accepts first-interaction playback as-is.
+- ~~i18n literal sweeps in `src/screens`/`src/components` — owned by Epic 6 US6.5; US7.1 records a pointer
+  for any such finding rather than fixing it here.~~ **Exclusion lifted 2026-08-01.** Original rationale
+  (kept for history): this exclusion existed to avoid Epic 7 duplicating or conflicting with Epic 6 US6.5's
+  own sweep, which was running concurrently. **Epic 6 has since shipped** (commit `4d78aa2`, "Spec 052
+  (Epic 6)") — the conflict the exclusion guarded against no longer exists, so a leak Epic 6's sweep missed
+  is cheap to fix in place and US7.1 now fixes it under FR-006 rather than merely pointing at it. Scope
+  stays narrow: this authorizes fixing only the specific leaks US7.1's triage actually finds, not a fresh
+  repo-wide re-sweep of `src/screens`/`src/components` — that work already happened under Epic 6.
+- Upgrade-funnel / payments findings (e.g. OI-35's "upgrade funnel has orphaned ends") — owned by Epic 3,
+  Lane A, which runs in a parallel worktree; US7.1 records a pointer, does not edit.
+- Any minimum-move / minimum-scored-move threshold on the accuracy badge — considered and rejected, see
+  Settled decision #4.
 
-**Open questions** — all three are the brainstorm agenda; expect `BRAINSTORM_NEEDED` on this epic.
+**Open questions** — the three brainstorm items are resolved; see Settled decisions #1–#5. No bounded
+spec-phase picks remain: the short-game threshold's exact value and the derive-vs-column choice for the
+Papergames scored-move count are both moot now that the threshold itself was rejected (Settled decision #4).
+
+### Deferred
+- **Anonymous deep-reveal spend gate.** Not implemented now; the documented reversal trigger is evidence that
+  anonymous users routinely spend the free reveal on suboptimal (non-blunder) moves — if that evidence
+  appears, the response is to *steer* users toward blunders (e.g. copy/UI nudges), not to *restrict* the
+  reveal, per the D2 rationale.
 
 ---
 
