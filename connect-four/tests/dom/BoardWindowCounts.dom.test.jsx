@@ -39,7 +39,15 @@ test('Board renders a digit in every empty cell when windowCounts is supplied', 
 test('Board renders no digits at all when windowCounts is omitted', () => {
   cleanup();
   render(<Board />);
-  assert.equal(screen.queryByText('13'), null);
+  // Compare a boolean, never the raw DOM node/null pair directly: on failure,
+  // node:assert's error-message formatter would try to util.inspect() the
+  // matched element, and a mounted React/jsdom node is a large, circular,
+  // getter-laden object graph (React Fiber back-references, jsdom internals).
+  // That formatting pass is unboundedly expensive — in practice it never
+  // finishes in test-suite time, which reads as a hang rather than a failure.
+  // See the `never renders a digit on an occupied cell` test below for the
+  // proven repro (OI-71).
+  assert.equal(screen.queryByText('13') === null, true);
 });
 
 test('Board skips cells marked null (occupied) and renders 0 without a tint', () => {
@@ -65,7 +73,18 @@ test('Board never renders a digit on an occupied cell, even when windowCounts su
   const board = Array.from({ length: 6 }, () => Array(7).fill('empty'));
   board[0][3] = 'red';
   render(<Board board={board} windowCounts={counts} />);
-  assert.equal(screen.queryByText('99'), null, 'an occupied cell must never render its windowCounts digit');
+  // Root cause of OI-71's ~30s hang under the diagnostic mutation: this used to be
+  // `assert.equal(screen.queryByText('99'), null, ...)`. When the assertion fails
+  // (i.e. the mutant renders the digit), the *actual* value is a live DOM element
+  // holding circular back-references into its React Fiber tree (which itself embeds
+  // Error objects with full stack traces via `_debugStack`) plus jsdom's
+  // getter-heavy prototype chain. node:assert's AssertionError builds its diff
+  // message by util.inspect()-ing both operands, and inspecting that graph is
+  // effectively unbounded — confirmed by direct repro: identical code with
+  // `assert.equal(node, null)` never returns (CPU-bound, growing RSS) while
+  // `assert.equal(node === null, true)` fails in <1s. Comparing a boolean instead
+  // of the raw node sidesteps the DOM-node formatting entirely.
+  assert.equal(screen.queryByText('99') === null, true, 'an occupied cell must never render its windowCounts digit');
 });
 
 test('Board suppresses the tint but still renders the digit when a per-cell overlay colours the same cell', () => {

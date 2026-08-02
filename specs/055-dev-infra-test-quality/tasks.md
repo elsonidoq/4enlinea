@@ -212,27 +212,27 @@ confirm the new regression test independently catches a spilled/oversized board.
 
 ### Implementation for User Story 2
 
-- [ ] T022 [US2] Reproduce OI-71's hang: temporarily delete `&& value === 'empty'` from
+- [x] T022 [US2] Reproduce OI-71's hang: temporarily delete `&& value === 'empty'` from
       `connect-four/src/components/Board.jsx:382` (verbatim today: `{windowCount != null && value
       === 'empty' && (`), then run `timeout 60 npm run test:dom` and confirm it hangs at 0% CPU
       until the 60s timeout kills it (this is the diagnostic starting point for T023 — do not revert
       yet).
-- [ ] T023 [US2] Bisect which assertion in `connect-four/tests/dom/BoardWindowCounts.dom.test.jsx`
+- [x] T023 [US2] Bisect which assertion in `connect-four/tests/dom/BoardWindowCounts.dom.test.jsx`
       never returns with the T022 mutation applied — research.md R6's hypothesis (unconfirmed) is
       the 4th of 5 `test(...)` blocks (`'Board never renders a digit on an occupied cell...'`, which
       isolates the `value === 'empty'` half of the guard via a deliberately contract-violating
       fixture, `counts[0][3] = 99`). Confirm by observing which test Node's `--test` runner reports
       as running when the process hangs — do not assume the hypothesis is correct without this
       confirmation.
-- [ ] T024 [US2] Find and fix the actual root cause identified in T023 (a jsdom/testing-library
+- [x] T024 [US2] Find and fix the actual root cause identified in T023 (a jsdom/testing-library
       interaction is the working hypothesis, per research.md R6/epic doc, but is NOT assumed here —
       fix whatever T023 bisection actually reveals) so that `npm run test:dom` with T022's mutation
       still applied produces a fast, clear assertion failure instead of a hang.
-- [ ] T025 [US2] Revert the diagnostic mutation from T022: restore `&& value === 'empty'` in
+- [x] T025 [US2] Revert the diagnostic mutation from T022: restore `&& value === 'empty'` in
       `connect-four/src/components/Board.jsx:382` exactly, and confirm `git diff
       connect-four/src/components/Board.jsx` is empty (FR-007/SC-002 — `Board.jsx` is production
       code, the deletion was diagnostic-only).
-- [ ] T026 [P] [US2] Annotate `specs/042-mistake-review-unification/contracts/split-reveal-zoom-contract.md`'s
+- [x] T026 [P] [US2] Annotate `specs/042-mistake-review-unification/contracts/split-reveal-zoom-contract.md`'s
       "Current mechanism" section (lines 6-17) as superseded by the shipped
       `computeFrozenBoardWidth` + ref-based freeze mechanism now live in
       `connect-four/src/lib/useDragSplit.js` (FR-009) — do not touch the "Required behavior" section
