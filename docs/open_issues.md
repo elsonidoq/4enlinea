@@ -2796,3 +2796,114 @@ default payment link at `/pricing-legal`** — it is deliberately static and JS-
 never satisfy the Paddle.js requirement. Cross-ref: spec 053 FR-024/FR-025, OI-41, OI-97.
 
 ---
+## OI-99 — Every non-tied puzzle attempt through `POST /api/puzzles/:id/check` is silently discarded
+
+**Status**: deferred — scheduled under spec 054 (Epic 4, US4.3); not yet fixed
+**Area**: `connect-four/server/index.js:2520` (the `puzzle_attempts` insert inside the `POST
+/api/puzzles/:id/check` handler at `:2461`), `connect-four/server/predicates.js:95`
+(`evaluatePredicate`), `connect-four/server/migrations/003_puzzles.sql:30` (the `outcome` CHECK)
+**Discovered**: spec 054 epic review, 2026-08-01
+
+The handler inserts `outcome: evaluation.result`, where `evaluatePredicate` returns
+`{ result: 'correct' | 'wrong' | 'tied' }`. Only `'tied'` is a member of the `outcome` CHECK
+constraint's value set — `'correct'` and `'wrong'` are not. Those inserts therefore fail the
+constraint on every call, and the failure is invisible because the write is fire-and-forget:
+
+```js
+  .catch(err => console.error('[puzzle attempt]', err.message));   // server/index.js:2525-2527
+```
+
+Consequence: for the whole life of this endpoint, **only tied gradings have ever produced a
+`puzzle_attempts` row**; every correct and every wrong attempt through it was dropped. Nothing reads
+`puzzle_attempts.outcome` (stats aggregate on `first_attempt_correct`), which is why the loss went
+unnoticed.
+
+Two second-order effects worth knowing before touching this area:
+- **`'tied'` is a live, written value, not dead vocabulary.** OI-49 and earlier drafts of the Epic 4
+  text asserted that only `ChallengeScreen.jsx` writes outcomes and that `'tied'` was unused. Both are
+  false; the claims came from reading OI prose rather than grepping `outcome:` across `server/`.
+- A narrowing `ALTER TABLE … ADD CONSTRAINT … CHECK` **validates existing rows**, so any live `'tied'`
+  row aborts the migration. Query before narrowing; do not assume zero.
+
+**Why deferred**: it is US4.3 of spec 054, which also normalizes the writer to the enum vocabulary
+(`'correct' → 'correct_first'`, `'wrong' → 'incorrect'`, `'tied' → 'tied'`).
+
+---
+
+## OI-100 — A wrong answer in a sequence-category puzzle records no attempt row at all
+
+**Status**: deferred — scheduled under spec 054 (Epic 4, US4.3); not yet fixed
+**Area**: `connect-four/src/screens/ChallengeScreen.jsx` — `handleSequenceClick`, the `else` branch at
+~`:668` sibling to the `data.outcome === 'success'` branch at ~`:659`
+**Discovered**: spec 054 epic review, 2026-08-01
+
+`ChallengeScreen.jsx` has three `outcome:` write sites. Two are conditional and record a wrong answer
+(as `'abandoned'` — see below): `:408` `outcome: isCorrect ? 'correct_first' : 'abandoned'` and `:584`
+`outcome: quality === 'optimal' ? 'correct_first' : 'abandoned'`. The third, `:659`, is
+**unconditional** `outcome: 'correct_first'` and sits inside the success branch only. Its sibling
+failure branch plays a wrong-move sound and pushes a coach message but never calls
+`recordPuzzleAttempt` — so a wrong answer in a sequence puzzle is invisible to stats entirely.
+
+Related and also unfixed: the two conditional sites **conflate "answered incorrectly" with
+"abandoned"**, so even where a row is written the distinction is unrecoverable for all data written to
+date. Spec 054 adds an explicit `'incorrect'` value and fixes the writers, but deliberately does **not**
+backfill — the distinction cannot be reconstructed from existing rows.
+
+**Why deferred**: it is US4.3 of spec 054, which widens the client exception to a fourth
+`ChallengeScreen.jsx` touch point covering this branch.
+
+---
+
+## OI-101 — `GET /api/admin/candidates` paginates on a non-unique sort key
+
+**Status**: deferred — scheduled under spec 054 (Epic 4, FR-012a); not yet fixed
+**Area**: `connect-four/server/index.js:3135-3143`
+**Discovered**: spec 054 spec review, 2026-08-02
+
+The handler paginates with `.order('created_at', { ascending: true }).range(offset, offset + limit - 1)`
+and **no `id` tiebreaker**. Candidates are inserted in generation batches, so a batch shares one
+`created_at` — Postgres may order tied rows differently between the two page queries, making some rows
+unreachable and others duplicated across pages.
+
+This is the same failure mode already documented for `/api/coach/queue` in
+`docs/architecture/api-conventions.md:324`, where QA observed **8 of 137 rows unreachable**. The
+tiebreaker rule exists in the conventions doc; this endpoint predates or missed it.
+
+Note that `GET /api/puzzles/draw` (`server/index.js:1640-1665`) also calls `.range()` but is **not**
+affected: its offset is a single randomized draw
+(`const offset = Math.floor(Math.random() * Math.max(0, totalIndexed - n + 1));` at `:1646`), not
+page-to-page traversal, so a stable sort key is semantically inapplicable there.
+
+**Why deferred**: it is spec 054's FR-012a, which also requires an inventory of every offset-paginated
+endpoint (`server/index.js:1654`, `:1984`, `:2774`, `:3143`).
+
+---
+
+## OI-102 — `tests/blunder/blunderTagConstraint.test.js` is registered in no npm script, and the three test lists have drifted
+
+**Status**: deferred — surfaced by spec 054 task review, not in that epic's scope
+**Area**: `connect-four/package.json` — `test:dom` (line 14), `test` (line 16), `test:fast` (line 17);
+`connect-four/tests/blunder/blunderTagConstraint.test.js`
+**Discovered**: spec 054 tasks review, 2026-08-02
+
+`docs/architecture/testing-conventions.md:174` already states that tests are explicitly listed with no
+automatic discovery, and `:187` gives the correct verification technique (confirm the test's own
+distinctive case names appear in the run output; assert the path is present in the script string).
+Despite that, `blunderTagConstraint.test.js` exists on disk and `grep -c blunderTagConstraint
+connect-four/package.json` returns **0** — it is in none of the three scripts and has never run.
+Whatever code-vs-constraint parity it guards is currently unguarded.
+
+Separately, the three lists have drifted from one another (each is hand-maintained), so "which suite
+covers this file" is not answerable without diffing the three strings.
+
+**Why deferred**: spec 054 adds registration tasks for the ~9 test files *it* creates, but re-enabling
+a pre-existing orphaned test is out of its scope — the test may itself be stale and needs a look before
+being switched on.
+
+**If picked up**: run it standalone first (`node --test
+connect-four/tests/blunder/blunderTagConstraint.test.js`) to see whether it still passes against the
+current migrations before adding it to a script. It is also a useful **pattern** to copy — it asserts
+code-vs-constraint parity by parsing the newest migration SQL file, with no DB connection, which is the
+only DB-free way to test a CHECK constraint in this repo.
+
+---

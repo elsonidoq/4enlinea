@@ -1338,3 +1338,73 @@ Spec 051 was implemented, backfilled and QA'd entirely against the **local** dat
   Paddle.com is the Merchant of Record..."), the 14-day refund statement, and the `/terms` link — all
   present with zero JavaScript execution (plain static HTML response).
 - [x] Signed off (tester + date): Claude, 2026-08-01 (curl-verified, no-JS method).
+## Epic 4 — Server/API Data Integrity & Environment Correctness (spec 054) — added 2026-08-02
+
+Source epic: `docs/epics/open-issues-epics.md` §"Epic 4"; spec `specs/054-server-api-data-integrity/`.
+The first two are **migration preconditions**: both must be run and their results recorded *before* the
+corresponding migration file is finalized, because a narrowing constraint / unique index validates
+existing rows and a failure here takes down the whole deploy (`railpack.json`'s start command is
+`node server/migrate.js && node server/index.js`, and `server/migrate.js:98` calls `process.exit(1)`).
+
+- **What** — Query `puzzle_attempts` on staging *and* production for rows whose `outcome` is not in
+  `('correct_first','tied','incorrect','abandoned')`; record the count per value.
+  **Why staging** — the local `puzzle_attempts` table is not representative; only deployed environments
+  hold real attempt history, and migration 063's narrowing `ADD CONSTRAINT … CHECK` validates every
+  existing row.
+  **Expected** — a recorded count per stray value (zero is a valid result, but it must be *recorded as
+  checked*, not assumed). Any `'correct_retry'` rows remap to `'correct_first'`; any `'revealed'` rows
+  remap to `'abandoned'`.
+  **Source** — spec 054 FR-017; epic Settled decision #3.
+  - [ ] Signed off (tester + date):
+
+- **What** — Query `candidates` on staging *and* production for `(generation_run_id, move_string)`
+  groups with `count > 1`; record the number of groups and total excess rows.
+  **Why staging** — the duplicates are produced by OI-50's retry-after-commit bug against a real
+  network, so only deployed data can contain them; migration 062's `CREATE UNIQUE INDEX` errors if any
+  survive, and `IF NOT EXISTS` guards only against the *index* already existing, not duplicate rows.
+  **Expected** — a recorded count, plus confirmation that the dedupe step (keep one row per group,
+  ordered by `(created_at, ctid)` — **not** by `id`, which is a random `gen_random_uuid()`) ran before
+  the index creation.
+  **Source** — spec 054 FR-012a, research D4a.
+  - [ ] Signed off (tester + date):
+
+- **What** — Determine what `DATABASE_URL` the Railway staging deploy actually injects, and whether it
+  is the port-6543 transaction pooler.
+  **Why staging** — requires Railway dashboard/CLI access; not derivable from the repo. Port 6543 is
+  the transaction pooler and is **forbidden for DDL / multi-statement transactions**, while
+  `server/migrate.js` wraps each migration in `BEGIN…COMMIT`.
+  **Expected** — the injected URL is recorded, and either confirmed not to be the transaction pooler or
+  changed so migrations run against a session-mode connection.
+  **Source** — spec 054 FR-029; OI-31.
+  - [ ] Signed off (tester + date):
+
+- **What** — Apply migration 057 on staging and run the account-carryover quickstart end to end.
+  **Why staging** — the failure mode is deploy-time and silent: PostgREST drops an unknown column from
+  an UPDATE rather than erroring, so `POST /api/user/migrate` returns `204` while persisting nothing
+  when 057 is unapplied. There is no server hot-reload — restart after applying.
+  **Expected** — carryover values actually persist and read back after the round-trip, not merely a
+  `204`.
+  **Source** — spec 054 US4.4; OI-14.
+  - [ ] Signed off (tester + date):
+
+- **What** — Run `scripts/probe-refresh-rotation.mjs` against a **real account's** credentials and
+  either build the de-dup Map or close OI-5.
+  **Why staging** — owner-gated: the probe harness exists but needs real account credentials, and the
+  anonymous-session result is not conclusive.
+  **Expected** — a recorded outcome. Per spec 054 FR-032, **"not run — owner-gated"** is an acceptable
+  recorded outcome; what is not acceptable is silent omission.
+  **Source** — spec 054 FR-032; OI-5.
+  - [ ] Signed off (tester + date):
+
+- **What** — From a linked worktree *and* from the main checkout, confirm that a failing
+  `worktree-ports.sh` self-derive makes the server and Vite refuse to start rather than binding
+  `3001`/`5173`.
+  **Why staging** — not a deployed-environment check, but it cannot be confirmed by unit tests alone:
+  the fallback only trips `strictPort` if the main checkout happens to be bound at that moment. With the
+  main checkout stopped, a worktree would silently start on the legacy ports with no error at all.
+  **Expected** — a self-derive failure is fatal in a worktree; the main checkout still returns the
+  unchanged legacy `3001`/`5173`.
+  **Source** — spec 054 US4.4; OI-51, OI-52; epic Settled decision #4.
+  - [ ] Signed off (tester + date):
+
+---

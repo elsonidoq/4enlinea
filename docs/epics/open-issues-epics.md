@@ -826,24 +826,55 @@ resolved 2026-07-31; see Settled decision #7.
 
 **Intent:** Close the handler-level defects where an identifier, a sort key, or a retry can silently corrupt
 or leak data, and finish the deferred environment/ops verifications that were never runnable in local dev.
+The puzzle serving pool never excludes solved/revealed puzzles by design; the `outcome` enum is narrowed to
+match the values actually written (keeping the live `'tied'` value), the server writer that inserts raw
+`evaluatePredicate` results is normalized to the enum vocabulary, and the client write sites that currently
+mislabel a wrong answer as `'abandoned'` — including the sequence-puzzle failure branch, which records
+nothing today — are fixed to write an explicit `'incorrect'`.
 
-**Issues covered:** OI-40 (anonymous puzzle attempts share a literal `device_uuid: 'anonymous'`), OI-53
-(`req.user.email` always `undefined`), OI-17 (`chooseSparringMove` returns `col: undefined` on a full board),
-OI-47 (`GET /api/games` pagination unaudited for a unique sort key), OI-50 (candidate-insert retry can
-double-insert), OI-22 (anon re-analysis re-runs the solver), OI-49 (no solved/revealed filter; partly
-aspirational `outcome` enum), OI-5 (refresh-rotation probe, owner-gated), OI-14 (migration 057 carryover
-unverified), OI-31 (staging `DATABASE_URL` uses the transaction pooler), OI-51/OI-52 (worktree-ports
-self-derive leaks stderr, and silently falls back to legacy ports when the script fails).
+**Issues covered:** OI-40 (anonymous puzzle attempts and anonymous game inserts share a literal
+`device_uuid: 'anonymous'` at two sites), OI-53 (`req.user.email` always `undefined`), OI-17
+(`chooseSparringMove` returns `col: undefined` on a full board), OI-47 (`GET /api/games` pagination
+unaudited for a unique sort key), OI-50 (candidate-insert retry can double-insert), OI-22 (anon re-analysis
+re-runs the solver), OI-49 (serving pool deliberately never excludes solved/revealed puzzles; `outcome`
+enum narrowed to match — keeping `'tied'`, which is live — plus a new `'incorrect'` outcome, a server-side
+writer fix, and four client writer fixes), OI-5 (refresh-rotation probe, owner-gated), OI-14 (migration 057
+carryover unverified), OI-31 (staging `DATABASE_URL` uses the transaction pooler), OI-51/OI-52
+(worktree-ports self-derive leaks stderr, and silently falls back to legacy ports when the script fails).
 
 **Settled decisions**
-1. OI-40 is a **write-path** fix: derive or require a real device_uuid, or reject with 400 — never default to
-   a shared bucket.
-2. OI-49 needs an explicit modelling answer first: either the serving pool excludes solved/revealed puzzles
-   (build the filter) **or** it deliberately never excludes anything (then the unused `outcome` values and
-   their CHECK-constraint entries are dead and should be removed). Do not leave it aspirational.
-3. Ops verifications (OI-14, OI-31, OI-5) are epic tasks, but their sign-off lives in `staging_checks.md`,
+1. OI-40 is a **write-path** fix, at both of its literal sites: derive or require a real device_uuid, or
+   reject with 400 — never default to a shared bucket. The server derives or generates a real per-request
+   identifier when none reaches the handler, rather than rejecting with 400 — a strict 400 would break
+   `SupabaseStore.recordPuzzleAttempt`, which forwards no `deviceUuid` in its request body at all
+   (`src/store/SupabaseStore.js:69`). This keeps the fix server-only.
+2. OI-49 is resolved: **never exclude.** `GET /api/puzzles/draw` keeps drawing from the full active pool —
+   no attempt-history join, no exhaustion policy, no unseen-first ordering. A migration narrows the
+   `puzzle_attempts.outcome` CHECK constraint to only the values actually written, removing `'revealed'`
+   and `'correct_retry'`. `'tied'` is **kept**, not removed — it is a real value written today by
+   `POST /api/puzzles/:id/check` (`evaluatePredicate` returns `result: 'tied'`) and Epic 1's multi-column/
+   tied-answer work, which lands immediately before this epic in Lane A, makes it more common, not less.
+   This removes the US4.1-before-US4.3 ordering dependency an exclusion design would otherwise create.
+3. A wrong answer is currently written as `'abandoned'` at most client sites, and not recorded at all for
+   sequence-puzzle failures. Add an explicit `'incorrect'` outcome in the same migration — the narrowed
+   CHECK constraint becomes `'correct_first' | 'tied' | 'incorrect' | 'abandoned'` — and fix
+   `src/screens/ChallengeScreen.jsx`'s four `outcome:`-relevant sites (approx. lines 408, 584, 659, and the
+   sequence failure branch at approx. line 668; read each before editing, line numbers are approximate) to
+   write `'incorrect'` when the submitted answer is wrong, reserving `'abandoned'` for the user actually
+   leaving without answering. This is a deliberate, narrowly scoped client-side exception in an otherwise
+   server-side epic. Separately, the server writer at `server/index.js:2520` (`outcome: evaluation.result`)
+   is normalized from `evaluatePredicate`'s raw `'correct'|'wrong'|'tied'` vocabulary to the stored enum
+   (`'correct'→'correct_first'`, `'wrong'→'incorrect'`, `'tied'→'tied'`) — today its non-tied inserts
+   already fail the *existing* CHECK constraint and are silently dropped by a fire-and-forget
+   `.catch(err => console.error(...))`, an in-scope live data-integrity defect, not a new one this epic
+   introduces. **"Existing rows are not backfilled" applies only to the unrecoverable `'incorrect'`-vs-
+   `'abandoned'` distinction for historical rows** — it does NOT forbid the mechanical value remap
+   (`UPDATE` or `NOT VALID`) the migration needs to make any pre-existing non-conforming `outcome` values
+   (e.g. stray `'revealed'`/`'correct_retry'` rows, if any) conform before a validating `ADD CONSTRAINT`
+   narrows the CHECK — that remap carries no information loss, unlike the incorrect/abandoned distinction.
+4. Ops verifications (OI-14, OI-31, OI-5) are epic tasks, but their sign-off lives in `staging_checks.md`,
    not in a silent "done".
-4. A worktree that cannot derive its own ports **fails loudly** rather than binding the main checkout's
+5. A worktree that cannot derive its own ports **fails loudly** rather than binding the main checkout's
    `3001`/`5173` — silently defaulting is the exact collision the feature exists to prevent (OI-52).
 
 **Non-obvious facts**
@@ -861,6 +892,36 @@ self-derive leaks stderr, and silently falls back to legacy ports when the scrip
   available dedupe key.
 - OI-53 needs no new column: the email is already on the Supabase auth user object returned by
   `authClient.auth.getUser(token)` and is discarded by `loadUser()`.
+- The draw query (`connect-four/server/index.js`, `GET /api/puzzles/draw`) filters only on `category`,
+  `is_active`, and non-null `position` — it never joins `puzzle_attempts`, confirming the pool is already
+  unfiltered by solved/revealed status today; OI-49 formalizes that as the intended design rather than
+  changing behavior.
+- **`ChallengeScreen.jsx` is not the sole writer of `puzzle_attempts.outcome`.** `server/index.js:2520`
+  (inside `POST /api/puzzles/:id/check`, `app.post` at line 2461) also inserts a row with
+  `outcome: evaluation.result`, where `evaluation` comes from `evaluatePredicate` in `server/predicates.js`
+  (documented return shape `{ result: 'correct'|'wrong'|'tied' }`, `predicates.js:95`). `'tied'` is
+  therefore a **live**, currently-written value, not a dead one — the earlier claim that it was dead (drawn
+  from OI-49's own prose rather than re-measured at source) was wrong.
+- Of `ChallengeScreen.jsx`'s three pre-existing `outcome:` write sites, only two are conditional and
+  currently mislabel a wrong answer as `'abandoned'`: `:408` (`outcome: isCorrect ? 'correct_first' :
+  'abandoned'`) and `:584` (`outcome: quality === 'optimal' ? 'correct_first' : 'abandoned'`). The third,
+  `:659` (`outcome: 'correct_first'`), is **unconditional** and only reached inside the `data.outcome ===
+  'success'` branch of `handleSequenceClick` — it has no wrong-answer expression to fix. The sibling failure
+  branch (`} else {` at approx. `:668`) plays the wrong-move sound and pushes a coach message but never
+  calls `recordPuzzleAttempt` at all, so sequence-category wrong answers are recorded nowhere today; a
+  fourth write call is added there.
+- `data-model.md`'s "Puzzle Attempts — `outcome` values and the serving pool" section (around `data-model.md`
+  line ~406) currently punts the non-exclusion question to OI-49; it must be updated to state the
+  non-exclusion is deliberate, and to document the narrowed enum (`'correct_first'`, `'tied'`, `'incorrect'`,
+  `'abandoned'`).
+- OI-40's cited handler (`POST /api/user/puzzle-attempts`) is misattributed. That handler lives at
+  `server/userRoutes.js:343`, opens with `if (!requireUser(req, res)) return;`, and passes
+  `req.user.device_uuid` into `writePuzzleAttempts` — it can never be anonymous and needs no fix. The real
+  `'anonymous'`-fallback literal is `server/index.js:2514`: `const deviceUuid = req.user?.device_uuid ||
+  req.body.deviceUuid || 'anonymous';`, inside `POST /api/puzzles/:id/check`. A second, previously unnamed
+  shared-bucket literal sits at `server/index.js:1897`: `device_uuid: device_uuid || req.user?.id ||
+  'anonymous'`, in the games-insert payload — both sites must be fixed for the "no shared-bucket identifier"
+  acceptance criterion to actually hold.
 - OI-5 is **owner-gated**: the probe harness exists at `scripts/probe-refresh-rotation.mjs` but needs a real
   account's credentials; the anonymous-session result is not conclusive.
 - Always run `eval "$(./worktree-ports.sh)"` before starting or killing any server — unconditionally, every
@@ -880,23 +941,42 @@ self-derive leaks stderr, and silently falls back to legacy ports when the scrip
 
 **User stories & tasks**
 
-**US4.1 — Request-context and identity completeness (11 tasks).** Replace the `'anonymous'` literal with a
-real per-device identifier or a 400 (OI-40); audit every caller that could omit `deviceUuid`; ensure the
-client generates one before first use; check whether contaminated rows already exist and decide on cleanup;
-add tests for both branches; thread `data.user.email` into `req.user` in `loadUser()` (OI-53); confirm the
-Paddle checkout overlay pre-fills; verify no handler silently depended on the field being absent; guard
-`chooseSparringMove` (or the endpoint) to return an explicit terminal signal instead of `col: undefined`
-(OI-17); regression test each; document the `req.user` shape in `api-conventions.md`.
+**US4.1 — Request-context and identity completeness (11 tasks).** Replace the `'anonymous'` literal at
+`server/index.js:2514` (`POST /api/puzzles/:id/check`) with a server-derived or -generated real per-device
+identifier (never a shared bucket, never a 400 — `SupabaseStore.recordPuzzleAttempt` forwards no
+`deviceUuid`, so a 400 would break that live path) (OI-40); fix the second shared-bucket literal at
+`server/index.js:1897` (`device_uuid: device_uuid || req.user?.id || 'anonymous'` in the games-insert
+payload) the same way; audit every caller that could omit `deviceUuid`; check whether contaminated rows
+already exist and decide on cleanup; add tests for both fixed sites and both branches; thread
+`data.user.email` into `req.user` in `loadUser()` (OI-53); confirm the Paddle checkout overlay pre-fills;
+verify no handler silently depended on the field being absent; guard `chooseSparringMove` (or the endpoint)
+to return an explicit terminal signal instead of `col: undefined` (OI-17); regression test each; document
+the `req.user` shape in `api-conventions.md`.
 
 **US4.2 — Pagination and retry integrity (7 tasks).** Audit `GET /api/games`'s in-JS sort key for uniqueness
 and add a tiebreaker if needed; prove the two-table merge cannot reorder across pages; add a unique index on
 `(generation_run_id, move_string)` and treat `23505` as success (or narrow the retry to pre-commit error
 classes); migration + test.
 
-**US4.3 — Anonymous cost and serving pool (7 tasks).** Extend the analyze cache-check to match
-`device_uuid` + `user_id IS NULL` for anonymous callers (OI-22); take the OI-49 decision and implement it —
-either a solved/revealed exclusion in `GET /api/puzzles/draw` or removal of the dead `outcome` values;
-migration if the enum changes; tests.
+**US4.3 — Anonymous cost, serving pool, and outcome integrity (12 tasks).** Extend the analyze cache-check
+to match `device_uuid` + `user_id IS NULL` for anonymous callers (OI-22); confirm `GET /api/puzzles/draw`
+needs no code change (it already never filters by attempt history — OI-49 formalizes that as intended);
+normalize the server writer at `server/index.js:2520` (`outcome: evaluation.result`) to translate
+`evaluatePredicate`'s raw `'correct'|'wrong'|'tied'` into the stored enum (`'correct'→'correct_first'`,
+`'wrong'→'incorrect'`, `'tied'→'tied'`), fixing the live defect where its non-tied inserts fail today's
+CHECK constraint and are silently dropped by the fire-and-forget `.catch`; write a migration narrowing
+`puzzle_attempts.outcome`'s CHECK constraint to `'correct_first' | 'tied' | 'incorrect' | 'abandoned'`,
+dropping only `'revealed'` and `'correct_retry'`, and mechanically remapping (via `UPDATE` or `NOT VALID`)
+any pre-existing rows outside that set so the validating `ADD CONSTRAINT` does not fail — this remap is not
+the forbidden incorrect/abandoned backfill; fix `src/screens/ChallengeScreen.jsx`'s four `outcome:`-relevant
+sites (approx. lines 408, 584, 659, and the sequence failure branch at approx. line 668, which today calls
+`recordPuzzleAttempt` not at all) to write `'incorrect'` on a wrong submitted answer and reserve
+`'abandoned'` for actual abandonment — this is the epic's one deliberate client-side touch, now four sites
+instead of three; update `data-model.md`'s Puzzle Attempts `outcome` section to state the non-exclusion is
+deliberate and document the narrowed four-value enum; note in the migration/PR that existing rows are not
+backfilled for the incorrect/abandoned distinction specifically; tests for the new outcome value, for the
+sequence-failure write site, for the server-writer normalization, and for the narrowed constraint accepting
+`'tied'` and rejecting the two removed values.
 
 **US4.4 — Environment and ops correctness (10 tasks).** Pass `stdio: ['ignore','pipe','ignore']` to both
 self-derive `execSync` calls so only the port values are captured (OI-51); detect a linked worktree in
@@ -912,6 +992,12 @@ verification in `staging_checks.md` under this epic.
 - Every paginated endpoint has a provably unique sort key.
 - A duplicate candidate batch is impossible (constraint) or provably not retried (narrowed retry).
 - A worktree whose `worktree-ports.sh` fails refuses to start instead of binding `3001`/`5173`.
+- The narrowed `puzzle_attempts.outcome` CHECK constraint accepts only `'correct_first'`, `'tied'`,
+  `'incorrect'`, `'abandoned'` and rejects `'revealed'` and `'correct_retry'`; a wrong Challenge answer
+  writes `'incorrect'`, not `'abandoned'`, for every puzzle type — including sequence puzzles, which record
+  nothing today; the server writer at `server/index.js:2520` writes the enum vocabulary, not
+  `evaluatePredicate`'s raw `'correct'|'wrong'|'tied'` values.
+- `data-model.md`'s Puzzle Attempts `outcome` section states the non-exclusion is deliberate, not open.
 - `npm run test:fast` green; each ops verification signed off in `staging_checks.md`.
 - Every `OI-N` under this epic's **Issues covered** is closed out in `docs/open_issues.md` per the
   Issue closeout convention at the top of this file — resolved-with-date, or still open with a dated
@@ -922,9 +1008,16 @@ verification in `staging_checks.md` under this epic.
 - Rewriting `worktree-ports.sh` itself — only its two self-derive consumers change.
 - The tier/entitlement model (Epic 3).
 - Any change to blunder tagging (Epic 2).
+- Any solved/revealed exclusion, unseen-first ordering, or exhaustion policy for the puzzle serving pool —
+  OI-49 is resolved as never-exclude, so this is explicitly out of scope, not deferred.
+- Backfilling existing `puzzle_attempts` rows to distinguish historical `'incorrect'` from `'abandoned'` —
+  the distinction is unrecoverable for already-written data.
+- Any other client-side (`src/`) change beyond the four `ChallengeScreen.jsx` `outcome:`-relevant write
+  sites named in US4.3 (approx. lines 408, 584, 659, and the sequence failure branch at approx. line 668) —
+  this epic is server-side except for that one deliberate exception.
 
 **Open questions**
-- OI-49: is the serving pool meant to exclude solved/revealed puzzles, or is "never exclude" the intent?
+- None.
 
 ---
 
