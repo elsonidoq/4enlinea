@@ -93,7 +93,6 @@ function BoardImpl({
   fullCols = [],
   selectedCols = [],
   onColToggle,
-  interactionMode = 'single_move',
   // Deprecated shim — CurationWorkspace.jsx only. [row, col, role, step?] tuples.
   highlightedCells = [],
   // Numbered move labels keyed "row,col" -> label. Rendered ON TOP of the green/gray disc without

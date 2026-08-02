@@ -151,7 +151,7 @@ the whole tree, then deliberately introduce one real violation into a `.mjs` fil
       that `react-hooks/*`/`react-refresh/*` (32 findings, all in `src/` production components) were
       demoted to `warn` rather than fixed in Epic 8, with the exact rule names and file/line
       breakdown from T009/T014, so a future pass can burn them down as a UI-behavior change.
-- [ ] T016 [US1] Confirm `cd connect-four && npm run lint` now exits 0 (FR-003/SC-001) — depends on
+- [x] T016 [US1] Confirm `cd connect-four && npm run lint` now exits 0 (FR-003/SC-001) — depends on
       T005-T015 all landing.
 - [ ] T017 [US1] Prove the widened glob is a real gate, not just a walked glob (FR-004/SC-001):
       temporarily insert one real violation that the current config's

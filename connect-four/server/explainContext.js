@@ -561,6 +561,10 @@ export function buildOpeningReason({ movestring, playedCol, bestCol, bestScore, 
  *                  |{prompt: null, allowedSet: null, allMovesEqual: true}
  *                  |null>}
  */
+// `rounds` is unused in the current flow (see the JSDoc above) but is a non-trailing positional
+// param: all 12 call sites pass it positionally, so removing it would be a call-site refactor,
+// not the non-behavior-changing deletion FR-019(a) prescribes. Kept deliberately (spec 055).
+// eslint-disable-next-line no-unused-vars
 export async function buildExplainContext(movestring, col, rounds = 1, solver, deps = {}) {
   const board = new Board(movestring);
   const perspective = movestring.length % 2 === 0 ? 1 : 2;
