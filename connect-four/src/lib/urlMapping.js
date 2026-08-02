@@ -109,10 +109,9 @@ export function parseUrl(pathname) {
  *
  * @param {string} pattern   e.g. '/challenge/:category'
  * @param {string} pathname  e.g. '/challenge/immediate_threat'
- * @param {string[]} paramNames
  * @returns {object|null}
  */
-function matchPattern(pattern, pathname, paramNames) {
+function matchPattern(pattern, pathname) {
   // Special case: root pattern
   if (pattern === '/') {
     return pathname === '/' ? {} : null;

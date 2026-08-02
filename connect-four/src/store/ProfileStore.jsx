@@ -1,7 +1,6 @@
 import { createContext, useContext, useEffect, useState } from 'react';
 import { IndexedDBStore } from './IndexedDBStore.js';
 import { SupabaseStore } from './SupabaseStore.js';
-import { track } from '../lib/track.js';
 import { clearEntitlement } from '../lib/entitlement.js';
 
 // Exported so tests can supply a lightweight `{ store, session, ... }` value directly
@@ -73,7 +72,7 @@ export function ProfileStoreProvider({ children }) {
           const { user } = await res.json();
           await switchToSupabase({ user });
         }
-      } catch (err) {
+      } catch {
         // stay anonymous (IndexedDBStore)
       }
     } finally {
@@ -100,7 +99,7 @@ export function ProfileStoreProvider({ children }) {
     try {
       const apiBase = import.meta.env.VITE_API_BASE_URL || '';
       await fetch(`${apiBase}/api/auth/signout`, { method: 'POST', credentials: 'include' });
-    } catch (_) {
+    } catch {
       // ignore errors
     }
     setStore(new IndexedDBStore());

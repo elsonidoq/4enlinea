@@ -241,7 +241,7 @@ export class IndexedDBStore {
   }
 
   // T033 — migrateToSupabase via POST /api/user/migrate (all-or-nothing)
-  async migrateToSupabase(_supabaseStore) {
+  async migrateToSupabase() {
     // Step 1: Read ALL data from IndexedDB in parallel
     const db = await this._db();
     const [attempts, lessonRows, sparringRecord, sessionRows, streak, profile] = await Promise.all([

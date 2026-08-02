@@ -44,7 +44,7 @@ function getWinLine(board, row, col, color) {
 }
 
 export function ChallengeScreen({
-  go, goBack,
+  go,
   category,
   lessonMode = false,
   lessonId,

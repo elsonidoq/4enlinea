@@ -105,7 +105,7 @@ export function useGameBoard({ initialMoves = '', side, difficulty, onGameEnd, i
       // Show generic hint phrase
       const key = trackPhrase(pickRandomKey(t, 'coach.spoken.sparring.hint.generic', usedPhraseKeysRef.current));
       updateCoach(t(key), 'think', false, key);
-    } catch (e) {
+    } catch {
       // Silently handle network errors
     }
   }
@@ -138,7 +138,7 @@ export function useGameBoard({ initialMoves = '', side, difficulty, onGameEnd, i
 
     // commitMove reads live state via internal refs in useBoardState —
     // no stale-closure risk even though this runs after an async await.
-    const { won, draw, row } = commitMove(aiCol);
+    const { won, draw } = commitMove(aiCol);
     const newHistory = [...currentMoves, aiCol];
 
     // Await classification result (null on network error / HTTP error / auto-play skip)
@@ -227,7 +227,7 @@ export function useGameBoard({ initialMoves = '', side, difficulty, onGameEnd, i
       const data = await res.json();
       if (typeof data.col !== 'number') throw new Error('missing col in /api/scores response');
       aiCol = data.col;
-    } catch (e) {
+    } catch {
       // Network/API error — pick a random legal column as fallback.
       const legalCols = [];
       for (let c = 0; c < 7; c++) {
@@ -287,7 +287,7 @@ export function useGameBoard({ initialMoves = '', side, difficulty, onGameEnd, i
         coachText = t(coachKey);
       }
       updateCoach(coachText, coachMood, false, coachKey);
-    } catch (_e) {
+    } catch {
       // Silently handle network errors
     }
 

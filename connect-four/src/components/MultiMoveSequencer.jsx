@@ -16,7 +16,7 @@ function immediateWinScore(moveCount) {
 export function MultiMoveSequencer({ category, baseMoveString, solverScores, onSequenceComplete }) {
   const [started, setStarted] = useState(false);
   const [sequenceMoves, setSequenceMoves] = useState(''); // moves played since start
-  const [humanMoves, setHumanMoves] = useState([]);
+  const [, setHumanMoves] = useState([]);
   const [aiMoves, setAiMoves] = useState([]);
   const [finished, setFinished] = useState(false);
 

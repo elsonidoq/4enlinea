@@ -216,7 +216,7 @@ export function colsToBoard(cols) {
   }
   try {
     return boardSpecToBoard(cols);
-  } catch (_e) {
+  } catch {
     return Array.from({ length: 6 }, () => Array(7).fill('empty'));
   }
 }
