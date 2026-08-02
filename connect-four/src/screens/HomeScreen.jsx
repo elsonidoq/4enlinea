@@ -151,7 +151,7 @@ export function HomeScreen({ go }) {
         </div>
       </div>
 
-      <LegalFooter />
+      <LegalFooter go={go} />
 
       {authOpen && <AuthModal onClose={() => setAuthOpen(false)} />}
     </div>

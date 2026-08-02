@@ -116,6 +116,22 @@
     "suffixMonth": "/mo",
     "suffixYear": "/yr"
   },
+  "pricing": {
+    "heading": "Pricing",
+    "subtitle": "DecodeC4 helps you learn Connect Four strategy by explaining your own mistakes. Deep Reveals are the detailed explanations behind why a move lost — and what the better move saw.",
+    "freePlanName": "Free",
+    "proPlanName": "Pro",
+    "freePrice": "$0",
+    "freeQuota": "{{count}} Deep Reveals per week",
+    "quotaFallback": "a generous weekly allowance of Deep Reveals",
+    "proQuota": "Unlimited Deep Reveals",
+    "sharedFeatures": "Puzzles, lessons, and sparring games",
+    "taxNote": "All prices are in US dollars. Taxes may apply and are calculated at checkout.",
+    "checkoutCta": "Become Pro",
+    "degraded": "Pricing is temporarily unavailable right now. Please check back soon.",
+    "legalNote": "Looking for the merchant of record, refund policy, or terms? See the {{link}}.",
+    "legalLinkLabel": "legal pricing page"
+  },
   "common": {
     "dismiss": "Dismiss",
     "confirm": "Confirm",
@@ -128,6 +144,7 @@
   },
   "footer": {
     "pricing": "Pricing",
+    "pricingLegal": "Pricing (legal)",
     "terms": "Terms",
     "privacy": "Privacy",
     "refunds": "Refunds"

@@ -31,6 +31,16 @@ export function CLChallengeScreen({ go, goBack, goReplace, lessonId, lessonTitle
       })
       .then(lesson => {
         if (cancelled) return;
+        // Server-side entitlement gate (spec 053 US1): a locked stub has no
+        // `confirmationCategory`/`confirmationChallenges` — this is the cold-boot path
+        // reachable by a direct reload of a locked lesson's URL, not only in-app
+        // navigation (client-side useLessonLockGuard above only catches the latter, on
+        // stale/cached tier info). Redirect through the exact same affordance the guard
+        // uses on a client-side block, rather than inventing a second locked-lesson UI.
+        if (lesson.locked === true) {
+          goReplace('saga', { lockAction: 'upgrade' });
+          return;
+        }
         setResolvedTitle(lesson.title);
         setResolvedCategory(lesson.confirmationCategory);
         setResolvedCount(lesson.confirmationCount);
@@ -41,7 +51,9 @@ export function CLChallengeScreen({ go, goBack, goReplace, lessonId, lessonTitle
       });
 
     return () => { cancelled = true; };
-  }, [lessonId, lessonTitle, lockStatus]);
+    // goReplace comes from Navigator's useCallback([], ...) — stable identity (same
+    // rationale as useLessonLockGuard.js), so including it here doesn't cause re-fetches.
+  }, [lessonId, lessonTitle, lockStatus, goReplace]);
 
   // Locked-safe gate: show the loading state until the guard has decided, and keep
   // showing it after a 'blocked' redirect (this instance unmounts immediately).

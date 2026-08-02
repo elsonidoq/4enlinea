@@ -56,6 +56,8 @@ import { SUPPORTED_LOCALES } from './locale.mjs';
 import { registryPathForLang, audioDirForLang, manifestPathForLang } from '../scripts/generate-tts.js';
 import { buildCacheFilter } from './explainCacheKey.mjs';
 import { FREE_DEEP_REVEAL_WEEKLY_LIMIT, resolveResetAt, isPastReset, effectiveDeepRevealCount, peekQuota } from './quotaLimits.js';
+import { entitlementForRequest } from './entitlement.js';
+import { buildLessonResponse } from './lessonEntitlement.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -669,13 +671,19 @@ app.get('/api/papergames/tournament/open', async (req, res) => {
   }
 });
 
+// ── Public config/limits (spec 053 — no auth required, not gated behind Paddle) ──
+app.get('/api/limits', (req, res) => {
+  res.json({ freeDeepRevealWeeklyLimit: FREE_DEEP_REVEAL_WEEKLY_LIMIT });
+});
+
 // ── Lesson routes (FR-033, FR-034, FR-035 — no auth required) ─────────────────
 app.get('/api/lessons', (req, res) => res.json(getLessons()));
 app.get('/api/lessons/:id', (req, res) => {
   const locale = req.locale ?? 'en';
   const lesson = getLesson(req.params.id, locale);
   if (!lesson) return res.status(404).json({ error: 'not_found' });
-  res.json(lesson);
+  const entitlement = entitlementForRequest(req);
+  res.json(buildLessonResponse(lesson, entitlement));
 });
 
 // ── Admin eval-set endpoints ───────────────────────────────────────────────────
@@ -4085,7 +4093,10 @@ const LEGAL_PAGE_OPTS = { dotfiles: 'allow' };
 app.get('/privacy', (_, res) => res.sendFile(join(__dirname, 'privacy.html'), LEGAL_PAGE_OPTS));
 app.get('/terms', (_, res) => res.sendFile(join(__dirname, 'terms.html'), LEGAL_PAGE_OPTS));
 // Paddle domain review requires prices to be publicly reachable without signing in.
-app.get('/pricing', (_, res) => res.sendFile(join(__dirname, 'pricing.html'), LEGAL_PAGE_OPTS));
+// spec 053: /pricing is now an in-app SPA route (PricingScreen, served by the
+// catch-all below); this byte-stable static page is retained at /pricing-legal
+// as the JS-free copy Paddle already reviewed (research.md Decision 6/11).
+app.get('/pricing-legal', (_, res) => res.sendFile(join(__dirname, 'pricing.html'), LEGAL_PAGE_OPTS));
 app.get('/refunds', (_, res) => res.sendFile(join(__dirname, 'refunds.html'), LEGAL_PAGE_OPTS));
 app.get('/googlefddb3b3c02590df4.html', (_, res) => res.sendFile(join(__dirname, 'googlefddb3b3c02590df4.html'), LEGAL_PAGE_OPTS));
 // Shared stylesheet for the 4 legal pages above. Found in QA: their former

@@ -1212,7 +1212,13 @@ means the environment flag can never disagree with the key/token actually in use
 setting to keep in sync. If a future change ever needs a real staging-vs-production distinction for
 something Paddle-unrelated, do not reach for `NODE_ENV` in this codebase — it is not a reliable signal.
 
-**`getSubscriptionStatus` is deliberately test-only in production wiring.** No production call site is wired through it — real paid-gates read `req.user.tier` directly (populated by `loadUser`). It exists solely to prove the `PaymentProcessor` interface's substitutability. This is by design, not a gap — do not "fix" it by wiring a call site unless a new requirement actually needs a derived (non-`tier`) subscription status.
+**`getSubscriptionStatus` is superseded for production entitlement decisions.** Spec 053 introduced
+`server/entitlement.js` (`entitlementForRequest(req)`, the sole production entry point for "is this account
+paid") as the one authoritative computation every server- and client-side decision point now sources — see
+`docs/architecture/api-conventions.md`'s `GET /api/user/entitlement` section. `getSubscriptionStatus` itself
+is still exercised by `paymentProcessor.test.mjs` and the `PaymentProcessor` substitutability tests below —
+**do not delete those tests or the function itself**; its role there (proving the `PaymentProcessor`
+interface's substitutability) is unaffected by the supersession (FR-015).
 
 ### Tier mirror: `payment_events` ledger + tier-mapping table
 
@@ -1233,7 +1239,7 @@ something Paddle-unrelated, do not reach for `NODE_ENV` in this codebase — it 
 
 `customData.app_user_id` is plain client-supplied Paddle checkout metadata — `src/lib/useUpgradeCheckout.js` sets it from client-side React store state when opening the Paddle.js overlay, and Paddle echoes it back verbatim on the webhook with **no server-side re-validation of its own**. Taken alone, that means a user could edit `customData.app_user_id` via devtools before opening the overlay and have a real payment grant `tier: 'paid'` to an arbitrary account.
 
-**Resolved trust model (2026-07-18, judgment call — see the "If picked up" note below for the residual gap)**: `handleWebhook`'s `transaction.completed` branch cross-checks `data.customerId` against the target user's **already-established** `users.paddle_customer_id`, read via a `supabase.from('users').select('paddle_customer_id').eq('id', userId).maybeSingle()` lookup immediately before the tier write:
+**Resolved trust model (2026-07-18; ratified 2026-07-31 — see below)**: `handleWebhook`'s `transaction.completed` branch cross-checks `data.customerId` against the target user's **already-established** `users.paddle_customer_id`, read via a `supabase.from('users').select('paddle_customer_id').eq('id', userId).maybeSingle()` lookup immediately before the tier write:
 - **No `paddle_customer_id` on file yet** (this is the userId's first-ever payment) → trusted as before. There is nothing to cross-check a first payment against — this is the one window OI-55 does **not** close (see below).
 - **An established `paddle_customer_id` exists and matches** `data.customerId` (the normal renewal/upgrade case) → tier write proceeds as before.
 - **An established `paddle_customer_id` exists and does NOT match** `data.customerId` → the tier write and `tracks` insert are both **skipped**; `logError` records the mismatch (`userId`, `establishedCustomerId`, `claimedCustomerId`, `eventId`); the function returns `{ handled: true, eventType: 'transaction.completed', securityRejected: true }` (an extra key beyond the normal `{ handled, eventType }` shape, present only on this path) rather than throwing — a mismatch is a security rejection, not an infra failure, so Paddle is not asked to retry a request that will keep failing the same way. The `payment_events` ledger insert still lands either way, so redelivery of the *same* event is still deduped by the `23505` guard.
@@ -1241,14 +1247,14 @@ something Paddle-unrelated, do not reach for `NODE_ENV` in this codebase — it 
 
 **Residual gap, called out explicitly, not fixed**: this closes the forgery window for every `transaction.completed` **after** a user's first payment, but a user's very first payment still has no established `paddle_customer_id` to check against, so a forged `customData.app_user_id` on a **first** payment for the *target* account is still possible in principle (the practical incentive remains unclear — the attacker spends real money to upgrade someone else's account, not their own). Closing that fully would require a different binding mechanism (e.g. minting a Paddle-side `customer_id` server-side at checkout-creation time and looking it up on the webhook, rather than trusting anything client-supplied) — a larger change than this hardening pass, deliberately out of scope here.
 
-**This was an unreviewed judgment call**: OI-55 originally documented this as an open product/architecture decision requiring either hardening or an explicit acceptance of the client-trust model — it was resolved by implementing the harden direction non-interactively per the issue's own "If picked up" note, without a human sign-off. Treat this section as a proposal to sanity-check, not settled policy.
+**Ratified 2026-07-31 (spec 053, Epic — Entitlement & Payments Consolidation, US3)**: the app owner has reviewed the harden-direction trust model above and explicitly accepted its residual risk as adequate for this product's risk profile. This is now settled policy, not an open question — the two accepted residual risks, named explicitly, are: **an attacker granting paid access to an account they don't control (at their own financial expense)**, and **laundering a chargeback-prone payment onto a third party's account**. The rationale for accepting both: exploiting either costs the attacker real money to benefit an account that isn't theirs, which is a weak incentive in practice. No code change accompanies this ratification — the identity cross-check above is unchanged (FR-017); this paragraph only closes out the "unreviewed judgment call" status the section previously carried (OI-55, closed).
 
 ### Activation: webhook primary + `verify-transaction` fallback
 
 Tier activation after a successful checkout has **two independent paths that converge on the same state**:
 
 1. **Primary — the webhook** (`transaction.completed`, above). In production a registered notification destination delivers it (see `staging_checks.md`'s Epic 10 section for the still-pending real-deployment verification); in local dev, use the `paddle:sandbox-testing` skill's webhook simulator or a locally-HMAC-signed synthetic payload posted directly at the dev server (OI-54: the sandbox account has no public tunnel configured, which also blocks the dashboard simulator from reaching localhost). If nothing delivers the event, the tier never flips and the client is left on the "still activating" banner — even though Paddle charged the card.
-2. **Fallback — `verifyTransaction`** (`POST /api/paddle/verify-transaction`). The client reads `transaction_id` off the Paddle.js `checkout.completed` event (no return-URL round-trip — the overlay never navigates away) and posts it here; the processor retrieves the transaction from Paddle (source of truth). **If the transaction's `status` isn't yet `'completed'`, it waits ~1.2s and re-fetches once** before proceeding — confirmed live (2026-07-18) that an immediate, zero-delay check reproducibly saw a transaction still short of `completed` right after the client-side `checkout.completed` event fired (Paddle's own docs, `build/checkout/upsell-checkout`, note this settle time as "typically less than a second"); this one bounded retry, not an open-ended poll, covers that window. It then verifies `customData?.app_user_id === userId` and `status === 'completed'`, and applies the **same** `tier: 'paid'` + `paddle_customer_id` write. This is a plain idempotent write (not guarded by the `payment_events` ledger — it has no event id), so it is safe to run alongside the webhook: whichever lands first wins, the other is a no-op. It does **not** insert the `upgrade_completed` track (the webhook owns analytics); if only the fallback fires, that one analytics row is absent by design.
+2. **Fallback — `verifyTransaction`** (`POST /api/paddle/verify-transaction`). The client reads `transaction_id` off the Paddle.js `checkout.completed` event (no return-URL round-trip — the overlay never navigates away) and posts it here; the processor retrieves the transaction from Paddle (source of truth). **If the transaction's `status` isn't yet `'completed'`, it waits ~1.2s and re-fetches once** before proceeding — confirmed live (2026-07-18) that an immediate, zero-delay check reproducibly saw a transaction still short of `completed` right after the client-side `checkout.completed` event fired (Paddle's own docs, `build/checkout/upsell-checkout`, note this settle time as "typically less than a second"); this one bounded retry, not an open-ended poll, covers that window. It then verifies `customData?.app_user_id === userId` and `status === 'completed'`, and applies the **same** `tier: 'paid'` + `paddle_customer_id` write. This is a plain idempotent write (not guarded by the `payment_events` ledger — it has no event id), so it is safe to run alongside the webhook: whichever lands first wins, the other is a no-op. **It also writes the same `upgrade_completed` `tracks` row the webhook writes (OI-34, spec 053 US3, 2026-08-01)** — historically it did not (the analytics record was documented as "exclusively the webhook's to write"), which left the fallback-only-activation edge case (webhook never delivered) analytics-undercounted even though the user was correctly tiered. `recordUpgradeCompletedTrack` (`paddleProcessor.js`) dedupes this per transaction by reusing `payment_events`' existing `UNIQUE(event_id)` constraint — no new table: it inserts a synthetic, transaction-id-derived `event_id` (`upgrade_completed_track:<transactionId>`) as a claim immediately before the `tracks` insert; a `23505` on that claim means the other path (whichever ran first) already wrote the analytics row, so this call is a no-op. Both `verifyTransaction` and `handleWebhook`'s `transaction.completed` branch call this same helper, so exactly one `tracks` row is written per transaction regardless of arrival order. A failure in `verifyTransaction`'s call is caught and logged, never rethrown (Constitution Principle V — must not block/break the client's activation result); a failure in `handleWebhook`'s call still throws, preserving that branch's existing FR-009 durability behavior.
 
 `useUpgradeCheckout.js`'s `checkout.completed` event handler is the **sole caller** of the fallback anywhere in the frontend — it owns `transactionId` and dispatches the resulting `confirming`/`activated`/`failed` state into `checkoutReturnFlow.js`'s shared store; `CheckoutReturnBanner.jsx` only renders that state and never calls the endpoint itself. The same handler also calls `paddle.Checkout.close()` once the fallback resolves (success or failure) — `Paddle.Checkout.open()` is never given a `settings.successUrl`, because passing one makes Paddle.js navigate the parent window there on completion (a real full-page reload, confirmed live 2026-07-18), which both breaks the "never leaves the app" requirement and can race with this very fetch.
 
@@ -1303,6 +1309,45 @@ The server hosts the built SPA (`dist/`) and serves `dist/index.html` for all no
 
 - When the id is a valid UUID (`UUID_REGEX`) and the blunder row exists, inject `<meta property="og:title" content="Connect Four blunder — <human category>">`, an `og:description`, **and** `<meta name="robots" content="noindex, nofollow">`. The human category comes from a small `CATEGORY_LABELS` map with a `snake_case → Title Case` fallback.
 - The `noindex, nofollow` robots tag is injected for **every** `/blunder/*` request — including malformed/non-UUID ids, 404s (no matching row), DB errors, and when Supabase is unconfigured. A blunder page must never be indexable, even on the fall-through paths.
+
+## `/pricing` vs `/pricing-legal` (spec 053 US4, FR-023/FR-024/FR-025)
+
+`/pricing` used to be a named static route (`app.get('/pricing', (_, res) => res.sendFile(...pricing.html))`)
+registered ahead of the SPA catch-all above. Spec 053 US4 took that address over for an in-app, designed
+React screen (`src/screens/PricingScreen.jsx`, `SCREENS.pricing` in `src/lib/screenRegistry.jsx`) with live
+prices/quota (FR-020) — but the byte-stable static `pricing.html` still exists and is still needed
+(merchant-of-record clause, refund statement, `/terms` link — FR-023), so it could not simply be deleted.
+
+**The mechanism is registration order, not two competing handlers for the same path.** The old `/pricing`
+static route registration was **renamed** to `/pricing-legal`, with an identical handler body (same
+`pricing.html`, same `LEGAL_PAGE_OPTS`):
+
+```js
+app.get('/pricing-legal', (_, res) => res.sendFile(join(__dirname, 'pricing.html'), LEGAL_PAGE_OPTS));
+```
+
+There is now **no** explicit server-side registration for `/pricing` at all. Because Express dispatches to
+whichever handler is registered first at a matching path, and the SPA catch-all (`app.get('/{*path}', ...)`,
+registered last — see "SPA Catch-all Route" above) is the only registration left that matches `/pricing`,
+that path now falls through to it and serves `dist/index.html`. The React app's own client-side router
+(`src/lib/urlMapping.js`'s `URL_MAP`, `src/lib/screenRegistry.jsx`'s `SCREENS`) then takes over and renders
+`PricingScreen` for that URL — no further server change was needed once those two client-side registries
+gained a `pricing` entry (`docs/architecture/frontend-conventions.md` §Screen Navigation).
+
+**`server/pricing.html` itself is byte-stable — never edited by this change.** Its content, including the
+merchant-of-record clause, the 14-day refund statement, and its own `/terms` link, is unchanged; only which
+URL routes to it changed. `privacy.html`, `terms.html`, and `refunds.html`'s own `<a href="/pricing">` links
+were each re-pointed to `<a href="/pricing-legal">` so a reader following "Pricing" from any of those pages
+still lands on the legal page, not the redesigned one (FR-025 — the old page's content "remains reachable...
+linked from the app").
+
+**Why this matters for anyone re-registering a route at `/pricing` in the future**: adding a second
+`app.get('/pricing', ...)` handler (even meaning to special-case something) would race the SPA takeover
+depending on where it's inserted relative to the catch-all, and would silently break either the designed
+page (if registered ahead of the catch-all, it wins and the React screen becomes unreachable) or do nothing
+(if registered after, since the catch-all already claimed it). The correct place for anything `/pricing`
+needs to do server-side is `GET /api/*` (see `GET /api/limits`, `docs/architecture/api-conventions.md`
+§Public Config/Limits), not a new page route.
 
 ---
 

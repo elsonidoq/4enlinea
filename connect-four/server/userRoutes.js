@@ -18,6 +18,7 @@ import {
   isValidOnboardingStatus,
 } from './userHelpers.js';
 import { FREE_DEEP_REVEAL_WEEKLY_LIMIT } from './quotaLimits.js';
+import { entitlementForRequest } from './entitlement.js';
 
 // ── Import job tracking (in-memory, not persisted; restarts clear all) ──────
 const jobMap = new Map();
@@ -39,6 +40,19 @@ function requireUser(req, res) {
  */
 export function registerUserRoutes(app, supabase) {
   // ── GET endpoints ──────────────────────────────────────────────────────────
+
+  // T017 (spec 053 US2): deliberately NOT gated by requireUser — this is a
+  // documented exception to the /api/user/* "401 if req.user is null"
+  // ownership invariant (research.md Decision 4, contracts/entitlement.md).
+  // entitlementForRequest(req) already handles req.user === null by
+  // returning { entitled: false, authenticated: false }, so anonymous
+  // callers get a normal 200, not a 401. Do NOT "fix" this into a
+  // requireUser(req, res) guard — the whole point is that an anonymous
+  // caller can cheaply ask "am I entitled" without that answer being an
+  // error. (Full doc callout lands in T029.)
+  app.get('/api/user/entitlement', (req, res) => {
+    res.json(entitlementForRequest(req));
+  });
 
   // T009: Must be registered BEFORE /api/user/session-stats (Express first-match)
   app.get('/api/user/session-stats/all', async (req, res) => {

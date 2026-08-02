@@ -4,25 +4,52 @@ import { TopBar } from '../components/TopBar.jsx';
 import { CoachDialog } from '../components/CoachDialog.jsx';
 import { ProgressBar } from '../components/ProgressBar.jsx';
 import { UpgradeModal } from '../components/UpgradeModal.jsx';
-import { useStore } from '../store/ProfileStore.jsx';
 import { track } from '../lib/track.js';
 import { CATEGORY_ORDER, CATEGORY_NAMES, PAID_CATEGORIES } from '../lib/categories.js';
 import { useUpgradeCheckout } from '../lib/useUpgradeCheckout.js';
 import { subscribeCheckoutReturn, resetCheckoutReturnState } from '../lib/checkoutReturnFlow.js';
 import { useCoachSpeech } from '../lib/useCoachSpeech.js';
+import { getEntitlement } from '../lib/entitlement.js';
+import { savePendingSetResults, readAndClearPendingSetResults } from '../lib/pendingSetResults.js';
 
-export function PostSetSummaryScreen({ go, results = [], category }) {
+export function PostSetSummaryScreen({ go, results: resultsProp = [], category: categoryProp }) {
   const { t } = useTranslation();
   const { speakCoachMessage } = useCoachSpeech();
-  const { store, session } = useStore();
   // /summary is a SESSION_ONLY screen (its `results` prop can't survive a cold
-  // boot/reload — e.g. via the successUrl passed to the Paddle.js overlay), so
-  // return the user to Challenges instead — the same place this screen's
-  // back/ghost buttons go.
-  const handleUpgrade = useUpgradeCheckout('/setpicker');
+  // boot/reload), so return the user to Challenges instead — the same place
+  // this screen's back/ghost buttons go — whenever the sessionStorage restore
+  // below (T060) doesn't apply.
+  const startUpgradeCheckout = useUpgradeCheckout('/setpicker');
   const [upgradeOpen, setUpgradeOpen] = useState(false);
   const [upgradeUiState, setUpgradeUiState] = useState('idle');
   const [isFreeUser, setIsFreeUser] = useState(true);
+
+  // T059/T060 (spec 053 US5, FR-029/FR-030, OI-25): restore results persisted by
+  // savePendingSetResults() (T058) before a purchase, so returning from checkout — including
+  // after a genuine app restart — shows the same set the player just finished instead of
+  // dropping them elsewhere. CHOSEN CARRIER: plain self-validating sessionStorage (freshness
+  // timestamp), no dependency on checkoutReturnFlow.js or the checkout returnPath — see
+  // src/lib/pendingSetResults.js's header comment for the full investigation record of why the
+  // returnPath/nonce carrier was rejected (nothing in this app ever navigates to a Paddle return
+  // URL, so it would never be read). Missing/invalid/expired entry -> `restored` stays null and
+  // this screen falls through unchanged to its normal in-memory `resultsProp`/`categoryProp`
+  // (which is empty/undefined on a real cold boot, matching the existing '/setpicker' fallback,
+  // FR-031).
+  // Lazy useState initializer (not a useEffect) so the read+clear happens synchronously at
+  // mount, before first paint — same established pattern as this file's `perfectKey` below.
+  // A useEffect here would call setState synchronously inside the effect body purely to store
+  // a value already available at first render, which is exactly what the react-hooks
+  // set-state-in-effect lint rule flags.
+  const [restored] = useState(() => readAndClearPendingSetResults());
+  const results = restored?.results ?? resultsProp;
+  const category = restored?.category ?? categoryProp;
+
+  function handleUpgrade(plan) {
+    // T058: persist before opening the Paddle overlay so a purchase started from here can be
+    // restored on return, cold boot included.
+    savePendingSetResults({ results, category });
+    return startUpgradeCheckout(plan);
+  }
 
   // See SettingsScreen.jsx's identical subscription for the full rationale:
   // UpgradeModal's controlled uiState/onUiStateChange props had no caller, so
@@ -72,13 +99,18 @@ export function PostSetSummaryScreen({ go, results = [], category }) {
   const isPerfect = accuracy === 100;
   const isProLesson = recommendedSlug != null && PAID_CATEGORIES.has(recommendedSlug);
 
-  // Async: check if user is free tier via store.getProfile()
+  // Async: check if user is free tier via the single client-side entitlement
+  // helper (spec 053 US2/T023) — not a cached profile.tier read. See
+  // docs/architecture/frontend-conventions.md "Reading the user's tier".
+  // getEntitlement() never rejects (fail-open, FR-013), so no catch needed.
   useEffect(() => {
-    if (!store) return;
-    store.getProfile().then(profile => {
-      setIsFreeUser(!profile || profile.tier === 'free');
-    }).catch(() => setIsFreeUser(true));
-  }, [store]);
+    let cancelled = false;
+    getEntitlement().then(({ entitled }) => {
+      if (cancelled) return;
+      setIsFreeUser(!entitled);
+    });
+    return () => { cancelled = true; };
+  }, []);
 
   // Fire analytics on mount
   useEffect(() => {

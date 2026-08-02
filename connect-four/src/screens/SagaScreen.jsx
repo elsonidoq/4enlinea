@@ -7,6 +7,7 @@ import { track } from '../lib/track.js';
 import { useUpgradeCheckout } from '../lib/useUpgradeCheckout.js';
 import { subscribeCheckoutReturn, resetCheckoutReturnState } from '../lib/checkoutReturnFlow.js';
 import { deriveLockReason, dispatchLockAction } from './sagaLock.js';
+import { getEntitlement } from '../lib/entitlement.js';
 
 const API = import.meta.env.VITE_API_BASE_URL || '';
 
@@ -187,10 +188,13 @@ export function SagaScreen({ go, goBack, lockAction }) {
         .then(data => setProgress(data))
         .catch(err => console.error('[SagaScreen] getLessonProgress error:', err));
 
-      store.getProfile()
-        .then(p => setTier(p?.tier ?? 'free'))
-        .catch(() => setTier('free'));
     }
+
+    // Subscription tier (spec 053 US2/T024): sourced from the single
+    // client-side entitlement helper, not a cached profile.tier read — see
+    // docs/architecture/frontend-conventions.md "Reading the user's tier".
+    // getEntitlement() never rejects (fail-open, FR-013), so no catch needed.
+    getEntitlement().then(({ entitled }) => setTier(entitled ? 'paid' : 'free'));
   }, [store]);
 
   useEffect(() => {

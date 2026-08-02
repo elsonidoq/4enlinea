@@ -56,6 +56,26 @@ Response shape is unchanged either way: `{ user: { id, tier } }` on success, `{ 
 
 **FR-007 (in-flight sign-in guard)**: no interaction with the OAuth hash-callback branch — that branch returns early after `POST /api/auth/callback` succeeds, before `GET /api/auth/session` is ever called. The two paths are mutually exclusive by control flow.
 
+## Public Config/Limits: `GET /api/limits` (spec 053 US4)
+
+Registered directly in `server/index.js`, near the other public resource routes (not inside
+`registerPaddleRoutes`/`paddleRoutes.js`). **Public / unauthenticated, always `200`** — not gated behind
+`PADDLE_API_KEY` the way `GET /api/paddle/config` (below) is, and deliberately not folded into that
+endpoint's response: this value has nothing to do with Paddle configuration and must stay available even
+when Paddle itself is unconfigured (`research.md` Decision 7,
+`specs/053-entitlement-payments-consolidation/`).
+
+**Response**: `200 { freeDeepRevealWeeklyLimit: number }`, sourced live from
+`server/quotaLimits.js`'s `FREE_DEEP_REVEAL_WEEKLY_LIMIT` export (currently `20`) — never a duplicated
+literal at the call site, so the route and the constant cannot drift apart.
+
+**Client caller**: `src/screens/PricingScreen.jsx` (T040) — the only free-tier quota figure shown on the
+redesigned `/pricing` page is sourced from this endpoint, never hand-typed (FR-020/SC-004). On fetch
+failure, `PricingScreen` falls back to the generic non-numeric `pricing.quotaFallback` i18n phrase rather
+than a hardcoded number — a distinct, independent degraded state from a `GET /api/paddle/config` failure
+(see `GET /pricing` vs `/pricing-legal` in `server-conventions.md` and FR-022's "never conflate the two
+failure modes").
+
 ## Paddle Checkout Config: `GET /api/paddle/config`
 
 Registered by `registerPaddleRoutes` (`server/paddleRoutes.js`). **Public / unauthenticated** — the upgrade modal renders it before the user is necessarily signed in. Returns the live display prices read off the actual Paddle price objects (`paddleProcessor.getPrices()`, `paddleClient.prices.get(priceId)`), so the UI never drifts from what is charged.
@@ -967,6 +987,91 @@ Client: a `<details>` sandbox in `src/pages/AdminAudioPage.jsx`, whose params ar
 (`sb*`) from the saved-config editor; promotion is explicit via "Load from saved config" / "Save to
 config" (the latter reuses `handleSavePrompt(cfg)`). The blob URL is revoked on regenerate and on
 unmount.
+
+## Lessons Endpoints
+
+### `GET /api/lessons/:id` — server-side entitlement gate (spec 053, Epic — Entitlement & Payments Consolidation, US1)
+
+Locale-scoped (see "Locale-scoped endpoints" above — merges `_es` sibling fields, `title` excluded). As of
+spec 053, the handler also computes entitlement via `entitlementForRequest(req)` (`server/entitlement.js`)
+and builds the response through `buildLessonResponse(lesson, entitlement)` (`server/lessonEntitlement.js`)
+before sending it:
+
+- `lesson.free === true`, or the caller is entitled (`entitlement.entitled === true`, i.e. a signed-in
+  paid-tier user) → the full lesson object, unchanged.
+- Otherwise (a free-tier or signed-out caller requesting a **paid** lesson) → a redacted stub, exactly:
+  ```json
+  { "id": "undercut", "title": "The Undercut", "order": 11, "free": false, "locked": true }
+  ```
+  No `authenticated` field on this endpoint — `authenticated` is exposed only by
+  `GET /api/user/entitlement` (spec 053 US2), which is the one place that distinction is actually consumed.
+
+**Field-presence conventions (both directions of this endpoint, not just the locked stub):**
+- `slides` (and `socratic`, `confirmationCategory`, `confirmationChallenges`, etc.) is **absent**, never
+  `null` or `[]`, on the locked response — no lesson content leaves the server for an unentitled caller.
+- `locked` is **present and `true`** only on the redacted response. It is **absent**, never `locked: false`,
+  on every full-content response (free lesson, or a paid lesson served to an entitled caller). No consumer
+  should ever branch on `locked === false`; the correct check is `locked === true` vs. its absence.
+
+`404 { error: 'not_found' }` for a nonexistent id is unchanged and unaffected by entitlement.
+
+**Client consumers** (all three read this endpoint and MUST handle `locked === true` before indexing any
+now-absent field): `src/screens/ConceptScreen.jsx`, `src/screens/SocraticScreen.jsx`, and
+`src/screens/CLChallengeScreen.jsx`'s cold-boot fetch (see "`clchallenge` cold-boot fetch pattern" in
+`frontend-conventions.md`). Each redirects through the same affordance the client-side
+`useLessonLockGuard` already uses on a locked direct-URL access — `goReplace('saga', { lockAction:
+'upgrade' })`, which opens `SagaScreen`'s `UpgradeModal` — rather than inventing a second locked-lesson UI.
+
+### `GET /api/user/entitlement` — the one authoritative "is this account paid" answer (spec 053 US2)
+
+**Deliberate, documented exception to the `/api/user/*` ownership invariant.** The "MUST check `req.user`
+and return `401` if null" rule stated at the top of this doc (`### /api/user/* ownership invariants`) does
+**NOT** apply to this endpoint — it always answers `200`, even for a fully anonymous caller. Do not "fix"
+this into a `401`; an anonymous or session-lapsed caller answering `{ entitled: false, authenticated: false
+}` is exactly the intended, load-bearing behavior (see below and `research.md` Decision 4 in
+`specs/053-entitlement-payments-consolidation/`).
+
+**Auth**: runs through the global `loadUser` middleware like every route, but is exempt from the inline
+`401`-if-null guard.
+
+**Request**: no params, no body.
+
+**Response `200`** (always — this endpoint has no error branch of its own), body `{ entitled: boolean,
+authenticated: boolean }`, for all three caller states:
+
+| Caller state | Response |
+|---|---|
+| Anonymous (no session) | `{ "entitled": false, "authenticated": false }` |
+| Signed in, free tier | `{ "entitled": false, "authenticated": true }` |
+| Signed in, paid tier | `{ "entitled": true, "authenticated": true }` |
+
+`authenticated` exists only to let the client (`src/lib/entitlement.js`'s `getEntitlement()`) distinguish "a
+session that just lapsed" from "a genuine free-tier account" when deciding whether to attempt a session
+refresh before downgrading a previously-cached `entitled: true` answer — it is not a general-purpose
+auth-status field, and callers with no cached prior answer can ignore it.
+
+**Implementation — `entitlementForRequest(req)` is the sole production entry point.** `server/entitlement.js`
+exposes two functions:
+- **`entitlementForRequest(req)`** — the only function outside `entitlement.js` (and its own tests) that
+  should ever be called from production code. Reads `req.user` (already populated by `loadUser`) and
+  returns `computeEntitlement(req.user)`. This route handler is a thin wrapper around it:
+  ```js
+  router.get('/api/user/entitlement', (req, res) => {
+    res.json(entitlementForRequest(req));
+  });
+  ```
+- **`computeEntitlement(user)`** — the pure, synchronous, never-throwing core (`entitled === true` iff
+  `user != null && user.tier === 'paid'`; `authenticated === true` iff `user != null`). **Test-only** —
+  exported solely for unit tests; production route handlers and other server-side decision points must call
+  `entitlementForRequest(req)`, never `computeEntitlement(user)` directly, and must not re-derive tier logic
+  locally.
+
+**Registered in**: `server/userRoutes.js`, alongside the other `/api/user/*` endpoints.
+
+**Client caller**: `src/lib/entitlement.js`'s `getEntitlement()` — a TTL-cached (5 min), fail-open wrapper
+that is now the single source every screen/component reads to decide paid-vs-free, superseding five
+independent `store.getProfile().tier` reads (see `docs/architecture/frontend-conventions.md` "Reading the
+user's tier"). Production callers invoke it with no arguments — `getEntitlement()`.
 
 ## Lesson Audio Generation & Pruning Endpoints (spec 046 US3/US4)
 

@@ -23,6 +23,10 @@ export const URL_MAP = [
   { pattern: '/pastGames',           screenKey: 'pastGames',     paramNames: [] },
   { pattern: '/play-online',         screenKey: 'playOnline',    paramNames: [] },
   { pattern: '/settings',            screenKey: 'settings',      paramNames: [] },
+  // Spec 053 US4 (FR-024): this address used to serve the byte-static
+  // pricing.html; that page is retained at /pricing-legal (server/index.js),
+  // and /pricing itself is now the in-app designed PricingScreen.
+  { pattern: '/pricing',             screenKey: 'pricing',       paramNames: [] },
 ];
 
 /**

@@ -48,7 +48,7 @@ problem" and because it has zero dependency on US2) → US4 (P2) → US3 → US5
 **Purpose**: Establish the one shared fact multiple later tasks need — a concrete free/paid lesson id pair —
 before any test references a lesson id.
 
-- [ ] T001 Confirm the current free/paid split of lesson ids by reading the `free` field in every
+- [x] T001 Confirm the current free/paid split of lesson ids by reading the `free` field in every
   `connect-four/lessons/*.json` file (do **not** trust the epic's "free 1–10 / paid 11–15" text as
   authoritative — re-derive it, per `quickstart.md`'s US1 step 2 and the project's "verify at the source
   layer" rule). Record one concrete free lesson id and one concrete paid lesson id for use in T007, T011–T013.
@@ -64,14 +64,14 @@ depend on. Nothing in either story can be implemented correctly before this exis
 
 **⚠️ CRITICAL**: Complete before starting US1 or US2.
 
-- [ ] T002 Create `connect-four/server/entitlement.js` exporting `entitlementForRequest(req)` (the sole
+- [x] T002 Create `connect-four/server/entitlement.js` exporting `entitlementForRequest(req)` (the sole
   production entry point — reads `req.user`, never issues its own DB query) and `computeEntitlement(user)`
   (internal pure core, exported only for tests). `entitled = user != null && user.tier === 'paid'`;
   `authenticated = user != null`. Never throws — returns `{ entitled: false, authenticated: false }` on any
   unexpected input (FR-010 fail-closed). See `contracts/entitlement.md` for the exact signatures and
   `research.md` Decision 1 for why `req.user` (already populated by the global `loadUser` middleware from a
   real `users.tier` DB read) is consumed directly rather than re-queried.
-- [ ] T003 [P] Unit test `connect-four/tests/unit/entitlement.test.js` for `computeEntitlement`/
+- [x] T003 [P] Unit test `connect-four/tests/unit/entitlement.test.js` for `computeEntitlement`/
   `entitlementForRequest`: paid user → `{entitled:true, authenticated:true}`; free signed-in user →
   `{entitled:false, authenticated:true}`; `null`/`undefined` user → `{entitled:false, authenticated:false}`;
   malformed user shape → does not throw, returns the fail-closed shape; `entitlementForRequest({user: X})`
@@ -94,7 +94,7 @@ story in this epic.
 
 ### Implementation for User Story 1
 
-- [ ] T004 [US1] Create `connect-four/server/lessonEntitlement.js` exporting
+- [x] T004 [US1] Create `connect-four/server/lessonEntitlement.js` exporting
   `buildLessonResponse(lesson, entitlement)` per `contracts/lessons.md`: returns the lesson unchanged when
   `lesson.free || entitlement.entitled`; otherwise returns exactly
   `{ id, title, order, free, locked: true }` — matching the ratified shape verbatim (spec.md FR-002 / "Lesson
@@ -104,7 +104,7 @@ story in this epic.
   "sign in" vs "upgrade" prompts on the lesson screens is a product call nobody has made). Pure, synchronous —
   follows the `blunderDetailResponse.js` shape-builder-as-pure-function precedent
   (`docs/architecture/testing-conventions.md` §"Test the real seam, never a copy of it").
-- [ ] T005 [P] [US1] Unit test `connect-four/tests/unit/lessonEntitlement.test.js` for
+- [x] T005 [P] [US1] Unit test `connect-four/tests/unit/lessonEntitlement.test.js` for
   `buildLessonResponse`: free lesson + any entitlement → full lesson, no `locked` key at all (its absence,
   not `locked: false`, is the "unlocked" signal); paid lesson + `entitled:true` → full lesson; paid lesson +
   `entitled:false, authenticated:true` → the redacted stub `{ id, title, order, free, locked: true }` with no
@@ -112,11 +112,11 @@ story in this epic.
   `authenticated` key** (assert `'authenticated' in result === false`); paid lesson +
   `entitled:false, authenticated:false` → the identical stub shape (the two unentitled cases produce the same
   body — `authenticated` is not part of this response).
-- [ ] T006 [US1] Update the `GET /api/lessons/:id` handler in `connect-four/server/index.js` (currently
+- [x] T006 [US1] Update the `GET /api/lessons/:id` handler in `connect-four/server/index.js` (currently
   `app.get('/api/lessons/:id', (req, res) => { ... res.json(lesson); })`, exact lines 674–679 per
   `contracts/lessons.md`) to call `entitlementForRequest(req)` (T002) then
   `buildLessonResponse(lesson, entitlement)` (T004) before responding, unchanged on the existing `404` path.
-- [ ] T007 [P] [US1] Integration test `connect-four/tests/integration/lessonEntitlementGate.test.js`
+- [x] T007 [P] [US1] Integration test `connect-four/tests/integration/lessonEntitlementGate.test.js`
   exercising `buildLessonResponse` through the real handler-equivalent path (per the "extract the logic, test
   both sides" pattern `blunderPermalinkContext.test.js` establishes — do not reimplement the handler's logic
   inside the test): using T001's verified paid lesson id, assert a signed-out-equivalent entitlement produces
@@ -126,40 +126,40 @@ story in this epic.
   existing `{ id, title, order, free }` projection with no `slides`/`locked` field added or removed (FR-005 —
   this endpoint is out of scope for the gate; the test exists so a future accidental edit to the shared
   lesson loader is caught).
-- [ ] T008 [P] [US1] Add a `locked === true` guard in `connect-four/src/screens/ConceptScreen.jsx`: before
+- [x] T008 [P] [US1] Add a `locked === true` guard in `connect-four/src/screens/ConceptScreen.jsx`: before
   the unguarded `lesson.slides[slideIndex]` indexing at lines ~78/89/100/166, detect `locked === true` on the
   fetched lesson and render the existing upgrade-prompt affordance (the same one client-side
   `useLessonLockGuard` already shows) instead of indexing the now-absent `slides` array.
-- [ ] T009 [P] [US1] Add the identical `locked === true` guard in `connect-four/src/screens/SocraticScreen.jsx`
+- [x] T009 [P] [US1] Add the identical `locked === true` guard in `connect-four/src/screens/SocraticScreen.jsx`
   (same fetch pattern, same upgrade-prompt affordance, per `contracts/lessons.md`'s consumer table).
-- [ ] T010 [P] [US1] Add the identical `locked === true` guard in `connect-four/src/screens/CLChallengeScreen.jsx`'s
+- [x] T010 [P] [US1] Add the identical `locked === true` guard in `connect-four/src/screens/CLChallengeScreen.jsx`'s
   cold-boot `GET /api/lessons/:lessonId` fetch path (`docs/architecture/frontend-conventions.md` §"`clchallenge`
   cold-boot fetch pattern") — this is the path reachable by a direct reload of a locked lesson's URL, not only
   in-app navigation.
-- [ ] T011 [P] [US1] Component test `connect-four/tests/dom/ConceptScreenLocked.dom.test.jsx`: mount
+- [x] T011 [P] [US1] Component test `connect-four/tests/dom/ConceptScreenLocked.dom.test.jsx`: mount
   `ConceptScreen` with a mocked `{ locked: true, id, title, order, free: false }` fetch response (the exact
   ratified shape — no `authenticated` field, per Decision 1) for T001's paid lesson id; assert the
   upgrade-prompt affordance renders and the component does not throw/blank out. Break the guard on purpose
   first (temporarily) and confirm the test goes red before restoring it, per `testing-conventions.md`'s
   DOM-test-coverage rule.
-- [ ] T012 [P] [US1] Component test `connect-four/tests/dom/SocraticScreenLocked.dom.test.jsx` — same pattern
+- [x] T012 [P] [US1] Component test `connect-four/tests/dom/SocraticScreenLocked.dom.test.jsx` — same pattern
   as T011, for `SocraticScreen.jsx`.
-- [ ] T013 [P] [US1] Component test `connect-four/tests/dom/CLChallengeScreenLocked.dom.test.jsx` — same
+- [x] T013 [P] [US1] Component test `connect-four/tests/dom/CLChallengeScreenLocked.dom.test.jsx` — same
   pattern as T011, for `CLChallengeScreen.jsx`'s cold-boot fetch path.
-- [ ] T014 [US1] Document the `GET /api/lessons/:id` locked-response contract in
+- [x] T014 [US1] Document the `GET /api/lessons/:id` locked-response contract in
   `docs/architecture/api-conventions.md`: a new `/api/lessons/*` subsection (none exists today) stating the
   exact `{ id, title, order, free, locked: true }` shape (Decision 1 — **no `authenticated` field on this
   endpoint**; that field exists only on `GET /api/user/entitlement`, documented separately in T029 — do not
   document the six-field version), the "absence of `slides`, not `null`/`[]`" convention, and the "absence of
   `locked`, not `locked: false`" convention for full-content responses.
-- [ ] T015 [US1] Register `tests/unit/lessonEntitlement.test.js` and
+- [x] T015 [US1] Register `tests/unit/lessonEntitlement.test.js` and
   `tests/integration/lessonEntitlementGate.test.js` in `connect-four/package.json`'s `test:fast` script
   string, and `tests/dom/ConceptScreenLocked.dom.test.jsx`, `tests/dom/SocraticScreenLocked.dom.test.jsx`,
   `tests/dom/CLChallengeScreenLocked.dom.test.jsx` in the `test:dom` script string. Verify registration by
   running `npm run test:fast 2>&1 | grep -c "<a distinctive test name from T005/T007>"` and confirming a
   non-zero count (per testing-conventions.md — exit code and grep-for-"Could not find" do NOT catch a stale
   registration).
-- [ ] T016 [US1] Update `docs/open_issues.md`: close OI-66 (paid lesson JSON served to unauthenticated
+- [x] T016 [US1] Update `docs/open_issues.md`: close OI-66 (paid lesson JSON served to unauthenticated
   callers) as `✅ RESOLVED <date>`, citing `buildLessonResponse` (`connect-four/server/lessonEntitlement.js`)
   and the `GET /api/lessons/:id` gate (`connect-four/server/index.js`) as what shipped, per the Issue
   closeout convention in `docs/epics/open-issues-epics.md`'s top matter.
@@ -182,17 +182,17 @@ migrated call sites.
 
 ### Implementation for User Story 2
 
-- [ ] T017 [US2] Add `GET /api/user/entitlement` as a thin wrapper in `connect-four/server/userRoutes.js`:
+- [x] T017 [US2] Add `GET /api/user/entitlement` as a thin wrapper in `connect-four/server/userRoutes.js`:
   `router.get('/api/user/entitlement', (req, res) => res.json(entitlementForRequest(req)))`. Per
   `research.md` Decision 4, this endpoint deliberately does **not** follow the `/api/user/*` "401 if
   `req.user` is null" ownership invariant — it always returns `200`, including for anonymous callers
   (`{ entitled: false, authenticated: false }`). This exception is documented in T029.
-- [ ] T018 [P] [US2] Unit/seam test `connect-four/tests/unit/userEntitlementEndpoint.test.js` asserting the
+- [x] T018 [P] [US2] Unit/seam test `connect-four/tests/unit/userEntitlementEndpoint.test.js` asserting the
   wrapper calls `entitlementForRequest(req)` and returns its result verbatim as the JSON body, for a
   paid-user-shaped `req`, a free-user-shaped `req`, and a `req.user === null` (anonymous) case — all `200`,
   per the "test the real seam" extraction pattern (the wrapper itself is the seam under test, not a
   reimplementation of it).
-- [ ] T019 [US2] Create `connect-four/src/lib/entitlement.js` (new plain `.js` module, following the
+- [x] T019 [US2] Create `connect-four/src/lib/entitlement.js` (new plain `.js` module, following the
   `checkoutReturnFlow.js`/`onboardingRouting.js`/`postLoginReturn.js` pattern — no JSX) exposing
   `getEntitlement(): Promise<{entitled: boolean}>` and `invalidateEntitlement(): void`. Implements: TTL cache
   (`ENTITLEMENT_CACHE_TTL_MS = 5 * 60 * 1000`) via `GET /api/user/entitlement`; fail-open to the last
@@ -210,7 +210,7 @@ migrated call sites.
   be bypassed by this leniency, so a transient backend blip must never show a paying customer an upgrade
   prompt. Do NOT "harmonize" this with FR-010's server-side fail-closed rule — the asymmetry is the design
   (see also the Standing constraints note at the top of this file).
-- [ ] T020 [P] [US2] Unit test `connect-four/tests/unit/entitlementClient.test.js` for `src/lib/entitlement.js`:
+- [x] T020 [P] [US2] Unit test `connect-four/tests/unit/entitlementClient.test.js` for `src/lib/entitlement.js`:
   cache-first return within TTL (no fetch); fetch triggered once TTL has expired; failed fetch returns the
   last known good value, or `{entitled:false}` if none exists yet; a fetch resolving
   `{entitled:false, authenticated:false}` while `lastKnownGood.entitled===true` triggers exactly one
@@ -220,35 +220,35 @@ migrated call sites.
   prior `lastKnownGood.entitled===true` exists — assert `getEntitlement()` keeps returning `{entitled:true}`
   (the stale-but-good answer, not the downgrade) until the TTL window expires; `invalidateEntitlement()`
   forces the next call to fetch even within an unexpired TTL window.
-- [ ] T021 [US2] Wire `invalidateEntitlement()` (T019) into `connect-four/src/lib/useUpgradeCheckout.js`'s
+- [x] T021 [US2] Wire `invalidateEntitlement()` (T019) into `connect-four/src/lib/useUpgradeCheckout.js`'s
   `checkout.completed` handler, immediately alongside its existing `setCheckoutReturnState('activated')`
   call — the single choke point every `UpgradeModal` checkout completion passes through (`research.md`
   Decision 2), satisfying FR-012 for all five call sites at once with no per-site invalidation wiring.
-- [ ] T022 [P] [US2] Migrate `connect-four/src/screens/SettingsScreen.jsx`: replace
+- [x] T022 [P] [US2] Migrate `connect-four/src/screens/SettingsScreen.jsx`: replace
   `setTier(profile.tier === 'paid' ? 'paid' : 'free')` with a call to `getEntitlement()` (T019), converting
   its boolean `entitled` answer into the same `'paid' | 'free'` local shape the screen already renders.
-- [ ] T023 [P] [US2] Migrate `connect-four/src/screens/PostSetSummaryScreen.jsx`: replace
+- [x] T023 [P] [US2] Migrate `connect-four/src/screens/PostSetSummaryScreen.jsx`: replace
   `setIsFreeUser(!profile || profile.tier === 'free')` with a call to `getEntitlement()`.
-- [ ] T024 [P] [US2] Migrate `connect-four/src/screens/SagaScreen.jsx`: replace
+- [x] T024 [P] [US2] Migrate `connect-four/src/screens/SagaScreen.jsx`: replace
   `.then(p => setTier(p?.tier ?? 'free'))` with a call to `getEntitlement()`.
-- [ ] T025 [P] [US2] Migrate `connect-four/src/components/DeepRevealPane.jsx`: replace the
+- [x] T025 [P] [US2] Migrate `connect-four/src/components/DeepRevealPane.jsx`: replace the
   `tier: profile?.tier` value fed into `describeQuota` with a call to `getEntitlement()`.
-- [ ] T026 [P] [US2] Migrate `connect-four/src/lib/useLessonLockGuard.js`: replace
+- [x] T026 [P] [US2] Migrate `connect-four/src/lib/useLessonLockGuard.js`: replace
   `store.getProfile().then(p => p?.tier ?? 'free').catch(() => 'free')` with a call to `getEntitlement()`,
   consuming the `{entitled, authenticated}`-derived boolean rather than a raw tier string.
-- [ ] T027 [US2] Grep-verify no call site outside `connect-four/src/lib/entitlement.js` and
+- [x] T027 [US2] Grep-verify no call site outside `connect-four/src/lib/entitlement.js` and
   `connect-four/server/entitlement.js` still reads `.tier` directly at the five migrated locations:
   `grep -rn "\.tier" connect-four/src/screens connect-four/src/components connect-four/src/lib/useLessonLockGuard.js`
   should show zero hits at T022–T026's sites (per `quickstart.md` US2 step 5). Unrelated `.tier` concepts
   (e.g. `colRankings[].tier` in `RecommendCoach`) are a different "tier" per
   `docs/architecture/frontend-conventions.md`'s three-tier-types note — do not touch those.
-- [ ] T028 [US2] Update `docs/architecture/server-conventions.md` §"PaymentProcessor Seam": replace
+- [x] T028 [US2] Update `docs/architecture/server-conventions.md` §"PaymentProcessor Seam": replace
   `getSubscriptionStatus`'s "nothing calls this in production, by design" framing with "superseded for
   production entitlement decisions by `server/entitlement.js` (spec 053); still exercised by
   `paymentProcessor.test.mjs`/the `PaymentProcessor` substitutability tests — do not delete those tests or
   the function itself" (FR-015, `research.md` Decision 10). Do not delete `getSubscriptionStatus` or its
   tests.
-- [ ] T028a [US2] Update `docs/architecture/frontend-conventions.md` §"Reading the user's tier — profile,
+- [x] T028a [US2] Update `docs/architecture/frontend-conventions.md` §"Reading the user's tier — profile,
   never session" (~line 741): replace the mandated
   `store.getProfile().then(p => setTier(p.tier))   // canonical precedent: PostSetSummaryScreen.jsx` snippet
   and its "Any screen or spec that gates on Pro/free ... MUST use this pattern" instruction with
@@ -259,15 +259,15 @@ migrated call sites.
   still worth keeping. This doc edit is load-bearing: leaving the old text stale would point the next
   paid-status feature straight back at a raw cached tier read, recreating a sixth entitlement source
   (Constitution Principle VIII).
-- [ ] T029 [US2] Document `GET /api/user/entitlement` in `docs/architecture/api-conventions.md`: the
+- [x] T029 [US2] Document `GET /api/user/entitlement` in `docs/architecture/api-conventions.md`: the
   `{entitled, authenticated}` response shape for all three caller states (anonymous, free signed-in, paid
   signed-in), and an explicit callout that this endpoint is a deliberate, documented exception to the
   `/api/user/*` "401 if `req.user` is null" ownership invariant (`research.md` Decision 4) — so a future
   reader does not "fix" it into a `401`. Also document `entitlementForRequest(req)` as the sole production
   entry point vs. `computeEntitlement(user)` as test-only (`research.md` Decision 1).
-- [ ] T030 [US2] Register `tests/unit/userEntitlementEndpoint.test.js` and `tests/unit/entitlementClient.test.js`
+- [x] T030 [US2] Register `tests/unit/userEntitlementEndpoint.test.js` and `tests/unit/entitlementClient.test.js`
   in `connect-four/package.json`'s `test:fast` script string; verify registration per T015's method.
-- [ ] T031 [US2] Update `docs/open_issues.md`: close OI-39 (`getSubscriptionStatus` has no production call
+- [x] T031 [US2] Update `docs/open_issues.md`: close OI-39 (`getSubscriptionStatus` has no production call
   site; stale four-site count) as `✅ RESOLVED <date>`, citing the shared `entitlementForRequest`/
   `computeEntitlement` module and noting the corrected five-site count (not four, per the epic's Non-obvious
   facts) that was actually migrated.
@@ -288,12 +288,12 @@ checkout. Load `/pricing-legal` directly — MoR clause, refund statement, `/ter
 
 ### Implementation for User Story 4
 
-- [ ] T032 [US4] Add `GET /api/limits` in `connect-four/server/index.js` (near the other public resource
+- [x] T032 [US4] Add `GET /api/limits` in `connect-four/server/index.js` (near the other public resource
   routes), returning `{ freeDeepRevealWeeklyLimit: number }` sourced live from
   `connect-four/server/quotaLimits.js`'s existing `FREE_DEEP_REVEAL_WEEKLY_LIMIT` export — always `200`, not
   gated behind `PADDLE_API_KEY`, and not folded into `GET /api/paddle/config` (`contracts/limits.md`,
   `research.md` Decision 7).
-- [ ] T032a [P] [US4] Add a `pricing` i18n namespace and a `footer.pricingLegal` key to
+- [x] T032a [P] [US4] Add a `pricing` i18n namespace and a `footer.pricingLegal` key to
   `connect-four/src/i18n/en.json`: headings/body copy for `PricingScreen.jsx` (T040), the FR-022 degraded
   "pricing temporarily unavailable, no purchase CTA" message, the non-numeric quota-fallback phrase (e.g. "a
   generous weekly allowance") for when only the quota fetch fails, the checkout CTA label, and
@@ -301,31 +301,31 @@ checkout. Load `/pricing-legal` directly — MoR clause, refund statement, `/ter
   `connect-four/src/i18n/en.json`'s existing `footer` block, ~line 129 — `footer.pricing` itself is
   unaffected). A missing key here falls back to English **silently, with no failing test**, so this task must
   land before T040 and T042 consume these keys, and before T043 asserts against them.
-- [ ] T032b [P] [US4] Add the Rioplatense-voseo Spanish equivalents of every key from T032a to
+- [x] T032b [P] [US4] Add the Rioplatense-voseo Spanish equivalents of every key from T032a to
   `connect-four/src/i18n/es.json` (same `pricing` namespace, same `footer.pricingLegal` key). Do this as a
   separate task from T032a (different file, independently reviewable), but land it in the same story before
   T040/T042/T043.
-- [ ] T033 [P] [US4] Integration test `connect-four/tests/integration/limitsEndpoint.test.js`: `GET
+- [x] T033 [P] [US4] Integration test `connect-four/tests/integration/limitsEndpoint.test.js`: `GET
   /api/limits` returns `{ freeDeepRevealWeeklyLimit: FREE_DEEP_REVEAL_WEEKLY_LIMIT }` (imported from
   `quotaLimits.js`, not a duplicated literal, so the test fails if the constant and the route ever drift),
   always `200`.
-- [ ] T034 [US4] In `connect-four/server/index.js`, change the existing static route registration (exact
+- [x] T034 [US4] In `connect-four/server/index.js`, change the existing static route registration (exact
   line: `app.get('/pricing', (_, res) => res.sendFile(join(__dirname, 'pricing.html'), LEGAL_PAGE_OPTS));`)
   to register at `/pricing-legal` instead, with the identical handler body — same `pricing.html`, same
   `LEGAL_PAGE_OPTS`. Remove the old `/pricing` registration entirely (do not add a second route alongside
   it) so the SPA catch-all, registered later, serves `/pricing` via `index.html` once T038/T039 land
   (`research.md` Decision 6/11 — "whichever handler is registered first at a given path wins").
-- [ ] T035 [US4] Re-point `connect-four/server/privacy.html`'s `<a href="/pricing">Pricing</a>` (line ~45) to
+- [x] T035 [US4] Re-point `connect-four/server/privacy.html`'s `<a href="/pricing">Pricing</a>` (line ~45) to
   `<a href="/pricing-legal">Pricing</a>`.
-- [ ] T036 [P] [US4] Re-point `connect-four/server/terms.html`'s `<a href="/pricing">Pricing</a>` (line ~49)
+- [x] T036 [P] [US4] Re-point `connect-four/server/terms.html`'s `<a href="/pricing">Pricing</a>` (line ~49)
   to `<a href="/pricing-legal">Pricing</a>`.
-- [ ] T037 [P] [US4] Re-point `connect-four/server/refunds.html`'s `<a href="/pricing">Pricing</a>` (line
+- [x] T037 [P] [US4] Re-point `connect-four/server/refunds.html`'s `<a href="/pricing">Pricing</a>` (line
   ~34) to `<a href="/pricing-legal">Pricing</a>`.
-- [ ] T038 [US4] Add a `/pricing` entry to the `URL_MAP` table in `connect-four/src/lib/urlMapping.js`.
-- [ ] T039 [US4] Register the new pricing screen in the `SCREENS` registry in
+- [x] T038 [US4] Add a `/pricing` entry to the `URL_MAP` table in `connect-four/src/lib/urlMapping.js`.
+- [x] T039 [US4] Register the new pricing screen in the `SCREENS` registry in
   `connect-four/src/lib/screenRegistry.jsx` (depends on T040 existing, but the registry entry itself can be
   scaffolded alongside it).
-- [ ] T040 [US4] Create `connect-four/src/screens/PricingScreen.jsx`: fetch live prices via
+- [x] T040 [US4] Create `connect-four/src/screens/PricingScreen.jsx`: fetch live prices via
   `connect-four/src/lib/usePaddlePrices.js` (`usePaddlePrices`, `formatPrice`, `computeAnnualSavings`) and
   the live quota via `GET /api/limits` (T032); reuse `connect-four/src/components/UpgradeModal.jsx`'s
   monthly/annual toggle and savings-badge treatment for visual consistency (FR-021, Principle IV); wire the
@@ -336,9 +336,9 @@ checkout. Load `/pricing-legal` directly — MoR clause, refund statement, `/ter
   fetch (T032) fails, fall back to the `pricing.*` generic non-numeric quota-fallback key (e.g. "a generous
   weekly allowance") rather than a hardcoded number (`research.md` Decision 7's degraded-state note) — never
   conflate the two failure modes.
-- [ ] T041 [US4] Wire the `/pricing` navigation entry point in `connect-four/src/App.jsx`'s
+- [x] T041 [US4] Wire the `/pricing` navigation entry point in `connect-four/src/App.jsx`'s
   `window.history.pushState`-based `go()` mechanism.
-- [ ] T042 [US4] Update `connect-four/src/components/LegalFooter.jsx`: change the existing `/pricing` entry
+- [x] T042 [US4] Update `connect-four/src/components/LegalFooter.jsx`: change the existing `/pricing` entry
   from a plain `<a href="/pricing">` to a `go('pricing')` call (the comment claiming these links "live
   outside the SPA" is now false for `/pricing` — `research.md` Decision 6); add a new
   `{ href: '/pricing-legal', label: t('footer.pricingLegal') }` entry as a plain `<a href>` (matching
@@ -347,14 +347,14 @@ checkout. Load `/pricing-legal` directly — MoR clause, refund statement, `/ter
   the SPA, so they must be plain <a href> that`, line ~4) so it no longer claims this of the `/pricing` entry
   specifically — the comment stays accurate for `/terms`, `/privacy`, `/refunds`, and the new
   `/pricing-legal` entry, but must call out that `/pricing` is now the one exception, routed via `go()`.
-- [ ] T043 [P] [US4] Component test `connect-four/tests/dom/PricingScreen.dom.test.jsx`: renders live
+- [x] T043 [P] [US4] Component test `connect-four/tests/dom/PricingScreen.dom.test.jsx`: renders live
   prices/savings badge and quota figure from mocked `usePaddlePrices`/`GET /api/limits` responses; renders
   the degraded-state message (no purchase CTA) when the pricing fetch is mocked to fail; renders the generic
   quota fallback phrase (no hardcoded number) when only the quota fetch is mocked to fail. Assert against the
   **real `pricing.*` i18n keys** added in T032a (e.g. render with the real `en.json` loaded and match on the
   actual translated strings, or assert the `t()` keys used are the ones T032a defines) — not hardcoded
   strings, so a missing/misspelled key fails this test instead of silently falling back to English.
-- [ ] T044 [US4] Manual verification (`quickstart.md` US4 steps 1–3, FR-027/SC-008 — **blocking**, per the
+- [x] T044 [US4] Manual verification (`quickstart.md` US4 steps 1–3, FR-027/SC-008 — **blocking**, per the
   epic's Settled decision #6): `cd connect-four && npm run build`; serve the built `dist/` via the real
   Express server (never `npm run dev` — CSP is invisible under Vite dev); load `/pricing`, confirm prices
   match `GET /api/paddle/config` and quota matches `GET /api/limits`; open devtools' CSP violation console
@@ -366,29 +366,29 @@ checkout. Load `/pricing-legal` directly — MoR clause, refund statement, `/ter
   use the file's existing `## Epic 3 — Global UI/UX & Accessibility Polish (spec 043)` heading — that is a
   different, unrelated Epic 3; this task's entries go under their own new heading, never folded into that
   one.
-- [ ] T045 [US4] Manual verification (`quickstart.md` US4 step 5, FR-023): with JavaScript disabled in the
+- [x] T045 [US4] Manual verification (`quickstart.md` US4 step 5, FR-023): with JavaScript disabled in the
   browser (or via `curl` following redirects), load `/terms`, `/privacy`, and `/refunds` in turn and follow
   each page's "Pricing" link; confirm each lands on `/pricing-legal` and renders the Merchant-of-Record
   clause, 14-day refund statement, and `/terms` link correctly with no JavaScript at all.
-- [ ] T046 [US4] Verify `git diff` on `connect-four/server/pricing.html` is **empty** after T034 — confirm
+- [x] T046 [US4] Verify `git diff` on `connect-four/server/pricing.html` is **empty** after T034 — confirm
   only the route registration in `server/index.js` changed, never the file's own content (owner decision
   2026-08-01; standing constraint above).
-- [ ] T047 [US4] Confirm via the `paddle-docs` MCP server that no domain re-submission is required for the
+- [x] T047 [US4] Confirm via the `paddle-docs` MCP server that no domain re-submission is required for the
   `/pricing` content change on the already-approved domain (confirmatory, non-blocking per the epic's
   Settled decision #6 — this does NOT gate the rest of the story). Record the confirmation in
   `staging_checks.md` under the same new `## Epic 3 — Entitlement & Payments Consolidation (spec 053) — added
   <date>` heading T044 creates, alongside T044's entry — not the pre-existing spec-043 Epic 3 heading.
-- [ ] T048 [US4] Document `GET /api/limits` in `docs/architecture/api-conventions.md` under a new "Public
+- [x] T048 [US4] Document `GET /api/limits` in `docs/architecture/api-conventions.md` under a new "Public
   Config/Limits" subsection (or cross-referenced alongside the existing `GET /api/paddle/config` section) —
   a new, previously-undocumented server convention (a public, provider-independent config endpoint).
-- [ ] T049 [US4] Document the `/pricing` ↔ `/pricing-legal` split in `docs/architecture/server-conventions.md`:
+- [x] T049 [US4] Document the `/pricing` ↔ `/pricing-legal` split in `docs/architecture/server-conventions.md`:
   the in-app React route takeover of `/pricing`, the retained byte-stable static legal page at
   `/pricing-legal`, and the Express registration-order mechanism that makes the takeover work
   (`research.md` Decision 6).
-- [ ] T050 [US4] Register `tests/integration/limitsEndpoint.test.js` in `connect-four/package.json`'s
+- [x] T050 [US4] Register `tests/integration/limitsEndpoint.test.js` in `connect-four/package.json`'s
   `test:fast` script string, and `tests/dom/PricingScreen.dom.test.jsx` in the `test:dom` script string;
   verify registration per T015's method.
-- [ ] T051 [US4] Update `docs/open_issues.md`: OI-41 (bare static pricing page + price drift) gets a dated
+- [x] T051 [US4] Update `docs/open_issues.md`: OI-41 (bare static pricing page + price drift) gets a dated
   `**UPDATE <date>**` block — **not** a `RESOLVED` flip — naming exactly what remains: the retained
   `/pricing-legal` page's hand-typed price and quota literals, kept by owner decision because the page must
   stay static and JavaScript-free for a payment-provider spot-check (`research.md` Decision 11). State that
@@ -410,33 +410,33 @@ writes exactly one `upgrade_completed` row.
 
 ### Implementation for User Story 3
 
-- [ ] T052 [US3] Update `docs/architecture/server-conventions.md` §"Identity binding on `transaction.completed`
+- [x] T052 [US3] Update `docs/architecture/server-conventions.md` §"Identity binding on `transaction.completed`
   (OI-55)": replace the closing "this was an unreviewed judgment call... treat this section as a proposal to
   sanity-check, not settled policy" paragraph with a dated (2026-07-31) ratification paragraph naming the two
   accepted residual risks verbatim — "an attacker granting paid access to an account they don't control (at
   their own financial expense)" and "laundering a chargeback-prone payment onto a third party's account"
   (FR-016). No code in this section changes (FR-017). Confirm afterward that no remaining "treat this as
   unreviewed" language exists anywhere in the section (SC-006).
-- [ ] T053 [US3] Re-evaluate OI-34 (originally written against the removed Stripe integration) against
+- [x] T053 [US3] Re-evaluate OI-34 (originally written against the removed Stripe integration) against
   `connect-four/server/paddleProcessor.js`'s `verifyTransaction` (the current sync-activation fallback):
   confirm whether it still applies the `tier: 'paid'` write without inserting the `tracks` `upgrade_completed`
   row that `handleWebhook` writes (`research.md` Decision 8; `docs/architecture/server-conventions.md` §
   "Activation: webhook primary + `verify-transaction` fallback"). Record the finding (still applicable /
   obsolete) before proceeding to T054.
-- [ ] T054 [US3] If T053 finds the gap still applies (per FR-018/FR-019): implement an idempotent
+- [x] T054 [US3] If T053 finds the gap still applies (per FR-018/FR-019): implement an idempotent
   `upgrade_completed` write in `connect-four/server/paddleProcessor.js`'s `verifyTransaction`, guarded
   against double-writing when the webhook also later lands for the same transaction — check against the
   existing `payment_events` ledger row for that transaction id (already keyed by `event_id`, no new table)
   before inserting. Fire-and-forget, matching the existing `writeTier` pattern (Constitution Principle V). If
   T053 instead finds the gap obsolete, skip this task and record why in T056 directly.
-- [ ] T055 [P] [US3] Extend `connect-four/server/paddleProcessor.test.mjs` (if T054 was performed) to cover:
+- [x] T055 [P] [US3] Extend `connect-four/server/paddleProcessor.test.mjs` (if T054 was performed) to cover:
   `verifyTransaction` writes exactly one `upgrade_completed` row on a fallback-only activation; a subsequent
   webhook delivery for the same transaction does not insert a second row.
-- [ ] T056 [US3] Update `docs/open_issues.md`: re-map OI-34 with a dated `**UPDATE <date>**` re-pointing its
+- [x] T056 [US3] Update `docs/open_issues.md`: re-map OI-34 with a dated `**UPDATE <date>**` re-pointing its
   Area to `paddleProcessor.js`'s `verifyTransaction`/`handleWebhook` (noting the Stripe-era description is
   historical only) — mark `✅ RESOLVED <date>` if T054 shipped the fix, or record the obsolete finding with
   its evidence if T053 found no gap remains.
-- [ ] T057 [US3] Update `docs/open_issues.md`: close OI-55 as `✅ RESOLVED <date>`, citing the ratification
+- [x] T057 [US3] Update `docs/open_issues.md`: close OI-55 as `✅ RESOLVED <date>`, citing the ratification
   paragraph landed in T052 (`docs/architecture/server-conventions.md`) as the closeout evidence —
   documentation-only closure, no code symbol.
 
@@ -457,13 +457,13 @@ applies.
 
 ### Implementation for User Story 5
 
-- [ ] T058 [US5] In `connect-four/src/screens/PostSetSummaryScreen.jsx`, before invoking
+- [x] T058 [US5] In `connect-four/src/screens/PostSetSummaryScreen.jsx`, before invoking
   `Paddle.Checkout.open()` for a purchase started from this screen, write
   `{ nonce: crypto.randomUUID(), results, category }` to a fixed `sessionStorage` key (e.g.
   `'pendingSetResults'`) — `data-model.md`'s "Preserved set results" entity. `sessionStorage`, not
   `localStorage`, is the deliberate mechanism: it survives a full page reload/app restart within the same
   tab without leaking across tabs or sessions.
-- [ ] T059 [US5] **Re-targeted (blocking issue 1 — the original design pointed at a module that is wiped on
+- [x] T059 [US5] **Re-targeted (blocking issue 1 — the original design pointed at a module that is wiped on
   restart).** `connect-four/src/lib/checkoutReturnFlow.js`, read at source: it is a plain in-memory
   module-level `let state = 'idle'` with four string values and no payload field. On a genuine cold boot
   (the app fully closed and reopened, per FR-029/SC-005/US5 AC2) that variable re-initializes to `'idle'` and
@@ -493,13 +493,13 @@ applies.
     `checkoutReturnFlow.js` or any return-path threading at all.
   Record which carrier was actually used (and why the other was rejected) as a comment at the T060 call site,
   so a future reader doesn't "helpfully" reintroduce the rejected one.
-- [ ] T060 [US5] On `PostSetSummaryScreen.jsx`'s mount effect, read the `sessionStorage` entry (T058) and
+- [x] T060 [US5] On `PostSetSummaryScreen.jsx`'s mount effect, read the `sessionStorage` entry (T058) and
   validate it via whichever carrier T059 established (a matching `resultsNonce` query param on the current
   URL, or T059's self-validation timestamp/category check); if valid, restore the results and clear the
   stored entry (FR-030). If the entry is missing or fails validation, fall through unchanged to the existing
   `returnPathOverride='/setpicker'` fallback (FR-031 — do not remove or alter that fallback, only make it a
   true fallback instead of the only path).
-- [ ] T061 [P] [US5] Extend `connect-four/tests/unit/checkoutReturnFlow.test.js` (or a new
+- [x] T061 [P] [US5] Extend `connect-four/tests/unit/checkoutReturnFlow.test.js` (or a new
   `connect-four/tests/unit/pendingSetResults.test.js` if T059's chosen carrier lives outside
   `checkoutReturnFlow.js` entirely — register whichever file per the Standing constraints note): a valid
   nonce round-trip restores the persisted results after a **simulated genuine cold boot** — reset
@@ -512,7 +512,7 @@ applies.
   unchanged; completing one purchase and later reopening the upgrade modal in the same session does not
   resurface the first purchase's outcome (the existing OI-59 replay-on-subscribe fix must keep holding —
   re-run, don't just eyeball, per `quickstart.md`'s US5 step 4).
-- [ ] T062 [US5] Update `docs/open_issues.md`: close OI-25 (paying from `/summary` loses the summary) as
+- [x] T062 [US5] Update `docs/open_issues.md`: close OI-25 (paying from `/summary` loses the summary) as
   `✅ RESOLVED <date>`, citing the `sessionStorage` nonce persistence in `PostSetSummaryScreen.jsx` as what
   shipped.
 
@@ -524,12 +524,12 @@ applies.
 
 **Purpose**: Full-suite verification and backlog-bookkeeping sweep across all five stories.
 
-- [ ] T063 Run `cd connect-four && npm run test:fast` — confirm it stays fully green after every story's
+- [x] T063 Run `cd connect-four && npm run test:fast` — confirm it stays fully green after every story's
   changes (never `npm test` — see Standing constraints above).
-- [ ] T064 [P] Run `cd connect-four && npm run test:dom` — confirm all new/existing DOM tests pass together.
-- [ ] T065 [P] Add an entry for spec 053 to `specs/index.md` per the project's documentation-index
+- [x] T064 [P] Run `cd connect-four && npm run test:dom` — confirm all new/existing DOM tests pass together.
+- [x] T065 [P] Add an entry for spec 053 to `specs/index.md` per the project's documentation-index
   convention (`CLAUDE.md` §Documentation index).
-- [ ] T066 Spot-check that all six `docs/open_issues.md` closeouts from this epic (OI-66 T016, OI-39 T031,
+- [x] T066 Spot-check that all six `docs/open_issues.md` closeouts from this epic (OI-66 T016, OI-39 T031,
   OI-41 T051, OI-55 T057, OI-34 T056, OI-25 T062) each follow the Issue closeout convention format defined
   in `docs/epics/open-issues-epics.md`'s top matter (RESOLVED-with-date-and-evidence, or a dated UPDATE
   naming exactly what remains) — a shipped fix with a stale or malformed backlog entry is an incomplete

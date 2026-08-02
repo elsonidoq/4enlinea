@@ -26,6 +26,7 @@
 import { useState, useEffect } from 'react';
 import { useStore } from '../store/ProfileStore.jsx';
 import { deriveLessonAccess } from '../screens/sagaLock.js';
+import { getEntitlement } from './entitlement.js';
 
 const API = import.meta.env.VITE_API_BASE_URL || '';
 
@@ -54,9 +55,13 @@ export function useLessonLockGuard(lessonId, goReplace) {
       }),
       // Same defaults SagaScreen falls back to on store errors.
       store ? store.getLessonProgress().catch(() => []) : Promise.resolve([]),
-      store
-        ? store.getProfile().then(p => p?.tier ?? 'free').catch(() => 'free')
-        : Promise.resolve('free'),
+      // Sourced from the single client-side entitlement helper (spec 053
+      // US2/T026), not a cached profile.tier read — see
+      // docs/architecture/frontend-conventions.md "Reading the user's tier".
+      // getEntitlement() never rejects (fail-open, FR-013), so no catch
+      // needed; it resolves {entitled:false} for both anonymous callers and
+      // failures, matching this hook's prior 'free' default.
+      getEntitlement().then(({ entitled }) => (entitled ? 'paid' : 'free')),
     ])
       .then(([lessons, progress, tier]) => {
         if (cancelled) return;

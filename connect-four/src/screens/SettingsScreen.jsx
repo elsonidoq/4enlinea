@@ -7,6 +7,7 @@ import { useLanguage } from '../lib/useLanguage.js';
 import { useUpgradeCheckout } from '../lib/useUpgradeCheckout.js';
 import { subscribeCheckoutReturn, resetCheckoutReturnState } from '../lib/checkoutReturnFlow.js';
 import { fetchWithAuthRetry } from '../lib/fetchWithAuthRetry.js';
+import { getEntitlement } from '../lib/entitlement.js';
 
 const API = import.meta.env.VITE_API_BASE_URL || '';
 
@@ -105,11 +106,24 @@ export function SettingsScreen({ go, goBack }) {
         const id = profile.papergames_id || '';
         setPapergamesId(id);
         setSavedValue(id);
-        setTier(profile.tier === 'paid' ? 'paid' : 'free');
       } catch (_) {
         // Ignore — user can still type
       }
     })();
+    return () => { cancelled = true; };
+  }, [isAuthenticated]);
+
+  // Subscription tier (D3, spec 053 US2/T022): sourced from the single
+  // client-side entitlement helper, not a cached profile.tier read — see
+  // docs/architecture/frontend-conventions.md "Reading the user's tier".
+  // getEntitlement() never rejects (fail-open, FR-013), so no catch needed.
+  useEffect(() => {
+    if (!isAuthenticated) return;
+    let cancelled = false;
+    getEntitlement().then(({ entitled }) => {
+      if (cancelled) return;
+      setTier(entitled ? 'paid' : 'free');
+    });
     return () => { cancelled = true; };
   }, [isAuthenticated]);
 

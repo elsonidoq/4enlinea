@@ -12,6 +12,7 @@
 // Authorization header from the client.
 import { useStore } from '../store/ProfileStore.jsx';
 import { setCheckoutReturnState } from './checkoutReturnFlow.js';
+import { invalidateEntitlement } from './entitlement.js';
 
 const API = import.meta.env.VITE_API_BASE_URL || '';
 
@@ -94,6 +95,23 @@ async function handleCheckoutCompleted(transactionId) {
       body: JSON.stringify({ transactionId }),
     });
     const result = res.ok ? await res.json() : { activated: false };
+    // FR-012/T021 (spec 053 US2): this checkout.completed handler is the
+    // single choke point every UpgradeModal call site funnels through
+    // (research.md Decision 2) — invalidating here satisfies FR-012 for
+    // all five entitlement-reading call sites at once, with no per-site
+    // wiring. Discards the client's cached entitlement answer so the very
+    // next getEntitlement() call re-fetches instead of serving a
+    // pre-purchase stale 'free' answer (SC-003: no manual reload needed).
+    //
+    // Deliberately UNconditional on result.activated: FR-012 keys off
+    // "returning from a completed checkout", not off the sync verify
+    // succeeding. The fallback verify can fail while the webhook activates
+    // the account moments later — gating on `activated` would leave that
+    // (genuinely paid) customer pinned to a stale 'free' answer for the rest
+    // of the TTL window. Invalidation only drops freshness, so the cost of
+    // being wrong here is one extra fetch; the cost of the other direction
+    // is a paying customer staring at an upgrade prompt.
+    invalidateEntitlement();
     setCheckoutReturnState(result.activated ? 'activated' : 'failed');
   } catch {
     setCheckoutReturnState('failed');

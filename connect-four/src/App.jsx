@@ -11,6 +11,7 @@ import { readDevBoardParam } from './lib/devBoardParam.js';
 import { consumeReturnTo } from './lib/postLoginReturn.js';
 import { shouldAutoRouteToOnboarding } from './lib/onboardingRouting.js';
 import { isLocalhostOrigin } from './lib/isLocalhostOrigin.js';
+import { hasFreshPendingSetResults } from './lib/pendingSetResults.js';
 import AdminBlockedPage from './pages/AdminBlockedPage.jsx';
 import './i18n/index.js';
 
@@ -28,6 +29,20 @@ function Navigator() {
     let isSessionOnly = SESSION_ONLY_SCREENS.has(screenKey);
     let resolved = isSessionOnly ? 'home' : screenKey;
     let resolvedParams = isSessionOnly ? {} : initParams;
+
+    // Spec 053 US5 (T059/T060, FR-029/FR-030, OI-25): SESSION_ONLY_SCREENS unconditionally
+    // forces 'summary' to 'home' on every cold boot (see urlMapping.js's SESSION_ONLY_SCREENS
+    // doc) — but that would defeat "returning from a purchase after a full app restart still
+    // shows the same set results", since PostSetSummaryScreen would never even mount to read
+    // its own restored sessionStorage entry (src/lib/pendingSetResults.js). Narrow carve-out,
+    // 'summary' only: peek (non-destructively — no clearing here) at whether a fresh
+    // pendingSetResults entry exists; if so, let the boot land on 'summary' after all so its
+    // mount effect can consume + clear it itself. 'game' (this Set's other member) is untouched.
+    if (screenKey === 'summary' && hasFreshPendingSetResults()) {
+      isSessionOnly = false;
+      resolved = 'summary';
+      resolvedParams = {};
+    }
 
     // DEV-only: allow cold-booting a seeded Sparring game from /game?devBoard=... (game is
     // session-only, so it would otherwise redirect to home). Entire block stripped from prod.

@@ -32,11 +32,18 @@
 //     (`transaction.customData?.app_user_id === userId`) and is
 //     `status === 'completed'` before granting `tier: 'paid'`. On success,
 //     applies the SAME idempotent write the webhook (T034) applies —
-//     `tier: 'paid'` + `paddle_customer_id` — with NO `tracks` insert;
-//     that analytics record is exclusively the webhook's to write (FR-008).
-//     The Paddle Node SDK's transaction object is camelCase
-//     (`customerId`, `customData`, `status`) — verified against the
-//     paddle-docs MCP (2026-07-17), not assumed from training data.
+//     `tier: 'paid'` + `paddle_customer_id`. The Paddle Node SDK's transaction
+//     object is camelCase (`customerId`, `customData`, `status`) — verified
+//     against the paddle-docs MCP (2026-07-17), not assumed from training data.
+//   - OI-34 (spec 053 US3, FR-018/FR-019, 2026-08-01): also writes the same
+//     `tracks`/`upgrade_completed` analytics record the webhook writes —
+//     historically this fallback skipped it entirely, undercounting analytics
+//     whenever the webhook was permanently undelivered. Deduped per-transaction
+//     via `recordUpgradeCompletedTrack` (reuses `payment_events`' UNIQUE
+//     `event_id`, no new table) so it never double-writes against a matching
+//     webhook delivery, in either arrival order. A write failure here is
+//     caught and logged, never rethrown — never blocks/breaks the client's
+//     activation result (Constitution Principle V).
 //
 // handleWebhook (US3, contracts/paddle-api.md, FR-006/FR-007/FR-008/FR-009):
 //   - `paddle.webhooks.unmarshal(rawBody, secret, signatureHeader)` verifies
@@ -167,6 +174,45 @@ export function createPaddleProcessor({
     if (error) throw new Error(error.message);
   }
 
+  // ── recordUpgradeCompletedTrack — per-transaction dedup for the
+  // `upgrade_completed` analytics write (OI-34, spec 053 US3, FR-018/FR-019)
+  // ──────────────────────────────────────────────────────────────────────
+  // Either verifyTransaction (the sync fallback) or handleWebhook's
+  // transaction.completed branch can be the FIRST path to observe a given
+  // payment — whichever runs first must own the one `tracks`/upgrade_completed
+  // row, and the other must skip it, regardless of which order they arrive in.
+  // Reuses `payment_events`' existing UNIQUE(event_id) constraint as the dedup
+  // key rather than a new table: a synthetic, transaction-id-derived event_id
+  // (`upgrade_completed_track:<transactionId>`) is inserted as a claim BEFORE
+  // the `tracks` row itself. A `23505` on that claim insert means the other
+  // path already claimed (and wrote) the analytics row for this transaction,
+  // so this call is a no-op — returns `false`. A genuine (non-23505) DB error
+  // on either the claim or the `tracks` insert throws, matching how
+  // handleWebhook already treats a `tracks` write failure (FR-009); the two
+  // call sites decide separately whether to propagate or swallow that throw.
+  async function recordUpgradeCompletedTrack({ transactionId, userId, priceId, path }) {
+    const claimEventId = `upgrade_completed_track:${transactionId}`;
+    const { error: claimErr } = await supabase.from('payment_events').insert({
+      event_id: claimEventId,
+      event_type: 'upgrade_completed_track',
+      payload: { transactionId, userId },
+    });
+    if (claimErr) {
+      if (claimErr.code === '23505') return false;
+      throw new Error(`upgrade_completed_track claim failed: ${claimErr.message}`);
+    }
+
+    const { error: trackErr } = await supabase.from('tracks').insert({
+      uid: userId,
+      user_id: userId,
+      path,
+      event: 'upgrade_completed',
+      event_data: { priceId, transactionId },
+    });
+    if (trackErr) throw new Error(trackErr.message);
+    return true;
+  }
+
   // ── verifyTransaction — synchronous single-check activation fallback ──────
   // FR-010: only a transaction confirmed to belong to THIS user, and already
   // `completed`, may flip tier -> paid. Safe to run alongside the (later-batch)
@@ -207,8 +253,29 @@ export function createPaddleProcessor({
 
     if (!supabase) return { activated: true };
     await writeTier({ userId, tier: 'paid', setPaddleCustomerId: transaction.customerId });
-    // No `tracks`/`upgrade_completed` insert here — that analytics record is
-    // exclusively the webhook's to write (FR-008).
+
+    // OI-34 (spec 053 US3, FR-018/FR-019): historically no `tracks`/
+    // `upgrade_completed` insert happened here at all — that analytics record
+    // was written exclusively by the webhook (FR-008 as originally shipped).
+    // That left the fallback-only-activation edge case (webhook never
+    // delivered) analytics-undercounted, so this fallback now writes the same
+    // record — deduped per-transaction via recordUpgradeCompletedTrack so it
+    // never double-writes if the matching webhook also lands (either before
+    // or after this call). A write failure here must never affect the
+    // client's activation result (Constitution Principle V — analytics writes
+    // must not block/break the response), so it's caught and logged, not
+    // rethrown.
+    try {
+      await recordUpgradeCompletedTrack({
+        transactionId,
+        userId,
+        priceId: transaction.items?.[0]?.price?.id ?? 'unknown',
+        path: '/paddle/verify-transaction',
+      });
+    } catch (err) {
+      logError('[paddle/verify-transaction]', err, { transactionId, userId });
+    }
+
     return { activated: true };
   }
 
@@ -294,16 +361,21 @@ export function createPaddleProcessor({
 
           await writeTier({ userId, tier: 'paid', setPaddleCustomerId: data.customerId });
 
-          // Exclusively the webhook's analytics record (FR-008) — verifyTransaction
-          // never writes this.
-          const { error: trackErr } = await supabase.from('tracks').insert({
-            uid: userId,
-            user_id: userId,
+          // This is the primary path's analytics record (FR-008). As of OI-34
+          // (spec 053 US3), verifyTransaction's fallback can also write this
+          // same record when it runs first (webhook delayed/undelivered) —
+          // recordUpgradeCompletedTrack's per-transaction claim means whichever
+          // path gets here first wins and this call is a no-op for the other,
+          // so exactly one `tracks` row is written per transaction regardless
+          // of arrival order. A genuine write failure here still throws,
+          // preserving this branch's existing FR-009 durability behavior
+          // (rolls back the just-inserted `payment_events` ledger row, below).
+          await recordUpgradeCompletedTrack({
+            transactionId: data.id,
+            userId,
+            priceId: data.items?.[0]?.price?.id ?? 'unknown',
             path: '/paddle/webhook',
-            event: 'upgrade_completed',
-            event_data: { priceId: data.items?.[0]?.price?.id ?? 'unknown' },
           });
-          if (trackErr) throw new Error(trackErr.message);
         }
       } else if (event.eventType === 'subscription.created') {
         // Documented no-op (contracts/paddle-api.md): ledger insert only. The

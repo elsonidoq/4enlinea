@@ -538,18 +538,47 @@ or a nav item) that opens `UpgradeModal` via `useUpgradeCheckout()` — it shoul
 
 ## OI-25 — Paying from the /summary paywall cannot restore the summary (SESSION_ONLY state lost)
 
-**Status**: mitigated, full fix deferred (2026-07-14)
-**Area**: `connect-four/src/screens/PostSetSummaryScreen.jsx`, `src/lib/urlMapping.js` (`SESSION_ONLY_SCREENS`)
+**Status**: ✅ RESOLVED 2026-08-01 (spec 053, Epic — Entitlement & Payments Consolidation, US5)
+**Area**: `connect-four/src/screens/PostSetSummaryScreen.jsx`, `connect-four/src/lib/pendingSetResults.js`
+(new), `connect-four/src/App.jsx` (`Navigator` boot routing)
 
-`/summary` is a `SESSION_ONLY` screen driven by an in-memory `results` prop; a full-page Stripe checkout
-redirect reboots the SPA, so on return the `results` are gone and the cold-boot rule sends the user to
-`home`. **Mitigation shipped**: `PostSetSummaryScreen` passes `returnPathOverride='/setpicker'` so the
-user lands on Challenges (the screen's own back-button destination) instead of home — acceptable, since
-they have already seen the summary. A true restore would require persisting `results` (e.g. sessionStorage)
-so `/summary` can rehydrate after the round-trip; judged not worth it for now.
+`/summary` is a `SESSION_ONLY` screen driven by an in-memory `results` prop; the historical Stripe
+full-page-redirect checkout rebooted the SPA on return, so `results` were gone and the cold-boot rule sent
+the user to `home`. The original mitigation (`returnPathOverride='/setpicker'`) only softened where the
+user landed — it never restored the summary itself.
 
-**If picked up**: persist the set `results` to sessionStorage keyed by a nonce, include the nonce in the
-returnPath, and rehydrate on cold boot. Cross-ref: memory `project_stripe_traps`, [[OI-24]].
+**Resolution**: `PostSetSummaryScreen.jsx` now persists `{ nonce, results, category, savedAt }` to a
+`sessionStorage` key (`pendingSetResults`) immediately before opening the Paddle.js overlay
+(`savePendingSetResults`, T058), and its own mount reads + clears that entry via a lazy `useState`
+initializer (`readAndClearPendingSetResults`, T060) — self-validated by a 30-minute freshness window, with
+**no** dependency on `checkoutReturnFlow.js` or the checkout `returnPath` (see the T059 investigation
+record below). `App.jsx`'s `Navigator` boot effect gained a narrow carve-out — a fresh
+`pendingSetResults` entry lets a cold boot land on `summary` instead of unconditionally redirecting to
+`home`, so the screen can actually mount to consume it (`docs/architecture/frontend-conventions.md`'s
+`SESSION_ONLY_SCREENS` entry documents this). If the entry is missing/invalid/expired, the screen falls
+through unchanged to its normal empty-props render and the existing `returnPathOverride='/setpicker'` call
+is untouched (FR-031).
+
+**T059 investigation record (why sessionStorage self-validation, not the nonce/returnPath carrier)**: the
+original design (and this OI's own "if picked up" note below) assumed the nonce could travel through the
+checkout `returnPath`. Investigated at source and rejected: `useUpgradeCheckout.js`'s
+`handleCheckoutCompleted` deliberately never forwards `successUrl` to `Paddle.Checkout.open()` — it closes
+the overlay itself once its own `verify-transaction` call resolves, specifically so Paddle's own redirect
+never fires (FR-003/US2 AC1) — and nothing else in the app reads a Paddle-return URL either. A
+`returnPath`-embedded nonce would be written to the server and read by nobody on the way back. Full
+reasoning lives as a comment in `connect-four/src/lib/pendingSetResults.js`.
+
+Covered by `connect-four/tests/unit/pendingSetResults.test.js` (pure carrier logic) and
+`connect-four/tests/dom/PostSetSummaryScreenPendingResults.dom.test.jsx` (a simulated genuine cold boot —
+re-seeded `sessionStorage` + a fresh mount with no in-memory props, distinct from a mere remount; the
+missing/expired-entry fallback; and a re-run, through the actual screen, of OI-59's replay-on-subscribe
+fix). `npm run test:fast`/`npm run test:dom` both green with these added.
+
+**Original report (historical)**: `/summary` is a `SESSION_ONLY` screen driven by an in-memory `results`
+prop; a full-page Stripe checkout redirect reboots the SPA, so on return the `results` are gone and the
+cold-boot rule sends the user to `home`. Mitigation shipped at the time: `PostSetSummaryScreen` passes
+`returnPathOverride='/setpicker'` so the user lands on Challenges instead of home. Cross-ref: memory
+`project_stripe_traps`, [[OI-24]].
 
 ## OI-26 — Admin TTS cleanup nulls audio cross-locale under composite explanation_cache key
 
@@ -779,14 +808,46 @@ because OI-90's residual means item 1 is only partially addressed on the forced-
 
 ## OI-34 — Fallback-only checkout activations do not record the `upgrade_completed` analytics track
 
-**Status**: accepted / knowingly-left (2026-07-15, when the `/api/stripe/verify-session` synchronous activation fallback shipped)
-**Area**: `connect-four/server/stripeProcessor.js` — `syncCheckoutSession` vs `handleWebhook`
+**Status**: ✅ RESOLVED 2026-08-01 (spec 053, Epic — Entitlement & Payments Consolidation, US3)
+**Area**: `connect-four/server/paddleProcessor.js` — `verifyTransaction` (sync-activation fallback) and `handleWebhook`'s `transaction.completed` branch (primary path)
 
-`syncCheckoutSession` (the fallback that flips `tier: 'paid'` when the webhook is delayed/undelivered) intentionally does **not** insert the `tracks` `upgrade_completed` row — that analytics write lives only in `handleWebhook`'s `checkout.session.completed` branch, to avoid double-tracking when both paths fire (the normal case, where they race and converge). Consequence: if a purchase activates via the fallback **and the webhook never arrives at all** (e.g. a permanently misconfigured/undelivered webhook endpoint in some environment), that upgrade is missing from the `upgrade_completed` analytics stream even though the user is correctly `paid`. Tier correctness is unaffected — this is purely an analytics undercount in the webhook-fully-down edge case.
+**UPDATE 2026-08-01**: this entry was originally written against the removed Stripe integration
+(`stripeProcessor.js`'s `syncCheckoutSession` vs `handleWebhook` — the description below this line is
+**historical only**; that file no longer exists). Re-evaluated against the current Paddle integration
+(spec 053 T053): the architecturally identical gap was confirmed still applicable —
+`connect-four/server/paddleProcessor.js`'s `verifyTransaction` (lines ~187–213 pre-fix) applied the
+same `tier: 'paid'` write `handleWebhook` applies but explicitly did **not** insert the `tracks`
+`upgrade_completed` row (the pre-fix code's own comment: "that analytics record is exclusively the
+webhook's to write"), so a purchase activated via the fallback with the webhook never delivered at all
+was still missing from the `upgrade_completed` analytics stream despite the user being correctly
+`paid`.
 
-**Why deferred**: the webhook is the primary path and is expected to deliver in staging/prod (a registered endpoint); the fallback firing *alone* (no webhook ever) is an operational-failure edge, not the steady state. Making the track idempotent-per-session (so either path could safely write it) would need a dedup key (e.g. a `stripe_events`-style ledger keyed on the checkout session id, or an upsert on `(user_id, session_id)`), which is more machinery than the analytics gap warrants today.
+**Fix shipped (T054)**: `verifyTransaction` now also writes the `upgrade_completed` `tracks` row, via a
+new shared helper `recordUpgradeCompletedTrack` (`paddleProcessor.js`) that both `verifyTransaction` and
+`handleWebhook`'s `transaction.completed` branch call. Idempotency is per-transaction, reusing
+`payment_events`' existing `UNIQUE(event_id)` constraint — no new table: each call first inserts a
+synthetic, transaction-id-derived claim row (`event_id: `upgrade_completed_track:<transactionId>``); a
+`23505` on that claim means the other path already claimed (and wrote) the analytics row for this
+transaction, so the call is a no-op. This holds in **both** arrival orders (fallback-then-webhook and
+webhook-then-fallback), not just the one FR-019 named. A write failure inside `verifyTransaction`'s call
+is caught and logged, never rethrown (Constitution Principle V — analytics writes must not block/break
+the client's activation result); a failure inside `handleWebhook`'s call still throws, preserving that
+branch's pre-existing FR-009 durability behavior.
 
-**If picked up**: give `syncCheckoutSession` the same `upgrade_completed` insert guarded by an idempotency key on the checkout session id so exactly one track is written whichever path wins. Cross-ref: memory `project_stripe_traps`; server-conventions.md "Activation: webhook primary + verify-session fallback".
+**Verified (T055)**: `connect-four/server/paddleProcessor.test.mjs` — the `verifyTransaction` "activates"
+test now asserts exactly one `tracks`/`upgrade_completed` row on a fallback-only activation; the
+`createPaddleProcessor — fallback + webhook upgrade_completed dedup (OI-34)` describe block covers both
+orderings explicitly (fallback-then-webhook and webhook-then-fallback), each asserting exactly one
+`tracks` row total across both calls. `npm run test:fast`: all `paddleProcessor.test.mjs` cases green
+(29/29).
+
+**Original report (historical, Stripe-era)**: `syncCheckoutSession` (the fallback that flips
+`tier: 'paid'` when the webhook is delayed/undelivered) intentionally did **not** insert the `tracks`
+`upgrade_completed` row — that analytics write lived only in `handleWebhook`'s
+`checkout.session.completed` branch, to avoid double-tracking when both paths fired (the normal case,
+where they raced and converged). Making the track idempotent-per-session was judged more machinery than
+the analytics gap warranted at the time (2026-07-15) and deferred; that decision is what spec 053 US3
+revisited and closed above.
 
 ## OI-35 — QA run 2026-07-15 findings backlog (agentic_QA_2026-07-15-1321.md) — unfixed at close
 
@@ -847,14 +908,32 @@ If picked up: audit which of the 45 KB entries have `short_summary_es` populated
 
 ## OI-39 — `getSubscriptionStatus` (paymentProcessor.js) has no production call site; three (soon four) tier-gate sites read the client-cached tier directly
 
-**Status**: logged for traceability, not a bug — an explicit spec-intent-vs-implementation gap, not a runtime defect that breaks any flow. See Batch B task 16 (finding 13).
-**Area**: `connect-four/server/paymentProcessor.js:31-46`; `connect-four/src/screens/sagaLock.js:13`; `connect-four/src/screens/PostSetSummaryScreen.jsx:55`; `connect-four/src/store/CheckoutReturnBanner.jsx:72`
+**Status**: ✅ RESOLVED 2026-08-01 (spec 053, Epic — Entitlement & Payments Consolidation, US2)
+**Area**: `connect-four/server/paymentProcessor.js`; `connect-four/server/entitlement.js`;
+`connect-four/src/lib/entitlement.js`; `connect-four/src/screens/sagaLock.js`,
+`connect-four/src/screens/SagaScreen.jsx`, `connect-four/src/screens/PostSetSummaryScreen.jsx`,
+`connect-four/src/screens/SettingsScreen.jsx`, `connect-four/src/components/DeepRevealPane.jsx`,
+`connect-four/src/lib/useLessonLockGuard.js`
 
-Spec-045 item 12 called for tier gates to be checked through a single server-authoritative interface. `paymentProcessor.js:31-46` deliberately documents `getSubscriptionStatus` as "test-only in production wiring: no production call site is wired through it today" — an existence proof that the function exists and is exercised by tests, but nothing in the running app actually calls it. In practice, all three current paywall gate sites (`sagaLock.js:13`, `PostSetSummaryScreen.jsx:55`, `CheckoutReturnBanner.jsx:72`) instead read the client-cached tier value directly (`store.getProfile()`/session tier), never a fresh server check.
+Spec-045 item 12 called for tier gates to be checked through a single server-authoritative interface.
+`paymentProcessor.js`'s `getSubscriptionStatus` was an existence proof — it satisfied the
+`PaymentProcessor` interface's substitutability but had no production caller — while, independently, the
+app's paywall gate sites each read the client-cached tier value directly. The stale **four**-site count
+recorded above was itself already wrong by the time spec 053 picked this up: a fresh grep found **five**
+call sites actually deciding paid-vs-free from a cached `profile.tier` (`SettingsScreen.jsx`,
+`PostSetSummaryScreen.jsx`, `SagaScreen.jsx`, `DeepRevealPane.jsx`, `useLessonLockGuard.js` — two of the
+original four-site list, `sagaLock.js`/`CheckoutReturnBanner.jsx`, were not independent tier readers at
+all). See OI-94 for the drift this caused and why the count needs enforcement going forward.
 
-**Do not refactor the three call sites to close this issue.** Routing them through a server-side interface from the frontend is an architecture decision needing its own brainstorm — it would touch every paywall in the app for zero user-visible benefit today, since nothing currently exploits the gap (the client-cached tier is refreshed through the normal auth/profile flow).
-
-**Strengthens the case for future consolidation**: W4 Task 9 adds a **fourth** independent tier read, in `SettingsScreen`, for its new Subscription section — meaning there are now four places that each independently decide "is this user paid," none of them going through `getSubscriptionStatus`. If/when this is picked up, design a single tier-check interface first, then migrate all four (not three) call sites together.
+**Resolution**: spec 053 introduced one shared, server-authoritative computation —
+`entitlementForRequest(req)` / `computeEntitlement(user)` in `connect-four/server/entitlement.js` — served
+via `GET /api/user/entitlement` (documented in `docs/architecture/api-conventions.md`), and one shared
+client-side cache wrapper, `getEntitlement()` in `connect-four/src/lib/entitlement.js`. All five actual
+call sites were migrated onto `getEntitlement()` in the same change (T022–T026), verified by a zero-hit
+grep for raw `.tier` reads at those five locations (T027). `getSubscriptionStatus` itself was **not**
+deleted and remains exercised by `paymentProcessor.test.mjs`/the `PaymentProcessor` substitutability
+tests — it is now documented as superseded, not removed, for production entitlement decisions
+(`docs/architecture/server-conventions.md` §"PaymentProcessor Seam", FR-015).
 
 ## OI-40 — Anonymous puzzle-attempt writes fall back to a shared literal `device_uuid: 'anonymous'`, cross-contaminating unrelated anon users
 
@@ -891,6 +970,31 @@ The final fallback, `'anonymous'`, is a **string literal**, not a per-device ide
 **Also carried by this page** (must survive any redesign — they are Paddle domain-review requirements, not decoration): the verbatim Merchant of Record clause ("Our order process is conducted by our online reseller Paddle.com…"), the 14-day refund statement, and the link to `/terms`.
 
 **Update (2026-07-18, verified during a live domain-review resubmission)**: two premises above are now stale — `connect-four/server/pricing.html` **does** exist on this branch/checkout (the "not on this branch" note is outdated), and the price source of truth has finished moving off Stripe to Paddle (`usePaddlePrices.js` / `GET /api/paddle/config`, not the `useStripePrices`/`/api/stripe/config` referenced above). The drift bug (item 2) is **not currently manifesting**: `pricing.html`'s hardcoded `$2.99`/`$21.99`, `en.json`'s `upgrade.body`/`upgrade.price` strings, and the **live** Paddle catalog's actual price objects were all cross-checked and agree, and this was the pricing consistency Paddle's domain reviewer flagged and (pending resubmission) should now clear. The underlying risk itself is unchanged and unfixed — nothing prevents these three from drifting apart again the next time a price changes, since `pricing.html`/`en.json` are still hand-maintained literals, not derived from the live config endpoint. Item 1 (real designed pricing page) is still fully open.
+
+**UPDATE 2026-08-01**: Item 1 (real designed pricing page) has shipped — `/pricing` is now an in-app React
+route (`connect-four/src/screens/PricingScreen.jsx`, registered in `src/lib/urlMapping.js`/
+`src/lib/screenRegistry.jsx`) that sources every price, savings percentage, and quota figure it displays
+live: `GET /api/paddle/config` (prices/savings, via `formatPrice`/`computeAnnualSavings` from
+`usePaddlePrices.js`) and the new `GET /api/limits` (quota — `docs/architecture/api-conventions.md` §Public
+Config/Limits). It visually and behaviorally matches the rest of the app (FR-021), has a distinct FR-022
+degraded state with no purchase CTA when pricing is unavailable. Its CSP posture was confirmed via `curl`
+against the production Express-served build (live prices/quota render, and the response's
+`Content-Security-Policy` header already carries every directive the Paddle checkout overlay needs, with
+no new origin added by this change) — **but the live-browser leg (opening the checkout overlay and reading
+the DevTools CSP-violation console) has NOT been exercised**; the shared browser automation profile was
+held by another live session across two QA passes (2026-08-01). This remains **NOT VERIFIED**, not a pass —
+see `staging_checks.md`'s "Epic 3 — Entitlement & Payments Consolidation (spec 053)" section, T044, for the
+full record and what's still outstanding. **This is a genuine fix, not a flip to
+RESOLVED**, because item 2's underlying literal-drift risk is **deliberately retained** on one page: the old
+static `pricing.html` is kept, byte-stable and unchanged, at the new address `/pricing-legal`
+(`docs/architecture/server-conventions.md` §"`/pricing` vs `/pricing-legal`") — reachable independent of
+`/pricing`'s own availability, per Paddle's requirement that a merchant-of-record/refund-policy page stay
+static and JavaScript-free for a reviewer spot-check (`research.md` Decision 11,
+`specs/053-entitlement-payments-consolidation/`). `/pricing-legal`'s hand-typed `$2.99`/`$21.99`/`39%`/`$1.83`
+literals and its own `20`-per-week quota figure are that retained risk, kept by explicit owner decision, not
+an oversight — they can still silently drift the next time a price or the quota changes, exactly as
+described above, but only on that one legal-compliance page. `/pricing` itself has no such literals left
+anywhere in it (FR-020/FR-026/SC-004 fully satisfied on `/pricing`).
 
 ## OI-42 — Lesson audio is not manageable from `/admin/audio`
 
@@ -1108,7 +1212,15 @@ Opening the Paddle.js overlay checkout in this sandbox account (after fixing OI'
 
 ## OI-55 — Paddle tier-grant identity (`customData.app_user_id`) is client-supplied with no server-side binding
 
-**Status**: partially resolved (2026-07-18, unreviewed judgment call — see below; not a rubber-stamped requirement, sanity-check before trusting it as settled)
+**Status**: ✅ RESOLVED 2026-08-01 (spec 053, Epic — Entitlement & Payments Consolidation, US3) — the
+2026-07-18 harden-direction trust model below was reviewed and explicitly ratified by the app owner as
+settled policy, with both residual risks named explicitly. Closeout evidence:
+`docs/architecture/server-conventions.md`'s "Identity binding on `transaction.completed` (OI-55)"
+subsection now carries a dated (2026-07-31) ratification paragraph naming the two accepted residual
+risks verbatim — "an attacker granting paid access to an account they don't control (at their own
+financial expense)" and "laundering a chargeback-prone payment onto a third party's account" — in place
+of the prior "treat this section as a proposal to sanity-check, not settled policy" language. This was a
+documentation-only closure (FR-017): no code in the identity cross-check changed.
 **Area**: `connect-four/server/paddleProcessor.js` (`createCheckout`, `handleWebhook`), `connect-four/src/lib/useUpgradeCheckout.js`
 
 `server/paddleRoutes.js` calls `createCheckout({ userId: req.user.id, ... })`, but `createCheckout` never uses `userId` — it's silently dropped. The frontend independently sets `customData: { app_user_id: session?.user?.id }` when opening the Paddle.js overlay, reading it from client-side React store state. `handleWebhook`'s `transaction.completed` branch trusts `data.customData?.app_user_id` unconditionally to decide which user's tier to flip to `'paid'`, with no server-side cross-check — unlike `verifyTransaction` (the sync fallback), which does check `customData.app_user_id` against the authenticated `req.user.id`.
@@ -1353,24 +1465,33 @@ OI-18, OI-64.
 
 ## OI-66 — `GET /api/lessons/:id` serves paid lesson content to unauthenticated callers
 
-**Status**: open — architectural decision, deliberately out of scope for the content/QA work (2026-07-25)
+**Status**: ✅ RESOLVED 2026-08-01 (spec 053, Epic — Entitlement & Payments Consolidation, US1)
 **Area**: `connect-four/server` lesson routes, `src/lib/useLessonLockGuard.js`, `src/screens/sagaLock.js`
 **Discovered**: browser QA of the remediated lessons (2026-07-25), documented in PR #19
 
-A free or anonymous caller can fetch a **paid** lesson's full JSON — slides, prose, socratic answer —
-directly from `GET /api/lessons/:id`. The paywall is enforced in the client only.
+A free or anonymous caller could fetch a **paid** lesson's full JSON — slides, prose, socratic answer —
+directly from `GET /api/lessons/:id`. The paywall was enforced in the client only.
 
-PR #19 added `useLessonLockGuard` so a paid lesson can no longer be opened *or completed* through a
+PR #19 added `useLessonLockGuard` so a paid lesson could no longer be opened *or completed* through a
 direct URL like `/clchallenge/undercut` (previously it could, leaving "✓ Completed" beside still-locked
-free lessons). That closes the **UI** hole; the endpoint is untouched, so `curl` still returns paid
-content. With the tier split now at free 1–10 / paid 11–15, five lessons are exposed this way.
+free lessons). That closed the **UI** hole; the endpoint itself remained untouched, so `curl` still
+returned paid content. With the tier split now at free 1–10 / paid 11–15, five lessons were exposed this
+way.
 
-**Why deferred**: adding server-side entitlement means deciding how the endpoint authenticates and what
-it returns to an unentitled caller (404 vs 402 vs a redacted stub) — an architecture call, not a QA fix.
-**If picked up**: gate the handler on the caller's tier, reusing the same `free`-flag/tier source
-`deriveLockReason` uses so client and server cannot drift; decide the unentitled response shape; keep
-metadata (title, `free`, `order`) public so the saga list still renders. Add an integration test that a
-signed-out fetch of a paid id does not return `slides`.
+**Resolution**: `GET /api/lessons/:id` (`connect-four/server/index.js`) now computes entitlement via
+`entitlementForRequest(req)` (`connect-four/server/entitlement.js`) and builds the response through
+`buildLessonResponse(lesson, entitlement)` (`connect-four/server/lessonEntitlement.js`) before responding.
+A free lesson, or a paid lesson requested by an entitled (paid-tier, signed-in) caller, still returns the
+full lesson unchanged. Any other caller requesting a paid lesson gets a redacted `200` stub — exactly
+`{ id, title, order, free, locked: true }`, with `slides` absent (not `null`/`[]`) — so metadata (title,
+`free`, `order`) stays public for the saga list while no lesson content leaves the server. Documented in
+`docs/architecture/api-conventions.md` §"Lessons Endpoints". The three real client consumers
+(`ConceptScreen.jsx`, `SocraticScreen.jsx`, `CLChallengeScreen.jsx`'s cold-boot fetch) all check
+`locked === true` before touching any now-absent field and redirect through the same
+`useLessonLockGuard`/`SagaScreen` upgrade-prompt affordance already used for a client-side block. Covered
+by `connect-four/tests/unit/entitlement.test.js`, `tests/unit/lessonEntitlement.test.js`,
+`tests/integration/lessonEntitlementGate.test.js`, and
+`tests/dom/{ConceptScreenLocked,SocraticScreenLocked,CLChallengeScreenLocked}.dom.test.jsx`.
 
 ## OI-67 — Admin lesson editor has no UI control for `slides[].windowHighlights`
 
@@ -2546,3 +2667,132 @@ carries the signal, so the client *could* answer the question with a second call
 `authenticated` to the lesson stub (amending spec 053 FR-002, its "Lesson (locked view)" entity, and
 the epic's Settled decision #7 together — do not amend just one) or have the screens consult the
 entitlement endpoint. Cross-ref: spec 053 FR-002/FR-033.
+## OI-96 — Spec 053's `/pricing` CSP verification (FR-027/SC-008) was never performed in a real browser
+
+**Status**: ✅ RESOLVED 2026-08-01 (spec 053, T044 — verified in a real browser once the shared
+Chrome profile was freed; see the "THIRD PASS" entry in `staging_checks.md` §Epic 3 — Entitlement &
+Payments Consolidation). Filed as deferred while the browser was blocked; the check has since been
+completed and passed: `/pricing` loaded from the built `dist/` under the real Express server, the
+checkout CTA opened the Paddle overlay (`cdn.paddle.com/paddle/v2/paddle.js` 304,
+`sandbox-buy.paddle.com` iframe rendered), and our Content-Security-Policy produced **zero**
+violations. The single console line was Paddle's own report-only `frame-ancestors` policy, a local
+`:4509` port artifact, not our header. A live transaction is still not exercisable locally because
+`VITE_PADDLE_CLIENT_TOKEN` is unset (owner-confirmed: Paddle does not work locally) — that is a
+staging concern, not a CSP one.
+
+**Original status when filed**: deferred (blocked on tooling, not on code — spec 053 T044)
+**Area**: `connect-four/src/screens/PricingScreen.jsx`, `connect-four/server/index.js` (CSP header),
+Paddle checkout overlay; recorded in `staging_checks.md` §"Epic 3 — Entitlement & Payments
+Consolidation (spec 053)"
+**Discovered**: spec 053, 2026-08-01
+
+FR-027/SC-008 require the redesigned `/pricing` page **and its checkout action** to be verified under
+the production CSP as actually enforced by the Express-served `dist/` build — never the Vite dev
+server, which sends no CSP header at all. Two separate agents attempted this and both were blocked:
+the shared Chrome DevTools MCP automation profile was held by a live Chrome process (confirmed via
+`ps`, not a stale lock), and per the "concurrent agents clobber" convention neither force-killed it.
+
+What *was* confirmed, by `curl` against the built `dist/` served by the real Express server:
+`/pricing` returns 200; `GET /api/paddle/config` and `GET /api/limits` return the live values the page
+renders; and the CSP header already carries every origin the Paddle overlay needs
+(`cdn.paddle.com`, `*.paddle.com`, `pay.google.com`, `www.google.com` across
+`script-src`/`connect-src`/`frame-src`/`img-src`) — this epic added no new origin or directive.
+
+What was **not** observed: the overlay actually opening, and a live DevTools console free of
+`Refused to …` violations. The residual risk is low (no directive changed) but non-zero: only a real
+overlay launch exercises the runtime origins.
+
+**Why deferred**: purely a tooling block. No code change is pending; the verification is a manual
+browser step that needs the shared automation profile free.
+
+**If picked up**: with the shared Chrome profile free, `cd connect-four && npm run build`, serve
+`dist/` via `node server/index.js` on the worktree's `$API_PORT` (`eval "$(./worktree-ports.sh)"` —
+never `npm run dev`), load `/pricing`, click the checkout CTA, and confirm zero `Refused to …` console
+lines. Then flip `staging_checks.md`'s T044 entry from NOT VERIFIED to a real pass/fail. Cross-ref:
+spec 053 FR-027/SC-008, OI-41.
+
+---
+
+## OI-97 — Paddle domain re-submission for the `/pricing` change was never confirmed
+
+**Status**: ✅ RESOLVED 2026-08-01 (spec 053, T047 — answered from Paddle's own docs once the owner
+authenticated the `paddle-docs` MCP server; see `staging_checks.md` §Epic 3 T047). **No domain
+re-submission is required.** Paddle documents no content-change trigger for re-review: a checkout
+domain is approved once and stays approved, and the only documented re-submission path
+(`POST /checkout-domains/{id}/resubmit`) applies solely to a domain sitting in `action_required`
+after a soft decline. Separately, a client-side-rendered pricing page is Paddle's *own* recommended
+pattern (their quickstart and Next.js starter kit both build it with Paddle.js `PricePreview()`), so
+`/pricing` becoming a React route does not move the site away from what review expects. The standing
+criteria — public, no login wall, pricing visible, terms/privacy/refund present, MoR named — all still
+hold, and the retained static `/pricing-legal` keeps prices visible in plain HTML even to a
+non-JS-rendering crawler.
+
+**Original status when filed**: deferred (blocked on interactive auth; non-blocking by the epic's own Settled decision #6)
+**Area**: Paddle domain approval for the already-approved app domain; `staging_checks.md` §"Epic 3 —
+Entitlement & Payments Consolidation (spec 053)"
+**Discovered**: spec 053, 2026-08-01
+
+Spec 053 T047 called for a confirmatory check — via the `paddle-docs` MCP server — that swapping
+`/pricing` from a static page to an in-app React route does not require re-submitting the domain for
+Paddle's approval review. The epic's assumptions already state the domain is cleared and that this
+check is confirmatory rather than gating. Two agents could not complete it: `paddle-docs` requires an
+interactive OAuth flow that cannot be driven autonomously.
+
+**Why deferred**: explicitly non-blocking per the epic's Settled decision #6, and blocked on an
+interactive login only the owner can complete.
+
+**New evidence (2026-08-01, from the T044 browser run)**: when the checkout overlay opened locally,
+Chrome logged Paddle's own **report-only** `frame-ancestors http://localhost` policy against the
+`sandbox-buy.paddle.com` frame. That directive is delivered by Paddle and is derived from the seller
+account's approved-domain list — direct confirmation that Paddle does gate framing on approved
+domains. It was report-only and did not block the overlay, and it fired only because the local server
+runs on a non-default port (`:4509` vs. the host-source `http://localhost`, which matches port 80).
+This does not indicate a problem with the production domain, which the epic's assumptions record as
+already approved — but it does mean the approved-domain list is the thing to check if the overlay ever
+fails to frame in production.
+
+**If picked up**: authenticate the `paddle-docs` MCP server and confirm whether a content change on an
+already-approved domain triggers re-review; record the answer in `staging_checks.md` under the spec
+053 heading. If re-review *is* required, that becomes a deploy prerequisite — see
+`docs/deployment_steps.md`. Cross-ref: spec 053 FR-027, OI-96.
+
+---
+## OI-98 — The Paddle default payment link's `?_ptxn=` auto-open checkout is not handled by any page
+
+**Status**: deferred (pre-existing, not introduced by spec 053 — scoped out of that epic)
+**Area**: `connect-four/src/lib/useUpgradeCheckout.js`, `connect-four/src/screens/PricingScreen.jsx`,
+Paddle dashboard → Checkout → Checkout settings → Default payment link
+**Discovered**: spec 053, 2026-08-01 (while confirming T047)
+
+Paddle builds every transaction's checkout link, and the "update your payment method" links it emails
+to subscribers, by appending `?_ptxn=<transaction_id>` to the account's **default payment link**. The
+target page is required to *include Paddle.js*, which then auto-opens a checkout for that transaction
+when the query parameter is present
+(`developer.paddle.com/build/transactions/default-payment-link`).
+
+Neither condition is met today:
+- `useUpgradeCheckout()` (`src/lib/useUpgradeCheckout.js:139`) has **no mount-time initialization** —
+  it returns a `handleUpgrade` closure, and `getPaddle()`/`initializePaddle` only run inside the click
+  handler. A visitor who merely *lands* on `/pricing` never initializes Paddle.js.
+- `grep -a -rn "_ptxn" connect-four/src connect-four/server` returns **nothing** — no page reads the
+  parameter.
+
+Consequence: a subscriber following Paddle's payment-method-update email lands on a page that shows
+pricing but never opens the checkout they were sent to complete.
+
+**This is pre-existing, not a spec 053 regression.** The old static `pricing.html` contained no
+Paddle.js at all (`grep -a -c paddle` → 0 script includes; the only "Paddle" hits are the
+merchant-of-record prose), so the flow was already broken. Spec 053's React `/pricing` is strictly
+closer to correct, since it at least loads Paddle.js on interaction.
+
+**Why deferred**: out of spec 053's scope (that epic's stated assumption is that the checkout flow
+itself is reused unchanged), and it needs a product decision about which page should be the default
+payment link.
+
+**If picked up**: initialize Paddle.js on mount wherever the default payment link points (an effect
+calling the existing `getPaddle()`), then read `_ptxn` from the query string and let Paddle.js open the
+transaction. Confirm the dashboard's Default payment link points at that page. **Do not point the
+default payment link at `/pricing-legal`** — it is deliberately static and JS-free (OI-41), so it can
+never satisfy the Paddle.js requirement. Cross-ref: spec 053 FR-024/FR-025, OI-41, OI-97.
+
+---

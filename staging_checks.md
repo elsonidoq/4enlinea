@@ -1122,3 +1122,219 @@ Spec 051 was implemented, backfilled and QA'd entirely against the **local** dat
     or a happy coach mood.
   - **Source**: Spec 052 US5, FR-023/FR-025; reason-DECISIONS D40; memory
     `project_creation_tags_not_score_gated.md`.
+
+---
+
+## Epic 3 — Entitlement & Payments Consolidation (spec 053) — added 2026-08-01
+
+### T044 — CSP verification against the built, Express-served `dist/` (FR-027/SC-008, BLOCKING)
+
+- **What ran**: `cd connect-four && npm run build` (succeeded — `dist/index.html` + hashed assets
+  emitted, no build errors); the built `dist/` was served by the **real Express server**
+  (`PORT=4509 node server/index.js`, via `eval "$(./worktree-ports.sh)"` — never `npm run dev`).
+- **Confirmed by `curl` against the running server** (not the dev server):
+  - `GET /pricing` → `200`, served by the SPA catch-all (`dist/index.html`).
+  - `GET /pricing-legal` → `200`, byte-identical `pricing.html`, containing the Merchant-of-Record
+    clause, the 14-day refund statement, and the `/terms` link.
+  - `GET /api/paddle/config` → `200 {"prices":{"monthly":{"amount":299,...},"annual":{"amount":2199,...}}}`.
+  - `GET /api/limits` → `200 {"freeDeepRevealWeeklyLimit":20}`.
+  - The server's `Content-Security-Policy` response header (Helmet, `server/index.js`) on `/pricing`
+    already includes `script-src ... https://cdn.paddle.com`, `connect-src ... https://*.paddle.com
+    https://pay.google.com https://www.google.com`, `frame-src https://*.paddle.com
+    https://pay.google.com https://www.google.com`, and `img-src ... https://*.paddle.com` — the same
+    directive set every other `UpgradeModal` checkout call site in the app already runs under
+    (`useUpgradeCheckout.js` is unchanged by this batch; `PricingScreen.jsx` calls the exact same
+    hook). This batch added **no new external origin** and **no new CSP directive**.
+- **NOT VERIFIED — the live-browser portion (opening the overlay and reading the DevTools CSP
+  violation console) could not be performed this session.** The Chrome DevTools MCP tool
+  (`mcp__chrome-devtools__new_page`/`list_pages`) returned: `"The browser is already running for
+  /Users/elsonidoq/.cache/chrome-devtools-mcp/chrome-profile. Use --isolated to run multiple browser
+  instances."` — a second, already-running Chrome session (a live, non-crashed process per `ps aux`)
+  holds the one shared automation profile this environment is configured with, and per this
+  project's own "concurrent agents clobber" convention this session did not kill or disturb another
+  session's browser to force the check. **I did not observe the Paddle checkout overlay open in a
+  real browser, and I did not read a real DevTools CSP-violation console — do not read the curl/CSP-
+  header evidence above as a substitute for that.** Whoever picks this up next should re-run
+  `quickstart.md` US4 steps 1–3 directly (load `/pricing` on the Express-served `dist/`, open
+  DevTools → Console, click "Become Pro", confirm zero `Refused to ...` CSP violation lines) once the
+  browser profile is free, and flip this entry to a real pass/fail.
+- **Directives touched**: none — `server/index.js`'s Helmet `contentSecurityPolicy` config is
+  unchanged by this batch.
+- [ ] Signed off (tester + date): **NOT VERIFIED** (browser portion blocked — see above). Curl/build
+  verification: Claude, 2026-08-01.
+
+- **2026-08-01 QA re-attempt (spec 053 final review pass): still NOT VERIFIED — same root cause.**
+  Rebuilt `dist/` fresh (`npm run build`, no errors) and re-served it via the real Express server
+  on `$API_PORT` (`4509`, via `eval "$(./worktree-ports.sh)"`). Re-confirmed by `curl` against that
+  running server: `GET /pricing` → `200` (SPA shell), `GET /api/paddle/config` →
+  `{"prices":{"monthly":{"amount":299,...},"annual":{"amount":2199,...}}}`, `GET /api/limits` →
+  `{"freeDeepRevealWeeklyLimit":20}`, and the `Content-Security-Policy` response header on
+  `/pricing` is byte-identical in directive set to what T044's first pass recorded — no new
+  origin/directive, `script-src`/`connect-src`/`frame-src` all already include
+  `https://cdn.paddle.com`/`https://*.paddle.com`/`https://pay.google.com`/`https://www.google.com`.
+  **The live-browser leg (opening DevTools, clicking "Become Pro", reading the CSP-violation
+  console) was attempted again and is still blocked**: `mcp__chrome-devtools__list_pages` (and the
+  `mcp__plugin_chrome-devtools-mcp_...` variant) both return "The browser is already running for
+  /Users/elsonidoq/.cache/chrome-devtools-mcp/chrome-profile. Use --isolated..." — confirmed via
+  `ps` that the lock-holding process (pid 52823, `--remote-debugging-pipe`, started 8:50PM, still
+  alive 1h+ later at the time of the last retry) is a genuinely live Chrome instance, not a stale
+  lock file, so per this session's instructions it was not killed. Retried after a 20s wait (one
+  intermediate holder, pid 64925, did exit in that window, but the shared profile itself is still
+  locked by pid 52823). Launching a separate, isolated Chrome instance
+  (`--remote-debugging-port=9223 --user-data-dir=/tmp/chrome-debug-qa`) succeeded independently, but
+  the chrome-devtools MCP tools are wired to the shared profile/port at the server-config level, not
+  something a tool call can redirect — this alternate instance could not be driven through the
+  available MCP tools. **Net effect: T044's browser-only leg remains NOT VERIFIED; every non-browser
+  leg (build, live prices/quota, unchanged CSP directive set) is re-confirmed.** Whoever next has
+  the shared browser profile free should complete the two remaining steps: open `/pricing` on
+  `$API_PORT`, click the checkout CTA, and read the DevTools Console for zero `Refused to ...` CSP
+  lines.
+  - Signed off (tester + date): **NOT VERIFIED** — Claude, 2026-08-01 (curl/build re-confirmed; browser leg still blocked).
+
+- **2026-08-01 THIRD PASS — ✅ VERIFIED IN A REAL BROWSER. This supersedes both NOT VERIFIED
+  entries above.** The user freed the Chrome automation profile, so the browser leg was finally
+  performed end to end.
+  - **Setup**: `npm run build`, served by the real Express server (`PORT=4509 NODE_ENV=production
+    node server/index.js`) on the built `dist/` — never `npm run dev`. One gotcha worth recording:
+    the Express server resolves `dist/index.html` **at boot**, so rebuilding under an already-running
+    server silently keeps serving the OLD asset hashes (symptom: `Failed to load module script ...
+    MIME type "text/html"` because the stale hashed asset 404s into the SPA catch-all). Restart the
+    server after any rebuild.
+  - **Page load** (`/pricing`): rendered fully — live monthly `$2.99/mo` and annual `$21.99/yr`
+    (matching `GET /api/paddle/config`'s `299`/`2199`), a computed `Save 39%` badge, `$1.83/mo`
+    equivalent, and `20 Deep Reveals per week` (matching `GET /api/limits`). Console: **zero errors,
+    zero CSP violations.**
+  - **Checkout action** (clicked "Become Pro"): the full Paddle overlay chain loaded under the
+    production CSP — `POST /api/paddle/create-checkout` → `200`;
+    `GET https://cdn.paddle.com/paddle/v2/paddle.js` → `304` (allowed by `script-src`);
+    `GET https://sandbox-buy.paddle.com/paddlejs/v2?...` → `200`, and the overlay **iframe rendered
+    visibly in the a11y tree** as `RootWebArea "Paddle Checkout"` (allowed by `frame-src`); Paddle's
+    own in-iframe assets and `connect-src` traffic all proceeded. **Zero `Refused to ...` lines from
+    our Content-Security-Policy, for both the page and the checkout action. FR-027/SC-008 satisfied.**
+  - **The one console CSP line, and why it is not ours**: `Framing
+    'https://sandbox-buy.paddle.com/' violates the following REPORT-ONLY Content Security Policy
+    directive: "frame-ancestors http://localhost". The violation has been logged, but no further
+    action has been taken.` `frame-ancestors` is delivered by the **framed** document — this is
+    *Paddle's* policy about who may embed *them*, derived from their seller-account approved-domain
+    list, not a directive from our Helmet config. It fires because the local server runs on
+    `http://localhost:4509` while the host-source `http://localhost` matches only the default port
+    80. It is report-only ("no further action has been taken") and did not block the overlay, which
+    rendered. It does not apply to the production domain, which is already approved (see T047).
+  - **Not exercisable locally: completing an actual transaction.** `VITE_PADDLE_CLIENT_TOKEN` is not
+    set in any local env file (only a placeholder in `.env.example`), which the app owner confirmed:
+    the Paddle integration does not work locally. With the placeholder token the overlay opens and
+    then shows Paddle's own in-iframe "Something went wrong" — a Paddle-side rejection of the fake
+    token, reached *after* every CSP-governed load succeeded. This is precisely the boundary CSP
+    verification needs to clear, so the check is complete; a live purchase remains a
+    staging/production concern, not a CSP one.
+  - **Directives touched**: none. `server/index.js`'s Helmet `contentSecurityPolicy` config is
+    unchanged by this epic.
+  - [x] Signed off (tester + date): **PASS** — Claude, 2026-08-01 (real browser, built `dist/`,
+    Express-served, overlay exercised).
+
+### Paddle dashboard config — Default payment link & compliance URL (spec 053 US4, OI-98)
+
+- **What**: In **Paddle > Checkout > Checkout settings**, confirm the **Default payment link** points at
+  `https://<domain>/pricing` (the React page, which loads Paddle.js), **not** `/pricing-legal`. Then confirm
+  any legal/compliance URL recorded for website approval points at `https://<domain>/pricing-legal`, where
+  the Merchant-of-Record clause, 14-day refund statement, and `/terms` link now live.
+- **Why staging**: these are Paddle **dashboard** settings on the live/sandbox account — there is no local
+  equivalent, and nothing in the repo can assert them. Local dev cannot open a real Paddle checkout at all
+  (`VITE_PADDLE_CLIENT_TOKEN` is unset; owner-confirmed the integration does not work locally).
+- **Expected**: Default payment link resolves to the SPA `/pricing` route; the compliance URL renders the MoR
+  clause. Quick check without the dashboard:
+  `curl -s https://<domain>/pricing-legal | grep -c "Merchant of Record"` → 1, and
+  `curl -s https://<domain>/pricing | grep -c "assets/index-"` → 1.
+- **Source**: spec 053 FR-024/FR-025; `docs/deployment_steps.md` §Spec 053 "Paddle dashboard config".
+- **Known gap (do not treat as a blocker for this check)**: even pointed at `/pricing`, Paddle's `?_ptxn=`
+  auto-open does not work — `useUpgradeCheckout` never initializes Paddle.js on mount and nothing reads
+  `_ptxn`. **Pre-existing** (the old static `/pricing` had no Paddle.js at all), tracked as OI-98.
+- [ ] Signed off (tester + date):
+
+### Real checkout round trip on the deployed build (spec 053 US2/US5)
+
+- **What**: On staging, complete a real sandbox purchase and confirm (a) paid content unlocks **without a
+  manual page reload** (SC-003), and (b) starting the purchase from `/summary` returns the player to their
+  own set results, including after a full app restart mid-flow (SC-005).
+- **Why staging**: the whole checkout path is unexercisable locally — no client token, so the overlay opens
+  and then errors inside Paddle's own iframe. Locally, US2's invalidation and US5's restore were verified by
+  unit/DOM tests plus a `sessionStorage`-seeded cold boot, never against a genuine `checkout.completed`
+  event.
+- **Expected**: after the purchase, `getEntitlement()` re-fetches (via `invalidateEntitlement()` in
+  `useUpgradeCheckout`'s completion handler) and the UI shows Pro without a reload; returning from a
+  `/summary`-initiated purchase re-renders the same set results, and an absent/stale `pendingSetResults`
+  entry still falls back to `/setpicker` rather than erroring.
+- **Source**: spec 053 FR-012/FR-029/FR-030/FR-031, SC-003, SC-005.
+- [ ] Signed off (tester + date):
+
+### Sign-out clears the entitlement cache on a deployed build (spec 053 US2)
+
+- **What**: As a **paid** account on staging, sign out without reloading the page, then confirm paid content
+  is no longer offered and the UI does not keep treating the tab as entitled.
+- **Why staging**: needs a genuinely paid account plus a real session/sign-out round trip. Locally this was
+  covered only by a unit test against the module's cache.
+- **Expected**: paid affordances disappear promptly; the tab does not keep serving `entitled: true`. (Before
+  the fix, the FR-033 session-lapse branch re-pinned the stale answer for the life of the tab — see memory
+  `project_entitlement_client_cache_traps.md`.) Server-side gating held regardless, so this is a UI-truth
+  check, not a content-leak check.
+- **Source**: spec 053 FR-013/FR-033; `ProfileStore.signOut()` → `clearEntitlement()`.
+- [ ] Signed off (tester + date):
+
+### T047 — Paddle domain re-submission confirmation (confirmatory, non-blocking)
+
+- **What**: confirm via the `paddle-docs` MCP server whether the `/pricing` content change (old
+  static page moved to `/pricing-legal`, `/pricing` now serves an in-app React page) requires a new
+  domain re-submission on the already-approved `decodec4.xyz`/`quaddojo.com` domain.
+- **2026-08-01 RESOLVED — ✅ no domain re-submission required. This supersedes the "unverified" note
+  below.** Checked against Paddle's own documentation via the `paddle-docs` MCP server, once the app
+  owner authenticated it.
+  - **There is no content-change trigger for re-review.** A checkout domain is submitted once, moves
+    `pending_review` → `approved`, and stays approved. The only re-submission path Paddle documents is
+    `POST /checkout-domains/{id}/resubmit`, and it applies *only* to a domain in `action_required`
+    status (a recoverable soft decline) — resubmitting anything else returns the
+    `checkout_domain_not_awaiting_resubmission` error. Changing what a page on an already-approved
+    domain renders is not a documented trigger.
+    (`developer.paddle.com/partners/embed-billing/seller-go-live/checkout-domains/`,
+    `developer.paddle.com/api-reference/checkout-domains/`)
+  - **A client-side-rendered pricing page is Paddle's own recommended pattern**, not a risk factor:
+    their quickstart and Next.js starter kit both build the pricing page with Paddle.js
+    `PricePreview()` and take those domains through approval
+    (`developer.paddle.com/build/checkout/build-pricing-page`,
+    `developer.paddle.com/get-started/quickstart`). So `/pricing` becoming a React route does not
+    move us away from what Paddle expects to see. Note: the docs do **not** state explicitly whether
+    the verification crawler executes JavaScript — this conclusion rests on Paddle documenting
+    JS-rendered pricing pages as the standard integration, not on a direct statement about the
+    crawler.
+  - **The review criteria that would matter if a review ever recurs** are: pages publicly accessible
+    and not behind a login; pricing visible; terms, privacy notice, and refund policy exist; terms
+    mention Paddle as merchant of record. All still hold after this epic — `/pricing` was confirmed
+    in-browser to render for an anonymous, signed-out visitor with no auth wall, and the retained
+    static `/pricing-legal` (JS-free, prices visible in plain HTML, MoR clause, 14-day refund) plus
+    `/terms`, `/privacy`, `/refunds` all remain public and reachable. Retaining `/pricing-legal` as a
+    static page is, in hindsight, precisely the hedge that makes this robust even to a non-JS crawler.
+  - [x] Signed off (tester + date): **PASS — no re-submission required** — Claude, 2026-08-01.
+
+- **Result: unverified — the `paddle-docs` MCP server was not available in this session** (its tools
+  never resolved as connectable; `mcp__plugin_paddle_paddle-live`/`paddle-sandbox` were the only
+  Paddle MCP tools that surfaced, and neither is `paddle-docs`). Per the task's own instruction ("If
+  the MCP server is unavailable, say so and record it as unverified rather than guessing"), this is
+  recorded as **unverified**, not a pass. This does not gate US4/this story per the task's own
+  non-blocking framing — reasoning-only: Paddle's domain review is understood to validate that the
+  reviewable page (pricing, ToS, refunds, MoR clause) stays reachable and accurate, and
+  `/pricing-legal`'s content is byte-identical to what was previously reviewed at `/pricing`, with
+  every legal page's own "Pricing" link re-pointed at the new address — so no *content* a reviewer
+  would re-check has changed, only which URL serves it. This is a reasoned expectation, not a
+  confirmed answer from Paddle's own docs.
+- [ ] Signed off (tester + date): **NOT VERIFIED** — `paddle-docs` MCP unavailable this session.
+
+### T045 — `/terms`, `/privacy`, `/refunds` → `/pricing-legal` reachable with no JavaScript (FR-023)
+
+- **What ran**: `curl` (no browser, no JS) against the running Express server (`http://localhost:4509`,
+  the built `dist/` served as above) for `/terms`, `/privacy`, `/refunds`, following each page's
+  "Pricing" link, then fetching `/pricing-legal` directly.
+- **Result: PASS.** All three pages' "Pricing" anchor is `<a href="/pricing-legal">Pricing</a>` (grep-
+  confirmed on the live HTML, no JS evaluation involved). `/pricing-legal` itself renders the verbatim
+  Merchant-of-Record clause ("Our order process is conducted by our online reseller Paddle.com...
+  Paddle.com is the Merchant of Record..."), the 14-day refund statement, and the `/terms` link — all
+  present with zero JavaScript execution (plain static HTML response).
+- [x] Signed off (tester + date): Claude, 2026-08-01 (curl-verified, no-JS method).

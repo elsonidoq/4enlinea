@@ -131,6 +131,148 @@ default.
 
 ---
 
+## Spec 053 (Epic 3) — Entitlement & Payments Consolidation
+
+**Status**: PENDING — one **Paddle dashboard config check** (owner action, see below). No migration,
+backfill, secret, or cache step; both manual verifications completed and passed.
+**When**: n/a for data (nothing to migrate). The **Paddle dashboard config check runs before or with
+the code deploy** — see below. Both manual verifications (CSP, Paddle domain re-review) are already
+done.
+**Blocks**: nothing in the database. The **Default payment link** setting is the one item with real
+consequences: if it points at a page without Paddle.js, every transaction checkout link and every
+payment-method-update email Paddle sends lands on a page that cannot open a checkout.
+**Applies to**: local (verification), production (the `/pricing` route swap + the Paddle dashboard
+settings)
+
+### What this sets up
+
+This epic ships **no schema migration, no data backfill, no new env var, and no cache invalidation.**
+That conclusion was reached by walking the checklist against the final accumulated diff, not by
+assuming — what was actually checked:
+
+- **Schema migration** — none. `git status connect-four/server/migrations/` is clean; the newest file
+  is still `061_correct_cols.sql` from a prior spec. The new `upgrade_completed` dedupe reuses
+  `payment_events`' existing `UNIQUE(event_id)` constraint with a synthetic, namespaced key
+  (`upgrade_completed_track:<transactionId>`), so it needs no DDL.
+- **Data migration / backfill** — none required. No enum, tag, detector output, or column meaning
+  changed. Entitlement is *derived* from the existing `users.tier` at request time; no stored row
+  changes meaning. One knowingly-accepted gap: payments that activated via the `verify-transaction`
+  fallback **before** this change are still missing their `upgrade_completed` analytics row.
+  Backfilling them is explicitly out of scope per spec 053's Out of Scope section. This is
+  analytics-only — no user-facing effect, and no account's paid status is wrong because of it.
+- **Content pools** — unaffected. No predicate or detector changed, so no `puzzles` / `candidates`
+  row was derived under superseded code. This epic touches entitlement and pricing only.
+- **Secrets / env vars** — none new. The only env read across every changed and new file is the
+  pre-existing `import.meta.env.VITE_API_BASE_URL` (verified by grepping the diff and each new module;
+  the new server modules read no env at all).
+- **Caches** — unaffected. `explanation_cache` is untouched. No `coach.spoken.*` or `eval.*` i18n key
+  was added, so no TTS/audio artifact needs regenerating (the new keys are all under the `pricing.*`
+  namespace, which is rendered, never synthesized — verified by grepping the i18n diff, 0 hits).
+  The service worker (`connect-four/public/sw.js`) is **network-first for navigations** and
+  cache-first only for hash-immutable `/assets/`, so a returning visitor cannot be served a stale
+  bundle lacking the new `/pricing` route.
+
+### Ordering — the one real constraint
+
+The server-side change (removing the static `/pricing` registration, adding `/pricing-legal`) and the
+client-side change (the `PricingScreen` route in `URL_MAP` / `screenRegistry`) **must ship in the same
+deploy**. Between them, `/pricing` falls through to the SPA catch-all and renders a bare shell — it
+serves neither the old static legal page nor the new pricing page. Both halves are in this one change,
+so a normal single deploy is safe; the hazard exists only if someone cherry-picks the server commits.
+
+Note for anyone holding an external link: `/pricing` no longer serves the static legal page. Its
+content lives at `/pricing-legal`, unchanged and byte-identical, linked from `/terms`, `/privacy`,
+`/refunds`, and the app footer.
+
+### Paddle dashboard config — check before or with the deploy (owner action)
+
+`/pricing` no longer serves the legal/compliance copy; that content now lives at `/pricing-legal`.
+Anywhere Paddle holds a URL for this site, the correct target differs by setting — and getting these
+two backwards would break checkout, so they are listed explicitly:
+
+| Paddle setting | Point it at | Why |
+|---|---|---|
+| **Checkout → Checkout settings → Default payment link** | `https://<domain>/pricing` (the React page) — **never `/pricing-legal`** | Paddle appends `?_ptxn=<txn>` and requires the page to *include Paddle.js* so it can auto-open a checkout. `/pricing-legal` is deliberately static and JS-free (OI-41) and can never satisfy this. |
+| Any **legal / compliance / pricing-policy URL** recorded for website approval or support | `https://<domain>/pricing-legal` | This is where the merchant-of-record clause, 14-day refund statement, and terms link now live. |
+
+Note this does **not** require a domain re-submission (T047 — Paddle documents no content-change
+trigger for re-review). It is a settings check, not a re-approval.
+
+**Known gap, not fixed by this epic (OI-98)**: even pointed at `/pricing`, the `?_ptxn=` auto-open
+does not work — `useUpgradeCheckout` never initializes Paddle.js on mount, and nothing reads `_ptxn`.
+This is **pre-existing**: the old static `/pricing` contained no Paddle.js at all, so the flow was
+already broken before this change. Spec 053 does not make it worse. Track under OI-98.
+
+### Run it
+
+Nothing to run. No script, no SQL, no backfill.
+
+### Verify
+
+**0. Paddle dashboard config (the one outstanding item).** In **Paddle > Checkout > Checkout
+settings**, read the **Default payment link** and confirm it points at a page that includes Paddle.js
+— `https://<domain>/pricing`, not `/pricing-legal`. Then confirm any legal/compliance URL recorded for
+website approval points at `https://<domain>/pricing-legal`.
+
+**Success condition**: Default payment link resolves to the React `/pricing` route (loads the SPA, not
+the static legal page), and the compliance URL renders the merchant-of-record clause. Quick check
+without the dashboard:
+
+```bash
+curl -s https://<domain>/pricing-legal | grep -c "Merchant of Record"   # expect 1
+curl -s https://<domain>/pricing | grep -c "assets/index-"              # expect 1 (SPA shell)
+```
+
+**The two verifications below are already DONE** (2026-08-01 — see `staging_checks.md` §Epic 3, and
+OI-96/OI-97). They are retained as reproduction recipes:
+
+```bash
+# 1. CSP against the PRODUCTION build (FR-027/SC-008) — never `npm run dev`, which sends no CSP header.
+eval "$(./worktree-ports.sh)"          # from the repo root, always — this is a worktree
+cd connect-four && npm run build
+node server/index.js                    # serves the built dist/ on $API_PORT
+# then, in a real browser with DevTools open: load /pricing, click the checkout CTA.
+```
+**Success condition**: zero `Refused to …` lines in the console, for both the page load and the
+checkout overlay. **Result 2026-08-01: PASS.** The overlay opened (`cdn.paddle.com/paddle/v2/paddle.js`
+304; `sandbox-buy.paddle.com` iframe rendered) with zero violations from our policy. Two gotchas worth
+knowing on a re-run: (a) the Express server resolves `dist/index.html` **at boot**, so restart it after
+any rebuild or it serves stale asset hashes that 404 into the SPA catch-all; (b) a live transaction is
+not exercisable locally — `VITE_PADDLE_CLIENT_TOKEN` is unset, so Paddle shows its own in-iframe
+"Something went wrong" *after* all CSP-governed loads succeed. That boundary is exactly what the CSP
+check needs, so it does not weaken the result.
+
+```bash
+# 2. Confirm no Paddle domain re-submission is needed for the /pricing content change (T047).
+# Requires authenticating the `paddle-docs` MCP server interactively.
+```
+**Success condition**: a recorded answer either way in `staging_checks.md`. **Result 2026-08-01: no
+re-submission required.** Paddle documents no content-change trigger for re-review — a domain is
+approved once and stays approved, and `resubmit` applies only to a domain in `action_required` after a
+soft decline. A client-rendered pricing page is Paddle's own recommended pattern. **Not a pre-deploy
+step.**
+
+Already verified by `curl` against the built `dist/` on the real Express server: `/pricing` returns
+200, `/pricing-legal` returns the byte-identical legal page, `GET /api/paddle/config` and
+`GET /api/limits` return the live values the page renders, and the CSP header already carries every
+Paddle origin the overlay needs (`cdn.paddle.com`, `*.paddle.com`, `pay.google.com`,
+`www.google.com`). **This epic added no new origin or directive** — which is why the residual CSP risk
+is low, though not zero.
+
+### Roll back
+
+Reverting the code fully reverts the behavior — there is no migrated data to restore. The only
+externally visible change is the `/pricing` ↔ `/pricing-legal` split; a revert restores the old static
+page at `/pricing` and removes `/pricing-legal`.
+
+**If you rolled back after changing the Paddle settings**, revert the compliance URL to
+`https://<domain>/pricing` — `/pricing-legal` stops existing on the old code, so leaving it pointed
+there would give Paddle a 404 on the page they check. The Default payment link needs no change on
+rollback: it should point at `/pricing` either way (note that on the old code that page had no
+Paddle.js at all — see OI-98).
+
+---
+
 ## Template for new entries
 
 ```markdown

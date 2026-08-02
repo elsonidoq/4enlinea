@@ -186,9 +186,16 @@ describe('createPaddleProcessor.verifyTransaction', () => {
     assert.deepEqual(supabase.calls.updates[0], {
       table: 'users', patch: { tier: 'paid', paddle_customer_id: 'ctm_9' }, col: 'id', val: 'user-1',
     });
-    // FR-008: verify-transaction never writes the upgrade_completed analytics record —
-    // that is exclusively the webhook's job.
-    assert.equal(supabase.calls.inserts.some(i => i.table === 'tracks'), false);
+    // OI-34 (spec 053 US3, FR-018/FR-019, 2026-08-01): verify-transaction now
+    // also writes the upgrade_completed analytics record — previously it was
+    // documented as exclusively the webhook's job, which undercounted
+    // analytics whenever the webhook was never delivered at all.
+    const trackInserts = supabase.calls.inserts.filter(i => i.table === 'tracks' && i.row.event === 'upgrade_completed');
+    assert.equal(trackInserts.length, 1);
+    assert.deepEqual(trackInserts[0].row, {
+      uid: 'user-1', user_id: 'user-1', path: '/paddle/verify-transaction',
+      event: 'upgrade_completed', event_data: { priceId: 'unknown', transactionId: 'txn_1' },
+    });
   });
 
   it('FR-010: rejects a transaction whose custom_data.app_user_id does not match the requesting user — no tier grant, no analytics record', async () => {
@@ -536,10 +543,17 @@ describe('createPaddleProcessor.handleWebhook — FR-009 durability', () => {
   });
 });
 
-// --- T032: idempotency-asymmetry test (verifyTransaction fallback + webhook) ---
+// --- T032/T055: idempotency-asymmetry tests (verifyTransaction fallback + webhook) ---
+//
+// OI-34 (spec 053 US3, FR-018/FR-019, 2026-08-01): verifyTransaction now also
+// writes the upgrade_completed analytics record (previously it never did, at
+// all — see the "activates" test above). Both orderings below prove exactly
+// ONE tracks/upgrade_completed row is ever written per transaction, via
+// recordUpgradeCompletedTrack's shared per-transaction claim on
+// `payment_events` (event_id = `upgrade_completed_track:<transactionId>`).
 
-describe('createPaddleProcessor — fallback-then-webhook idempotency asymmetry', () => {
-  it('verifyTransaction grants tier with NO tracks row; the matching webhook re-grants tier and writes exactly ONE tracks row', async () => {
+describe('createPaddleProcessor — fallback + webhook upgrade_completed dedup (OI-34)', () => {
+  it('fallback-then-webhook: verifyTransaction writes the ONE tracks row; the matching webhook re-grants tier but does not insert a second row', async () => {
     const transactionId = 'txn_asym_1';
     const userId = 'user-asym-1';
     const customerId = 'ctm_asym_1';
@@ -556,13 +570,15 @@ describe('createPaddleProcessor — fallback-then-webhook idempotency asymmetry'
     const supabase = makeMockSupabase();
     const processor = createPaddleProcessor({ paddleClient, supabase, ...base });
 
-    // 1. Fallback fires first (client-side verify-transaction call).
+    // 1. Fallback fires first (client-side verify-transaction call) — claims
+    // and writes the upgrade_completed row itself, since nothing else has yet.
     const fallbackResult = await processor.verifyTransaction({ transactionId, userId });
     assert.deepEqual(fallbackResult, { activated: true });
 
     // 2. The corresponding transaction.completed webhook is delivered for the
-    // SAME transaction — idempotently re-grants tier, but is the exclusive
-    // owner of the tracks/upgrade_completed analytics record.
+    // SAME transaction afterward — idempotently re-grants tier, but its own
+    // claim attempt hits the fallback's already-claimed event_id (23505), so
+    // it skips its own tracks insert.
     const webhookResult = await processor.handleWebhook(Buffer.from('{}'), 'sig_asym_1');
     assert.deepEqual(webhookResult, { handled: true, eventType: 'transaction.completed' });
 
@@ -574,6 +590,39 @@ describe('createPaddleProcessor — fallback-then-webhook idempotency asymmetry'
 
     const trackInserts = supabase.calls.inserts.filter(i => i.table === 'tracks' && i.row.event === 'upgrade_completed');
     assert.equal(trackInserts.length, 1);
+    assert.equal(trackInserts[0].row.path, '/paddle/verify-transaction');
+  });
+
+  it('webhook-then-fallback: handleWebhook writes the ONE tracks row; a later verifyTransaction call for the same transaction does not insert a second row', async () => {
+    const transactionId = 'txn_asym_2';
+    const userId = 'user-asym-2';
+    const customerId = 'ctm_asym_2';
+
+    const webhookEvent = {
+      eventId: 'evt_asym_2',
+      eventType: 'transaction.completed',
+      data: { id: transactionId, customerId, customData: { app_user_id: userId } },
+    };
+    const paddleClient = makeMockPaddle({
+      getTransaction: { status: 'completed', customerId, customData: { app_user_id: userId } },
+      webhookEvent,
+    });
+    const supabase = makeMockSupabase();
+    const processor = createPaddleProcessor({ paddleClient, supabase, ...base });
+
+    // 1. Webhook lands first — claims and writes the upgrade_completed row.
+    const webhookResult = await processor.handleWebhook(Buffer.from('{}'), 'sig_asym_2');
+    assert.deepEqual(webhookResult, { handled: true, eventType: 'transaction.completed' });
+
+    // 2. The client's fallback call for the same transaction arrives after —
+    // idempotently re-grants tier, but its claim attempt hits the webhook's
+    // already-claimed event_id (23505), so it skips its own tracks insert.
+    const fallbackResult = await processor.verifyTransaction({ transactionId, userId });
+    assert.deepEqual(fallbackResult, { activated: true });
+
+    const trackInserts = supabase.calls.inserts.filter(i => i.table === 'tracks' && i.row.event === 'upgrade_completed');
+    assert.equal(trackInserts.length, 1);
+    assert.equal(trackInserts[0].row.path, '/paddle/webhook');
   });
 });
 

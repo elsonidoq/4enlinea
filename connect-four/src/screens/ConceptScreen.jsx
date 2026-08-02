@@ -49,6 +49,17 @@ export function ConceptScreen({ go, goBack, goReplace, lessonId }) {
         return r.json();
       })
       .then(data => {
+        // Server-side entitlement gate (spec 053 US1): a locked stub has no `slides`
+        // array — indexing it would throw. This can happen even though the client-side
+        // useLessonLockGuard above already said 'allowed' (stale/cached tier info), so
+        // it needs its own guard. Redirect through the exact same affordance the guard
+        // uses on a client-side block (SagaScreen's UpgradeModal via lockAction), rather
+        // than inventing a second locked-lesson UI. loadState is left at 'loading' so
+        // nothing tries to render `lesson.slides` before the redirect takes effect.
+        if (data.locked === true) {
+          goReplace('saga', { lockAction: 'upgrade' });
+          return;
+        }
         setLesson(data);
         setLoadState('ready');
       })
@@ -56,7 +67,9 @@ export function ConceptScreen({ go, goBack, goReplace, lessonId }) {
         console.error('[ConceptScreen] fetch error:', err);
         setLoadState('error');
       });
-  }, [lessonId, lockStatus]);
+    // goReplace comes from Navigator's useCallback([], ...) — stable identity (same
+    // rationale as useLessonLockGuard.js), so including it here doesn't cause re-fetches.
+  }, [lessonId, lockStatus, goReplace]);
 
   // Track lesson start exactly once when lesson first loads
   useEffect(() => {

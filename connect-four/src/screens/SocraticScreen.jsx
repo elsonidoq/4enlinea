@@ -41,6 +41,16 @@ export function SocraticScreen({ go, goBack, goReplace, lessonId }) {
         return r.json();
       })
       .then(data => {
+        // Server-side entitlement gate (spec 053 US1): a locked stub has no `socratic`
+        // key — rendering would fall through to the "error/no lesson" state rather than
+        // crash, but that shows a generic error instead of the upgrade prompt the client
+        // guard already shows on a client-side block. Redirect through that exact same
+        // affordance (SagaScreen's UpgradeModal via lockAction) rather than inventing a
+        // second locked-lesson UI here.
+        if (data.locked === true) {
+          goReplace('saga', { lockAction: 'upgrade' });
+          return;
+        }
         setLesson(data);
         if (data.socratic) {
           setBoard(boardSpecToBoard(data.socratic.boardSpec));
@@ -57,7 +67,9 @@ export function SocraticScreen({ go, goBack, goReplace, lessonId }) {
         console.error('[SocraticScreen] fetch error:', err);
         setLoadState('error');
       });
-  }, [lessonId, lockStatus]);
+    // goReplace comes from Navigator's useCallback([], ...) — stable identity (same
+    // rationale as useLessonLockGuard.js), so including it here doesn't cause re-fetches.
+  }, [lessonId, lockStatus, goReplace]);
 
 
   function advance() {

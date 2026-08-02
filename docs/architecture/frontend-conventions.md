@@ -738,16 +738,48 @@ order-lock is not a paywall; `'navigate'` proceeds normally.
 
 ## Upgrade / Checkout flow (Epic 5)
 
-**Reading the user's tier — profile, never session.** The `session` object exposed by `useStore()` is the **Supabase auth session** and has **no `tier` field**. Tier lives on the user profile and is read asynchronously:
+**Reading the user's tier — the entitlement helper, never session (never a cached profile.tier read either).**
+The `session` object exposed by `useStore()` is the **Supabase auth session** and has **no `tier` field**.
+Spec 053 (Entitlement & Payments Consolidation, US2) replaced the five independent `store.getProfile().tier`
+reads that used to decide paid-vs-free (SettingsScreen, PostSetSummaryScreen, SagaScreen, DeepRevealPane,
+useLessonLockGuard) with one shared client-side helper, `getEntitlement()`
+(`src/lib/entitlement.js`) — it TTL-caches, fails open (FR-013), and sources its answer from the single
+server-side authority (`server/entitlement.js`'s `entitlementForRequest(req)`, documented in
+`docs/architecture/api-conventions.md`'s `GET /api/user/entitlement` section) rather than a locally cached
+profile copy:
 
 ```js
-store.getProfile().then(p => setTier(p.tier))   // canonical precedent: PostSetSummaryScreen.jsx
+getEntitlement().then(({ entitled }) => setTier(entitled ? 'paid' : 'free'))   // src/lib/entitlement.js
 ```
 
-Any screen or spec that gates on Pro/free (`locked` nodes, `UpgradeModal`, deep-reveal gates) MUST use this pattern. `session?.tier` is always `undefined`, so gating on it fails **silently and in the permissive direction** — every user reads as free tier.
+Any screen or spec that gates on Pro/free (`locked` nodes, `UpgradeModal`, deep-reveal gates) MUST use this
+pattern — call `getEntitlement()` with **no arguments** in production code (its `fetchFn`/`now` params are
+test-only seams) and map the returned `{entitled: boolean}` to whatever local `'paid'|'free'` shape the
+screen renders. Do not reintroduce a direct `store.getProfile().tier` read for this decision — that is
+exactly the six-independent-sources problem this epic consolidated (Constitution Principle VIII).
+`session?.tier` is still always `undefined`, so gating on it fails **silently and in the permissive
+direction** — every user reads as free tier.
+
+**Cache lifecycle — three entry points, and they are not interchangeable.** `src/lib/entitlement.js`
+holds module-level singleton state (`lastKnownGood`, `lastFetchedAt`), the same pattern as
+`checkoutReturnFlow.js`:
+
+| Call | Effect | When to use |
+|---|---|---|
+| `getEntitlement()` | TTL-cached read (5 min); never rejects | Every paid-vs-free decision |
+| `invalidateEntitlement()` | Drops *freshness only*, keeps `lastKnownGood` | After a checkout completes, so the next read re-fetches. Already wired into `useUpgradeCheckout.js`'s `checkout.completed` handler — **unconditionally**, not gated on the sync verify succeeding, since the webhook can activate the account moments later |
+| `clearEntitlement()` | Drops the answer **entirely** | Only when the identity behind the session changes. Wired into `ProfileStore.signOut()` |
+
+Using `invalidateEntitlement()` where `clearEntitlement()` is required is a silent, load-bearing bug:
+the cache is scoped to the module, not to an account, so a signed-out tab keeps the previous account's
+answer. Worse, the post-sign-out fetch returns `{entitled:false, authenticated:false}`, which the FR-033
+session-lapse branch reads as *ambiguous* rather than *downgraded* and — by design, to protect paying
+customers through a backend blip — re-pins the stale `entitled: true` for another full TTL window, every
+window, for the life of the tab. Any future identity transition (account switch, impersonation) must call
+`clearEntitlement()`.
 
 **"Tier" has three unrelated meanings in this codebase — don't conflate them:**
-1. **Subscription tier** (this section) — `free | paid`, read via `store.getProfile().tier`.
+1. **Subscription tier** (this section) — `free | paid`, sourced via `getEntitlement()` (`src/lib/entitlement.js`), which itself reads the server's authoritative `entitlementForRequest(req)` computation. `profile.tier` still exists on the profile object and is not itself wrong data, but is no longer the client's decision-making source for paid-vs-free gating.
 2. **Position tier** — `getPositionTier(scores, board)` in `server/llmCoachHelpers.js`, returns `'WINNING' | 'DRAWING' | 'LOSING'` from solver scores (best legal score `> 0` / `=== 0` / `< 0`).
 3. **Pattern tier** — `TIER1_TAGS`/`TIER2_TAGS` in `server/explainContext.js`, a server-side grouping of `classifyPattern` tags used to build the deep-reveal `allowedSet` (Tier-1 = detectors with concrete `cells[]`; Tier-2 = `z_threat`; Tier-3 = position-global tags, not added to `allowedSet`). **Exception:** the three parity-aware threat detectors (`major_threat_parity`, `major_threat_nonparity`, `minor_threat`, added 2026-06-25) also emit concrete `cells[]` like a Tier-1 detector, but are deliberately **NOT** in `TIER1_TAGS` — "emits `cells[]`" is necessary but not sufficient for Tier-1 membership. They instead belong to a second, separate registry: `server/sparseLookahead.js`'s `THREAT_TAGS` (the three parity tags) and `LOOKAHEAD_TAGS` (`= [...TIER1_TAGS, ...THREAT_TAGS]`), which gates sparse-lookahead rendering, not the deep-reveal `allowedSet`. Don't assume a cell-emitting tag is in `TIER1_TAGS` — check which registry the call site actually reads.
 
@@ -926,6 +958,7 @@ The mistakes feature has three independent screen routes:
 `src/lib/urlMapping.js` exports:
 - `URL_MAP` — ordered array of `{ screenKey, pattern, buildPath }` entries for all 16 routable screens. This is the canonical URL ↔ screen-key mapping; no other file may hard-code URL paths.
 - `SESSION_ONLY_SCREENS` — `Set` of 2 screen keys whose state cannot survive a cold page load: `summary`, `game`. On cold boot, these screens redirect to `home`. (`explorer` was removed when the Explorer screen was unified into `MistakeDetailScreen`.) `mistakeDetail` was removed from this set in spec 042: its route changed from a bare `/mistakeDetail` to `/mistakeDetail/:category` (`URL_MAP` entry `{ pattern: '/mistakeDetail/:category', screenKey: 'mistakeDetail', paramNames: ['category'] }`), so the `category` param now round-trips through the URL itself and the screen survives a cold reload by staying on the category list instead of redirecting to `home`.
+  **`summary` carve-out (spec 053 US5, T059/T060, OI-25)**: `App.jsx`'s `Navigator` mount effect peeks (non-destructively) at `src/lib/pendingSetResults.js`'s `hasFreshPendingSetResults()` before applying the redirect — if a purchase was started from `/summary` and its results were persisted to `sessionStorage` (`savePendingSetResults`, written before `Paddle.Checkout.open()`), the boot is allowed to land on `summary` after all, so `PostSetSummaryScreen.jsx`'s own mount effect can consume + clear the entry and restore the results (FR-030). Any other cold boot to `/summary` (no fresh entry) still redirects to `home` exactly as before. `game` is untouched by this carve-out.
 - `buildUrl(screenKey, params)` — constructs the URL pathname for a given screen + params.
 - `parseUrl(pathname)` — parses a pathname and returns `{ screenKey, params }` or `null`.
 

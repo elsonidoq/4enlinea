@@ -2,8 +2,17 @@ import { createContext, useContext, useEffect, useState } from 'react';
 import { IndexedDBStore } from './IndexedDBStore.js';
 import { SupabaseStore } from './SupabaseStore.js';
 import { track } from '../lib/track.js';
+import { clearEntitlement } from '../lib/entitlement.js';
 
-const StoreContext = createContext(null);
+// Exported so tests can supply a lightweight `{ store, session, ... }` value directly
+// (a `<StoreContext.Provider>`) instead of standing up the full `ProfileStoreProvider`,
+// which does real network calls (checkSession) on mount — heavy for a component test
+// that only needs `useStore()` to resolve to a known value. See
+// tests/dom/ConceptScreenLocked.dom.test.jsx for the pattern.
+/* eslint-disable react-refresh/only-export-components -- same pre-existing non-component-
+   export pattern as `useStore` below in this file; not a new violation class. */
+export const StoreContext = createContext(null);
+/* eslint-enable react-refresh/only-export-components */
 
 export function ProfileStoreProvider({ children }) {
   const [store, setStore] = useState(() => new IndexedDBStore());
@@ -96,6 +105,10 @@ export function ProfileStoreProvider({ children }) {
     }
     setStore(new IndexedDBStore());
     setSession(null);
+    // Spec 053 US2: the entitlement cache is module-scoped, not account-scoped.
+    // Without this the tab keeps serving the signed-out account's `entitled`
+    // answer — and the FR-033 session-lapse branch would re-pin it forever.
+    clearEntitlement();
   }
 
   return (

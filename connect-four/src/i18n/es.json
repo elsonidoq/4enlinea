@@ -97,6 +97,7 @@
   },
   "footer": {
     "pricing": "Precios",
+    "pricingLegal": "Precios (legal)",
     "terms": "Términos",
     "privacy": "Privacidad",
     "refunds": "Reembolsos"
@@ -121,6 +122,22 @@
     "refresh": "Actualizar",
     "suffixMonth": "/mes",
     "suffixYear": "/año"
+  },
+  "pricing": {
+    "heading": "Precios",
+    "subtitle": "DecodeC4 te ayuda a aprender estrategia de Cuatro en Línea explicando tus propios errores. Las Revelaciones Profundas son las explicaciones detalladas de una posición: por qué una jugada perdía y qué vio la mejor jugada.",
+    "freePlanName": "Gratis",
+    "proPlanName": "Pro",
+    "freePrice": "$0",
+    "freeQuota": "{{count}} Revelaciones Profundas por semana",
+    "quotaFallback": "una generosa cuota semanal de Revelaciones Profundas",
+    "proQuota": "Revelaciones Profundas ilimitadas",
+    "sharedFeatures": "Puzzles, lecciones y partidas de práctica",
+    "taxNote": "Todos los precios están en dólares estadounidenses. Pueden aplicarse impuestos, calculados al finalizar la compra.",
+    "checkoutCta": "Hacete Pro",
+    "degraded": "Los precios no están disponibles por el momento. Volvé a intentarlo en un rato.",
+    "legalNote": "¿Buscás el Merchant of Record, la política de reembolsos o los términos? Mirá la {{link}}.",
+    "legalLinkLabel": "página legal de precios"
   },
   "common": {
     "dismiss": "Descartar",

@@ -13,6 +13,7 @@ import { DEEP_REVEAL_SOFT_MS, DEEP_REVEAL_HARD_MS } from '../lib/deepRevealTimeo
 import { canRevealAnon, markRevealedAnon } from '../lib/anonDeepReveal.js';
 import { langHeaders } from '../lib/apiLang.js';
 import { describeQuota } from '../lib/deepRevealQuota.js';
+import { getEntitlement } from '../lib/entitlement.js';
 import i18n from '../i18n/index.js';
 
 const API = import.meta.env.VITE_API_BASE_URL || '';
@@ -78,6 +79,14 @@ export function DeepRevealPane({
   const [profile, setProfile] = useState(null);
   const [quotaExceeded, setQuotaExceeded] = useState(false);
   const [quotaResetsAt, setQuotaResetsAt] = useState(null);
+  // Subscription tier feeding describeQuota (spec 053 US2/T025): sourced from
+  // the single client-side entitlement helper, not profile.tier — see
+  // docs/architecture/frontend-conventions.md "Reading the user's tier". null
+  // = not yet resolved, matching the pre-migration `profile === null` initial
+  // state (describeQuota's `tier !== 'free'` gate also hides the quota
+  // banner for an unresolved/undefined tier, so this preserves prior
+  // first-render behavior).
+  const [entitled, setEntitled] = useState(null);
 
   async function refreshProfile() {
     try {
@@ -88,11 +97,19 @@ export function DeepRevealPane({
     }
   }
 
+  // getEntitlement() never rejects (fail-open, FR-013), so no catch needed.
+  async function refreshEntitlement() {
+    const result = await getEntitlement();
+    setEntitled(result.entitled);
+  }
+
   // See SettingsScreen.jsx's identical subscription for the full rationale:
   // UpgradeModal's controlled uiState/onUiStateChange props had no caller, so
   // a real payment left the modal stuck on 'loading'. Reuses refreshProfile
-  // (already called after every successful reveal) so profile.tier/quota
-  // reflect Pro immediately, and clears quotaExceeded so the paywall banner
+  // (already called after every successful reveal) and refreshEntitlement so
+  // the quota counter/tier reflect Pro immediately (useUpgradeCheckout.js's
+  // handleCheckoutCompleted already called invalidateEntitlement(), so this
+  // refetch is guaranteed fresh), and clears quotaExceeded so the paywall banner
   // (line ~289) disappears. The modal itself now owns auto-dismissing (with
   // its slide-away animation) once 'success' renders, via this screen's own
   // onDismiss prop below — which also closes this whole pane (onClose?.()),
@@ -104,6 +121,7 @@ export function DeepRevealPane({
     return subscribeCheckoutReturn((state) => {
       if (state === 'activated') {
         refreshProfile();
+        refreshEntitlement();
         setQuotaExceeded(false);
         setUpgradeUiState('success');
         resetCheckoutReturnState();
@@ -159,6 +177,7 @@ export function DeepRevealPane({
     setQuotaExceeded(false);
     setQuotaResetsAt(null);
     refreshProfile();
+    refreshEntitlement();
 
     const controller = new AbortController();
     setSlow(false);
@@ -280,7 +299,7 @@ export function DeepRevealPane({
 
   const quota = describeQuota({
     signedIn: !!session?.user,
-    tier: profile?.tier,
+    tier: entitled === null ? undefined : (entitled ? 'paid' : 'free'),
     count: profile?.deep_reveal_count,
     resetAt: profile?.deep_reveal_reset_at,
     limit: profile?.deep_reveal_limit,
