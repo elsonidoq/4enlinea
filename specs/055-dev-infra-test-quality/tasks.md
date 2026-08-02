@@ -153,7 +153,7 @@ the whole tree, then deliberately introduce one real violation into a `.mjs` fil
       breakdown from T009/T014, so a future pass can burn them down as a UI-behavior change.
 - [x] T016 [US1] Confirm `cd connect-four && npm run lint` now exits 0 (FR-003/SC-001) — depends on
       T005-T015 all landing.
-- [ ] T017 [US1] Prove the widened glob is a real gate, not just a walked glob (FR-004/SC-001):
+- [x] T017 [US1] Prove the widened glob is a real gate, not just a walked glob (FR-004/SC-001):
       temporarily insert one real violation that the current config's
       `'no-unused-vars': ['error', { varsIgnorePattern: '^[A-Z_]' }]` rule actually reports — use
       `const unusedProbe = 1;` (lowercase, no leading underscore or capital; **NOT**
@@ -162,17 +162,17 @@ the whole tree, then deliberately introduce one real violation into a `.mjs` fil
       `.mjs` file, run `npm run lint`, confirm non-zero exit reporting that violation **by name**
       (`unusedProbe` appears in the eslint output, not merely a non-zero exit code), then revert the
       inserted line.
-- [ ] T018 [US1] Prefix `eslint . && ` onto the `test:fast` script string in
+- [x] T018 [US1] Prefix `eslint . && ` onto the `test:fast` script string in
       `connect-four/package.json` (leaving `test` and `test:dom`'s script strings unchanged per
       FR-006(a)/Settled decision #2 — lint only becomes a gate now that T016 made it green).
-- [ ] T019 [US1] Extend `.githooks/pre-commit` (repo root) with a new leading block that runs `cd
+- [x] T019 [US1] Extend `.githooks/pre-commit` (repo root) with a new leading block that runs `cd
       connect-four && npm run lint --silent` **before** the existing `sync-kb.mjs` step (per
       research.md R5's decision: lint-fails-fast avoids `sync-kb.mjs` mutating/staging
       `connect-four/server/kb/` ahead of a commit that's going to be rejected anyway) — exit
       non-zero with a clear message (`"pre-commit: lint failed" >&2; exit 1`, matching the existing
       hook's error-message style) if lint fails, and add a one-line comment noting the measured
       full-tree lint wall time (e.g. "~7.5s wall on full-tree lint as of <date re-measured>").
-- [ ] T020 [US1] Prove FR-006/SC-001a's double-wiring, in a window that does NOT overlap US2's
+- [x] T020 [US1] Prove FR-006/SC-001a's double-wiring, in a window that does NOT overlap US2's
       `Board.jsx` mutation (see Dependencies note below): insert the same genuinely-reported fixture
       from T017 (`const unusedProbe = 1;` — **NOT** the `_`-prefixed fixture, which the config's
       `varsIgnorePattern` ignores) into a single new throwaway file (e.g.
@@ -183,7 +183,7 @@ the whole tree, then deliberately introduce one real violation into a `.mjs` fil
       `.githooks/pre-commit` rejects it; run `git restore --staged
       connect-four/scripts/lintProbe.mjs` to unstage (nothing was ever committed); delete the
       throwaway file and revert any other stray change.
-- [ ] T021 [US1] Mark OI-70 ✅ RESOLVED in `docs/open_issues.md` (currently `**Status**: open —
+- [x] T021 [US1] Mark OI-70 ✅ RESOLVED in `docs/open_issues.md` (currently `**Status**: open —
       pre-existing, long-standing (observed 2026-07-28)` at the "## OI-70" entry, `npx eslint .`
       reporting "268 problems (254 errors, 14 warnings)"), citing this story's evidence: the
       environment split + explicit two-block catch-all (T005-T008), the `.mjs`/`.cjs` glob widening

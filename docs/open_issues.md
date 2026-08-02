@@ -2130,24 +2130,22 @@ Two things noticed while reviewing the rendered capsules, neither worth blocking
 
 ## OI-70 — `npm run lint` is red repo-wide (254 errors), so lint gates nothing
 
-**Status**: open — pre-existing, long-standing (observed 2026-07-28)
-**Area**: `connect-four/eslint.config.js` and the whole tree
-**Discovered**: running `npx eslint` on touched files during the `windowHighlights` work
+**Status**: ✅ RESOLVED in spec `055` (T005-T020, 2026-08-02) — the eslint config was split by
+environment (browser for `src/`; node for `server/`+`scripts/`; node for `tests/`; node+browser
+merged for `tests/dom/`; two explicit catch-all blocks for `vite.config.js`/`eslint.config.js` and
+`public/sw.js`), with all globs widened to include `.mjs`/`.cjs` (T005-T008). A fresh re-measurement
+against the new config (T009) fed a triage pass (T010-T015) that cleared every error, demoting the
+remaining `react-hooks/*`/`react-refresh/*` findings to `warn` (tracked separately as OI-119) rather
+than fixing them as a UI-behavior change. Confirmed by direct command execution: `cd connect-four &&
+npm run lint` now exits 0 — `✖ 47 problems (0 errors, 47 warnings)` (T016). The gate was proven real,
+not just a walked glob: inserting `const unusedProbe = 1;` into a `.mjs` file made lint fail with
+`'unusedProbe' is assigned a value but never used. Allowed unused vars must match /^[A-Z_]/u
+no-unused-vars`, then reverting brought it back to the same 0-errors/47-warnings result (T017). Lint
+is now wired into both `npm run test:fast` (prefixed as `eslint . && `, T018) and `.githooks/pre-commit`
+(a new leading block before `sync-kb.mjs`, T019); T020 proved both gates go red on the same
+`unusedProbe` fixture and revert cleanly.
 
-`npx eslint .` reports **268 problems (254 errors, 14 warnings)**. A large share are environment
-rules misfiring rather than real defects — e.g. `'process' is not defined` (`no-undef`) in Node-side
-scripts that the config lints with browser globals only. Because the baseline is red, `npm run lint`
-cannot be used as a gate, is not in CI, and a genuinely new lint error is invisible in the noise.
-
-Concretely observed: `src/components/admin/BoardEditor.jsx` imports `boardToSpec` and never uses it
-(`no-unused-vars`) — harmless, pre-existing, and exactly the kind of thing a working lint would have
-caught at authoring time.
-
-**If picked up**: split the eslint config by environment (browser for `src/`, node for `server/`,
-`scripts/`, `tests/`) before touching any individual rule — that alone should clear most of the 254.
-Then run `--fix`, triage the remainder, and only then consider adding `lint` to the test scripts.
-Until that happens, run `npx eslint <files-you-touched>` and compare against the same files on
-`main` rather than trusting a clean/dirty verdict.
+**If picked up**: OI-119 tracks burning down the demoted `react-hooks/*`/`react-refresh/*` warnings.
 
 ## OI-71 — Removing the `windowCounts` empty-cell guard hangs `test:dom` instead of failing it
 
