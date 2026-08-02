@@ -238,43 +238,43 @@ confirm the new regression test independently catches a spilled/oversized board.
       `connect-four/src/lib/useDragSplit.js` (FR-009) — do not touch the "Required behavior" section
       (lines 19-40), which already correctly describes the target state (research.md R7); this is an
       annotation of a frozen planning artifact, not a rewrite.
-- [ ] T027 [US2] Write a new DOM regression test,
+- [x] T027 [US2] Write a new DOM regression test,
       `connect-four/tests/dom/SplitRevealZoom.dom.test.jsx`, that mounts `SplitReveal` in a short
       container and asserts (a) the rendered board width stays `<=` the enclosing pane width and (b)
       the `constrain`/`maxWidth` styling remains applied (FR-008) — this supplements, not replaces,
       the existing pure-function test at `connect-four/tests/unit/splitRevealZoom.test.js` (leave
       that file untouched).
-- [ ] T028 [US2] Add the new test file **by name** to the `test:dom` script string in
+- [x] T028 [US2] Add the new test file **by name** to the `test:dom` script string in
       `connect-four/package.json` (currently 19 space-separated file paths ending in
       `tests/dom/ChallengeScreenGoalPrompt.dom.test.jsx`, no auto-discovery) and run `npm run
       test:dom` to confirm it executes (grep the output for the new test's distinctive name).
-- [ ] T029 [US2] Prove the new test is not vacuous (SC-003): temporarily reintroduce the original
+- [x] T029 [US2] Prove the new test is not vacuous (SC-003): temporarily reintroduce the original
       live-fit sizing bug (the pre-fix mechanism `split-reveal-zoom-contract.md`'s "Current
       mechanism" section describes, per T026), confirm the T027 test now fails, then revert the
       reintroduced bug.
-- [ ] T030 [P] [US2] Delete the `deepRevealPhase` export from
+- [x] T030 [P] [US2] Delete the `deepRevealPhase` export from
       `connect-four/src/lib/deepRevealTimeout.js` (FR-010) — confirm
       `connect-four/src/components/DeepRevealPane.jsx:12` only imports `DEEP_REVEAL_SOFT_MS`/
       `DEEP_REVEAL_HARD_MS` (verbatim: `import { DEEP_REVEAL_SOFT_MS, DEEP_REVEAL_HARD_MS } from
       '../lib/deepRevealTimeout.js';`) and never calls `deepRevealPhase` before deleting.
-- [ ] T031 [US2] Delete only the `'phase transitions: loading -> slow -> timedOut...'` test block
+- [x] T031 [US2] Delete only the `'phase transitions: loading -> slow -> timedOut...'` test block
       from `connect-four/tests/unit/deepRevealTimeout.test.js`, leaving the
       `'hard cap is well beyond the soft hint...'` test (which covers the still-live
       `DEEP_REVEAL_SOFT_MS`/`DEEP_REVEAL_HARD_MS` constants) fully intact. Run `node --test
       connect-four/tests/unit/deepRevealTimeout.test.js` and confirm exactly one test runs and
       passes. Do NOT modify the `test`/`test:fast` script strings — both already list this file by
       name and only one test case (not the whole file) was removed.
-- [ ] T032 [US2] Run `npm run test:fast` once all of US2's changes have landed and confirm the
+- [x] T032 [US2] Run `npm run test:fast` once all of US2's changes have landed and confirm the
       baseline is still exactly 5 RED (T004's number) — no new failures introduced, and OI-82's
       pre-existing failures are not mistaken for a regression.
-- [ ] T033 [US2] Mark OI-71 ✅ RESOLVED in `docs/open_issues.md` (currently `**Status**: open — low
+- [x] T033 [US2] Mark OI-71 ✅ RESOLVED in `docs/open_issues.md` (currently `**Status**: open — low
       priority, cosmetic to the test experience (observed 2026-07-28)` at the "## OI-71" entry),
       citing T022-T025's bisection and fix as evidence: the confirmed hang reproduction (T022), the
       bisected root cause (T023), the actual fix that turns the hang into a fast assertion failure
       (T024), and the reverted diagnostic mutation (T025, `git diff Board.jsx` empty). Quote the root
       cause T023/T024 actually found as evidence — do NOT reuse research.md R6's unconfirmed jsdom/
       testing-library hypothesis verbatim if the bisection found something else.
-- [ ] T034 [US2] Mark OI-16 ✅ RESOLVED in `docs/open_issues.md` — but ONLY the "Dead tested helper
+- [x] T034 [US2] Mark OI-16 ✅ RESOLVED in `docs/open_issues.md` — but ONLY the "Dead tested helper
       (from OI-12)" bullet describing `deepRevealPhase` (currently under `**Status**: deferred
       (accepted as backlog by the final whole-branch review, 2026-07-12; not merge-blocking)` at the
       "## OI-16" entry); the entry's other bullet (the jsdom peer mismatch) is **already** marked
@@ -284,7 +284,7 @@ confirm the new regression test independently catches a spilled/oversized board.
       `DEEP_REVEAL_SOFT_MS`/`DEEP_REVEAL_HARD_MS` test stays intact (T031). Resolve inline on that one
       bullet (matching the existing jsdom bullet's inline-resolution style), not by flipping the
       whole entry's Status line.
-- [ ] T035 [US2] Mark OI-29 ✅ RESOLVED in `docs/open_issues.md` (currently `**Status**: deferred
+- [x] T035 [US2] Mark OI-29 ✅ RESOLVED in `docs/open_issues.md` (currently `**Status**: deferred
       (2026-07-14) — fix is shipped & user-verified; only follow-up docs/tests remain` at the
       "## OI-29" entry), citing this story's two follow-ups as evidence: the contract annotation
       (T026, `specs/042-mistake-review-unification/contracts/split-reveal-zoom-contract.md`'s

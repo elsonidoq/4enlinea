@@ -395,7 +395,7 @@ in lockstep with `en.json` if the switcher goes live.
 
 Two small residues from remediating OI-12 and OI-7, both judged defer-not-fix:
 
-- **Dead tested helper (from OI-12):** `deepRevealPhase(elapsedMs, resolved)` in `src/lib/deepRevealTimeout.js` is unit-tested but **not consumed** — `DeepRevealPane.jsx` drives the `slow`/`timedOut` states inline via `setTimeout`, reimplementing the same 3-way branch. Both sides import the shared `DEEP_REVEAL_SOFT_MS`/`DEEP_REVEAL_HARD_MS` constants, so the timing can't drift, only the branch shape. If picked up: either wire `deepRevealPhase` into the render, or drop the helper + its test.
+- **Dead tested helper (from OI-12): ✅ RESOLVED (Epic 8, spec 055, US2 T030–T031).** `deepRevealPhase(elapsedMs, resolved)` was deleted from `src/lib/deepRevealTimeout.js` — confirmed no remaining caller anywhere in the repo (`DeepRevealPane.jsx:12` only ever imported `DEEP_REVEAL_SOFT_MS`/`DEEP_REVEAL_HARD_MS`) before deleting (T030). Its dedicated test case (`'phase transitions: loading -> slow -> timedOut...'`) was removed from `tests/unit/deepRevealTimeout.test.js`, leaving the sibling `'hard cap is well beyond the soft hint...'` test — which covers the still-live `DEEP_REVEAL_SOFT_MS`/`DEEP_REVEAL_HARD_MS` constants — fully intact; `node --test tests/unit/deepRevealTimeout.test.js` now runs exactly one passing test (T031). The "either wire it in or drop it" choice below was resolved as: drop it.
 - **jsdom peer mismatch (from OI-7): ✅ RESOLVED 2026-07-14.** This bit the **staging deploy** — Railway's `npm ci` (strict peer resolution) aborted with `ERESOLVE` (`global-jsdom@29` peer-wants `jsdom >=29 <30`, tree has `jsdom@27`), failing the build. Fixed by aligning `global-jsdom` `^29.0.0` → `^27.0.0` (its major tracks jsdom's, so `^27` matches the pinned `jsdom@27`) + regenerated lock — the root cause (version mismatch) is removed, so `npm ci` now passes strictly with **no flag / no `.npmrc`** (verified `npm ci --dry-run` + `npm run test:dom`, both green). Chosen over the originally-suggested "bump jsdom to `^29`" (2 majors, test-breakage risk) and over an `.npmrc legacy-peer-deps=true` (suppresses rather than fixes, and depends on railpack copying `.npmrc`). Also un-staled memory `project_repo_worktree_setup` 2b (no longer needs `--legacy-peer-deps`).
 
 ## OI-17 — `chooseSparringMove` returns `col: undefined` on a terminal/full board
@@ -782,20 +782,25 @@ a separate content project; lessons fall back to English audio meanwhile.
 
 ## OI-29 — SplitReveal live-fit: stale spec-042 contract + missing render-level regression test
 
-**Status**: deferred (2026-07-14) — fix is shipped & user-verified; only follow-up docs/tests remain
-**Area**: `connect-four/src/components/SplitReveal.jsx`, `specs/042-mistake-review-unification/contracts/split-reveal-zoom-contract.md`, `connect-four/tests/unit/splitRevealZoom.test.js`
+**Status**: ✅ RESOLVED (Epic 8, spec 055, US2) — both "If picked up" follow-ups below are now done.
+**Area**: `connect-four/src/components/SplitReveal.jsx`, `specs/042-mistake-review-unification/contracts/split-reveal-zoom-contract.md`, `connect-four/tests/unit/splitRevealZoom.test.js`, `connect-four/tests/dom/SplitRevealZoom.dom.test.jsx`
 
 The board-sizing fix (live-fit `maxWidth` from the current `splitPct`, floored at 120, replacing the
-frozen `boardW`/`>=200`-gate) is in and verified, but two follow-ups were left:
-(1) `contracts/split-reveal-zoom-contract.md §2` still describes the SUPERSEDED frozen behavior (FR-022,
-SC-009) and should be updated/annotated so it doesn't mislead;
-(2) `splitRevealZoom.test.js` only tests the pure `computeFrozenBoardWidth` (still frozen-by-signature),
-so it passes unchanged and gives NO coverage of the actual bug. Add a render-level regression test
-asserting the board never spills to full viewport width and never exceeds the top pane when the
-container's available height is small.
+frozen `boardW`/`>=200`-gate) is in and verified, and this story closed the two remaining follow-ups:
+(1) `contracts/split-reveal-zoom-contract.md`'s "Current mechanism" section is now annotated
+`SUPERSEDED (Epic 8, spec 055, T026)`, pointing forward to the shipped live-fit mechanism instead of
+describing it as current;
+(2) a new render-level DOM regression test,
+`connect-four/tests/dom/SplitRevealZoom.dom.test.jsx` (T027–T029), mounts `SplitReveal` in a short
+container and asserts the rendered board's `maxWidth` stays within the enclosing pane and that the
+`constrain`/`maxWidth` cap is actually applied — registered by name in the `test:dom` script string
+and observed running. Proven non-vacuous (SC-003): temporarily reintroducing the pre-fix mechanism
+(`boardW` computed without the `MIN_BOARD_W` floor, gated by `constrain = boardW >= 200`) made the
+test fail with `AssertionError: SplitReveal must apply a maxWidth cap, not drop it`; reverting made it
+pass again (`git diff connect-four/src/components/SplitReveal.jsx` empty after revert).
+`splitRevealZoom.test.js` (the pure `computeFrozenBoardWidth` test) was left untouched, as intended —
+the new test supplements it rather than replacing it.
 
-**If picked up**: update the contract doc; add a DOM/jsdom test that mounts `SplitReveal` with a short
-container and asserts `board rendered width <= pane width` and `constrain`/maxWidth stays applied.
 Cross-ref: `docs/architecture/frontend-conventions.md` (SplitReveal board fit).
 
 ## OI-30 — `figure_7` (and other multi-tag patterns) never praised on live user moves; would need transition-gating if added
@@ -2149,22 +2154,30 @@ is now wired into both `npm run test:fast` (prefixed as `eslint . && `, T018) an
 
 ## OI-71 — Removing the `windowCounts` empty-cell guard hangs `test:dom` instead of failing it
 
-**Status**: open — low priority, cosmetic to the test experience (observed 2026-07-28)
+**Status**: ✅ RESOLVED (Epic 8, spec 055, US2 T022–T025) — bisected and fixed, not just a
+workaround. `git diff connect-four/src/components/Board.jsx` is empty (the diagnostic mutation used
+to reproduce the hang was reverted after the fix landed).
 **Area**: `connect-four/src/components/Board.jsx` (windowCounts render block), `connect-four/tests/dom/BoardWindowCounts.dom.test.jsx`
 
-While mutation-proving the fix for the untested `value === 'empty'` guard, deleting that half of the
-condition did **not** produce a clean assertion failure. `npm run test:dom` instead hung and was
-killed after ~32s (0% CPU, stable low RSS across three separate runs — a genuine block, not a busy
-loop). The unmutated suite passes in under a second.
+Root cause (confirmed by bisection, NOT the unverified jsdom/testing-library suspicion originally
+recorded below): the hang was never in jsdom's query implementation, `Board.jsx`'s render, or an
+infinite loop. It was `assert.equal`/`assert.strictEqual` being called with a **live mounted DOM
+node as the actual operand** (e.g. `assert.equal(screen.queryByText('99'), null)`). When such an
+assertion legitimately fails, Node's `util.inspect` tries to format the failure diff by walking the
+matched DOM node — which holds circular back-references into the React Fiber tree (including `Error`
+objects with full stack traces via `_debugStack`) plus jsdom's getter-heavy prototype chain.
+Formatting that graph is unboundedly expensive: measured at 30s+ and never returning, versus **~18ms**
+for the equivalent boolean comparison (e.g. `assert.equal(screen.queryByText('99') === null, true)`).
+The fix converts every such assertion to compare a derived primitive instead of a raw DOM/React node,
+applied across **all 19 sites** of this pattern in the DOM suite, not only the one that originally
+hung. See `connect-four/tests/dom/BoardWindowCounts.dom.test.jsx`'s
+`'Board never renders a digit on an occupied cell...'` test for the proven repro and the converted
+assertion.
 
-This does not weaken the test — the mutant never goes green, which is what the guard needs — but a
-hang is a poor failure mode: a future regression here will read as flaky infrastructure rather than
-as a broken guard. Root cause was not investigated. Suspicion (unverified) is that rendering a digit
-into every occupied cell interacts badly with jsdom or the testing-library query used, rather than
-anything in `Board` itself.
-
-**If picked up**: reproduce by deleting `&& value === 'empty'` from the windowCounts block in
-`Board.jsx`, then bisect the assertion in `BoardWindowCounts.dom.test.jsx` that stops returning.
+Originally observed while mutation-proving the fix for the untested `value === 'empty'` guard —
+deleting that half of the condition made `npm run test:dom` hang (~32s, no clean assertion failure)
+instead of failing fast. It now fails fast (~18ms) under the same mutation, confirmed by the
+bisection above.
 
 ## OI-72 — Lesson editor re-submits a stale `windowCounts` array on every save
 
