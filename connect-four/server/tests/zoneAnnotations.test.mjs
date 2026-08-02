@@ -110,7 +110,7 @@ test('processAnnotations bare-strips a genuinely unclosed tag and reports it in 
   const { mechanism, repairs } = processAnnotations(raw, ZONES);
   assert.doesNotMatch(mechanism, /\[term:/);
   assert.doesNotMatch(mechanism, /\[\/term:/);
-  assert.match(mechanism, /You needed to keep the  on c2 alive because it is tough\./);
+  assert.match(mechanism, /You needed to keep the {2}on c2 alive because it is tough\./);
   assert.deepEqual(repairs, ['unclosed_tag:term:double_threat']);
 });
 

@@ -25,7 +25,7 @@ test('playPolicyGame plays policies alternately and stops on a win', async () =>
 
 test('playPolicyGame getScores is lazy, memoized, and uses EMPTY_BOARD_SCORES for the empty board', async () => {
   let queries = 0;
-  const solver = { query: async (ms) => { queries++; return [0, 0, 0, 3, 0, 0, 0]; } };
+  const solver = { query: async () => { queries++; return [0, 0, 0, 3, 0, 0, 0]; } };
   const greedy = async ({ getScores, legal }) => {
     const s1 = await getScores();
     const s2 = await getScores(); // memoized — must not re-query
@@ -37,7 +37,7 @@ test('playPolicyGame getScores is lazy, memoized, and uses EMPTY_BOARD_SCORES fo
   assert.equal(first.movePlayed, 3);            // argmax of EMPTY_BOARD_SCORES
   assert.deepEqual(first.scores, [0, 0, 1, 2, 1, 0, 0]);
   assert.equal(queries, 0);                     // empty board never hits the solver
-  const second = (await gen.next()).value;
+  await gen.next();
   assert.equal(queries, 1);                     // one memoized query for ply 2
   await gen.return();
 });

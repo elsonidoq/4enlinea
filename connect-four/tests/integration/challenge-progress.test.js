@@ -63,7 +63,7 @@ function authMiddleware(req) {
   req.user = TEST_USER;
 }
 
-function anonMiddleware(_req) {
+function anonMiddleware() {
   // req.user stays undefined
 }
 

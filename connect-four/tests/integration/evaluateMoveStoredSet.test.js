@@ -36,7 +36,7 @@ const i18nStub = { coach: {}, eval: {} };
 // .select(...).eq('id', puzzleId).eq('is_active', true).single().
 function makeTrackedSupabaseStub(rowsById) {
   return {
-    from(table) {
+    from() {
       let requestedId;
       const chain = {
         select() { return chain; },

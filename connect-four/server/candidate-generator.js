@@ -294,7 +294,7 @@ function computeForbiddenColumnsHighlight(moveString, correctCols) {
 // highlight_metadata: static pattern for tactical categories (z_threat, undercut, overcut,
 //   claimeven, figure_7, j_shape). Shape: { type, cells: [{ column, row, role }] } or capsule.
 // These are never both populated for the same candidate. New categories → use highlight_metadata.
-async function computeHighlightCells(category, moveString, scores, correctCols, solver) {
+async function computeHighlightCells(category, moveString, scores, correctCols) {
   if (['immediate_threat', 'forced_block', 'double_threat'].includes(category)) return computeLowCategoryHighlight(moveString, correctCols);
   if (category === 'forced_win') return computeForcedWinHighlight(moveString, correctCols);
   if (category === 'forbidden_columns') return computeForbiddenColumnsHighlight(moveString, correctCols);
@@ -387,7 +387,7 @@ export function checkOvercutPredicate(ms, scores) {
   };
 }
 
-export function checkFigure7Predicate(ms, _scores) {
+export function checkFigure7Predicate(ms) {
   const board = new Board(ms);
 
   // T011 (spec 051 Epic 1, FR-009): accumulate every matching column, not only the first —
@@ -420,7 +420,7 @@ export function checkFigure7Predicate(ms, _scores) {
   };
 }
 
-export function checkJShapePredicate(ms, _scores) {
+export function checkJShapePredicate(ms) {
   const board = new Board(ms);
 
   // T011 (spec 051 Epic 1, FR-009): accumulate every matching column, not only the first —

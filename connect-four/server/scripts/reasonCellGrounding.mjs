@@ -1,6 +1,4 @@
 // Resolve a vector cell to a grounded object (spec §3c). Pure; reuses classifier's board model.
-import { parseBoardState } from '../classifier.js';
-
 export function cellToRC(cell) {
   const m = /^c(\d+)r(\d+)$/.exec(cell);
   if (!m) throw new Error(`bad cell: ${cell}`);

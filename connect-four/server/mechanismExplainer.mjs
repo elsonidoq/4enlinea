@@ -34,7 +34,7 @@ export async function defaultCallLLM(prompt, { model, apiKey, endpoint, userId, 
 
 // ── Lenient JSON parse (handles fenced or prose-wrapped output; ported from compute.mjs) ─────
 export function parseAnswer(raw) {
-  try { return { answer: JSON.parse(raw), parse_error: null }; } catch {}
+  try { return { answer: JSON.parse(raw), parse_error: null }; } catch { /* fall through to fenced/prose extraction below */ }
   const m = raw && raw.match(/\{[\s\S]*\}/);
   if (m) {
     try { return { answer: JSON.parse(m[0]), parse_error: null }; } catch (e) {

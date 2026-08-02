@@ -100,7 +100,7 @@ export function loadKBStatement(id) {
         continue;
       }
       if (line.length > 0 && !/^\s/.test(line)) break;
-      statementLines.push(line.replace(/^  /, ''));
+      statementLines.push(line.replace(/^ {2}/, ''));
     }
     return statementLines.join('\n').trim() || null;
   } catch {
@@ -126,7 +126,7 @@ function _loadKBFieldRaw(id, field) {
     for (const line of lines) {
       if (!inField) { if (re.test(line)) inField = true; continue; }
       if (line.length > 0 && !/^\s/.test(line)) break;
-      out.push(line.replace(/^  /, ''));
+      out.push(line.replace(/^ {2}/, ''));
     }
     return out.join('\n').trim() || null;
   } catch {
@@ -606,7 +606,6 @@ export function buildBlunderExplainPrompt({
   openingSection,         // pre-formatted opening-provenance reason (named book-line deviation)
   centerDominanceSection, // pre-formatted opening center-dominance reason (no-structure path)
 }) {
-  const opponentName = playerName === 'Green' ? 'Gray' : 'Green';
   const perspective = playerName === 'Green' ? 1 : 2;
   const winningParity = perspective === 1 ? 'ODD' : 'EVEN';
   const winningRows = perspective === 1 ? '1,3,5' : '2,4,6';

@@ -25,7 +25,6 @@ test('the committed P4 coverage set exercises every REQUIRED render predicate', 
   const missingRequired = RENDER_REQUIRED.filter((p) => !hit.has(p));
   const missingProvisional = [...RENDER_PROVISIONAL].filter((p) => !hit.has(p));
   if (missingProvisional.length) {
-    // eslint-disable-next-line no-console
     console.log(`PROVISIONAL render predicates not covered (non-blocking): ${missingProvisional.join(', ')}`);
   }
   assert.deepEqual(missingRequired, [], `uncovered REQUIRED render predicates: ${missingRequired.join(', ')}`);

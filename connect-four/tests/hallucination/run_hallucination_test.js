@@ -8,7 +8,6 @@
 // Must achieve < 2% error rate (≤ 10 errors) to pass.
 
 import { execSync } from 'node:child_process';
-import { readFileSync } from 'node:fs';
 
 const API = process.env.API_BASE || 'http://localhost:3001';
 const TOKEN = process.env.AUTH_TOKEN || '';

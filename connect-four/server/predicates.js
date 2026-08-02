@@ -94,8 +94,6 @@ export function buildPredicatePuzzle(category, movestring, { correctCol, highlig
 // @param {number[]} scores      - solver scores for all 7 columns
 // @returns {{ result: 'correct'|'wrong'|'tied', correctCol?: number, tiedWith?: number[] }}
 export function evaluatePredicate(puzzle, candidateCol, scores) {
-  const moveCount = puzzle.moveString.length;
-
   switch (puzzle.category) {
     case 'immediate_threat': return evalImmediateThreat(candidateCol, scores, puzzle.moveString);
     case 'forced_block': return evalForcedBlock(candidateCol, puzzle.moveString);

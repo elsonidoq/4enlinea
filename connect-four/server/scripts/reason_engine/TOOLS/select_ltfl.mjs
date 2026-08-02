@@ -3,8 +3,7 @@
 // Finds positions where bestScore<0 AND playedScore<0 AND playedScore<bestScore,
 // then runs the swindle GATE on the BEST move and reports.
 import { readFileSync } from 'fs';
-import { fileURLToPath } from 'url';
-import { dirname, join } from 'path';
+import { join } from 'path';
 import { createSolverProcess } from '/Users/elsonidoq/prog/cuatro_en_linea/connect-four/server/c4solver-wrapper.js';
 import { playGame } from '/Users/elsonidoq/prog/cuatro_en_linea/connect-four/server/gameSampling.js';
 

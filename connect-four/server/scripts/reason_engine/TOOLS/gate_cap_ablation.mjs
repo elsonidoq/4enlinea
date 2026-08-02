@@ -33,7 +33,7 @@ import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 import { createSolverProcess } from '../../../c4solver-wrapper.js';
 import { playGame } from '../../../gameSampling.js';
-import { Board, detectImmediateThreat } from '../../../classifier.js';
+import { Board } from '../../../classifier.js';
 import { swindleGate, REASON_CONFIG, computeReason } from '../reasonEngine.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));

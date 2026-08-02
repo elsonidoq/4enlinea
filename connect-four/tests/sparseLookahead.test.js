@@ -107,7 +107,7 @@ test('searchOpportunities tallies structures per first-opponent-reply branch', a
   const solver = fakeSolver(() => [3, 0, 0, 0, 0, 0, -3]); // cols1-5 concede (0), col0 wins, col6 worst
   // classifyFn: only when it's the player's move AND the line went through opp reply col 2,
   // report a double_threat; otherwise nothing.
-  const classifyFn = async (ms, perspective) => {
+  const classifyFn = async (ms) => {
     // ms is rootMovestring + oppReply + ... ; detect oppReply char at index = root length.
     if (ms[1] === '2') return new Map([['double_threat', { cells: ['c4r3', 'c5r3'] }]]);
     return new Map();

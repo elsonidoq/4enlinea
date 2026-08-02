@@ -40,11 +40,6 @@ describe('handleSelfDeriveFailure', () => {
 
 describe('detectLinkedWorktree', () => {
   it('returns true when GIT_DIR !== GIT_COMMON after cd+pwd -P normalization (simulated linked worktree)', () => {
-    const execImpl = (cmd) => {
-      if (cmd.includes('--git-dir')) return '/tmp/worktree-fixture/.git/worktrees/epic-1\n';
-      if (cmd.includes('--git-common-dir')) return '/tmp/main-checkout-fixture/.git\n';
-      throw new Error(`unexpected command: ${cmd}`);
-    };
     // Both fixture dirs must actually exist for realpathSync to succeed; use the
     // real filesystem's own git dirs as stand-ins so normalization runs for real
     // without shelling out to git.

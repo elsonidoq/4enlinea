@@ -1167,7 +1167,7 @@ app.post('/api/track', async (req, res) => {
 
 // T028: Explanation Engine endpoint
 app.post('/api/explain-move', async (req, res) => {
-  const { moves, candidateCol, humanFirst = true, requestDeepReveal = false } = req.body;
+  const { moves, candidateCol, requestDeepReveal = false } = req.body;
 
   const movesErr = validateMoves(moves ?? '');
   if (movesErr) return res.status(400).json({ error: movesErr });
@@ -1897,7 +1897,7 @@ app.post('/api/evaluate-move/inline', async (req, res) => {
     }
 
     // Score the move
-    const { badge, quality, bestCol } = scoreMove(scores, colInt);
+    const { badge, quality } = scoreMove(scores, colInt);
 
     // Classify for pattern tag
     const classifyResult = classify(movestring, colInt, scores);
@@ -2438,7 +2438,7 @@ app.post('/api/games/analyze', async (req, res) => {
         try {
           const sv = await computeBlunderSeverity(solver, postMistakeMs, 3);
           blunderSeverity = sv.severity;
-        } catch (_e) {
+        } catch {
           // non-fatal: leave null
         }
       }
@@ -3628,11 +3628,6 @@ app.post('/api/admin/puzzles', requireLocalhost, async (req, res) => {
 
 // ── Admin Audio (TTS management — localhost only) ─────────────────────────────
 
-/** Derive a slug from an i18n key (same logic as generate-tts.js). */
-function keyToAudioSlug(key) {
-  return key.replace(/[._]/g, '--');
-}
-
 // Coach text source per language, keyed by the same `lang` values threaded
 // through the admin audio endpoints below.
 const COACH_SOURCES = { en: i18nTranslations, es: i18nTranslationsEs };
@@ -4257,7 +4252,6 @@ ${noindexTag}`;
 
 // ── Global error handler ───────────────────────────────────────────────────────
 // Safety net for any error passed via next(err) or thrown in async routes.
-// eslint-disable-next-line no-unused-vars
 app.use((err, req, res, next) => {
   logError('[unhandled]', err, { method: req.method, url: req.originalUrl });
   if (res.headersSent) return next(err);

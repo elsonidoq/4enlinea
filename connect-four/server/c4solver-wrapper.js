@@ -46,7 +46,6 @@ export function createSolverProcess() {
 
       pending = pending.then(() =>
         new Promise((chainResolve) => {
-          const startTime = Date.now();
           let settled = false;
 
           const timer = setTimeout(() => {
@@ -85,7 +84,7 @@ export function createSolverProcess() {
       return callerPromise;
     },
     destroy() {
-      try { process.kill(); } catch {}
+      try { process.kill(); } catch { /* already dead — ignore */ }
     },
   };
 }

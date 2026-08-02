@@ -51,7 +51,7 @@ try {
   for (const c of cases) {
     let scores;
     try { scores = await solver.query(c.board_state); }
-    catch (e) { scores = null; }
+    catch { scores = null; }
     const best = scores ? outcome(scores[c.correct_move]) : 'ERR';
     const played = scores ? outcome(scores[c.move_played]) : 'ERR';
     const branch = best === played ? 'SAME' : 'FLIP';

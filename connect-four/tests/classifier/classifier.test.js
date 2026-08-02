@@ -1,4 +1,4 @@
-import { test, describe, before, after } from 'node:test';
+import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
@@ -6,13 +6,9 @@ import { dirname, join } from 'node:path';
 import {
   classify, parseBoardState, hasActiveDoubleThreat,
   Board,
-  detectImmediateThreat, detectDoubleThreat, detectForcedBlock,
-  detectForcedWin, detectForbiddenColumns,
-  detectZThreat, detectUndercutVictim, detectOvercutVictim, detectOvercutBeneficiary,
-  detectFigure7, detectJShape, detectClaimeven,
+  detectForcedWin,
   detectOddEvenThreat,
 } from '../../server/classifier.js';
-import { createSolverProcess } from '../../server/c4solver-wrapper.js';
 
 const __dir = dirname(fileURLToPath(import.meta.url));
 const fixtures = JSON.parse(
@@ -218,7 +214,7 @@ describe('classify() edge cases', () => {
   test('never throws on any input', () => {
     const edgeCases = [
       { moves: '', col: 0, scores: [0, 0, 0, 0, 0, 0, 0] },
-      { moves: '4', col: 3, scores: [0, 0, 0, -1, 0, 0, 0] }, // eslint-disable-line
+      { moves: '4', col: 3, scores: [0, 0, 0, -1, 0, 0, 0] },
       { moves: '1234567', col: 0, scores: [0, 2, 2, 2, 2, 2, 0] },
     ];
     for (const { moves, col, scores } of edgeCases) {

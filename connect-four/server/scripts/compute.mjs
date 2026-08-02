@@ -190,7 +190,7 @@ function projectVector(fv, condition) {
     };
   }
   const pruned = pruneVector(fv);
-  if (condition === 'C') { const { movestring, ...rest } = pruned; return rest; }
+  if (condition === 'C') { const { movestring: _movestring, ...rest } = pruned; return rest; }
   return pruned; // A
 }
 
@@ -276,7 +276,7 @@ export function renderDecisionForCondition(nv, condition) {
 
 // ── Lenient JSON parse (handles fenced or prose-wrapped output) ──────────────────
 function parseAnswer(raw) {
-  try { return { answer: JSON.parse(raw), parse_error: null }; } catch {}
+  try { return { answer: JSON.parse(raw), parse_error: null }; } catch { /* fall through to fenced/prose extraction below */ }
   const m = raw && raw.match(/\{[\s\S]*\}/);
   if (m) {
     try { return { answer: JSON.parse(m[0]), parse_error: null }; } catch (e) {

@@ -121,10 +121,9 @@ export function checkP1(zoneSpecs) {
  * If any explicit col reference names a different column number, fail.
  *
  * @param {Array<{ spec: string, innerText: string }>} zones
- * @param {Map<string, Array<{col: number, row: number}>>} expandedCellsMap  (reserved for future use)
  * @returns {string[]}  failure codes
  */
-export function checkP2(zones, expandedCellsMap) {
+export function checkP2(zones) {
   const failures = [];
   const colZoneRegex = /^col(\d+)$/;
 
