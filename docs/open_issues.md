@@ -490,7 +490,11 @@ in lockstep with `en.json` if the switcher goes live.
 
 ## OI-16 — Follow-ups from the Open-Issues Remediation branch (low-risk polish)
 
-**Status**: deferred (accepted as backlog by the final whole-branch review, 2026-07-12; not merge-blocking)
+**Status**: ✅ RESOLVED 2026-08-02 (spec 055, Epic 8) — **both** sub-bullets below are now resolved: the
+dead `deepRevealPhase` helper was deleted (US2, T030–T031) and the jsdom peer mismatch was fixed
+2026-07-14. This top line previously still read "deferred" while both of its own bullets read ✅ RESOLVED —
+exactly the stale-top-line scan trap the Epic 8 whole-backlog audit (see the header section) flags on other
+entries, so it is corrected here rather than left for a reader to reconcile.
 **Area**: `connect-four/src/components/DeepRevealPane.jsx` + `src/lib/deepRevealTimeout.js`; `connect-four/package.json` (jsdom peer)
 **Discovered**: final review of plan `docs/superpowers/plans/2026-07-12-open-issues-remediation.md`
 
