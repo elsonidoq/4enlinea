@@ -97,6 +97,7 @@
 
 - [app-qa traps](project_app_qa_setup_gotchas.md) — automation Chrome fakes autoplay (audio ships silent); discs are background-image; resize_page dead → emulate
 - [Worktree setup traps](project_repo_worktree_setup.md) — baseRef is a Claude-Code setting NOT git config; copy server/.env or tests ENOENT; res.sendFile needs dotfiles:'allow' under .claude/
+- [ESLint flat-config traps](project_eslint_config_traps.md) — unmatched files get ZERO rules (141 .mjs); blocks MERGE; `_unused` probe stays green
 - [test:fast baseline is 5 RED, not green](project_repo_worktree_setup.md) — OI-82's 5 ENOENT reason-engine tests fail in the MAIN checkout too; judge yourself against 5, not 0 (§2d)
 - [Papergames integration](project_papergames_integration.md) — skipped ≠ duplicates (don't "fix"); reCAPTCHA blocks server login; 100%-accuracy losses are ALL time-up, not resigns
 

@@ -5,7 +5,7 @@ metadata:
   node_type: memory
   type: feedback
   originSessionId: 09ab1bbf-3752-44fc-9a64-d05aa25d0cce
-  modified: 2026-08-01T23:41:01.510Z
+  modified: 2026-08-02T17:17:17.557Z
 ---
 
 [[feedback_verify_at_the_source_layer]] says verify at the right *layer*. This is the **time** axis
@@ -22,6 +22,18 @@ Spec 052 produced three of these in one epic, all of the form "we already verifi
 
 **Why:** these claims assert something about code or data while doing the least checking, so they
 attract the least scrutiny — and unlike a stale line number, nothing about them looks stale.
+
+## A backlog epic's own "Non-obvious facts" expire too
+
+Epic 8 opened its `/epics-manager` run with three headline facts, and **two were already false**: OI-58
+("five CSP fixes exist only on `stagging`") had been ported to `main` out-of-band by the owner
+themselves — the `helmet(...)` block is byte-identical between the branches and commit `ae3c006` is
+reachable from `main` — and OI-70's "254 errors" had drifted to 282. Both were caught only because the
+review agent re-ran the measurement instead of reading the epic. An epic's `Non-obvious facts` and
+`docs/open_issues.md` entries are **dated snapshots written by an earlier session**, not current state;
+the owner fixing something himself between sessions is the normal case, not the exception. Re-measure
+every load-bearing number and status claim at the *start* of an epic run — the epic file's own preamble
+says so, but that warning lives in a section a spec agent reading only its own epic never sees.
 
 ## The sharpest form: an unchanged line does NOT mean an unfixed bug
 

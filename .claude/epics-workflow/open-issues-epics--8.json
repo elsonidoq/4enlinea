@@ -1,0 +1,14 @@
+{
+  "worktree_setup_done": true,
+  "worktree_path": "/Users/elsonidoq/prog/cuatro_en_linea/.claude/worktrees/epic-8-dev-infra-test-quality",
+  "epic_file": "docs/epics/open-issues-epics.md",
+  "epic_heading": "Epic 8 — Dev Infrastructure & Test-Quality Baseline",
+  "spec_dir": "specs/055-dev-infra-test-quality",
+  "stage": "done",
+  "pending_brainstorm": null,
+  "pending_brainstorm_answers": null,
+  "pending_critique": null,
+  "pending_answers": null,
+  "pending_handoff": null,
+  "pending_deferrals": []
+}
