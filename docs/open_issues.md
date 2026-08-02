@@ -4391,3 +4391,35 @@ architecture doc was read-only reference for it.
 
 **If picked up**: update the section to describe the Sentry `connect-src` entry and cross-reference
 OI-10, using the verbatim header captured in OI-58's resolution note as the source of truth.
+
+## OI-123 — `DebugTracePanel` crashes the admin curation page on older `debug_trace` rows
+
+**Status**: deferred (pre-existing; found by spec 055 / Epic 8's QA smoke test, out of that epic's scope)
+**Area**: `connect-four/src/components/CurationWorkspace.jsx:450-456` (`DebugTracePanel`)
+**Discovered**: spec 055 (Epic 8) QA pass, 2026-08-02
+
+Clicking **"▼ Debug trace"** on a candidate whose stored `debug_trace` lacks `temperature_p1` /
+`temperature_p2` throws `TypeError: Cannot read properties of undefined (reading 'toFixed')` and
+**blanks the page until reload** — there is no error boundary around the panel (React logs "An error
+occurred in `<DebugTracePanel>`… consider adding an error boundary").
+
+```jsx
+const { temperature_p1, temperature_p2, termination, plies } = trace;
+...
+T₁ = {temperature_p1.toFixed(3)} &nbsp; T₂ = {temperature_p2.toFixed(3)}
+```
+
+Both fields are dereferenced unguarded. Reproduced live on an `immediate_threat` candidate. The cause
+is a **data-shape mismatch, not a rendering bug**: rows written before temperature-based sampling was
+introduced have no temperature fields, and nothing migrated or defaulted them — so this is the
+"stored rows outlive the code that wrote them" class, and any fix should assume both shapes will
+coexist indefinitely rather than assume a backfill.
+
+**Why deferred**: genuinely pre-existing — verified that spec 055's only edits to this file
+(commit `b84ac6e`, lines 1/70/163/273) are nowhere near `DebugTracePanel` at line 450. Epic 8's scope
+was dev tooling, tests, and doc bookkeeping; fixing an admin-screen crash was not in it.
+
+**If picked up**: guard both dereferences (`typeof temperature_p1 === 'number' ? …toFixed(3) : '—'`)
+rather than backfilling, since old rows are legitimately temperature-less; then consider wrapping the
+panel in the existing `ErrorBoundary` component (`src/components/ErrorBoundary.jsx`, already DOM-tested)
+so a future field mismatch degrades instead of blanking the page. Admin-only, so user impact is low.
