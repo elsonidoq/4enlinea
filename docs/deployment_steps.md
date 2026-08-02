@@ -411,6 +411,69 @@ before deploying. **Reasoned from the code, not exercised against production.**
 
 ---
 
+## Spec 055 (Epic 8) — Dev infrastructure & test-quality baseline
+
+**Status**: NONE REQUIRED — this change ships with the code alone
+**When**: n/a
+**Blocks**: nothing
+**Applies to**: n/a
+
+This entry exists because "no prerequisite" is a finding that has to be *reached by checking*, not by
+not looking. Each category below was walked against the **final** accumulated branch diff
+(`1ce54e7..HEAD`, 70 files) on **2026-08-02**, after all seven implementation batches had landed — not
+mid-epic, when an earlier measurement could still have been invalidated by a later batch.
+
+| Category | Checked how | Result |
+|---|---|---|
+| Schema migration | `git diff --name-only` filtered for `migration` | **None** — no file added to `server/migrations/` |
+| Data migration / backfill | Reviewed every changed signature and predicate for an output change | **None** — see below |
+| Content pools (`puzzles`/`candidates`) | Checked whether any detector/predicate *output* changed | **None** — see below |
+| Secrets / env vars | `git diff` grepped for added `process.env.X` reads | **None** — no new env var |
+| Caches (`explanation_cache`, TTS) | Checked whether any cached-content producer changed its output | **None** — see below |
+| Ordering | n/a — nothing to sequence | n/a |
+
+### Why no backfill, despite ~150 deletions across `src/`, `server/`, and `tests/`
+
+The epic deleted roughly 150 unused bindings to get `npm run lint` to exit 0. Every one was the
+removal of a binding **nothing read** — a non-behavior-changing deletion, never a refactor. Five
+function signatures lost a parameter (`checkP2`, `checkFigure7Predicate`, `checkJShapePredicate`,
+`zoneToOverlays`, `matchPattern`, `pickGameEndScreen`); in every case the removed parameter was
+**trailing** and was **already unused inside the function body**, which is why `no-unused-vars`
+reported it. Verified additionally that no code introspects function arity (`fn.length`), so no
+caller's behavior changes by passing an argument that is now ignored.
+
+Because no detector, predicate, or producer changed what it *outputs*, no row written under the old
+behavior means anything different under the new one. That is the condition that would have forced a
+backfill or a content-pool repair, and it is not met.
+
+### The one carve-out worth knowing about
+
+`server/explainContext.js`'s `buildExplainContext(movestring, col, rounds, solver, deps)` keeps its
+unused `rounds` parameter behind a scoped `eslint-disable-next-line no-unused-vars` with a stated
+reason: it is **non-trailing**, and all 12 call sites pass positionally, so removing it would be a
+call-site refactor rather than the non-behavior-changing deletion the epic's triage policy allows.
+No behavior change, nothing to deploy — recorded here only so a future reader does not mistake the
+disable comment for a suppressed defect.
+
+### CSP (OI-58) — verified, nothing to do
+
+US3 verified the CSP fixes are live rather than merely present in `main`'s source. Measured
+2026-08-02, read-only: a real `npm run build` served by the Express server returns the full expected
+`Content-Security-Policy` header, and `curl -sS -D - https://decodec4.xyz/` returns `HTTP/2 200` with
+an **identical** header, directive for directive, differing only in `media-src` pointing at the real
+Supabase host instead of `127.0.0.1:54321`. So there is nothing to port, redeploy, or backfill for
+OI-58. Nothing was written to staging or production.
+
+### Deploy-time behavior changes that are *not* prerequisites
+
+- **`test:fast` now runs `eslint . &&` first.** Railway's build runs `npm run build` (per
+  `connect-four/railpack.json`), **not** `test:fast`, so the lint gate cannot fail a deploy. Verified
+  by reading `railpack.json`.
+- **`.githooks/pre-commit` now runs `npx eslint . --quiet`.** Developer-machine only. It needs no
+  action: `core.hooksPath` is already set by `package.json`'s existing `prepare` script, which runs on
+  `npm install` and also installs eslint. No dependency was added or changed, so the strict `npm ci`
+  in the Railway build is unaffected.
+
 ## Template for new entries
 
 ```markdown
