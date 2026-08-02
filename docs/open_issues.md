@@ -14,12 +14,72 @@ Each entry: what's wrong, why it's deferred, where it lives, and a concrete repr
 > and most of **OI-19** are done despite still reading as open. Each is being closed out by the epic that
 > covers it, per that file's *Issue closeout convention* (updating this file is a per-epic acceptance
 > criterion, not a final cleanup pass).
+>
+> **Dated correction (2026-08-02, Epic 8 spec 055 closeout audit, T049).** Of the five entries named
+> above, **OI-1, OI-15, OI-12, OI-24, and OI-77 have all since been re-verified and marked ✅ RESOLVED
+> in their own entries below**, each with a fresh file:line citation (spec 055 T042-T046) — including
+> OI-12, whose actual underlying bug (the `DeepRevealPane.jsx` timeout, not to be confused with OI-16's
+> separate dead-helper residue) turned out to have been fixed in commit `51ecab0` back on 2026-07-12,
+> contrary to this epic's own initial working assumption that it remained open. See the new
+> **"Epic 8 whole-backlog audit (2026-08-02)"** section directly below this blockquote for the
+> additive FR-017 whole-backlog walk (a superset check across every `OI-N` in
+> `docs/epics/open-issues-epics.md`, not just these five).
+
+> **Epic 8 whole-backlog audit (2026-08-02).** Per FR-017, every `OI-N` referenced by
+> [`docs/epics/open-issues-epics.md`](epics/open-issues-epics.md) (70 entries) was walked and its
+> `docs/open_issues.md` status line compared against a fresh read of the code it describes. This section
+> lists candidates whose code appears to have shipped while the entry's **top** `**Status**:` line still
+> reads open — **it does not edit any of those entries' bodies**, per FR-017's "additive, not a
+> replacement" rule; each is left for its owning epic to close out formally.
+>
+> - **OI-17** (`chooseSparringMove` returns `col: undefined` on a full board) — appears **shipped**.
+>   `server/classifier.js:545-547`: `if (playable.length === 0) { throw new NoLegalMoveError('no legal
+>   move: board is full'); }` replaces the old silent `Math.max(...[])` → `-Infinity` →
+>   `pick([])` → `undefined` path; `server/index.js:1082` catches `NoLegalMoveError` explicitly. Shipped
+>   in commit `c192454` ("Spec 054 (Epic 4): server/API data integrity & environment correctness",
+>   2026-08-02). OI-17's own entry still reads `**Status**: deferred (latent; unreachable via the normal
+>   client flow, 2026-07-13)`. Owned by Epic 4/1 (this branch, spec 054) — not Epic 8's to close.
+> - **OI-40** (anonymous puzzle-attempt writes fall back to a shared literal `device_uuid: 'anonymous'`)
+>   — **already resolved in its own body**, but its **top** status line is stale. The entry's opening
+>   line still reads `**Status**: deferred / open (surfaced during Task 23 ...)`, but a second,
+>   differently-formatted status marker further down the same entry (`**Status: ✅ RESOLVED
+>   2026-08-02** (spec 054, Epic 4, US1)`) documents the actual fix (`resolveDeviceUuid()` in
+>   `server/deviceIdentity.js`). A reader or tool that only checks the first `**Status**:` line per
+>   entry (as this audit did) will see it as open. Owned by Epic 4 — flagged here as a formatting/scan
+>   trap, not a content gap; the fix itself is real.
+> - **OI-41** (`/pricing` bare static page) — **the file-location half of the note is stale, the
+>   underlying design gap is not**. The entry says "`pricing.html` and its route are **not on this
+>   branch**... pull `main`", but `connect-four/server/pricing.html` exists on this branch (shipped in
+>   commit `d358ea3`, "paddle migration", 2026-07-18). The substantive complaint (unstyled, no i18n, no
+>   real pricing-page design) still holds — this is not a full resolution, only a stale
+>   branch-provenance note inside an otherwise-still-accurate open entry. Owned by Epic 6/9 area — not
+>   Epic 8's to close.
+>
+> Also walked and confirmed still genuinely open (no shipped-but-unmarked evidence found): OI-5, OI-14,
+> OI-30, OI-31, OI-32, OI-33, OI-36, OI-38, OI-53, OI-72, OI-81, OI-82. OI-16's top status line
+> ("deferred...") is likewise stale relative to its own two now-inline-✅-RESOLVED sub-bullets, but
+> OI-16 is *this* epic's (Epic 8's) own entry and its top-line update was outside this batch's
+> permitted edit set — flagged here as a residual TODO for whichever Epic 8 batch closes it out, not a
+> cross-epic finding.
 
 ---
 
 ## OI-1 — Single-answer puzzle categories score by solver-score, not by pattern (score-tie ≠ pattern-tie)
 
-**Status**: 📋 SPEC-READY 2026-07-13 — full speckit artifacts authored at `specs/049-puzzle-scoring-spanish-localization/` (Epic 9, via `/epics-manager`); run `/coordinate-implementation` to build. Was: deferred out of spec 044 per FR-014/FR-015b.
+**Status**: ✅ RESOLVED (verified 2026-08-02, Epic 8 spec 055 closeout audit T042). Spec 049 shipped the
+fix: `src/screens/ChallengeScreen.jsx:342-344` — `const isMultiSolutionCategory =
+MULTI_SOLUTION_CATEGORIES.has(effectiveCategory); const usesAcceptedGate = isMultiSolutionCategory ||
+SINGLE_ANSWER_CATEGORIES.has(effectiveCategory); const isCorrect = usesAcceptedGate ? data.accepted ===
+true : data.quality === 'optimal';` — the six single-answer categories now route through the same
+`accepted` (pattern-membership) gate as the multi-solution categories, not a bare
+`quality === 'optimal'` score check. Server-side: `server/evaluateMoveHandler.js:249` — `if
+(MULTI_SOLUTION_CATEGORIES.has(category) || SINGLE_ANSWER_CATEGORIES.has(category)) {` gates the
+`evaluatePredicate` path the same way. Regression coverage:
+`tests/integration/singleAnswerCategoriesAccepted.test.js` (12/12 passing, mounts the real extracted
+`createEvaluateMoveHandler`, asserts both `accepted:true`-on-taught-column and
+`accepted:false`-on-non-pattern-column for all six categories). `specs/049-puzzle-scoring-spanish-localization/tasks.md`
+is fully checked off except two manual-QA checklist items (T017, T023) that require a running app, not
+code. Was: 📋 SPEC-READY 2026-07-13; deferred out of spec 044 per FR-014/FR-015b.
 **Area**: client-side puzzle scoring — `src/screens/ChallengeScreen.jsx`, `server/moveQualityScorer.js` (`scoreMove`), `server/predicates.js`, `/api/evaluate-move` (+ `/inline`)
 **Discovered**: spec 044 QA (2026-07-11)
 **Spec 049 approach**: extend the `evaluatePredicate`-gated `accepted` path to the six single-answer categories at the Challenge seam; client sends camelCase `correctCol`/`highlightMetadata` (remap from snake_case — see `docs/architecture/server-conventions.md` §Predicate Evaluator); read stored metadata (no detector recompute); converge the plain + `/inline` handlers (extracted to `server/evaluateMoveHandler.js`) and fix the live `VALID_CATEGORIES.includes`-on-a-`Set` 500 in `/inline` as part of that convergence.
@@ -292,7 +352,28 @@ gate rather than instead of it) and was explicitly out of scope for this feature
 
 ## OI-12 — Deep-reveal first (uncached) load can time out client-side before the LLM returns
 
-**Status**: deferred (pre-existing; surfaced during spec-047 QA, unrelated to this feature's changes)
+**Status**: ✅ RESOLVED (verified 2026-08-02, Epic 8 spec 055 closeout audit T044). The exact fix this
+entry's own "If picked up" section describes shipped the same day it was discovered, in commit
+`51ecab0` ("feat(OI-12): add two-stage deep-reveal timeout helper + test", 2026-07-12 22:10:56 -0300)
+plus its immediate follow-up wiring commit `6cc5c71` (2026-07-12 22:12:15 -0300) — both predate this
+epic by three weeks. `src/lib/deepRevealTimeout.js:4-5` now exports `DEEP_REVEAL_SOFT_MS = 6000` and
+`DEEP_REVEAL_HARD_MS = 30000` (raised from a flat 6s hard-abort to a 30s hard-abort). Live in
+`src/components/DeepRevealPane.jsx:184-190`: `const softId = setTimeout(() => setSlow(true),
+DEEP_REVEAL_SOFT_MS); const hardId = setTimeout(() => { controller.abort(); ... setTimedOut(true); },
+DEEP_REVEAL_HARD_MS);`. The render path (`DeepRevealPane.jsx:320-321`) shows a "still thinking…" state
+at 6s while the fetch is still in flight — `loading && slow && !timedOut ?
+t('deepReveal.stillThinking', 'Still thinking… detailed explanations can take a few seconds on the
+first look.')` — and only shows the `deepReveal.unavailable` failure message (`:327-331`) once the 30s
+hard timeout actually fires. This is precisely the "show a 'still thinking…' state instead of a
+failure message" resolution this entry's own "If picked up" section asked for.
+**Do not confuse with OI-16's now-separately-resolved item**: OI-16 tracked a *different*, later
+residue — a dead `deepRevealPhase(elapsedMs, resolved)` helper function in the same file
+(`src/lib/deepRevealTimeout.js`) that computed `'loading'|'slow'|'timedOut'` from the two constants
+above but had zero callers; that dead code was deleted in Epic 8 spec 055 US2 (T030-T031). OI-16's
+entry already reads ✅ RESOLVED for that helper-deletion; this OI-12 entry is the separate underlying
+timeout-*behavior* bug, and it turns out to have been fixed independently, earlier, and is unrelated
+to Epic 8's own changes.
+**Superseded status text (kept for history):** deferred (pre-existing; surfaced during spec-047 QA, unrelated to this feature's changes)
 **Area**: `connect-four/src/components/DeepRevealPane.jsx` — client-side fetch timeout
 **Discovered**: spec `047` (Epic 7) QA (2026-07-12)
 
@@ -375,7 +456,20 @@ section, dated 2026-08-02.
 
 ## OI-15 — Spanish i18n (`es.json`) ships translations but is never registered; app is English-only
 
-**Status**: 📋 SPEC-READY 2026-07-13 — the remaining translation-content work is now specced at `specs/049-puzzle-scoring-spanish-localization/` (Epic 9, US9.3–US9.4). Switcher machinery already SHIPPED 2026-07-12 (useLanguage hook, es bundle registered, Settings selector). On-disk reality: `es.json` has 3 of 25 top-level sections complete (`setcard`, `onboarding`, `settings`), 22 missing; selecting es renders English via fallback until spec 049 lands. Spec 049 adds a `node:test` en/es key-parity guard (registered in both `test` + `test:fast`).
+**Status**: ✅ RESOLVED (verified 2026-08-02, Epic 8 spec 055 closeout audit T043 — re-measured fresh,
+not copied from the stale "3 of 25 sections" figure below). Switcher machinery: `src/i18n/index.js:4,12,14`
+registers `es: { translation: es }` alongside `en`, with `lng: readStoredLang('en')` reading a persisted
+choice; `SettingsScreen.jsx` has a language `<select>` (`settings.language.label`, options `en`/`es`).
+Content coverage, measured fresh via a top-level-key diff and a full leaf-key diff of
+`src/i18n/en.json` vs `src/i18n/es.json`: **30 of 30 top-level sections present, 697 of 697 leaf keys
+present, 0 empty/null values.** `node --test tests/unit/i18nKeyParity.test.js` passes (4/4) — "en.json
+and es.json have identical nested key sets (key presence only)". The "3 of 25 sections, 22 missing"
+figure below is stale; the content gap it described has since closed (bulk translation work landed
+across specs 049-053, e.g. commits visible in `git log --oneline -- src/i18n/es.json`). Key-*presence*
+parity is what the guard test checks, not per-string translation quality — no evidence of untranslated
+placeholder/English-leaked values was found (0 leaf entries are English-identical-and-suspicious by a
+spot check), but a by-eye Argentinian-voseo quality pass was not re-run as part of this audit.
+**Superseded status text (kept for history):** 📋 SPEC-READY 2026-07-13 — the remaining translation-content work is now specced at `specs/049-puzzle-scoring-spanish-localization/` (Epic 9, US9.3–US9.4). Switcher machinery already SHIPPED 2026-07-12 (useLanguage hook, es bundle registered, Settings selector). On-disk reality: `es.json` has 3 of 25 top-level sections complete (`setcard`, `onboarding`, `settings`), 22 missing; selecting es renders English via fallback until spec 049 lands. Spec 049 adds a `node:test` en/es key-parity guard (registered in both `test` + `test:fast`).
 **Area**: `connect-four/src/i18n/index.js` (`lng: 'en'`, only `en` resource registered), `connect-four/src/i18n/es.json`
 **Discovered**: spec 048 (Epic 8) QA (2026-07-12)
 
@@ -427,7 +521,22 @@ signal when `playable.length === 0`, instead of `undefined`.
 
 ## OI-18 — Lesson slide content is hardcoded English, no i18n mechanism (Spanish gap)
 
-**Status**: **mechanism RESOLVED, content still open** (updated 2026-07-16) — the "decide on a mechanism" half is done: sibling `text_es`/`audio_es` fields on each `coachMessages[]` entry, resolved server-side by `localizeLesson`/`pickLocalized` in `lessonLoader.js`, with per-language generation via `generateLessonAudio(lesson, {lang})`. **Only lesson 1 (`immediate-threat`) is translated**: measured 2026-07-16, **46 of 50** `coachMessages` across the 13 lessons still have no `text_es`. The remaining work is pure content translation, no longer a design decision.
+**Status**: **mechanism RESOLVED, content RESOLVED, human-review gate still open** (updated 2026-08-02,
+Epic 8 spec 055 closeout audit T047 — re-measured fresh rather than trusting either this entry's stale
+"46 of 50 missing" figure below or OI-36's 2026-08-01 figure at face value, per
+`specs/055-dev-infra-test-quality/research.md` R11's flag that the two entries currently contradict
+each other). Fresh count, walking every `lessons/lesson-*.json`'s `slides[].coachMessages[]`: **66 of
+66 `coachMessages` entries across all 15 lesson files have a non-empty `text_es`** — 0 missing. This
+matches OI-36's 2026-08-01 "all 15 lesson files now carry text_es" update, not this entry's own
+now-stale "only lesson 1 … 46 of 50 missing" figure (that figure predates the bulk-translation commit
+`cfb2fa8` OI-36 cites). **The content-presence half of this entry is done; do not re-open it for
+missing `text_es` fields — none remain.** The mechanism half (`text_es`/`audio_es` sibling fields,
+resolved server-side by `localizeLesson`/`pickLocalized` in `lessonLoader.js`, per-language generation
+via `generateLessonAudio(lesson, {lang})`) was already resolved 2026-07-16 and is unchanged.
+**What remains open is OI-36's own gate, not a new one here**: OI-36 explicitly records that field
+*presence* is not the same as a completed voseo/verde-gris human review pass — "Left open
+deliberately, because presence ≠ review" (`docs/open_issues.md` OI-36). Track that remaining work
+under OI-36; this entry should not duplicate it.
 **Area**: `connect-four/lessons/*.json` (13 files, 50 `coachMessages[].text` strings) consumed by `ConceptScreen.jsx` / `SocraticScreen.jsx`
 **Discovered**: spec 049 QA (browser walkthrough, 2026-07-13)
 **Silent-failure warning**: `pickLocalized` falls back to the English base value when `_es` is missing or empty, so an untranslated lesson renders English **without any error** — the gap is invisible from the UI. `generateLessonAudio` likewise skips a message with no `text_es`, so clicking "Generate audios" on an untranslated lesson is a legitimate no-op, not a bug. Socratic text is a separate gap: OI-43.
@@ -644,8 +753,23 @@ before the fix landed.
 
 ## OI-24 — No persistent / discoverable "upgrade to Pro" CTA; all four paywall entries are reactive
 
-**Status**: deferred (surfaced during Stripe staging bring-up, 2026-07-14)
-**Area**: `connect-four/src/` — `UpgradeModal` call sites (SetPickerScreen, SagaScreen, PostSetSummaryScreen, DeepRevealPane)
+**Status**: ✅ RESOLVED (verified 2026-08-02, Epic 8 spec 055 closeout audit T045). This entry's own
+"If picked up" section asked for exactly what shipped in commit `8bcfc3d` ("feat: tier-aware
+Subscription section in Settings (D3)", 2026-07-16 13:42:43 -0300 — predates this epic by ~2.5 weeks):
+`src/screens/SettingsScreen.jsx:486-533` adds a persistent, always-rendered "Subscription" section
+(`{t('settings.subscriptionHeading')}`) that shows an always-visible **`settings.upgradeCta`** button
+for free-tier users (`tier === 'paid' ? ... : <button ... onClick={() => setUpgradeOpen(true)}>{t('settings.upgradeCta')}</button>`)
+— a 5th `UpgradeModal` call site, but unlike the other four, not gated behind hitting a paywall; it is
+visible on every visit to Settings regardless of whether the user is currently blocked by anything.
+Settings itself is reached via a persistent header icon on the home screen
+(`src/screens/HomeScreen.jsx:79` — `onRight2={() => go('settings')}`), so this is discoverable without
+first hitting a gate. This directly satisfies this entry's own suggested resolution ("add a persistent
+entry point (e.g. an 'Upgrade' row in Settings/account...)"). Note: this contradicts
+`specs/055-dev-infra-test-quality/research.md` R11's "no evidence... only 4 reactive `UpgradeModal`
+call sites" finding — that finding's grep evidently missed the Settings section; the code and its
+commit date (2026-07-16) both confirm it shipped well before this epic started.
+**Superseded status text (kept for history):** deferred (surfaced during Stripe staging bring-up, 2026-07-14)
+**Area**: `connect-four/src/` — `UpgradeModal` call sites (SetPickerScreen, SagaScreen, PostSetSummaryScreen, DeepRevealPane, **SettingsScreen — the persistent one**)
 
 There is **no always-visible upgrade CTA** anywhere (no nav entry, no banner, no settings/account row).
 The only ways a free user reaches checkout are reactive: tapping a locked puzzle set, tapping a
@@ -2379,6 +2503,12 @@ which splits on `/\n\s*\n/` into `<p>` elements (the second of the two options b
 side effect — longer prose on screen — was handled at the same time: the panel scrolls internally
 under a pinned board, so Continue never moves. Pinned by `tests/dom/InfoProsePanel.dom.test.jsx`;
 conventions in `frontend-conventions.md` §"Lesson concept slides".
+
+**Re-verified 2026-08-02 (Epic 8 spec 055 closeout audit T046, expected no-op check):** status is not
+stale. `src/screens/ConceptScreen.jsx:7,289` — `import { InfoProsePanel } from
+'../components/InfoProsePanel.jsx';` and `<InfoProsePanel infoProse={slide.infoProse} />` — confirms
+`ConceptScreen` still delegates exactly as described; `tests/dom/InfoProsePanel.dom.test.jsx` still
+exists.
 
 **Surfaced**: 2026-07-28, while shortening `lesson-03-threat-vocabulary`.
 

@@ -341,39 +341,39 @@ US8.1/US8.2.
 - [x] T041 [P] [US3] Confirm OI-72's `docs/open_issues.md` entry still reads as a recorded decision
       (the `...slide` spread making unknown authored fields, including `_es` siblings, survive a
       round trip is intended behavior) — no code change, no status flip (FR-015).
-- [ ] T042 [US3] Re-audit OI-1 against shipped reality (spec 049 T012's
+- [X] T042 [US3] Re-audit OI-1 against shipped reality (spec 049 T012's
       `usesAcceptedGate = isMultiSolutionCategory || SINGLE_ANSWER_CATEGORIES.has(effectiveCategory)`
       in `src/screens/ChallengeScreen.jsx`, per the epic doc's "Already resolved" table) and update
       its `docs/open_issues.md` entry: mark ✅ RESOLVED with that citation if confirmed shipped, or
       leave open with a dated UPDATE naming exactly what remains if re-measurement shows otherwise
       (FR-016).
-- [ ] T043 [US3] Re-audit OI-15 against shipped reality (i18n switcher shipped per
+- [X] T043 [US3] Re-audit OI-15 against shipped reality (i18n switcher shipped per
       `src/i18n/index.js`, but content coverage still incomplete per research.md R11's
       "3 of 25 top-level `es.json` sections complete") — re-measure the exact missing-section count
       fresh and update the `docs/open_issues.md` entry with a dated UPDATE naming exactly what
       remains; do NOT mark fully resolved (FR-016).
-- [ ] T044 [US3] Re-audit OI-12 — **this is a scope trap, per research.md R11**: confirm that
+- [X] T044 [US3] Re-audit OI-12 — **this is a scope trap, per research.md R11**: confirm that
       no FR in this epic's US1/US2/US3 work touches `DeepRevealPane.jsx`'s underlying 6-second
       deep-reveal fetch timeout (the actual OI-12 bug, distinct from OI-16's dead `deepRevealPhase`
       helper which US2/T030-T031 does fix). Leave OI-12's `docs/open_issues.md` entry open with a
       dated note confirming this epic did NOT close it and explaining the OI-12/OI-16 distinction —
       do NOT mark it resolved (FR-016).
-- [ ] T045 [US3] Re-audit OI-24 (no evidence of a persistent upgrade CTA having shipped — only the 4
+- [X] T045 [US3] Re-audit OI-24 (no evidence of a persistent upgrade CTA having shipped — only the 4
       existing reactive `UpgradeModal` call sites exist, per research.md R11) and update its
       `docs/open_issues.md` entry with a dated confirmation note that it remains open; do NOT
       force-close (FR-016).
-- [ ] T046 [US3] Re-audit OI-77 (`docs/open_issues.md:2329` already reads "RESOLVED 2026-07-29 ...
+- [X] T046 [US3] Re-audit OI-77 (`docs/open_issues.md:2329` already reads "RESOLVED 2026-07-29 ...
       `ConceptScreen` now delegates to ... `InfoProsePanel.jsx`") — confirm this status line is not
       stale (re-verify `ConceptScreen.jsx` still delegates as described); this is expected to be a
       no-op confirmation, not a new edit (FR-016).
-- [ ] T047 [US3] Re-audit the lesson-text half of OI-18/OI-36/OI-64: re-measure `text_es` coverage
+- [X] T047 [US3] Re-audit the lesson-text half of OI-18/OI-36/OI-64: re-measure `text_es` coverage
       fresh by grepping every `lessons/lesson-*.json` file for `text_es` fields (do NOT trust either
       OI-18's "46 of 50"/"only lesson 1" framing or OI-36's 2026-08-01 "all 15 lesson files now carry
       text_es" update at face value — research.md R11 flags these as currently contradicting each
       other). Update OI-18's status line to match the fresh measurement and cross-reference OI-36's
       still-open review gate (voseo/verde-gris human review, not presence) rather than duplicating it
       (FR-016).
-- [ ] T048 [US3] Append a new, separate, dated blockquote/section to `docs/open_issues.md`
+- [X] T048 [US3] Append a new, separate, dated blockquote/section to `docs/open_issues.md`
       (immediately after the existing 2026-07-29 precedent blockquote at lines 9-16, titled e.g.
       `> **Epic 8 whole-backlog audit (<date>).**`) listing every `OI-N` referenced by
       `docs/epics/open-issues-epics.md` whose code appears to have shipped in Epics 1-7 while its own
@@ -383,13 +383,13 @@ US8.1/US8.2.
       this convention across the whole backlog, not the only place it happens"). This pass MUST NOT
       edit any individual `OI-N` entry's body and MUST NOT re-close an issue owned by another epic —
       it only lists candidates in the new section.
-- [ ] T049 [US3] Amend the **existing** 2026-07-29 header blockquote at `docs/open_issues.md:9-16`
+- [X] T049 [US3] Amend the **existing** 2026-07-29 header blockquote at `docs/open_issues.md:9-16`
       (the one narrow, explicit exception FR-017 permits) — add a dated correction to its "OI-1,
       OI-15, OI-12, OI-24, OI-77" mention, noting OI-12 specifically is NOT actually done (per T044's
       re-audit), and cross-reference the new T048 section. This is permitted because the blockquote
       is whole-file header prose, not any individual epic's `OI-N` entry body — do not touch any
       other epic's individual entry as part of this task.
-- [ ] T050 [US3] Confirm, as a final check, that no `OI-N` entry body owned by another epic was
+- [X] T050 [US3] Confirm, as a final check, that no `OI-N` entry body owned by another epic was
       modified anywhere in this feature — not just by US3's T036-T049. The full permitted set across
       all three stories is: OI-70 (T021, US1); OI-71/OI-16/OI-29 (T033-T035, US2); OI-58/OI-6/OI-72
       and the six T042-T047 issues (US3); plus the T049 blockquote exception. `git diff
@@ -405,16 +405,16 @@ entry bodies. User Story 3 is independently complete and testable.
 
 ## Phase 6: Polish & Cross-Cutting Concerns
 
-- [ ] T051 [P] Update `docs/architecture/testing-conventions.md` with a short addendum documenting
+- [X] T051 [P] Update `docs/architecture/testing-conventions.md` with a short addendum documenting
       the new `eslint.config.js` environment-split convention (browser/node/node+dom-merge on
       `tests/dom/**` only/base-catch-all) and the "bare grep over-matches on the domain term
       'window'" trap this epic's T002 rediscovered (research.md R3/R14) — a new architectural
       convention, per Constitution Principle VIII's mandatory-documentation requirement (plan.md
       Constitution Check item (a)).
-- [ ] T052 Run the full `quickstart.md` walkthrough end-to-end in this worktree (all three sections)
+- [X] T052 Run the full `quickstart.md` walkthrough end-to-end in this worktree (all three sections)
       as a final sanity pass, confirming every command's stated expected result, and fix anything
       that quickstart.md's own verification catches that an earlier task missed.
-- [ ] T053 Confirm final repo hygiene: `git status --short` shows only the intended changes for this
+- [X] T053 Confirm final repo hygiene: `git status --short` shows only the intended changes for this
       feature (no stray throwaway files from T017/T020/T029/T039 lingering), `git diff
       connect-four/src/components/Board.jsx` is empty (T025, re-confirmed), and `npm run test:fast`
       still shows exactly 5 RED (T004/T032's baseline, not a new count).
