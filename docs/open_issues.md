@@ -4312,3 +4312,82 @@ often signals a real render-loop or stale-state bug, not just a style nit), then
 rules above back to `error` in `eslint.config.js`'s `src/**` block.
 
 **Closes when shipped**: all 36 findings fixed and the six rules restored to `error`.
+
+## OI-120 — `expandedCellsMap` is built but no longer consumed by `checkP2`
+
+**Status**: deferred (surfaced by spec 055 / Epic 8's lint triage; not fixed there to avoid a
+behavior-adjacent server change at epic close)
+**Area**: `connect-four/server/annotationGate.js:476-486`
+**Discovered**: spec 055 (Epic 8) code review, 2026-08-02
+
+`checkP2(zones, expandedCellsMap)` never read its second parameter, so spec 055's FR-019(a)
+`no-unused-vars` pass removed it from the signature (`annotationGate.js:126`). The call site at
+line 486 still passes the map, and lines 476-480 still build it:
+
+```js
+// Build expandedCellsMap for P2 (and potential reuse by callers)
+const expandedCellsMap = new Map();
+... expandedCellsMap.set(spec, expandSpec(spec));
+```
+
+Two things are now true and neither is resolved: (a) the map is dead work — an `expandSpec()` call
+per unique spec whose result nothing reads; (b) the comment says it exists "for P2", which raises the
+real question of whether `checkP2` was *supposed* to consume it and silently does not — i.e. a latent
+gap in the P2 annotation check, not merely dead code.
+
+**Why deferred**: removing the argument orphans the map, which cascades into deleting the build block
+— a behavior-adjacent change to server annotation-gate code, made at the end of an epic whose scope
+was explicitly non-behavioral. More importantly, deleting it would *cement* possibility (b) rather
+than answer it. The deadness is pre-existing; spec 055 only made it visible.
+
+**If picked up**: first answer whether P2's check is correct without expanded cells — read
+`checkP2` against what `expandSpec` produces — then either wire the map in (if P2 needs it) or delete
+both the argument and the build block. See memory `project_annotation_gate_and_zones`.
+
+## OI-121 — `ChallengeScreen` passes an `interactionMode` prop nothing consumes
+
+**Status**: deferred (pre-existing dead prop, exposed by spec 055 / Epic 8)
+**Area**: `connect-four/src/screens/ChallengeScreen.jsx:872,900`; `src/components/Board.jsx`
+**Discovered**: spec 055 (Epic 8) code review, 2026-08-02
+
+`ChallengeScreen` computes and passes, at two call sites:
+
+```jsx
+interactionMode={puzzles[currentIdx]?.interaction_mode === 'sequence' ? 'sequence' : 'single_move'}
+```
+
+`Board.jsx` destructured `interactionMode` but never read it, so spec 055's `no-unused-vars` pass
+deleted the destructure. `Board.jsx` and `MultiMoveSequencer.jsx` now contain **zero** references to
+the identifier, so both call sites pass a prop that is silently discarded.
+
+This is a question, not just a wart: either sequence-mode interaction was meant to change `Board`'s
+behavior and never got wired (a real feature gap), or it is handled entirely elsewhere and both call
+sites plus the `interaction_mode` read are vestigial. The deadness pre-dates this epic — Board ignored
+the prop before the destructure was removed.
+
+**Why deferred**: answering it requires knowing the intended sequence-mode UX, which is out of scope
+for a dev-infrastructure epic.
+
+**If picked up**: trace how `interaction_mode === 'sequence'` puzzles actually render (start at
+`MultiMoveSequencer.jsx` and the `usesAcceptedGate` path in `ChallengeScreen.jsx`), then either wire
+the prop into `Board` or delete both call sites.
+
+## OI-122 — `server-conventions.md`'s CSP rationale still says Sentry has no `connect-src`
+
+**Status**: deferred (doc staleness, not a defect; found during spec 055's CSP verification)
+**Area**: `docs/architecture/server-conventions.md` §"CSP Directive Rationale"
+**Discovered**: spec 055 (Epic 8) US3 CSP header verification, 2026-08-02
+
+The section still states there is no `connect-src` entry for Sentry because no `Sentry.init(...)`
+call exists. Both halves are now false: `connect-four/server/index.js:119` calls `Sentry.init(...)`,
+and the live CSP header carries `https://*.ingest.sentry.io` — verified directly against both a local
+production build and `https://decodec4.xyz/` on 2026-08-02.
+
+The **header is correct**; only the prose explaining it is stale, which matters because that section
+is the checklist future CSP work verifies against (spec 055 FR-013 used it as exactly that).
+
+**Why deferred**: spec 055's US3 scope fence was the backlog entries and the header check itself; the
+architecture doc was read-only reference for it.
+
+**If picked up**: update the section to describe the Sentry `connect-src` entry and cross-reference
+OI-10, using the verbatim header captured in OI-58's resolution note as the source of truth.
