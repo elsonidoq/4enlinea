@@ -1769,6 +1769,14 @@ Rationale" section describes as current: `font-src 'self' https://fonts.gstatic.
 carrying `https://papergames.io`, `script-src`/`frame-src` carrying the Paddle + Google Pay origins, and a
 `media-src` carrying the Supabase host. No missing directive was found.
 
+**Live production confirmed (2026-08-02)**: the local production-like build proves the *source* is correct,
+but not that the deployed instance had been rebuilt since `ae3c006` landed. Checked directly —
+`curl -sS -D - https://decodec4.xyz/` returns `HTTP/2 200` with a `content-security-policy` header
+**identical** to the locally-built one, directive for directive, the only difference being `media-src`
+pointing at the real Supabase host (`https://kxtqwsumojtexokrtlfp.supabase.co`) instead of the local
+`https://127.0.0.1:54321`. So the CSP fixes are not merely on `main` — they are live in production. This
+was a read-only GET against the public site; nothing was deployed or mutated.
+
 **If picked up** (historical — kept for anyone reconstructing the target state): the `stagging`-side version
 (with `PADDLE_CDN`/`PADDLE_ORIGINS`/`GOOGLE_PAY_ORIGINS`/`GOOGLE_FONTS_STYLESHEET`/`GOOGLE_FONTS_FILES`
 constants and their per-directive rationale comments) was the target state — see
