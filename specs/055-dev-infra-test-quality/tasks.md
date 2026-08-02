@@ -35,19 +35,19 @@ concurrent sessions (research.md R1a/R2/R3, epic doc "Re-measure this epic's fac
 them"). Re-measure before touching any file so triage decisions in US1/US3 are based on current
 reality, not the numbers cited in spec.md/plan.md/research.md.
 
-- [ ] T001 [P] Re-run `npx eslint .` inside `connect-four/` and `npx eslint . -f json` piped through
+- [x] T001 [P] Re-run `npx eslint .` inside `connect-four/` and `npx eslint . -f json` piped through
       a rule×directory aggregation; record the fresh total error/warning count and the fresh
       `no-undef`/`no-unused-vars`/`react-hooks`+`react-refresh`/trivial-rule breakdown — do NOT
       assume research.md's 282/164/76/32/10 figures still hold.
-- [ ] T002 [P] Re-run the `tests/dom/**` bare-global recount from research.md R3 (dot-access grep
+- [x] T002 [P] Re-run the `tests/dom/**` bare-global recount from research.md R3 (dot-access grep
       `document\.|window\.|localStorage\.|globalThis\.(document|window)` across `tests/`, then a
       case-sensitive bare-token grep `\b(document|window)\b` inside each of the 19 `tests/dom/*.dom.test.jsx`
       files already listed in `connect-four/package.json`'s `test:dom` string) to confirm which files
       still need the merged node+browser ruleset in FR-001's `tests/dom/**` block.
-- [ ] T003 [P] Confirm `find connect-four -name "*.mjs" -not -path "*/node_modules/*" | wc -l` and the
+- [x] T003 [P] Confirm `find connect-four -name "*.mjs" -not -path "*/node_modules/*" | wc -l` and the
       `.cjs` equivalent are still in the same ballpark as research.md R2's 141/0, so FR-002's glob
       widening scope is current.
-- [ ] T004 [P] Run `npm run test:fast` inside `connect-four/` once, unmodified, and confirm the
+- [x] T004 [P] Run `npm run test:fast` inside `connect-four/` once, unmodified, and confirm the
       baseline is still 5 RED (OI-82's ENOENT reason-engine tests — CLAUDE.md/memory
       `project_repo_worktree_setup` §2d), not 0 and not more — this is the number every later
       "confirm nothing new broke" check in this feature is judged against.
@@ -71,7 +71,7 @@ the whole tree, then deliberately introduce one real violation into a `.mjs` fil
 
 ### Implementation for User Story 1
 
-- [ ] T005 [US1] In `connect-four/eslint.config.js`, replace the single `files: ['**/*.{js,jsx}']`
+- [x] T005 [US1] In `connect-four/eslint.config.js`, replace the single `files: ['**/*.{js,jsx}']`
       block (currently `eslint.config.js:10`) with an environment split per FR-001/FR-018: a
       browser-globals block for `src/**`; a node-globals block for `server/**` and `scripts/**`; a
       node-globals block for `tests/**` in general; a **fourth, narrower** block merging node +
@@ -88,18 +88,18 @@ the whole tree, then deliberately introduce one real violation into a `.mjs` fil
       `connect-four/public/sw.js` (OI-70's exact defect) are each matched by exactly one explicit
       block, never zero and never every block. Keep `js.configs.recommended` shared across all
       blocks; keep `reactHooks`/`reactRefresh` scoped to the `src/**` block only.
-- [ ] T006 [US1] In the same `connect-four/eslint.config.js` change, widen every relevant `files`
+- [x] T006 [US1] In the same `connect-four/eslint.config.js` change, widen every relevant `files`
       glob to include `.mjs` and `.cjs` in addition to `.js`/`.jsx` (FR-002), so
       `server/tests/*.test.mjs`, `server/scripts/*.mjs`, and `server/*.test.mjs` receive real rules
       (confirmed today at 0 applied rules via `npx eslint --print-config`, research.md R1/R2).
-- [ ] T007 [US1] Verify FR-018's explicit two-block catch-all coverage — run from `connect-four/`
+- [x] T007 [US1] Verify FR-018's explicit two-block catch-all coverage — run from `connect-four/`
       (paths are relative to that cwd; do NOT prefix them with `connect-four/`, which would point at
       a nonexistent nested path): `npx eslint --print-config vite.config.js`, `npx eslint
       --print-config eslint.config.js`, and `npx eslint --print-config public/sw.js`, confirming each
       returns a non-zero `rules` count, and that `vite.config.js`'s 2 pre-existing real `no-undef`
       errors still surface once `npm run lint` runs (not silently vanish because the file stopped
       being matched).
-- [ ] T008 [US1] **Blocking gate for T005-T007 — T009 MUST NOT run until this passes with its output
+- [x] T008 [US1] **Blocking gate for T005-T007 — T009 MUST NOT run until this passes with its output
       pasted as evidence** (not a verification afterthought): verify the environment split is scoped
       correctly (FR-001 acceptance scenario 1, quickstart.md "Confirm environment split
       correctness"), run from `connect-four/` (do NOT prefix these with `connect-four/`, same
@@ -109,16 +109,16 @@ the whole tree, then deliberately introduce one real violation into a `.mjs` fil
       NO `document` global (plain `tests/unit/` stays node-only); `npx eslint --print-config
       src/components/Board.jsx` shows NO `process` global (`src/` stays browser-only, confirming the
       explicit two-block catch-all in T005 did not leak node globals into `src/**`).
-- [ ] T009 [US1] Re-measure the real error/warning count on the now-widened, now-split config —
+- [x] T009 [US1] Re-measure the real error/warning count on the now-widened, now-split config —
       depends on T008's four assertions having passed with their actual output pasted as evidence:
       `cd connect-four && npx eslint . -f json`, aggregated by rule × directory — this is the number
       FR-019's triage below actually operates against (NOT research.md's stale 282/76/32/10, which
       predates the split and the glob widening).
-- [ ] T010 [P] [US1] Remove the unused `boardToSpec` import from
+- [x] T010 [P] [US1] Remove the unused `boardToSpec` import from
       `connect-four/src/components/admin/BoardEditor.jsx` (line 4, verbatim today: `parseMovestring,
       boardToSpec, appendMove, undoMove, isColFull,`) per FR-005 — confirmed no other reference to the
       bare identifier exists later in the file (research.md R4).
-- [ ] T011 [US1] Per FR-019(a): fix every remaining `no-unused-vars` violation across `src/`
+- [x] T011 [US1] Per FR-019(a): fix every remaining `no-unused-vars` violation across `src/`
       production components (measured at 34 pre-split in research.md R1a, T009's fresh count is
       authoritative) by removing the unused binding — a non-behavior-changing deletion, never a
       refactor. `BoardEditor.jsx`'s `boardToSpec` (T010) is one instance of this set; enumerate the
@@ -130,22 +130,22 @@ the whole tree, then deliberately introduce one real violation into a `.mjs` fil
       on one isolated commit rather than by re-reading up to 34 diffs, which matters more than usual
       here since other epics are concurrently editing `src/`. Stage explicit paths only for this
       commit — never `git add -A` (`project_external_auto_backup_commits`).
-- [ ] T012 [P] [US1] Per FR-019(a): fix every remaining `no-unused-vars` violation across `tests/`
+- [x] T012 [P] [US1] Per FR-019(a): fix every remaining `no-unused-vars` violation across `tests/`
       (measured at 27 pre-split) and `server/` (measured at 15 pre-split) by removing the unused
       binding, same non-behavior-changing-deletion rule as T011.
-- [ ] T013 [P] [US1] Per FR-019(b): fix every remaining `no-empty`, `no-regex-spaces`, and
+- [x] T013 [P] [US1] Per FR-019(b): fix every remaining `no-empty`, `no-regex-spaces`, and
       unused-eslint-disable-directive violation (measured at 10 pre-split, including the 3
       `Unused eslint-disable directive` reports at `server/index.js:4260`,
       `server/tests/renderCoverageUniverse.test.mjs:28`, `tests/classifier/classifier.test.js:221`
       per the epic doc's Non-obvious facts — re-confirm these line numbers against T009's fresh run,
       they will have shifted).
-- [ ] T014 [US1] Per FR-019(c): in `connect-four/eslint.config.js`'s `src/**` block, demote the
+- [x] T014 [US1] Per FR-019(c): in `connect-four/eslint.config.js`'s `src/**` block, demote the
       `react-hooks/*` and `react-refresh/*` rule families from `error` to `warn` (measured at 32
       pre-split, all inside `src/` production React components — `set-state-in-effect` ×21, `refs`
       ×5, `static-components` ×4, per research.md R1a), with a one-line comment in the config stating
       why (fixing them is behavior-affecting UI refactoring, out of this epic's scope) — no other
       rule may be silently disabled or demoted to reach exit-0.
-- [ ] T015 [US1] Per FR-019(c): open a new tracking issue in `docs/open_issues.md` (next available
+- [x] T015 [US1] Per FR-019(c): open a new tracking issue in `docs/open_issues.md` (next available
       `OI-N` — `OI-119` as of this writing per `grep -oE '^## OI-[0-9]+' docs/open_issues.md`, but
       re-check for a higher number first since concurrent sessions may have added entries) recording
       that `react-hooks/*`/`react-refresh/*` (32 findings, all in `src/` production components) were
