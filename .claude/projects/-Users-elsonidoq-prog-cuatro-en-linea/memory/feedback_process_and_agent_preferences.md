@@ -5,7 +5,7 @@ metadata:
   node_type: memory
   type: feedback
   originSessionId: 5a34af86-ae36-4059-aa61-20c2adf0e291
-  modified: 2026-07-29T14:06:07.808Z
+  modified: 2026-07-31T19:37:47.550Z
 ---
 
 Merged from `feedback_speckit_epic_scoping` (+ its `feedback_scope_by_diff` half), `feedback_prework_discipline`, `feedback_proportion_process_to_change`, `feedback_agent_and_ui_workflow` (+ its merged `feedback_askuserquestion_preview_format` / `reference_multiagent_orchestration_patterns` halves), and the agent-dispatch rules of `feedback_workflow_hygiene`. These are the owner's non-default preferences — the defaults are usually the opposite.
@@ -27,6 +27,16 @@ Merged from `feedback_speckit_epic_scoping` (+ its `feedback_scope_by_diff` half
 3. **Count what CHANGES, not what exists.** Unchanged plumbing (auth, cache, retry, endpoints) is evidence *for* simplicity — never list it as work.
 4. **Match process to residual unknowns, not surface area.** 0 open decisions → do it; N known steps → writing-plans; genuine forks → brainstorm. *"I can write a long paragraph about it" is NOT an unknown.*
 5. **Take "drop-in replacement" / "just swap X" literally** — strong prior that the seams already match.
+6. **Classify BEFORE proposing: bug / gap / new scope.** When surfacing missing behaviour, the owner's
+   first question is *"is this a bug? a gap? or are you proposing something not in the epic's scope?"*
+   — asked verbatim, 2026-07-31. Answer it unprompted, because the three have different owners and the
+   answer decides whether work starts at all. Worked case: `goalPrompt` overrides shipping silent was
+   **not** a bug (FR-029 specified silence), and **not** an unfinished epic — it was a gap in the
+   *seam between two epics* (Epic 5 built the audio walker before the field rendered; Epic 6 made it
+   render but forbade itself from generating audio). Naming that let the owner make a real decision
+   instead of accepting an implied defect. Also: don't over-hedge once the pieces are known — when the
+   owner says *"I thought this was straightforward, am I correct?"*, they usually are; say so plainly
+   and name the single genuine unknown rather than restating the whole risk surface.
 
 **Why:** in the explain-move-llm → reason-engine session the first proposal was "big scope, needs brainstorming", then "writing-plans" — the real work was swapping one function call at one seam. Process weight was used as a hedge for a scoping decision that hadn't been done. See [[feedback_occam_principled_extrapolation]], [[feedback_llm_output_root_cause]].
 
@@ -39,6 +49,12 @@ Merged from `feedback_speckit_epic_scoping` (+ its `feedback_scope_by_diff` half
 
 ## 4. Agent dispatch
 
+- **Delegate on brief-cost, not edit-size.** The owner asks this explicitly (*"is it small enough to
+  instruct a sub-agent, or better in this context because the edit is very small?"*, 2026-07-31). The
+  test is not line count — it's whether the constraints are already loaded. If the edit is small but
+  each line carries a constraint a fresh agent must re-derive (an ordering invariant tests assert on, a
+  gating asymmetry between two similar helpers), the brief costs more than the work: do it in-context.
+  Delegate when the work is broad, mechanical, or genuinely re-explorable from a short prompt.
 - **Opus for critique, Sonnet for apply.** Opus when the task needs independent judgment on an unfamiliar document (critique, gap analysis, catching what the author would rationalize away). Sonnet when applying a well-defined list of known decisions. Ask this before every spawn. **But:** Opus critique agents assert confident false premises too — see [[feedback_verify_at_the_source_layer]]; give fix agents a **stop-and-report** instruction.
 - **Background subagents get Edit/Write DENIED** → they return "designed everything, wrote nothing" because a spawned background `Agent` can't surface a permission prompt, so its writes are blocked outright. A silent failure mode; don't dispatch write work to one — implement writes in the main session, or have the subagent return a tight ready-to-apply design (file + exact change) that you apply. Reserve background subagents for read/research/analysis.
 - **Commit pre-existing WIP before subagent-driven-development.** `git status` for pre-existing uncommitted WIP unrelated to the new plan and commit (or ask) BEFORE dispatching Task 1 — an implementer's `git add <file>` sweeps unrelated WIP into the task commit, misattributing it.

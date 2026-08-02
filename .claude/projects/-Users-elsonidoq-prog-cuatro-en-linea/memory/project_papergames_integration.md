@@ -5,6 +5,7 @@ metadata:
   node_type: memory
   type: project
   originSessionId: bd59bb82-d7ac-4e59-995b-ea65d067be38
+  modified: 2026-08-01T23:41:22.606Z
 ---
 
 # Papergames integration — gotchas
@@ -16,6 +17,25 @@ metadata:
 ## `skipped` ≠ duplicates — contract/code mismatch (ACCEPTED, do not "fix" the copy)
 
 The importer has **no duplicate-room detection**: `importForUser`'s `skipped` counts only processing failures (fetch/parse/empty-movestring/solver/upsert errors). A same-user re-import is either re-upserted in place (counted as `imported`) or filtered out entirely by the `lastImportAt` incremental check in `userRoutes.js` before `importForUser` runs. Spec-041's contract § US1.5 wrongly describes `skipped` as "same-user duplicate". Owner decision 2026-07-08: keep the honest UI copy ("N games couldn't be processed and were skipped") and the documented gap in `api-conventions.md`; adding real dedup detection is a possible follow-up, not a bug to silently patch.
+
+## 100% accuracy on a LOST game is a clock artifact, not a resignation one
+
+Measured over 342 imported games (2026-08-01), of 160 losses: `finish_reason='winner'` (decided on the
+board) n=144, **max accuracy 94%**; `'resignation'` n=4, **max 89%**; `'time-up'` n=12, of which
+**7 sit at exactly 100%**. Every perfect-accuracy loss is a clock loss, and all 7 are tiny games —
+1–6 user moves.
+
+**Why this is a trap:** OI-37, `agentic_QA_2026-07-15-1321.md`, and Epic 7's original text all frame
+this as "played optimally, then **resigned** → 100% beside a loss." The Papergames data refutes that
+framing — but only for imported games. The **in-app sparring resign path was never measured**, and the
+QA file carries an explicit repro for it, so "it's just timeouts" is a bounded claim, not a general
+one. Don't promote it to a settled fact for the in-app path.
+
+Owner decision 2026-08-01: **do nothing about the short-game badges** — no minimum-move threshold, no
+suppression rule. A threshold of 7 user moves would have caught all 7 cases but suppressed the badge on
+48/342 games (14%), and genuinely-earned 100% scores exist at 13, 17, and 18 moves. The regression risk
+outweighed a narrow cosmetic case. See `docs/architecture/data-model.md` §papergames_games for the
+`finish_reason` enum and the "full-board draws carry `finish_reason='winner'`" trap.
 
 ## FK separation
 

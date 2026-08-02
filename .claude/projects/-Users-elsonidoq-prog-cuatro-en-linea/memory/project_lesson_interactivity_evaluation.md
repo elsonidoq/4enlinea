@@ -5,7 +5,7 @@ metadata:
   node_type: memory
   type: project
   originSessionId: d7194ddb-70f6-4602-a846-18bfc9014c46
-  modified: 2026-07-28T21:04:32.541Z
+  modified: 2026-07-30T13:43:38.585Z
 ---
 
 Two different evaluation paths for lesson interactivity.
@@ -32,6 +32,21 @@ table. Consequences:
 - But the admin lesson editor's puzzle **picker** reads real rows, so re-picking a challenge finds
   nothing if that category's pool is empty. A lesson's stored `puzzleId` is close to decorative.
 - `recordPuzzleAttempt` still posts that dangling `puzzle_id`, which has an FK to `puzzles`.
+
+**A lesson's `puzzleId` MUST NOT reach `/api/evaluate-move`** (owner rule, 2026-07-30: *"lessons
+should not use the puzzle id at any place, since the whole puzzle is inside the lesson"*). It is
+**authoring provenance**, read only by `AdminLessonEditorScreen.jsx` (stamps it on curation),
+`PuzzlePickerModal.jsx` (dedupes already-added puzzles) and `PuzzlePickerRow.jsx` (displays it) —
+never a runtime reference. `ChallengeScreen.jsx`'s lesson branch therefore mints
+``id: `inline-${ch.moveString}` `` **unconditionally**, ignoring any authored `ch.puzzleId`, and
+`src/lib/syntheticPuzzleId.js` strips `inline-`/`dev-` ids from the request body so these requests
+take the row-less computed-live branch.
+
+**Why this bites:** spec 051 briefly sent `puzzleId` for every board while the server 404'd on a
+lookup miss — silently killing grading feedback on *every* lesson confirmation challenge, because
+`ChallengeScreen` commits its phase change **before** the response lands and swallows the rejection
+in a `.catch`. Nothing appeared on screen; the move just committed with no verdict. If lesson
+challenges ever send an id again, that is the failure mode, and it is invisible in the UI.
 
 Also: `evaluatePredicate` (`predicates.js`) is **category-keyed** with **no generic best/winning-move
 predicate** — an unknown `goalPredicateType` falls through to `{ result: 'wrong' }`.

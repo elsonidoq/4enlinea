@@ -1,8 +1,11 @@
 ---
 name: project_lesson_json_fields_not_rendered
-description: "Lesson JSON fields the learner UI never reads — goalPrompt (socratic + challenges), socratic.overlays, userPerspective — and the shared coach.spoken.<category> copy that must stay outcome-neutral"
-metadata:
+description: "Lesson JSON fields the learner UI never reads — socratic.goalPrompt, socratic.overlays, userPerspective — plus the ONE that stopped being dead (confirmationChallenges[].goalPrompt now renders AND narrates)"
+metadata: 
+  node_type: memory
   type: project
+  originSessionId: 7db608a0-3785-4c8f-94aa-9d6fe6577d1e
+  modified: 2026-07-31T19:35:46.883Z
 ---
 
 Several lesson JSON fields **look authoritative in the file and in the admin editor but are never read
@@ -12,13 +15,17 @@ corrections landed in dead fields and were reported as fixed).
 
 Verified at source 2026-07-25:
 
-- **`socratic.goalPrompt` and `confirmationChallenges[].goalPrompt` are never rendered.**
-  `ChallengeScreen.jsx:116-118` builds its prompt from the shared i18n keys
-  `coach.spoken.<category>.prompt.{0,1,2}` and picks one at **random**; `goalPrompt` appears nowhere in
-  the file. The socratic prompt likewise comes from `socratic.messages.ask`, not `goalPrompt`. To change
-  what a player reads, edit **i18n** (challenges) or **`socratic.messages`** (socratic).
-  Note `lesson-editor.md` documents `goalPrompt_es` as a localization target — that is true of the
-  editor and the loader, and irrelevant to the learner.
+- **`confirmationChallenges[].goalPrompt` NOW RENDERS AND NARRATES — this bullet used to say the
+  opposite** (changed 2026-07-30/31, spec 052 / Epic 6). It is a **per-lesson override** of the shared
+  `coach.spoken.<category>.prompt.*` pool: present → the lesson's own text shows; absent → the shared
+  random pool pick, unchanged. Its clip lives in `goalPromptAudio`/`goalPromptAudio_es`, path-addressed
+  via the **lesson** (text-hash) scheme, *not* the key-based coach scheme. Two consequences: editing
+  this field is no longer a no-op, and editing the text **orphans its clip** until you regenerate.
+
+- **`socratic.goalPrompt` is still dead** — the interactive Socratic prompt comes from
+  `socratic.messages.ask`. The two `goalPrompt` fields now behave **oppositely**; never reason about
+  one from the other, and note `lesson-editor.md` had a Traps bullet asserting both were dead long
+  after one stopped being so.
 
 - **`socratic.overlays` is ignored.** `SocraticScreen.jsx:151` *derives* its overlays
   (`win` ring on the dropped cell at `correct`, on the correct cell at `wrong2`) and never reads

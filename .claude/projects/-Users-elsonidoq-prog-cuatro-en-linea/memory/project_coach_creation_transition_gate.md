@@ -5,6 +5,7 @@ metadata:
   node_type: memory
   type: project
   originSessionId: 746f6892-a180-4223-b740-e03e252ce6fd
+  modified: 2026-07-30T19:34:18.356Z
 ---
 
 `classify()` (server/classifier.js, live user-move coach path) tags `double_threat` and
@@ -29,8 +30,17 @@ of them (same direction, low-severity). Coach pools are `category`-shielded (`ev
 `/api/evaluate-move/inline` `phrasePoolKey = category || patternTag`), but the raw tag is surfaced
 UNSHIELDED in three places: `POST /api/explain-move` (`patternTag`, no category), `/api/evaluate-move/inline`'s
 response `patternTag` field, and `GET /api/admin/scores` (`classifier_tags`, localhost-only). Plus
-`candidate-generator.js:607` puts `cls.tag` in puzzle-gen metadata — and its test is excluded from
+`candidate-generator.js` puts `cls.tag` in puzzle-gen metadata (`if (cls?.tag) tags.push(cls.tag);`
+— locate by symbol; it drifted 607 → 668 by 2026-07-30) — and its test is excluded from
 `npm run test:fast`, so that consumer is NOT covered by the fast suite ([[OI-33]]).
+
+**`detectForcedWin`'s JSDoc lies, and it has no per-instance identity.** The comment declares
+`@returns {{ matched, cols? }}`, but *every* return statement in the body emits `cells: []`. Follow
+the body, and do **not** "fix" the code to match the comment. The consequence bites when you try to
+generalise the transition gate: `hasDoubleThreat` already computes `gravityTopCols` internally, so a
+per-column set-diff is mechanical there — but for forced wins there is literally nothing to diff, so
+recognising a genuinely *new* forced win requires inventing identity (spec 052 returns the anchoring
+`blockCol`; note two distinct winning lines can share one anchor).
 
 **Status: SHIPPED 2026-07-14** (commits 7be5c7f double_threat, 0393258 forced_win). Verified
 end-to-end: `classify()` four-case fixture set (persisting DT/FW → best_move/suboptimal_move,

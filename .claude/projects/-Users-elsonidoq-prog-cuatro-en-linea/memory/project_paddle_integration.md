@@ -5,7 +5,7 @@ metadata:
   node_type: memory
   type: project
   originSessionId: b3651b10-6fef-44e8-8fb4-6381e4fda310
-  modified: 2026-07-18T23:34:23.796Z
+  modified: 2026-08-01T23:16:16.741Z
 ---
 
 **The decision + full evidence lives in `docs/payment_provider_research.md`** (canonical, indexed). Stripe is unavailable to Argentine sellers, so the project is migrating payments to **Paddle**, a merchant of record. This file is only the traps that doc won't warn you about.
@@ -65,6 +65,14 @@ Domain submission: submit **`decodec4.xyz` ONLY** — not `staging.decodec4.xyz`
 
 `decodec4.xyz`'s first live domain submission came back `action_required` ("soft-declined") with an email citing pricing clarity/consistency: a public pricing page, prices matching everywhere they're shown (site vs. checkout), a tax-transparency note, and trial/intro-pricing disclosure if applicable. Verified directly (not assumed) that `pricing.html`, the in-app `UpgradeModal` copy (`en.json`'s `upgrade.body`/`upgrade.price`), and the **live** Paddle catalog's actual prices all agree ($2.99/mo, $21.99/yr, no `trial_period` on either price) — this should clear that specific rejection.
 
+**UPDATE 2026-08-01 (owner-confirmed): `decodec4.xyz`'s domain review has since been APPROVED.**
+Two consequences that are easy to get wrong: (a) approval is granted **per domain, not per page** — changing
+what an already-approved URL *serves* triggers no new review and there is nothing to re-submit, so the
+remove-and-re-add dance below is NOT needed for a content or implementation change; (b) approval is not a
+permanent waiver — Paddle can spot-check, and the Merchant-of-Record clause, 14-day refund statement and
+`/terms` link must stay reachable on the domain. Because a spot-check may not execute JavaScript, spec 053
+keeps the static server-rendered `pricing.html` alive at `/pricing-legal` when the React app takes `/pricing`.
+
 **How to actually resubmit, for a standard (non-partner) seller account**: the email's "Resubmit domain for review" button just links to `vendors.paddle.com/request-domain-approval` (Website approval → Domain approval tab) — there is **no per-domain resubmit control there**, only an **X** (remove) next to the domain and a **"+ Add a new domain"** link. The `POST /checkout-domains/{id}/resubmit` API endpoint exists but is gated behind the Paddle **partner program** — not available here. The actual resubmit mechanism on this account is: **remove the domain (X), then re-add it via "+ Add a new domain"**, which triggers a fresh review pass. (The domain's own required content — terms/privacy/refund policy linked/contained on the site — was already satisfied; don't assume a second soft-decline means content is the problem without checking the email's actual reason first.)
 
 ## 10. `transaction_checkout_not_enabled` is a SEPARATE account gate from domain review
@@ -89,5 +97,48 @@ When staging returned a generic `"upstream error"` on a `verify-transaction` ret
 ## 13. `checkoutReturnFlow.js`'s pub/sub never replayed current state to new subscribers — the real cause of OI-59
 
 The modal-stuck-on-idle bug (item 12's Railway detour was a red herring for a *different* attempt) had a real root cause: `subscribeCheckoutReturn(fn)` only notified listeners of *future* `setCheckoutReturnState` calls, never the current value at subscribe time. `useUpgradeCheckout.js`'s `checkout.completed` handler is a module-level singleton independent of which screen is mounted — if a screen's subscription effect wasn't active at the exact instant `'activated'` broadcast, the notification was lost forever, even though the store's internal `state` correctly held `'activated'`. Confirmed via screenshot: the modal was frozen at its pristine pre-payment `'idle'` state, not a loading spinner or a success message — and the account had correctly become Pro anyway (the server-side tier flip via webhook/`verifyTransaction` doesn't depend on any UI listener). Fixed by having `subscribeCheckoutReturn` immediately replay the current state on subscribe, paired with each of the 5 `UpgradeModal` call sites now calling `resetCheckoutReturnState()` after consuming a terminal state (so the replay doesn't leak a stale outcome into some later, unrelated modal open). See `docs/open_issues.md` OI-59 (resolved) for the full trace and 2 new regression tests in `checkoutReturnFlow.test.js`.
+
+## 14. There is NO durable carrier across a checkout round-trip — the return-flow store dies on cold boot, and `successUrl` never reaches Paddle
+
+Anything that must survive "user opens checkout, closes the app, reopens it" cannot ride either of the two
+obvious channels, and both failures are silent:
+
+- **`checkoutReturnFlow.js` is a bare in-memory module-level `let state = 'idle'`** with four string values,
+  no payload field, no persistence. A cold boot resets it to `'idle'`. Any design that stashes a token there
+  and compares it after a restart can never match — it will pass every in-session test and fail the exact case
+  it was built for. Widening it to carry a payload is also not free: its header declares `useUpgradeCheckout.js`
+  the sole writer and `CheckoutReturnBanner.jsx` a pure reader, and all five `UpgradeModal` call sites depend
+  on the replay + `resetCheckoutReturnState()` contract that fixed OI-59 (item 13).
+- **The return URL is not a carrier either**: per item 8, `successUrl` is deliberately **not** passed to
+  `Paddle.Checkout.open()` (passing it navigates the parent window and raced the tier grant). It is still
+  returned by `createCheckout` server-side, but Paddle never navigates to it — so appending a nonce to
+  `returnPathOverride` only works if you first verify that path is actually navigated to.
+
+The remaining reliable option is client-side storage that self-validates (freshness timestamp + a content
+match), needing no coupling to the return flow at all. Surfaced while planning spec 053 US5 (restoring set
+results after paying from `/summary`); the tasks carry it as an investigation, not a settled fix.
+See [[feedback_plan_file_map_is_coverage_frontier]] for how the wrong assumption survived four review stages.
+
+## 15. The **default payment link** must include Paddle.js — and `?_ptxn=` is unhandled today (OI-98)
+
+Easy and costly to get backwards, surfaced 2026-08-01 while splitting `/pricing` (React) from
+`/pricing-legal` (static) in spec 053. Paddle holds URLs for this site in two places that pull in
+**opposite** directions:
+
+- **Checkout → Checkout settings → Default payment link** must point at a page that *includes Paddle.js*.
+  Paddle builds every transaction's checkout link, and the "update your payment method" links it emails to
+  subscribers, by appending `?_ptxn=<transaction_id>` to it and expecting the page to auto-open a checkout.
+  **Never point this at `/pricing-legal`** — that page is deliberately static and JS-free (it exists so a
+  non-JS-executing Paddle spot-check can still read prices + the MoR clause), so it can never satisfy this.
+- Any **legal/compliance URL** recorded for website approval should point at `/pricing-legal`, which is
+  where the MoR clause, 14-day refund statement, and `/terms` link now live.
+
+**The `_ptxn` flow is broken today and this is PRE-EXISTING, not caused by spec 053.** `useUpgradeCheckout()`
+has no mount-time initialization — it returns a `handleUpgrade` closure and only calls `getPaddle()` inside
+the click handler, so merely landing on `/pricing` never initializes Paddle.js; and `grep -a -rn "_ptxn"` over
+`src/`+`server/` returns nothing. The *old* static `/pricing` contained no Paddle.js at all (`grep -a -c` for a
+script include → 0; the only "Paddle" hits are MoR prose), so the flow never worked. Tracked as OI-98. Note the
+`grep -a` — a bare grep on these files hits the non-UTF-8 binary trap and returns a false negative
+([[project_grep_silent_zero_matches]]).
 
 Related: [[project_stripe_traps]] (obsolete now that Stripe is deleted — kept only for historical Stripe-era context, do not use for anything current); `docs/payment_provider_research.md`; `docs/open_issues.md` (OI-54/55/56/57/59, all resolved); `docs/architecture/api-conventions.md` + `server-conventions.md` (current Paddle contract — authoritative).

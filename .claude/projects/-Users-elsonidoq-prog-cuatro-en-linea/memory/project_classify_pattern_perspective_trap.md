@@ -5,7 +5,7 @@ metadata:
   node_type: memory
   type: project
   originSessionId: bc83bcfc-d31a-4a85-b465-32eb56b1c65c
-  modified: 2026-07-28T21:34:37.985Z
+  modified: 2026-07-30T19:33:35.100Z
 ---
 
 **Before changing how any `classifyPattern` detector handles `perspective`, know that
@@ -26,6 +26,22 @@ fixed by *who is to move*, not by an argument. `undercut` is now perspective-ind
 correctly at both seams: for the mover "the column you must not enter", for the player who just
 moved "the undercut you just landed". **`detectOvercut` still has the defect — OI-76**, and it is in
 `MISSED_OWN_PRIORITY`, i.e. always evaluated on the unsound branch.
+
+**Which half of a split detector `classifyPattern` wants is counter-intuitive — it is the VICTIM.**
+`detectUndercutBeneficiary`'s own docstring states the rule: *"Not a `classifyPattern` tag: on a
+classifier board the side to move is the one facing the decision, and the `undercut` tag names their
+exposure."* On Phase C's `P(moves + correctCol, blunderer)` board the blunderer has **already moved**,
+so the side to move is the *opponent*; wiring the Beneficiary half there reports the opponent's
+pattern and files it as the blunderer's missed chance — the same wrong-player bug, differently
+sourced. The tag is one symmetric board fact read from either side, so Victim is correct at that seam.
+Spec 052 settles OI-76 this way (Victim in `classifyPattern`; Beneficiary at
+`candidate-generator.js`'s puzzle-gen call site, which already passes no perspective).
+
+**But `detectOvercutVictim` is NEW code, not a sign-mirror rename.** Today's single `detectOvercut`
+gates on `scores[C] > 0` — it is *already written in the beneficiary framing* ("playing in C is
+WINNING"). Splitting undercut was a refactor; splitting overcut is half refactor, half new detector
+with no existing semantics, no KB worked example, and no counterexample board (the canonical five are
+all beneficiary-shaped). Do not size it as a mirror of the undercut job.
 
 **Do not group detectors by argument count.** `detectFigure7(board, _scores, perspective)` and
 `detectJShape(board, _scores, perspective)` take three arguments but the second is `_scores` —

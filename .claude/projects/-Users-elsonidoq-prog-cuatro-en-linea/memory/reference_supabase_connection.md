@@ -24,7 +24,7 @@ modified: 2026-07-18T15:21:39.160Z
 
 The prod ref `kxtqwsumojtexokrtlfp` is the one this memory's other sections describe. Staging is a SEPARATE project. `server/.env` (root, unsuffixed) points at LOCAL, not staging/prod.
 
-**Staging DATABASE_URL trap:** `.env.staging` uses the **transaction pooler (port 6543)**, which per the session-vs-transaction rule below is FORBIDDEN for DDL / multi-statement transactions. A single-statement op (e.g. one `TRUNCATE ... CASCADE`) works fine; but `migrate.js` (wraps each migration in `BEGIN...COMMIT` DDL) needs port 5432 — swap the port before running migrations against staging. See [[OI-31]].
+**Staging DATABASE_URL — convention drift, NOT a blocker (corrected 2026-08-02):** `.env.staging` and Railway's injected staging value both use the **transaction pooler (port 6543)**, which the convention below declares forbidden for DDL. **But staging has demonstrably applied migrations through it** — its `schema_migrations` ledger shows five, most recently `061_security_lints.sql` on 2026-07-30. In pgBouncer *transaction* mode a backend is pinned for an explicit `BEGIN…COMMIT`, so `migrate.js`'s DDL transactions work; the "different backend per statement" rationale describes *statement* mode. Converge on 5432 anyway, but **never report 6543 as "this deploy will fail" without checking the ledger first**. See [[OI-31]], [[project_migration_ledger_and_pooler]].
 
 **Wiping staging data:** `connect-four/server/scripts/reset-staging-db.js` TRUNCATEs all `public` tables except `schema_migrations` (keeps schema + migration history). Reads `.env.staging` only, hard-refuses the prod ref, requires typing `Yes` twice. `--dry-run` lists targets. Uses a single TRUNCATE statement so the 6543 pooler is OK.
 
@@ -44,7 +44,7 @@ psql "$DATABASE_URL" -f connect-four/server/migrations/NNN_slug.sql
 
 **Session pooler vs transaction pooler — critical distinction:**
 - **Session pooler (port 5432)** — required for: DDL migrations (`migrate.js`), `pg_dump`/`psql` data export/import, any multi-statement transaction. Use this for `DATABASE_URL`.
-- **Transaction pooler (port 6543)** — pgBouncer transaction mode; FORBIDDEN for DDL and `pg_dump`. Do not use for migrations.
+- **Transaction pooler (port 6543)** — pgBouncer transaction mode; the documented convention forbids it for DDL and `pg_dump`. `pg_dump` genuinely does not work. **DDL migrations empirically DO** — see the corrected staging note above; treat a 6543 `DATABASE_URL` as drift to fix, not as a broken deploy.
 - Always include `sslmode=require` in the connection string.
 
 **Querying from Node.js (inline script pattern):**

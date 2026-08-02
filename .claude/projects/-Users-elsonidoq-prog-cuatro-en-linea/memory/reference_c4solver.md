@@ -114,3 +114,21 @@ On Linux containers (Claude Code on the web) you must rebuild the solver to run 
 - **You cannot commit a real solver update while the bit is set** — `git add` is ignored. Clear it first: `git update-index --no-skip-worktree connect-four/server/c4solver`.
 
 Nothing in the repo sets this bit (no script, no hook — grepped); it is applied per-clone/per-container, so its presence varies by machine. Always check `git ls-files -v <path>` before reasoning about the binary's state. Related: [[feedback_verify_at_the_source_layer]].
+
+## A full board makes the solver throw a *generic* error — which masks your own error signal
+
+`c4solver` returns an **empty line** for a position with zero legal columns (a full/drawn board), and
+`c4solver-wrapper.js` turns that into a generic `"Invalid position"` throw. Verified 2026-08-02 via
+`POST /api/scores`.
+
+The trap is ordering. In `POST /api/scores` the call sequence is `solver.query(moves)` **then**
+`chooseSparringMove(...)`. Spec 054 added a `NoLegalMoveError` to `chooseSparringMove` and a handler
+translating it to an explicit `400` — but the solver threw first, so the endpoint returned a generic
+`500 "internal error"` and the new branch was **unreachable**. The unit test on `chooseSparringMove`
+was green the whole time; only a curl against the running server exposed it. The fix is a board-full
+guard that runs *before* `solver.query` (`server/index.js`, `POST /api/scores`), guarded by an
+ordering assertion in `tests/unit/scoresValidation.test.js`.
+
+**How to apply:** any terminal/edge-case signal you add to a function called *after* a solver query
+is dead code unless you also check what the solver does with that same input first. Test the
+endpoint, not just the function. Related: [[feedback_verify_at_the_source_layer]].

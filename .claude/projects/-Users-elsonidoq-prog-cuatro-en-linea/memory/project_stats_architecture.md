@@ -1,9 +1,36 @@
 ---
 name: project_stats_architecture
-description: Challenge stats are computed live from puzzle_attempts via GET /api/stats, not session_stats
-metadata:
+description: Stats-screen accuracy is PUZZLE accuracy from puzzle_attempts — no average-game-accuracy metric exists anywhere in the app
+metadata: 
+  node_type: memory
   type: project
+  originSessionId: 38a71538-1257-4f4a-bc47-fb9ea7d2669c
+  modified: 2026-08-01T23:40:45.381Z
 ---
+
+## The Stats "avg accuracy" card is puzzle accuracy — game accuracy has no aggregate at all
+
+`StatsScreen.jsx`'s `t('stats.avg_accuracy')` card renders the `accuracy` value set from
+`store.getStats()` — i.e. **puzzle** accuracy over `puzzle_attempts`. It has nothing to do with
+games, board-move optimality, or the per-game accuracy badge. `stats.avg_accuracy` is an **i18n
+label key**, not a data field: grepping it across `src/`, `server/`, and `server/migrations/` finds
+exactly one hit, the label itself.
+
+**There is no average-game-accuracy metric anywhere in the app.** Game accuracy exists only as a
+per-game badge (`PastGamesListScreen`, `ReviewScreen`). Nothing averages it.
+
+**Why:** the label reads as though it were about games, and two independent agents in one session
+assumed it was — one wrote a code citation for it into a spec review as a "game accuracy surface",
+and a product decision to "filter that average to board-decided games" was taken before anyone
+checked that such an average existed. Any request to change, filter, or exclude games from "the
+accuracy stat" is a request to **build a new metric**, not to modify one.
+
+**How to apply:** when a task mentions accuracy, first establish *which* accuracy — puzzle
+(aggregated, on Stats) or game (per-game only, on Past Games / Review). See
+[[feedback_verify_at_the_source_layer]]; the label is the representation layer, `getStats()` is
+where the truth lives.
+
+## Where challenge stats come from
 
 Challenge accuracy stats (overall + by-pattern) come from `GET /api/stats`, which aggregates `puzzle_attempts JOIN puzzles` server-side for the authenticated user. `SupabaseStore.getStats()` calls this endpoint.
 

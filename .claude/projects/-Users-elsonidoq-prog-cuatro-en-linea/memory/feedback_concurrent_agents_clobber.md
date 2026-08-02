@@ -5,6 +5,7 @@ metadata:
   node_type: memory
   type: feedback
   originSessionId: e6ae0484-0c2a-40fc-8f58-250ef499d103
+  modified: 2026-07-30T13:44:04.842Z
 ---
 
 **The user routinely has a second agent working this repo/branch while you are.** Assume it, don't discover it. Three things follow, all observed on 2026-07-16.
@@ -16,5 +17,8 @@ metadata:
 **2. Line numbers go stale inside a single session.** `ChallengeScreen.jsx:536` became `:549` and `OnboardingMissionScreen.jsx:56` became `:62` within an hour, because commits landed underneath. A subagent's "corrected" line numbers were right and the ones read earlier were wrong. **Cite by symbol or a `grep` command, never by line number**, in plans and prompts especially — CLAUDE.md's rule is not theoretical here, it fires routinely.
 
 **3. Nothing tells you a test stopped running.** The deleted-by-someone test file that would have caught the clobbering was **silently skipped** — `node --test` given a *list* skips a missing path with exit 0 and `fail 0`. Verify a test still runs by grepping the run output for its own case names; see `docs/architecture/testing-conventions.md` §`test:fast`.
+
+**4. The coordinator is one of the agents — `git stash` while a subagent works is a clobber you inflict on yourself.** 2026-07-30: to check whether a backfill's rejections predated the feature, the coordinator ran `git stash push -- <4 core files> && node <solver script> && git stash pop` **while a batch subagent was editing the same tree**. The solver hung on shutdown (a documented trap — see [[reference_inline_node_scripts]]), the 2-minute timeout killed the command mid-chain, and `stash pop` never ran: four core files sat reverted while the subagent kept working against them. Caught only by checking `git status` afterwards.
+- **How to apply:** never `stash`/`checkout`/`reset` a tree that has a live subagent in it — do the comparison in a scratch clone or a throwaway worktree. Never chain a restore behind something that can hang; run it as its own command and **verify with `git stash list` + `git status`**, since a killed chain leaves no error to notice.
 
 **Why:** parallel agents are how the user works; the failure mode is invisible rather than loud, so the mitigation has to be structural (worktree isolation) rather than vigilance.

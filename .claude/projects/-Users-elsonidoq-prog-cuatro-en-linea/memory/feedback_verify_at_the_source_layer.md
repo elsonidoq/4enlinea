@@ -5,7 +5,7 @@ metadata:
   node_type: memory
   type: feedback
   originSessionId: beac6818-214f-4294-b8d7-b0f88677a1a0
-  modified: 2026-07-28T16:15:56.228Z
+  modified: 2026-08-02T04:07:41.988Z
 ---
 
 **You trust representations of reality over reality itself. That is one mistake, and it wears many costumes.**
@@ -41,6 +41,9 @@ Whenever you are about to believe something about a system, ask: *is this the tr
 - **My own broken command almost became a fact.** `rg -rn "AdminLessonEditorScreen" src/lib/…` returned nothing, so I reported the editor screen "isn't routed" — `-r` is ripgrep's `--replace`. It was routed all along (`App.jsx` pathname checks, not `screenRegistry`). I noticed the empty output, mentioned it in passing, and *let it stand for a whole turn*. An empty result is a claim about your command before it's a claim about the code.
 - **A green suite I'd filtered.** Reported "1378 pass, 0 fail" by grepping the summary lines — never checking the exit code, while a registered-but-deleted test file was being silently skipped. I built the filter that hid the evidence.
 - **An assertion that compared a literal to itself.** A plan I authored shipped `assert.equal(WINDOW_COUNT_MAX, 13)` where `WINDOW_COUNT_MAX` **is** the literal `13` one file away. It can never fail: change the board geometry that produces the 13 and every tint mis-scales with the suite fully green. A sibling test asserted a render guard no fixture exercised — deleting `&& value === 'empty'` left all three tests passing. Both survived a spec, a plan, six task reviews *and* a whole-branch review. Fixed by deriving the expectation from the real geometry (`Math.max(...computeWindowCounts('', 'red').flat())`). **A tautological assertion is worse than no test — it occupies the slot where a real one would go, and reads as coverage.**
+
+- **Four artifacts agreed, and all four were wrong — because none opened `package.json`.** A spec/plan/tasks pipeline built an acceptance gate on `npm run test:fast` + `test:dom`, creating ~9 new test files. The plan paraphrased `test:dom` as `--test tests/dom/*.dom.test.jsx`; the real script is a **hand-maintained explicit file list**, as is `test` and `test:fast` (three lists, already drifted from each other). No task touched `package.json`, so **every new test would have been invisible to the runner and the gate would have gone green with zero of them executing.** `docs/architecture/testing-conventions.md:174` already said "explicitly listed — there is no automatic discovery" and `:187` gave the verification technique; nobody read it. Corroborating evidence sat on disk the whole time: `tests/blunder/blunderTagConstraint.test.js` is in **none** of the three lists (OI-102). **Unanimous agreement across four documents is where an unverified inherited fact survives longest** — it reads as consensus when it is one unchecked paraphrase copied three times. Read the boring config *first*: the runner, the scripts, `"type"`, the import style.
+- **A "no precedent found" claim suppressed the right answer.** The same pipeline reported no migration-constraint-test precedent existed and left a placeholder. `blunderTagConstraint.test.js` is exactly that precedent — it asserts code-vs-constraint parity by parsing the migration SQL, with no DB connection. A negative claim about the repo manufactured a placeholder where a copyable pattern already existed. See [[project_grep_silent_zero_matches]].
 
 **The lesson that generalizes past all of it:** I first wrote these rules scoped to *plan authoring* — and then made three more of the same errors, in *verification*, *code review*, and *orchestration*. **A rule scoped to one costume does not transfer.** The principle is the deliverable, not the checklist.
 

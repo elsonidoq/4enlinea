@@ -5,6 +5,7 @@ metadata:
   node_type: memory
   type: project
   originSessionId: 4176d659-b797-4125-825c-a96fa2d4c8f2
+  modified: 2026-07-30T13:59:11.857Z
 ---
 
 Traps for lesson progression + lesson audio (spec 046 territory; some pre-existing).
@@ -34,6 +35,16 @@ and is deliberately never synthesized) — so a phrase under any other namespace
 `socratic.*`, `onboarding.mission.*`) is invisible on the admin page and can never get
 generated/approved audio until it's re-keyed under `coach.spoken.*`. A tripwire test
 (`coachSpokenNamespace.test.js`) now fails if any registry key sits outside `coach.spoken.`.
+
+**`/admin/audio` has TWO independent audio players served over DIFFERENT paths — testing one proves
+nothing about the other** (spec 051, 2026-07-30). The **coach** section's `<AudioPlayer>` streams from
+the API: `GET /api/admin/audio/play/:slug?lang=` → `res.sendFile`. The **lesson** section (added by
+spec 051) uses a plain relative `/audio/lessons/<hash>.mp3`, i.e. Vite's `public/` — deliberately, since
+lesson clips have no registry to stream through. Consequence: a QA pass that plays a lesson clip and
+calls "inline playback" PASS has verified **nothing** about coach playback, and vice versa — that is
+exactly how a fully-broken coach player shipped through a batch, a static review, and a browser QA pass
+undetected. Assert on **both**. The coach path in particular has a worktree-only failure mode: see
+[[project_repo_worktree_setup]] §4 (`res.sendFile` + the `.claude/` dot-segment → silent 500).
 
 **`speakDeepReveal(audio)` in `src/lib/useCoachSpeech.js` is a module-level singleton queue** (file-scope `speechQueue`/`currentSpeechAudio`), shared with deep-reveal narration — pushing lesson clips into it gives "one at a time" playback for free. It does NOT check the global `speechEnabled` toggle; the caller must gate on `speechEnabled` and call `stopSpeech()` on unmount/navigation. Correcting the epic: spec 039 keys by i18n key, NOT text hash — the text-hash idea is the correct *new* lesson design, not a spec-039 attribution. Related: `docs/architecture/coach-audio-conventions.md`, [[project_admin_localhost_directive]].
 

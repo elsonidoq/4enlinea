@@ -15,11 +15,16 @@
 ## Puzzle categories, challenge & lessons
 
 - [New-category wiring](project_new_category_wiring_checklist.md) — before adding a category read server-conventions §Category Registry; missing candidate-generator.js = SILENT failure
+- [Grading reads STORED metadata](project_puzzle_grading_reads_stored_metadata.md) — changing a detector silently invalidates live rows; they mark correct answers wrong. 18/42 in spec 052
+- [puzzle_attempts write traps](project_puzzle_attempt_outcome_traps.md) — ALL 4 writers fire-and-forget ⇒ CHECK/type errors vanish; moves_tried is integer[]; a green store-mock test proves nothing
+- [correct_cols engine traps](project_correct_cols_engine_traps.md) — checkPredicate ≠ checkPredicateRaw (sort/sync only in the wrapper); a load-bearing circular import; mass backfill rejections are usually stale data
+- [Generate puzzles for local QA](feedback_generate_puzzles_for_local_qa.md) — local `puzzles` is EMPTY for most categories; YOU can generate+promote (all localhost-gated, `--port` defaults to a WRONG 3001 in worktrees) — never report "unreachable" or lower a threshold
 - [Opening theory scoping](project_opening_theory_scoping.md) — NO opening challenge category (won boards have losing side to move); openings → Lessons
 - [Lesson interactivity](project_lesson_interactivity_evaluation.md) — Socratic = client-side col===correctCol; inline challenges DO work (/api/evaluate-move, no DB row)
 - [Lesson board sourcing traps](project_lesson_answer_set_invariant.md) — undercut boards are valid for ONE side only; lesson-11 MUST fail detectUndercutVictim; JSONB key-order false drift
-- [Lesson fields NOT rendered](project_lesson_json_fields_not_rendered.md) — goalPrompt/socratic.overlays/userPerspective are dead; socratic color = movestring parity
-- [Lesson/coach audio traps](project_lesson_progression_audio_traps.md) — CoachDialog never speaks; only coach.spoken.* synthesized; :3001 won't serve public/ (test :5173)
+- [Lesson fields NOT rendered](project_lesson_json_fields_not_rendered.md) — socratic.goalPrompt/overlays/userPerspective dead, but challenge goalPrompt now RENDERS+narrates; color = movestring parity
+- [Lesson/coach audio traps](project_lesson_progression_audio_traps.md) — CoachDialog never speaks; only coach.spoken.* synthesized; /admin/audio has TWO players on different paths — test both
+- [Lesson audio generation traps](project_lesson_audio_generation_traps.md) — no `locator` = re-synthesizes ALL (142-file churn); back-to-back en/es silently loses a write; generate-tts.js is broken
 - [Lesson write lands elsewhere](project_lesson_disk_edit_cache_clobber.md) — a 200 ≠ it saw your file, or wrote the one you watch (slug≠id forks it)
 - [odd_even_threat split life](project_detect_odd_even_threat_yellow.md) — still a classifyPattern tag + puzzle category, but OFF the coach prompt & blunder vocab
 - [New lesson slide field wiring](project_lesson_slide_field_wiring.md) — 6 wiring points; the SlideEditor control is forgotten EVERY time (OI-67, then showWindowCounts)
@@ -30,30 +35,37 @@
 ## Server, API, DB schema, auth, payments & deploy
 
 - [Admin gate reality](project_admin_localhost_directive.md) — requireAdmin is a NO-OP outside NODE_ENV=production; requireLocalhost is the only real gate
-- [CSP invisible under Vite dev](project_csp_helmet_traps.md) — Express CSP never lands under npm run dev; test the Express-served dist; SW reg in main.jsx
+- [CSP invisible under Vite dev](project_csp_helmet_traps.md) — never lands under npm run dev; server reads dist at BOOT (restart after rebuild); placeholder Paddle token suffices
+- [Entitlement client cache traps](project_entitlement_client_cache_traps.md) — cache is module- not account-scoped; sign-out needs clearEntitlement or fail-open re-pins stale entitled:true forever
 - [Auth flow traps](project_auth_flow_traps.md) — two supabase clients; GoTrue skips on_auth_user_created; NO route guard → CTA gate ≠ screen gate; deleteDatabase hangs sign-in
+- [Migration ledger vs disk + pooler myth](project_migration_ledger_and_pooler.md) — schema_migrations tracks FILENAMES (061 collided); "6543 forbidden" rationale is wrong — staging ships on it
 - [Unapplied migration = silent 204](project_user_column_propagation.md) — PostgREST drops unknown columns from UPDATE → 204 persists nothing; no server hot-reload
-- [Supabase envs & poolers](reference_supabase_connection.md) — staging=6543 txn-pooler (NO DDL); local needs the JWT service key, not sb_secret_*; storage signedUrl; delete-staging-user-by-email.js
+- [Adding a puzzles/candidates column](project_puzzle_row_write_sites.md) — 5 hand-written insert sites, none shared; candidate-generator.js never touches the DB
+- [Supabase linter triage](project_supabase_linter_traps.md) — 0012 anon-policy warns are WAI (anonymous sign-ins ⇒ `authenticated`); migrate.js-bootstrapped tables escape the RLS/grant sweeps; RLS does NOT cover TRUNCATE
+- [Supabase envs & poolers](reference_supabase_connection.md) — staging=6543 (DDL works anyway — see ledger); local needs the JWT service key, not sb_secret_*; storage signedUrl
 - [Stripe traps](project_stripe_traps.md) — OBSOLETE 2026-07-18 (Stripe fully removed); historical context only, do not use for current work
 - [Paddle integration](project_paddle_integration.md) — sandbox/live from key prefix NOT NODE_ENV/MODE; CSP=5-round discovery; domain resubmit=remove+re-add; checkout_not_enabled≠domain gate; fulfillment checklist needs 6 events + a REAL delivery
 - [explanation_cache bypasses producers](project_blunder_serving_dual_paths.md) — cache-hit path skips the producer guards; sanitize at the response seam + TRUNCATE on deploy
-- [session-stats byPattern always empty](project_stats_architecture.md) — /api/user/session-stats/all reads stats.byPattern; stored shape is flat category keys (open bug)
+- [Stats accuracy is PUZZLE accuracy](project_stats_architecture.md) — no game-accuracy aggregate exists; avg_accuracy is a LABEL key; byPattern always empty (open bug)
 - [Deploy: invisible strict npm ci](project_spec031_staging_production_deploy.md) — railpack.json hides the auto-injected npm ci; peer conflicts fail the build; npm ci --dry-run
 - [Secret-scan = placeholders](project_secret_scan_placeholders.md) — git-history secret hits are ALL placeholders; NO rotation; docs/security_audit_fable.md
 - [OPENAI_API_KEY is present](feedback_openai_key_present.md) — real key in server/.env; never defer TTS/LLM as "needs a key"; verify on localhost
 
 ## Frontend, board display & i18n
 
+- [Consolidating two homes drops localization](feedback_consolidating_two_homes_drops_localization.md) — deleting the "duplicate" i18n copy deleted the only translations; a rule can outlive its reason
 - [Spanish output silent fallback](project_spanish_output_silent_fallback.md) — a new string/term/LLM-field ships English SILENTLY via graceful fallback; graders English-only
-- [TTS audio cached by text](project_tts_audio_cached_by_text.md) — model/voice/prompt change does NOT regenerate coach/deep-reveal clips (text-hash keyed); audition via /admin/audio
+- [TTS audio naming is NOT uniform](project_tts_audio_cached_by_text.md) — lesson/deep-reveal text-hashed, COACH keyed by i18n key ⇒ dynamic coach text ships silent or stale
+- [Coach phrase key drives TWO lookups](project_coach_phrase_pool_dual_lookup.md) — `coach.spoken.*` AND `eval.*.summary`; `eval.*` has 6 keys only; parity test is presence-only
 - [DEV board injector](project_dev_board_injector.md) — load any board into Challenge via panel/`?devBoard=`; seed sparring via `/game?devBoard=`; fixtures solver-verified
 
 ## Production LLM coach / deep reveal (toFeatureVector / explainContext)
 
-- [Prod LLM call graph](project_prod_llm_call_graph.md) — prod deep-reveal = defaultCallLLM (mechanismExplainer); callLLM is offline-only; the doc diagrams still lie
+- [Prod LLM call graph](project_prod_llm_call_graph.md) — deep-reveal = defaultCallLLM; callLLM offline-only; composeExplanation//api/explain-move is DEAD (no frontend caller)
 - [Feature vector design](feedback_feature_vector_design.md) — toFeatureVector: keep grounded cells, drop plumbing/derivations; keep instance counts
 - [Feature vector content traps](project_feature_vector_content_traps.md) — null outcomes on losing_either_way; patternsOpponent snapshot ambiguity; pliesToEnd = |score|
 - [Annotation gate debugging](project_annotation_gate_and_zones.md) — classifyPattern Map order non-deterministic (PRIORITY.find); blunders-not-populated ladder; `inverted`=OPTIMAL
+- [Creation tags aren't score-gated](project_creation_tags_not_score_gated.md) — double_threat/forced_win/figure_7/j_shape fire on a LOSING move too; never key their phrase pool off raw `quality`
 - [Explain system](project_explain_system.md) — LLM prompt invariants; explanation_cache schema; NO KB term injects without its pattern firing
 - [LLM perspective bug](feedback_llm_perspective_bug.md) — the post-move board's "Next:" label hijacks LLM perspective; name the mover explicitly
 - [Deep reveal product mindset](feedback_deep_reveal_product_mindset.md) — score is a compass not the reason; sparse ≠ no-reason; never fabricate
@@ -84,16 +96,22 @@
 ## QA, worktrees & Papergames
 
 - [app-qa traps](project_app_qa_setup_gotchas.md) — automation Chrome fakes autoplay (audio ships silent); discs are background-image; resize_page dead → emulate
-- [Worktree setup traps](project_repo_worktree_setup.md) — baseRef is a Claude-Code setting (.claude/settings.json), NOT git config; copy server/.env or reason tests ENOENT
-- [Papergames integration](project_papergames_integration.md) — skipped ≠ duplicates (don't "fix"); reCAPTCHA blocks server login; loadUser 3-site trap
+- [Worktree setup traps](project_repo_worktree_setup.md) — baseRef is a Claude-Code setting NOT git config; copy server/.env or tests ENOENT; res.sendFile needs dotfiles:'allow' under .claude/
+- [test:fast baseline is 5 RED, not green](project_repo_worktree_setup.md) — OI-82's 5 ENOENT reason-engine tests fail in the MAIN checkout too; judge yourself against 5, not 0 (§2d)
+- [Papergames integration](project_papergames_integration.md) — skipped ≠ duplicates (don't "fix"); reCAPTCHA blocks server login; 100%-accuracy losses are ALL time-up, not resigns
 
 ## Workflow, agents & process
 
+- [File mtime is never evidence](project_file_mtime_is_never_evidence.md) — mtime = the checkout, not the write; all 565 mp3s share one stamp. Date from `generated_at` or `git log --diff-filter=A`
+- [Bare grep silently finds nothing](project_grep_silent_zero_matches.md) — non-UTF-8 locale ⇒ multibyte files read as binary; ZERO matches + exit 1, no error. Always `grep -a` before trusting a negative
 - [Verify at the source layer](feedback_verify_at_the_source_layer.md) — every false belief hides in a layer: signature NOT doc comment, diff NOT agent report, real output NOT your fixture, all-N NOT a sample
+- [Measurements expire](feedback_measurement_expires.md) — re-measure against FINAL code; an UNCHANGED line ≠ an unfixed bug (the fix may have landed in another file) — git log --grep first
+- [Implemented ≠ deployable](feedback_implemented_vs_deployable.md) — answer both; deploy prereqs → `docs/deploy-runbook.md` (deployment_steps.md NEVER existed) + an OI; never write to staging/prod
 - [A wrong test is part of the bug](feedback_wrong_test_is_part_of_the_bug.md) — never shape a fix to keep an existing test green; read the fixture, not its name; a defect in a fixture is usually in the data too
 - [Concurrent agents clobber](feedback_concurrent_agents_clobber.md) — the user runs agents in parallel; two in one tree overwrite SILENTLY; line numbers stale within the hour
 - [External auto-backup commits](project_external_auto_backup_commits.md) — a background process auto-commits STAGED work unpredictably (once broke HEAD); stage explicit paths only, never git add -A, git status --short before commit
 - [Isolated review misses seams](feedback_isolated_review_misses_seams.md) — the JOIN of two correct halves; 1-instance tests miss N-instance clashes
+- [plan.md's file map is the coverage frontier](feedback_plan_file_map_is_coverage_frontier.md) — /speckit-tasks reads the Source Code map, NOT prose; a file named only in research/contracts gets NO task, silently
 - [Process & agent preferences](feedback_process_and_agent_preferences.md) — sizing bars; scope is a diff you MEASURE; Opus critique/Sonnet apply; AskUserQuestion ≥2 opts, never `preview` for text
 - [Open-issues destination](feedback_open_issues_destination.md) — deferred/latent bugs → docs/open_issues.md (OI-N), NOT memory
 - [Superpowers docs aren't durable](feedback_superpowers_docs_not_durable.md) — docs/superpowers/ is throwaway; migrate durable info to docs/architecture/

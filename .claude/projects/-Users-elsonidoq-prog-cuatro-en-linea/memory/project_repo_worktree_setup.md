@@ -5,7 +5,7 @@ metadata:
   node_type: memory
   type: project
   originSessionId: 0ad220ef-6705-44bc-8c78-a29812c83801
-  modified: 2026-07-29T14:22:25.225Z
+  modified: 2026-08-02T01:25:39.832Z
 ---
 
 Two non-obvious traps when creating a git worktree in this repo (both hit during the
@@ -60,12 +60,44 @@ real npm exit code, not a piped `tail`'s.
 **Why:** worktrees share tracked git objects but not gitignored files (.env, node_modules),
 and the tool's base-ref is a harness setting, not something the repo can pin.
 **How to apply:** reset the new worktree to stagging HEAD, `npm install`, copy `server/.env`,
-then confirm a green `test:fast` baseline before treating any failure as your own.
+then take a `test:fast` baseline before treating any failure as your own.
+
+**2d. That baseline is NOT green, and the 5 reds are NOT a worktree artifact.** As of 2026-08-01 a
+clean `npm run test:fast` is **1522 tests / 1517 pass / 5 fail** — `branchInvariance`,
+`causalLinksComposers`, `reasonRenderFixes`, `renderCoverageCorpus`, `renderCoverageUniverse`, all
+`ENOENT` on `server/scripts/reason_evidence_boards_coverage_*.jsonl`. This is **OI-82**: the tests
+build the path at `server/scripts/`, but the corpora live one directory deeper in
+`server/scripts/fv_suff/` (`.gitignore:6` is a blanket `*jsonl`, so the tracked ones were
+force-added under the other name). It reproduces in the **main checkout too** — do NOT diagnose it as
+a missing-gitignored-file worktree gap like §2, and do not "fix" it by copying files in. Record the
+number, then judge yourself against **5, not 0**; a *sixth* failure is yours. (Misattributed to the
+worktree exactly this way during spec 053.)
+
+**2c. `/speckit-analyze` aborts in a worktree — it is the branch NAME, not the artifacts.**
+Its prerequisite script rejects branch names like `worktree-<slug>` (what `EnterWorktree`
+generates), so the command fails before reading anything. Confirmed 2026-07-29 while reviewing
+spec 051. Do **not** read the failure as a signal about spec/plan/tasks quality — run its
+detection passes by hand instead.
 
 **3. Port collisions across concurrent worktrees are now handled — see
 `docs/architecture/worktree-conventions.md`.** Always `eval "$(./worktree-ports.sh)"`
 from the repo root before starting/killing any server in this or any worktree; it's an
 unconditional rule (in `CLAUDE.md`), not gated behind "am I in a worktree."
 
+**4. `res.sendFile()` 500s in a worktree — the `.claude/` path segment.** Worktrees live under
+`.claude/worktrees/<branch>/`, so every absolute path built from `__dirname` contains a
+**dot-segment**. Express's `res.sendFile` delegates to `send`, whose `dotfiles` option defaults to
+`'ignore'` — it refuses any such path with `NotFoundError`, which the global handler surfaces as a
+generic **500 `{"error":"Internal server error"}`**. The file exists; an `existsSync()` guard on the
+line above passes; the response says nothing useful. It works on the main checkout (no dot-segment),
+so it reproduces **only** in a worktree — i.e. only in the normal way feature branches are run here.
+Has now bitten **twice**: the legal-page routes (fixed via `LEGAL_PAGE_OPTS`) and
+`GET /api/admin/audio/play/:slug` (every coach clip on `/admin/audio` silently unplayable, 2026-07-30).
+**Rule: every `res.sendFile()` in this repo passes `{ dotfiles: 'allow' }`.** No traversal risk at
+these call sites (hardcoded filename or an already-sanitised token, `requireLocalhost`-gated).
+`express.static()` is NOT affected — its dotfiles check applies to the request path relative to
+`root`, not to `root` itself. Full write-up: `docs/architecture/worktree-conventions.md`.
+
 Related: [[project_gamesampling_rng_determinism_trap]] (why gameSampling.js edits must be
-additive), [[reference_supabase_connection]] (the .env lives at `connect-four/server/.env`).
+additive), [[reference_supabase_connection]] (the .env lives at `connect-four/server/.env`),
+[[project_lesson_progression_audio_traps]] (the OTHER audio-serving path on the same admin page).
