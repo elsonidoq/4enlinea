@@ -3526,6 +3526,15 @@ current migrations before adding it to a script. It is also a useful **pattern**
 code-vs-constraint parity by parsing the newest migration SQL file, with no DB connection, which is the
 only DB-free way to test a CHECK constraint in this repo.
 
+**UPDATE 2026-08-02** — this is one half of a symmetric failure, and the structural fix is now tracked
+separately as **OI-118**. The mirror case also exists: `test:fast` lists
+`tests/unit/detectClaimodd.test.js`, deleted back in commit `362afcd`, and `node --test` ignores a
+missing path **silently** — so the list is wrong in both directions with no signal either way. The same
+hand-maintained lines are also the highest-risk conflict in every parallel-lane merge (resolving them by
+taking one side unregisters the other lane's tests). Fixing OI-102 by adding one more path to a
+hand-maintained list treats the symptom; OI-118 proposes replacing the lists with discovery, which
+closes this entry as a side effect.
+
 ---
 
 ## OI-103 — Two `ChallengeScreen.jsx` puzzle-attempt writes pass a scalar `moves_tried` into an `integer[]` column
@@ -4046,3 +4055,44 @@ CAS to the lesson-write path, which is broader than this epic.
 **If picked up**: serialise writes per lesson id (a simple in-process mutex keyed by id would cover the
 admin single-writer case), or make `saveLessonFile` re-read-and-merge under a lock. Add a test that
 fires two concurrent generate-audio calls for different langs and asserts both fields persist.
+
+## OI-118 — Replace the hand-maintained `package.json` test lists with discovery; they fail silently in both directions
+
+**Status**: open — proposed structural fix for the root cause behind OI-102
+**Area**: `connect-four/package.json` — `test`, `test:fast`, `test:dom`;
+`docs/architecture/testing-conventions.md` §"explicitly listed, no automatic discovery"
+**Discovered**: 2026-08-02, while merging the Epic 1–4 and Epic 5–7 lanes
+
+The three test scripts are single-line, space-separated, **glob-free** file lists maintained by hand.
+That representation has no validation in either direction, and both directions are already broken:
+
+- **Listed but missing.** `test:fast` contains `tests/unit/detectClaimodd.test.js`, which was deleted in
+  commit `362afcd` ("bye bye claimodd"). `node --test` **ignores a non-existent path silently** when
+  given a list — exit 0, no warning. This trap is already documented, with a measured table, at
+  `docs/architecture/testing-conventions.md:176-185` ("A stale registration fails nothing"), and the
+  entry has *still* been dead for months: a documented hazard that the representation keeps re-creating
+  is the argument for removing the representation, not for documenting it harder.
+- **Present but unlisted.** `tests/blunder/blunderTagConstraint.test.js` exists on disk and is in none of
+  the three scripts, so it has never run — this is OI-102.
+
+**The merge multiplier.** Because every lane appends to the same three single lines, this file conflicts
+on *every* parallel-lane merge, and resolving it with `git checkout --ours`/`--theirs` silently
+unregisters the other lane's entire test contribution. The 2026-08-02 two-lane merge required a
+174-entry hand union of `test:fast` alone; a single slip there removes coverage with no error anywhere.
+See `docs/architecture/parallel-lane-conventions.md` and the `merging-parallel-lanes` skill.
+
+**Proposed fix**: replace the enumerations with directory/glob discovery (`node --test` supports glob
+patterns, and `--experimental-test-module-mocks` can stay a flag). Discovery makes all three failure
+modes structurally impossible: a new test file is picked up without a registry edit, a deleted one
+cannot linger, and the file stops being a merge conflict surface entirely.
+
+**Care required**: `test` and `test:fast` are deliberately *different* sets — `test:fast` omits
+`tests/integration/candidate-generator.test.js`, which calls the real c4solver up to 400 times and hangs
+on solver IPC deadlock (see `CLAUDE.md` §"Running tests"). Any discovery scheme must preserve that
+exclusion — most simply by an explicit ignore/exclude rather than by an opt-in list. Confirm the
+resulting counts against the pre-change baseline (currently `test` 125, `test:fast` 174, `test:dom` 19)
+and against the known-red baseline in OI-82, and update
+`docs/architecture/testing-conventions.md:174/187`, which currently documents the explicit-list rule and
+its verification technique.
+
+**Closes when shipped**: OI-102 (registration drift), and the `detectClaimodd` phantom entry above.

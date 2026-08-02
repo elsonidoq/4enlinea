@@ -88,6 +88,8 @@
 
 [architecture/testing-conventions.md](architecture/testing-conventions.md) — test runner (node:test), fixture format, suite layout — writing or running tests
 
+[architecture/parallel-lane-conventions.md](architecture/parallel-lane-conventions.md) — forking epics into parallel worktree lanes and merging them back: pre-allocating a disjoint `OI-N` range per lane, landing shared harness/build changes on the base branch before forking, the inventory of hand-maintained registries that collide on every parallel merge (`package.json` test lists, `open_issues.md`, `specs/index.md`, `staging_checks.md`), and the mechanical check for silently auto-merged files — before creating a lane worktree or merging one back
+
 [architecture/index-conventions.md](architecture/index-conventions.md) — 0-indexed vs 1-indexed breakdown for move strings, DB columns, API fields, and frontend state — diagnosing off-by-one bugs or adding new coordinate-bearing fields
 
 [architecture/db-schema.md](architecture/db-schema.md) — live table schemas: columns, types, PKs, FKs, and defaults for all 10 public tables — writing DB queries or migrations

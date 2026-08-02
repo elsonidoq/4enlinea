@@ -17,6 +17,7 @@ Authoritative, up-to-date source for project conventions, API contracts, data mo
 | [index-conventions.md](./index-conventions.md) | reasoning about 0- vs 1-based indexing across movestrings and coordinates |
 | [coach-audio-conventions.md](./coach-audio-conventions.md) | adding any string under `coach.` in i18n, or touching TTS generation / the audio registry & manifest (`coach.spoken.*` is the sole TTS-eligible namespace; `coach.ui.*` is never synthesized) |
 | [worktree-conventions.md](./worktree-conventions.md) | starting, restarting, or killing any dev server (Express API or Vite) from any checkout — main or a linked worktree |
+| [parallel-lane-conventions.md](./parallel-lane-conventions.md) | forking an epic into its own worktree lane, or merging a lane back — `OI-N` range pre-allocation, landing shared harness changes on the base first, and the registry inventory that collides on every parallel merge |
 
 ## LLM coach & lessons
 
