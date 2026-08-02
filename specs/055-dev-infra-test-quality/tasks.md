@@ -314,18 +314,18 @@ US8.1/US8.2.
 
 ### Implementation for User Story 3
 
-- [ ] T036 [P] [US3] Diff `connect-four/server/index.js`'s `helmet(...)` block between `main` and
+- [x] T036 [P] [US3] Diff `connect-four/server/index.js`'s `helmet(...)` block between `main` and
       `stagging` (`git diff origin/main origin/stagging -- connect-four/server/index.js | grep -A5
       "helmet("`) and confirm it is byte-identical; confirm `git log --oneline -1 ae3c006` and `git
       merge-base --is-ancestor ae3c006 main` (exit 0) (FR-011).
-- [ ] T037 [US3] Mark OI-58 ✅ RESOLVED in `docs/open_issues.md` (currently `**Status**: deferred /
+- [x] T037 [US3] Mark OI-58 ✅ RESOLVED in `docs/open_issues.md` (currently `**Status**: deferred /
       open (created 2026-07-18)` at the "## OI-58" entry), citing the byte-identical diff and
       `ae3c006` as evidence — no code change, no worktree, no branch merge (FR-011). Depends on T036.
-- [ ] T038 [US3] In the same OI-58 entry, disambiguate the existing trailing "**Resolved
+- [x] T038 [US3] In the same OI-58 entry, disambiguate the existing trailing "**Resolved
       (2026-07-18)**" paragraph (which is entirely about the `@paddle/paddle-node-sdk` static-import
       change) with an explicit gloss (e.g. "(Unrelated to OI-58's CSP gap — see the CSP resolution
       above/below)") so a future reader cannot conflate the two unrelated resolutions (FR-012).
-- [ ] T039 [US3] Perform a real production-like build + header check (FR-013/SC-004): from the
+- [x] T039 [US3] Perform a real production-like build + header check (FR-013/SC-004): from the
       worktree root, run `eval "$(./worktree-ports.sh)"` (never a bare port, never `pkill node`),
       `cd connect-four && npm run build`, restart the server so it serves the built `dist/`, then
       `curl -sD - "http://localhost:$API_PORT/" -o /dev/null | grep -i content-security-policy` and
@@ -333,12 +333,12 @@ US8.1/US8.2.
       `docs/architecture/server-conventions.md` §"CSP Directive Rationale" — `npm run dev` must NOT
       be used for this check (CSP never lands there). Kill the server only by the exact `$API_PORT`
       the script produced.
-- [ ] T040 [P] [US3] Mark OI-6 ✅ RESOLVED in `docs/open_issues.md`, citing the SUPERSEDED note that
+- [x] T040 [P] [US3] Mark OI-6 ✅ RESOLVED in `docs/open_issues.md`, citing the SUPERSEDED note that
       **already exists** at
       `specs/045-account-session-checkout/contracts/api-auth-session.md:8-13` (dated 2026-07-12,
       confirmed by direct read — research.md R9) as the evidence (FR-014) — this is a citation task,
       not an authoring task; do NOT add a second, redundant SUPERSEDED block to that contract file.
-- [ ] T041 [P] [US3] Confirm OI-72's `docs/open_issues.md` entry still reads as a recorded decision
+- [x] T041 [P] [US3] Confirm OI-72's `docs/open_issues.md` entry still reads as a recorded decision
       (the `...slide` spread making unknown authored fields, including `_es` siblings, survive a
       round trip is intended behavior) — no code change, no status flip (FR-015).
 - [ ] T042 [US3] Re-audit OI-1 against shipped reality (spec 049 T012's

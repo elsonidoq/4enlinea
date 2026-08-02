@@ -124,14 +124,21 @@ under the Epic 4 section, dated 2026-08-02. This OI remains **open**.
 
 ## OI-6 — Superseded de-dup language in `contracts/api-auth-session.md`
 
-**Status**: deferred (doc staleness, non-functional)
+**Status**: ✅ RESOLVED 2026-08-02 (spec 055, Epic 8, US3, T040) — citation task only, no code/doc change.
 **Area**: `specs/045-account-session-checkout/contracts/api-auth-session.md`
 **Discovered**: spec `045` T041/T042 (2026-07-11)
 
 The auth-session contract still describes a server-side de-dup Map coalescing concurrent same-token refreshes, which the shipped code deliberately does **not** implement (see OI-5 / research.md R1). The authoritative, current behavior is documented in `docs/architecture/api-conventions.md` and `server-conventions.md`; the contract file's original wording is now superseded.
 
-**Why deferred**: cosmetic — the contract is a frozen planning artifact; the architecture docs are the live source of truth.
-**If picked up**: add a one-line "SUPERSEDED — see OI-5 / server-conventions.md" note at the top of the relevant section in `contracts/api-auth-session.md`.
+**Resolution**: the "If picked up" note below already happened before this OI was worked — confirmed by
+direct read that `specs/045-account-session-checkout/contracts/api-auth-session.md:8-13` already carries a
+`> **SUPERSEDED (OI-6, 2026-07-12):**` blockquote (dated 2026-07-12, i.e. predating this OI's own
+2026-07-11 discovery note by a day, meaning it was added essentially immediately) pointing to OI-5,
+`research.md` R1, `server-conventions.md`'s "No de-dup Map — documented absence" section, and
+`connect-four/server/authRefresh.js` as the live source of truth. No second, redundant SUPERSEDED block was
+added — this is a citation of pre-existing evidence, not new authoring.
+
+**Why originally deferred**: cosmetic — the contract is a frozen planning artifact; the architecture docs are the live source of truth.
 
 ---
 
@@ -1741,15 +1748,35 @@ A code-review verification pass ruled out the session-load-race variant of this 
 
 ## OI-58 — `main`/production `server/index.js` CSP is missing 5 fixes shipped to `stagging`
 
-**Status**: deferred / open (created 2026-07-18)
-**Area**: `connect-four/server/index.js`'s `helmet({ contentSecurityPolicy: { directives: {...} } })` block
+**Status**: ✅ RESOLVED 2026-08-02 (spec 055, Epic 8, US3, T036–T039) — the CSP gap this OI described no
+longer exists; `main` and `stagging` are byte-identical on this file.
 
 This session fixed five separate CSP gaps on the `stagging` branch (commits `2794793`, `811be2c`, `fb0ecc1`, `ae3c006`, plus the `frameSrc`/`connectSrc` additions in the earlier Paddle-checkout commit): `script-src`/`connect-src`/`frame-src` for Paddle.js + Google Pay, `style-src` for Paddle's inline styles + external stylesheet + Google Fonts' stylesheet, and a new `font-src` directive for Google Fonts' `.woff2` files. All five block real functionality (Paddle checkout, Google Pay, the app's own webfonts) when the CSP header is actually enforced (i.e., any deployed build, not `npm run dev`).
 
-**Why deferred**: `main` (production, `decodec4.xyz`) is ~496 commits behind/diverged from `stagging` (per memory `project_paddle_integration` §4/§9) and this project's convention is to ship small prod-facing fixes via a fresh worktree off `origin/main`, not by merging the divergent branch. The user was offered this (a worktree-based PR carrying just the CSP diff) and explicitly declined, choosing to port the fix to `main` themselves.
-**If picked up**: diff `server/index.js`'s `helmet(...)` block between `stagging`'s current HEAD and `main`'s current HEAD; the `stagging`-side version (with `PADDLE_CDN`/`PADDLE_ORIGINS`/`GOOGLE_PAY_ORIGINS`/`GOOGLE_FONTS_STYLESHEET`/`GOOGLE_FONTS_FILES` constants and their per-directive rationale comments) is the target state — see `docs/architecture/server-conventions.md`'s "CSP Directive Rationale" section for the current, authoritative description of every directive and why.
+**Why originally deferred**: `main` (production, `decodec4.xyz`) is ~496 commits behind/diverged from `stagging` (per memory `project_paddle_integration` §4/§9) and this project's convention is to ship small prod-facing fixes via a fresh worktree off `origin/main`, not by merging the divergent branch. The user was offered this (a worktree-based PR carrying just the CSP diff) and explicitly declined, choosing to port the fix to `main` themselves.
 
-**Resolved (2026-07-18)**: `server/index.js` now has a static top-level `import { Paddle, Environment } from '@paddle/paddle-node-sdk'`; the `if (process.env.PADDLE_API_KEY)` block only constructs `new Paddle(...)` conditionally, same as before. Boot-tested both ways: (1) with `PADDLE_API_KEY` set (`server/.env`) — server starts, `GET /api/paddle/config` returns real prices (200). (2) without it — verified by temporarily forcing the guard false in a throwaway local edit (reverted before committing) since this sandbox's environment injects a real `PADDLE_API_KEY` into every child process regardless of the `.env` file or shell overrides used, making a true "unset" boot untestable here; with the guard forced false the server still starts cleanly and `/api/paddle/config` correctly 503s ("Payments not configured"). No behavior change versus the dynamic-import version — only the import timing moved earlier.
+**Resolution (2026-08-02, CSP gap — no code change, no worktree, no branch merge)**: `git diff origin/main
+origin/stagging -- connect-four/server/index.js` returns **empty** — the whole file, including the
+`helmet(...)` block, is byte-identical between the two branches today (the user's self-described manual
+port, referenced above, evidently landed at some point after this OI was opened). `git log --oneline -1
+ae3c006` → `ae3c006 fix(csp): allow Google Fonts stylesheet and font files`; `git merge-base --is-ancestor
+ae3c006 main` exits 0 — the fix commit is an ancestor of `main`. Verified beyond the source diff (FR-013/
+SC-004): ran a real `npm run build` (not `npm run dev`, which never serves CSP headers) and restarted the
+server against the built `dist/`, then `curl -sD -` against the running app. The live
+`Content-Security-Policy` response header carries every directive `server-conventions.md`'s "CSP Directive
+Rationale" section describes as current: `font-src 'self' https://fonts.gstatic.com`, `style-src 'self'
+'unsafe-inline' https://*.paddle.com https://fonts.googleapis.com`, `img-src` and `connect-src` both
+carrying `https://papergames.io`, `script-src`/`frame-src` carrying the Paddle + Google Pay origins, and a
+`media-src` carrying the Supabase host. No missing directive was found.
+
+**If picked up** (historical — kept for anyone reconstructing the target state): the `stagging`-side version
+(with `PADDLE_CDN`/`PADDLE_ORIGINS`/`GOOGLE_PAY_ORIGINS`/`GOOGLE_FONTS_STYLESHEET`/`GOOGLE_FONTS_FILES`
+constants and their per-directive rationale comments) was the target state — see
+`docs/architecture/server-conventions.md`'s "CSP Directive Rationale" section for the current, authoritative
+description of every directive and why.
+
+**Resolved (2026-07-18)** *(unrelated to the CSP resolution above — this paragraph is entirely about the
+`@paddle/paddle-node-sdk` import mechanism, not helmet/CSP; see OI-57)*: `server/index.js` now has a static top-level `import { Paddle, Environment } from '@paddle/paddle-node-sdk'`; the `if (process.env.PADDLE_API_KEY)` block only constructs `new Paddle(...)` conditionally, same as before. Boot-tested both ways: (1) with `PADDLE_API_KEY` set (`server/.env`) — server starts, `GET /api/paddle/config` returns real prices (200). (2) without it — verified by temporarily forcing the guard false in a throwaway local edit (reverted before committing) since this sandbox's environment injects a real `PADDLE_API_KEY` into every child process regardless of the `.env` file or shell overrides used, making a true "unset" boot untestable here; with the guard forced false the server still starts cleanly and `/api/paddle/config` correctly 503s ("Payments not configured"). No behavior change versus the dynamic-import version — only the import timing moved earlier.
 
 ## OI-59 — UpgradeModal didn't auto-dismiss after a real (non-simulated) staging payment
 
