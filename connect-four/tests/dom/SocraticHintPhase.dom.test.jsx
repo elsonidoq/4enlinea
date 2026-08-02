@@ -180,7 +180,7 @@ test('(a) Hint clicked, then correct move played: the correct message renders an
 
   await waitFor(() => {
     assert.ok(screen.getByText(CORRECT_TEXT), 'expected the correct/reward message to render in the bubble after Hint');
-    assert.equal(screen.queryByText(HINT_TEXT), null, 'expected the hint text to no longer render once the phase reaches correct');
+    assert.equal(screen.queryByText(HINT_TEXT) === null, true, 'expected the hint text to no longer render once the phase reaches correct');
     assert.ok(playCalls.some((src) => src.endsWith(CORRECT_AUDIO)), `expected the reward message to narrate; got ${JSON.stringify(playCalls)}`);
   });
 
@@ -212,7 +212,7 @@ test('(b) Hint clicked, then wrong move played: the hint text does not linger al
     assert.ok(screen.getByText(WRONG1_TEXT), 'expected the wrong-move message to render');
     assert.ok(playCalls.some((src) => src.endsWith(WRONG1_AUDIO)), `expected the wrong-move message to narrate; got ${JSON.stringify(playCalls)}`);
   });
-  assert.equal(screen.queryByText(HINT_TEXT), null, 'expected the hint text to no longer render alongside the wrong-move message');
+  assert.equal(screen.queryByText(HINT_TEXT) === null, true, 'expected the hint text to no longer render alongside the wrong-move message');
 
   cleanup();
 });
@@ -226,7 +226,7 @@ test('(c) Hint never clicked, correct move played: behavior unchanged from today
     assert.ok(screen.getByText(CORRECT_TEXT), 'expected the correct/reward message to render in the bubble');
     assert.ok(playCalls.some((src) => src.endsWith(CORRECT_AUDIO)), `expected the reward message to narrate; got ${JSON.stringify(playCalls)}`);
   });
-  assert.equal(screen.queryByText(HINT_TEXT), null, 'expected the hint text to never have rendered when Hint was never clicked');
+  assert.equal(screen.queryByText(HINT_TEXT) === null, true, 'expected the hint text to never have rendered when Hint was never clicked');
 
   cleanup();
 });

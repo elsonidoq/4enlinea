@@ -204,7 +204,7 @@ test('goal_prompt override renders the lesson-authored text, not a pool string (
     const poolKey = `coach.spoken.${LESSON_FIXTURE.confirmationCategory}.prompt.${i}`;
     const poolText = enTranslation.coach?.spoken?.[LESSON_FIXTURE.confirmationCategory]?.prompt?.[String(i)];
     if (poolText) {
-      assert.equal(screen.queryByText(poolText), null, `did not expect the pool string for ${poolKey} to render alongside the override`);
+      assert.equal(screen.queryByText(poolText) === null, true, `did not expect the pool string for ${poolKey} to render alongside the override`);
     }
   }
 

@@ -85,6 +85,6 @@ test('SetCard hides progress on a locked card even when progress data exists (an
       onClick={() => {}}
     />
   ));
-  assert.equal(screen.queryByLabelText('Puzzle progress'), null);
+  assert.equal(screen.queryByLabelText('Puzzle progress') === null, true);
   cleanup();
 });

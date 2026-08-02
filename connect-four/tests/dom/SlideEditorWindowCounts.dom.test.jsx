@@ -116,6 +116,6 @@ test('SocraticEditor shows no window-counts control — the field is concept-sli
       onChange={() => {}}
     />
   );
-  assert.equal(screen.queryByText(/Window counts/i), null);
-  assert.equal(screen.queryByLabelText(/show window counts/i), null);
+  assert.equal(screen.queryByText(/Window counts/i) === null, true);
+  assert.equal(screen.queryByLabelText(/show window counts/i) === null, true);
 });
