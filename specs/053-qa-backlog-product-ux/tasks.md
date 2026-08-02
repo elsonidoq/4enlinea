@@ -50,7 +50,7 @@ file the finding named) — only assign `fix-here` after both searches come up e
 **Purpose**: Confirm the untracked-file and baseline-tree facts the whole epic is built on, before any
 disposition gets recorded against a stale assumption.
 
-- [ ] T001 Run `git status --short` from the repo root and confirm it still reports
+- [x] T001 Run `git status --short` from the repo root and confirm it still reports
   `?? agentic_QA_2026-07-15-1321.md` (untracked) and `git log --diff-filter=A -- agentic_QA_2026-07-15-1321.md`
   returns empty (never committed) — this is the fact FR-001 corrects. Then run
   `cd connect-four && npm run test:fast` on the unmodified tree and confirm it is green, so any later red
@@ -75,11 +75,11 @@ Confirm every finding in the file has exactly one recorded disposition (in the f
 leaks, anon 401) each carry a disposition backed by a cited, current-tree observation obtained today, not
 assumed from the epic/spec text.
 
-- [ ] T002 [US1] Commit `agentic_QA_2026-07-15-1321.md` to the repository at the repo root
+- [x] T002 [US1] Commit `agentic_QA_2026-07-15-1321.md` to the repository at the repo root
   (`git add agentic_QA_2026-07-15-1321.md`, as its own change within this feature's commit set) so
   `git status --short` no longer reports it untracked (FR-001, SC-001). Do not edit its content in this
   task — content edits happen in T007/T008 after triage.
-- [ ] T003 [US1] Live-check the `/mistakes ↔ /stats` cold-load nav loop (FR-004). Run the required triage
+- [x] T003 [US1] Live-check the `/mistakes ↔ /stats` cold-load nav loop (FR-004). Run the required triage
   step first: `git log --oneline --grep "mistakes.*stats\|cold.load\|categoryListBack"` and
   `git log --oneline -- connect-four/src/screens/categoryListBack.js` — expect to find commit `f4de927`.
   Then run `cd connect-four && npm run test:fast -- categoryListBack` (or the project's equivalent
@@ -95,7 +95,7 @@ assumed from the epic/spec text.
     (consumed at `connect-four/src/screens/CategoryListScreen.jsx:64`) — reproduce before theorizing — fix
     it, and extend `connect-four/tests/unit/categoryListBack.test.js` with the reproducing case before
     re-running it green.
-- [ ] T004 [US1] Live-check the `/api/scores` 500-on-malformed-movestring finding (FR-005). Run the
+- [x] T004 [US1] Live-check the `/api/scores` 500-on-malformed-movestring finding (FR-005). Run the
   triage step: `git log --oneline --grep "scores.*500\|validateMoves"` and
   `git log --oneline -- connect-four/server/index.js`. Read `connect-four/server/index.js` around
   `validateMoves(moves)` (near line 1037) to confirm the current guard shape (`if (movesErr) return
@@ -110,7 +110,7 @@ assumed from the epic/spec text.
   - **If it still 500s**: this is the second fix-here-authorized item — add/fix the `validateMoves` guard
     on this route and add an integration test under `connect-four/tests/integration/` per
     `docs/architecture/testing-conventions.md`'s "HTTP endpoint behavior" row before closing it out.
-- [ ] T005 [US1] Live-check English-in-Spanish leaks (FR-006). First re-verify the four already-named
+- [x] T005 [US1] Live-check English-in-Spanish leaks (FR-006). First re-verify the four already-named
   leaks at their current locations — Past Games sort chips ("Worst Mistakes"/"Played Well"),
   Review/blunder headers ("You played"/"Prev"/"Next"), and `connect-four/src/components/KbTermPopup.jsx`
   (expect `t(\`kb.term.${kbId}\`, ...)` at/near line 66) — by switching the running app to Spanish
@@ -131,7 +131,7 @@ assumed from the epic/spec text.
     fresh repo-wide sweep beyond what this triage step actually finds.
   - **For any i18n leak already owned by Epic 3 (upgrade-funnel/payments)**: record `owned-by-Epic-3`,
     pointer only, no edit.
-- [ ] T006 [US1] Live-check the anon challenge-progress 401 fix (FR-007). In a clean/incognito (or
+- [x] T006 [US1] Live-check the anon challenge-progress 401 fix (FR-007). In a clean/incognito (or
   IndexedDB-cleared) anonymous session against the running dev server, start a Challenge session and
   confirm progress persists across puzzles without a 401 from the endpoint that tracks it.
   - **If it still holds (expected/default)**: record `fixed`/"still holding" with today's date; no code
@@ -139,7 +139,7 @@ assumed from the epic/spec text.
     it would get a new `OI-N`, not a fix, even if small).
   - **If it regressed**: file a new `OI-N` in `docs/open_issues.md` per T009's contract; do not fix it
     under this feature.
-- [ ] T007 [US1] **Open with an explicit denominator step**: enumerate and freeze the finding list in
+- [x] T007 [US1] **Open with an explicit denominator step**: enumerate and freeze the finding list in
   `agentic_QA_2026-07-15-1321.md` — 25 `####` blocks, of which 23 are actual problem reports (`[major]`
   ×3, `[minor]` ×18, `[polish]` ×2) and 2 are `[passes]` entries (things that worked, not findings,
   excluded from the disposition count by definition) — plus a separate sweep of the four `❌ fail` rows
@@ -161,7 +161,7 @@ assumed from the epic/spec text.
   "fetch failed" finding keeps its existing "environmental flake" classification — do not reopen it
   (FR-008). Do not fix anything found in this task; a `fix-here` disposition is illegal here — only
   T003–T005 may fix code (Assumptions: the three fix-here items are the full and only set).
-- [ ] T008 [US1] Update `agentic_QA_2026-07-15-1321.md` in place: append a `DISPOSITION:` line directly
+- [x] T008 [US1] Update `agentic_QA_2026-07-15-1321.md` in place: append a `DISPOSITION:` line directly
   under each finding using the literal tag vocabulary from `contracts/disposition-record-format.md`
   (`DISPOSITION: fixed — <file:line or test>, verified <date>` / `stale — <reason>, verified <date>` /
   `fix-here — see OI-35, fixed <date>` / `owned-by-Epic-<N> — <shipped, confirmed covered | new OI-N
@@ -170,7 +170,7 @@ assumed from the epic/spec text.
   and stated in the OI-35 record (the 2 `[passes]` entries are excluded by definition, not counted) —
   and separately confirm the four `❌` checklist rows T007 swept each carry a recorded disposition in the
   OI-35 table, even though they carry no `DISPOSITION:` line in the file itself (SC-002).
-- [ ] T009 [US1] Rewrite `docs/open_issues.md`'s OI-35 entry: remove the false "the **committed** findings
+- [x] T009 [US1] Rewrite `docs/open_issues.md`'s OI-35 entry: remove the false "the **committed** findings
   file" claim (correct only if T002 has landed by the time this is written), replace the body with the
   full durable disposition table per `contracts/disposition-record-format.md`'s "Per-`OI-N` durable
   record" shape (one row per finding or a grouped summary with an explicit total count matching T007's
@@ -199,20 +199,20 @@ confirm the text bubble alone conveys the full greeting. Separately, in a real (
 from a clean incognito session, reach the mission screen via the first-run auto-route and confirm (or
 fail to confirm) the greeting audibly plays on first interaction, in both languages.
 
-- [ ] T010 [US2] Verify FR-011: with the app's audio muted (or an autoplay-blocked state), reach
+- [x] T010 [US2] Verify FR-011: with the app's audio muted (or an autoplay-blocked state), reach
   `OnboardingMissionScreen` fresh in English, then again in Spanish, and confirm the coach's on-screen
   text bubble alone — no audio — fully conveys the greeting content in both languages (Acceptance
   Scenario 1, SC-006). Read-only verification; no code change expected. If the text is found to be
   incomplete relative to the audio script in either language, that is out of this feature's fix-here
   scope (FR-012 forbids new onboarding UI, and a copy gap here is a distinct, smaller fix than anything
   named in FR-004–006) — file a new `OI-N` rather than editing under this feature.
-- [ ] T011 [US2] Write the accepted-alternative rationale into `docs/open_issues.md`'s OI-21 entry
+- [x] T011 [US2] Write the accepted-alternative rationale into `docs/open_issues.md`'s OI-21 entry
   (first-interaction playback, status quo; rationale: browsers block `audio.play()` before a user
   gesture, and the mission screen is reached via `shouldAutoRouteToOnboarding`'s auto-route with no prior
   gesture) and mark it `**Status**: ✅ RESOLVED <date>` (FR-010, Acceptance Scenario 2, SC-005). Per
   plan.md, OI-21's design-question closeout is satisfied by this documentation alone, independent of
   T012's outcome — do not gate this task on T012.
-- [ ] T012 [US2] **MANUAL, human-in-the-loop — MUST NOT be performed with `/app-qa` automation tooling,
+- [x] T012 [US2] **MANUAL, human-in-the-loop — MUST NOT be performed with `/app-qa` automation tooling,
   `chrome-devtools` MCP, or any other headless/automation browser** (FR-014a; those tools disable
   autoplay-blocking and produce a false pass). Following `quickstart.md` §6: a human opens a real desktop
   browser in a clean incognito/private window, navigates to the app's first-run URL so the anonymous
@@ -235,7 +235,7 @@ fail to confirm) the greeting audibly plays on first interaction, in both langua
     legitimate outcome, not a blocker — it does not reopen OI-21 (T011 already closed the design question)
     and does not block T013 or Phase 5.
   Do not substitute any automated/scripted check to manufacture the first or avoid recording the third.
-- [ ] T013 [US2] Confirm-and-close: verify FR-012 (no new onboarding entry-point UI — splash, welcome
+- [x] T013 [US2] Confirm-and-close: verify FR-012 (no new onboarding entry-point UI — splash, welcome
   card, routing change, speaker affordance — was introduced by T010–T012) and FR-013
   (`shouldAutoRouteToOnboarding`'s anonymous-only semantics and the no-flash-of-the-sparring-game
   constraint are unchanged — read `connect-four/src/lib/onboardingRouting.js`/`App.jsx`'s relevant effect
@@ -261,7 +261,7 @@ task strictly ordered before the closeout task (FR-015–FR-022, Settled Decisio
 and confirm `docs/open_issues.md` records the decision. For the accuracy half, play a sparring game
 making only optimal moves, then resign, and observe what the Review screen shows.
 
-- [ ] T014 [US3] Edit `docs/superpowers/specs/2026-07-13-anon-free-deep-reveal-design.md:41`: remove the
+- [x] T014 [US3] Edit `docs/superpowers/specs/2026-07-13-anon-free-deep-reveal-design.md:41`: remove the
   live "blunders only" restriction line (`4. **Which mistakes:** **blunders only.** Only genuine blunders
   open the reveal…`) and replace it with the documented reversal trigger (evidence anonymous users
   routinely spend the reveal on suboptimal, non-blunder moves) and the response to that trigger (steer
@@ -270,7 +270,7 @@ making only optimal moves, then resign, and observe what the Review screen shows
   already carries the equivalent line struck through and marked `RETIRED 2026-07-16`; cite it as evidence
   D2 shipped, not a target. If line 41 is already gone by the time this runs, this is **not** a trivial
   pass — confirm the reversal-trigger note is present at that path and add it if missing (Edge Cases).
-- [ ] T015 [US3] Record D2 (retire "blunders only", ship no gate) in `docs/open_issues.md` — a new or
+- [x] T015 [US3] Record D2 (retire "blunders only", ship no gate) in `docs/open_issues.md` — a new or
   existing entry for the deep-reveal spend-policy decision, with the rationale from Settled Decision #5
   (server-side gate maps ambiguously to stored rows; client-only gate is theatre against a public no-auth
   permalink `/api/blunders/:id`; blocking a deliberate click costs conversion; spec-042's "label + color
@@ -279,7 +279,7 @@ making only optimal moves, then resign, and observe what the Review screen shows
   Confirm zero lines of gate/restriction code exist anywhere in the deep-reveal spend path
   (`grep -rn "blunder" connect-four/server/index.js connect-four/src` around the deep-reveal
   routes/components and confirm no move-type check gates the spend) — FR-016, SC-008.
-- [ ] T016 [US3] **Before any close-as-not-a-bug determination** (FR-018 — this task strictly precedes
+- [x] T016 [US3] **Before any close-as-not-a-bug determination** (FR-018 — this task strictly precedes
   T018): reproduce the findings file's in-app repro. Start a sparring game
   (`eval "$(./worktree-ports.sh)"` first), play only solver-optimal moves for every user move (use the
   Hint toggle in `connect-four/src/screens/GameScreen.jsx` — `handleHintToggle` at line 124, the button
@@ -296,14 +296,14 @@ making only optimal moves, then resign, and observe what the Review screen shows
     specifically) before moving to T017.
   - **If `review.cleanButLost` already renders correctly for this trigger (expected/default per plan.md)**:
     no code change; proceed to T017 with this observation as evidence for T018.
-- [ ] T017 [US3] Confirm FR-021/FR-022 regardless of T016's branch: the accuracy calculation itself is
+- [x] T017 [US3] Confirm FR-021/FR-022 regardless of T016's branch: the accuracy calculation itself is
   byte-for-byte unchanged (no outcome-folding, no threshold, no suppression rule, no new Stats metric —
   `git diff` for this story should show no change to the accuracy computation in `ReviewScreen.jsx` or
   `papergamesImporter.js` beyond whatever T016's bug-branch, if it fired, touched for copy/framing only);
   and that the already-shipped `review.cleanButLost` copy (`connect-four/src/screens/ReviewScreen.jsx`
   near line 293, `en.json`/`es.json` near line 1005) still reads correctly in both languages (Acceptance
   Scenario 7, SC-010).
-- [ ] T018 [US3] Close `docs/open_issues.md`'s OI-37 entry: cite evidence from **both** triggers — the
+- [x] T018 [US3] Close `docs/open_issues.md`'s OI-37 entry: cite evidence from **both** triggers — the
   342-game Papergames `finish_reason` breakdown (already measured in spec.md's Non-Obvious Facts /
   `docs/epics/open-issues-epics.md` Epic 7, cite verbatim, do not re-derive) and T016's in-app
   verification result (whichever branch it landed on) — and mark
@@ -323,7 +323,7 @@ repro strictly reproduced before closeout.
 **Purpose**: Cross-story confirmation that the epic's acceptance criteria (`docs/epics/open-issues-epics.md`
 Epic 7) and spec.md's Success Criteria are met as a whole, once US1/US2/US3 are all done.
 
-- [ ] T019 Confirm all three of OI-35, OI-21, OI-37 show a dated resolution (or dated "deliberately not
+- [x] T019 Confirm all three of OI-35, OI-21, OI-37 show a dated resolution (or dated "deliberately not
   fixed, decision recorded") entry in `docs/open_issues.md` (SC-011); confirm `git log --diff-filter=A --
   agentic_QA_2026-07-15-1321.md` now returns a commit (SC-001); confirm
   `grep -n "^DISPOSITION:" agentic_QA_2026-07-15-1321.md | wc -l` equals 23 — the denominator T007 froze

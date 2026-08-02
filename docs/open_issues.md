@@ -513,34 +513,49 @@ pre-existing Epic 8 behavior, not regressions from the mission screen:
 
 ## OI-21 — Onboarding greeting cannot autoplay on a cold load; design a gesture-first entry so the coach can speak on arrival
 
-**Status**: open — product/UX design task (the runtime bug is FIXED; this is about making the greeting play *on arrival* rather than *on first interaction*).
-**Area**: `src/screens/OnboardingMissionScreen.jsx`, `src/lib/useCoachSpeech.js` (audio unlock), `src/lib/onboardingRouting.js` (the first-run auto-route), and whatever precedes the mission screen.
+**Status**: ✅ RESOLVED 2026-08-01 (spec `053`/Epic 7, US2) — accepted alternative documented; the
+runtime bug was already FIXED (2026-07-13) and this closes the remaining product/UX question.
+**Area**: `src/screens/OnboardingMissionScreen.jsx`, `src/lib/useCoachSpeech.js` (audio unlock), `src/lib/onboardingRouting.js` (the first-run auto-route).
 **Discovered**: onboarding follow-ups coach-speech debugging, 2026-07-13.
 
 Browsers block `audio.play()` until the page has received a user gesture (confirmed observable:
 `play()` rejects with `NotAllowedError`, mp3 fetched but silent). The mission screen is reached via
-the anonymous first-run **auto-route** — it appears with **no prior gesture**, so the coach greeting
-is autoplay-blocked. The 2026-07-13 fix (`useCoachSpeech`: hold a blocked clip and replay it on the
-first `pointerdown`/`keydown`/`touchend`) makes the greeting play on the user's **first interaction**
-and makes all later coach speech robust — but on a truly cold mission screen the greeting still can't
-sound *the instant the screen appears*, because that is a hard browser rule, not a code bug.
+the anonymous first-run **auto-route** (`shouldAutoRouteToOnboarding`) — it appears with **no prior
+gesture**, so the coach greeting is autoplay-blocked. The 2026-07-13 fix (`useCoachSpeech`: hold a
+blocked clip and replay it on the first `pointerdown`/`keydown`/`touchend`) makes the greeting play
+on the user's **first interaction** and makes all later coach speech robust — but on a truly cold
+mission screen the greeting still can't sound *the instant the screen appears*, because that is a
+hard browser rule, not a code bug.
 
-The product task: design a first-run entry that **naturally elicits a gesture before (or as) the
-mission screen is shown**, so the greeting can play on arrival without an awkward "click anywhere"
-gap. Options to weigh (do NOT just pick one — brainstorm):
-- A one-tap "Meet your coach" / "Start" splash *before* the mission screen; the tap both advances
-  and unlocks audio, so the greeting plays as the mission screen mounts.
-- Make the auto-route itself require a tap (e.g. land on a minimal welcome card whose only CTA
-  enters onboarding), instead of silently routing into the mission screen.
-- A visible speaker / "tap to hear the coach" affordance on the mission bubble (explicit, but adds
-  a tap and some UI).
-- Accept first-interaction playback (current behavior) + ensure the text bubble fully conveys the
-  greeting meanwhile; lowest effort, no new UI.
+**Decision (accepted alternative, owner-settled, spec `053` Settled Decision #3): keep
+first-interaction playback as-is.** No new splash screen, no welcome card, no routing change, no
+speaker/play affordance — the greeting plays on whatever the user first touches. Rationale: any
+entry that "naturally elicits a gesture before the mission screen" adds new UI for a narrow win
+(shaving off the delay until the first tap), and the text-bubble fallback below already means no
+content is lost while waiting. `shouldAutoRouteToOnboarding`'s anonymous-only semantics and the
+no-flash-of-the-sparring-game constraint are unchanged (verified 2026-08-01: `git diff` for this
+story touches only docs, not `onboardingRouting.js`/`App.jsx`).
 
-Constraint: whatever the entry, it must not reintroduce a flash of the sparring game before the
-gesture, and must keep the anonymous-only auto-route semantics (`shouldAutoRouteToOnboarding`).
-Cross-ref: staging_checks.md Epic 8 "Coach greeting is actually AUDIBLE" item; `useCoachSpeech`
-unlock mechanism.
+**Text-bubble parity verified 2026-08-01 (FR-011, SC-006):** `OnboardingMissionScreen.jsx`'s
+`CoachDialog` bubble renders `onboarding.mission.coachLead` + `onboarding.mission.coachText`, which
+concatenate to the **exact same string** as the spoken key `coach.spoken.onboardingMission.greeting`,
+in both locales — read directly from `connect-four/src/i18n/en.json` and `es.json`:
+- EN: `"Hi, I'm your coach."` + `"Here's how we'll make you dangerous at Connect Four."` = the full
+  spoken greeting.
+- ES: `"Hola, soy tu entrenador."` + `"Así es como te volveremos peligroso en el Cuatro en línea."` =
+  the full spoken greeting.
+A user who never hears the audio loses nothing.
+
+**`staging_checks.md:495` real-browser audibility check — pending, not yet performed this session
+(2026-08-01).** FR-014a requires a human in a real (non-automation) browser, clean incognito, to
+confirm the greeting audibly plays on first interaction in EN and ES before that checkbox can be
+signed off — `/app-qa` automation/chrome-devtools MCP is explicitly disallowed (fakes autoplay
+permission). No human was available to run this manual check this session. **Owner: Pablo
+(repo owner). Target: 2026-08-08.** Also recorded in `docs/deploy-runbook.md` (see note there —
+`docs/deployment_steps.md` does not exist in this repo, so the pending-check note was filed at the
+nearest equivalent, `docs/deploy-runbook.md`, per this spec's Trap #1 handling) and beside the
+checkbox itself at `staging_checks.md:495`. This pending state does **not** reopen OI-21 — the
+design question above is fully settled and documented independent of this manual check's outcome.
 
 ## OI-22 — Anon post-game review re-analysis re-runs the solver (analyze cache-check is `user_id`-only)
 
@@ -824,21 +839,48 @@ Two low-severity residuals were deliberately left when the transition gate shipp
 
 **If picked up**: give `syncCheckoutSession` the same `upgrade_completed` insert guarded by an idempotency key on the checkout session id so exactly one track is written whichever path wins. Cross-ref: memory `project_stripe_traps`; server-conventions.md "Activation: webhook primary + verify-session fallback".
 
-## OI-35 — QA run 2026-07-15 findings backlog (agentic_QA_2026-07-15-1321.md) — unfixed at close
+## OI-35 — QA run 2026-07-15 findings backlog (agentic_QA_2026-07-15-1321.md) — re-triaged and routed
 
-**Status**: deferred / open (surfaced 2026-07-15 by the 6-batch `/app-qa` coordinator run; a plan to address the full findings set is queued via a `superpowers:writing-plans` prompt, not yet executed). **The authoritative, full-detail backlog for this run is the committed findings file `agentic_QA_2026-07-15-1321.md` at repo root** — this OI is a discoverability pointer, not a re-listing. Read that file (per-finding severity, exact code location, repro) before working any item.
-**Area**: multiple (mistake-review nav, lessons/Spanish localization, upgrade funnel, input validation)
+**Status**: ✅ RESOLVED 2026-08-01 (spec `053`/Epic 7, US1). The findings file `agentic_QA_2026-07-15-1321.md` is now committed at the repo root (was untracked at surfacing time — the prior body's "committed findings file" claim was false until this triage; it is now true). Every finding has been re-triaged against the current tree and carries a `DISPOSITION:` line in the file itself (`grep -n "^DISPOSITION:" agentic_QA_2026-07-15-1321.md` → 23 lines). This entry is the durable disposition record — read below, not just the file.
+**Area**: multiple (mistake-review nav, lessons/Spanish localization, upgrade funnel, input validation, onboarding, saga progression, DEV tooling)
 
-Headline items still unfixed at session close (see the file for the rest — several [minor] English-in-Spanish leaks, `/api/scores` 500 on malformed movestring, scattered `tier==='paid'` checks, anon challenge-progress 401):
+**Denominator (FR-002/T007)**: the file's 25 `####` blocks split into 23 actual problem reports (dispositioned below) and 2 `[passes]` entries (line 353 "Progression + locking", line 371 "Lesson audio" — excluded by definition, they record successes not findings). Separately, 4 `❌ fail` checklist rows live outside any `####` header (lines 474, 543, 546, 547) — each maps onto one of the 23 findings below and carries that finding's same disposition (noted inline in the table). **Total dispositioned: 23 findings + 4 swept checklist rows, all accounted for.**
 
-- **[major] Back button infinite-toggles `/mistakes ↔ /stats` on a COLD-loaded `/mistakes`** (empty nav stack), never reaching Home. In-session nav unwinds fine — bug is cold-load specific.
-- **[major] Lesson CONTENT is English-only in Spanish mode** — lesson JSON has no `_es` fields and `lessonLoader.js` has no locale logic; narration/concept/highlight text renders English. The whole "Learn" surface degrades. (Needs a product decision on approach — static `_es` vs reuse the deep-reveal LLM localization path vs deferral.)
-- **[product decision] Anon single free deep-reveal is spendable on a *suboptimal* move**, contradicting the "blunders only" design intent — needs a product call, not a mechanical fix.
-- **[product/UX] Upgrade funnel has orphaned ends**: `/api/stripe/portal` has zero frontend call sites (paid users can't manage/cancel in-app); no standalone Settings upgrade entry (free users can only upgrade by hitting a specific paywall); annual plan has no savings framing.
+### Disposition table (one row per `####` finding, in file order)
 
-**Reclassified during the session (NOT a bug)**: the candidate-generation "fetch failed" finding was downgraded [major]→[minor] as an environmental flake — see memory [[project_generate_candidates_fetch_failed_flake]]. The paid-puzzle-category paywall it left unexercised is now positively testable (generate→approve→reindex a paid category, then confirm a free user hits the paywall).
+| # | Finding (severity) | Batch | Disposition | Evidence |
+|---|---|---|---|---|
+| 1 | "Replay intro" bypasses mission screen (minor) | A | **fixed** | commit `e85640d` — `SettingsScreen.jsx#handleReplayIntro` now routes through `onboardingMission` |
+| 2 | Import offer requires 2 clicks after sign-in (minor) | A | **fixed** | commit `f625de8` — Dev-skip-auth no longer wipes `stashReturnTo('settings')`; `App.jsx` consumes it via `consumeReturnTo()` |
+| 3 | Lost games report "No mistakes"/100% accuracy (minor) | A | **owned-by-OI-37/US3** | same spec's US3 (T016–T018) reproduces the in-app resign repro and closes OI-37 with both triggers' evidence; pointer only |
+| 4 | Onboarding mission Spanish uses tú, not voseo (minor) | A | **fixed** | commit `99561c7` — `es.json` onboarding strings now voseo (dup of #21; also swept row line 543) |
+| 5 | DEV claimeven fixture Green/Gray contradiction (minor) | B | **fixed** | commit `fb7c22c` — `devFixtures.js` sets `CATEGORY_USER_PLAYER.claimeven = 2` |
+| 6 | Setpicker pluralizes "1 positions" (polish) | B | **fixed** | commit `8cbd3fd` — i18next `positions_one`/`positions_other` plural keys |
+| 7 | `challenge-progress` 401 for signed-in anon (minor) | B | **fixed / still holding** | live-verified 2026-08-01: fresh anon session (`POST /api/auth/anonymous`) → `GET /api/user/challenge-progress` = 200 with real progress, cold and after navigating into a Challenge screen |
+| 8 | Candidate generation "fetch failed" (minor) | B | **stale (environmental flake, not reopened)** | already reclassified 2026-07-16 in-file; FR-008 forbids reopening; re-confirmed 2026-08-01 |
+| 9 | Anon free deep reveal spendable on suboptimal move (minor) | C | **owned-by-OI-35/US3 (D2)** | Settled Decision #5: retire "blunders only", ship no gate — recorded by this same spec's US3 (T014/T015); pointer only |
+| 10 | Back button infinite-toggles `/mistakes ↔ /stats` (major) | C | **fixed** | commit `f4de927`; regression test `categoryListBack.test.js` 5/5 pass; live-verified 2026-08-01 (cold `/mistakes` → 1 Back press → Home) |
+| 11 | "Failed to save" papergames_id on first attempt (minor) | C | **fixed** | commit `f76b62d` — `SettingsScreen.jsx` wraps the save in `fetchWithAuthRetry` |
+| 12 | Saga map shows stale progress after lesson completion (minor) | D | **fixed** | commit `0de0a8b` — awaits the lesson-progress save before returning to the saga map |
+| 13 | English leaks in Spanish UI: sort chips, review/blunder headers (minor) | D | **fixed** | commits `9469a68`, `c995491` (dup of #20/#21 below) |
+| 14 | Lesson CONTENT English-only in Spanish (major) | D | **stale** | commit `cfb2fa8` shipped `_es` sibling fields for all 15 lesson files; `lessonLoader.js` merges them per-field for `es` (dup of #18) |
+| 15 | No in-app billing-portal UI / no standalone upgrade entry (minor) | E | **owned-by-Epic-3** | Epic 3 ("Entitlement & Payments Consolidation"), still open/running in a parallel worktree (Lane A) — pointer only |
+| 16 | Paid gates use scattered `tier` checks, not shared interface (minor) | E | **owned-by-Epic-3** | Epic 3 Settled Decision #1 (OI-39), still open — pointer only (also swept row line 474) |
+| 17 | Annual plan shows no savings framing (polish) | E | **owned-by-Epic-3** | Epic 3, still open — pointer only |
+| 18 | Lesson Concept/Socratic content English-only (major) | F | **stale** | same evidence as #14 — commit `cfb2fa8` |
+| 19 | Onboarding mission-pillar/import-offer titles tú not voseo (minor) | F | **fixed** | same evidence as #4 — commit `99561c7` (also swept row line 543) |
+| 20 | Past Games sort chips hardcoded English (minor) | F | **fixed** | commit `9469a68` (also swept row line 547) |
+| 21 | Review + Blunder-detail headers hardcoded English (minor) | F | **fixed** | commit `c995491` (also swept row line 547) |
+| 22 | KbTermPopup raw-slug title + hardcoded English CTAs (minor) | F | **fixed** | commit `f41dcce` (also swept row line 547; the KB summary body's own Spanish-fallback gap is the separately-tracked OI-38, untouched here) |
+| 23 | `/api/scores` 500 on malformed movestring (minor) | F | **fixed** | commit `9a7d42d`; live-verified 2026-08-01: malformed movestring → HTTP 400 with a validation message, not 500 |
 
-**Why deferred**: this was a QA + planning session, not an implementation one; fixes are being routed through a plan. **If picked up**: consume `agentic_QA_2026-07-15-1321.md` as the work-list and `staging_checks.md` for the deploy-only verification residue.
+**Swept checklist rows (outside any `####` header, FR-002)**: line 474 ("Paid gates read 'is paid' only through shared swappable interface — ❌ fail") → same disposition as finding #16 (owned-by-Epic-3). Line 543 ("Voseo dialect — ❌ FAIL") → same disposition as finding #19 (fixed, `99561c7`). Line 546 ("Lesson content English-only — ❌ CONFIRMED") → same disposition as finding #18 (stale, `cfb2fa8`). Line 547 ("Batch-D minor leaks — ❌ CONFIRMED") → same disposition as findings #20/#21/#22 (fixed).
+
+**Net**: 15 of 23 findings **fixed** (with commit citations, several duplicated across batches so the real fix count is 12 distinct commits); 3 **stale** (candidate-gen flake unchanged-by-design, row 8; lesson-content gap closed by `cfb2fa8`, rows 14 and 18 — the same evidence dispositioning two separately-filed findings); 3 **owned-by-Epic-3** (upgrade-funnel/payments, still open in a parallel worktree); 2 **owned by this same spec's US3** (accuracy-vs-outcome, deep-reveal spend policy — both are this epic's own record-and-close stories, not a different epic, and are pointers only from US1's perspective). Zero findings require further code changes under US1's fix-here scope (FR-004/FR-005/FR-006 all landed as "already fixed, re-verified" — no live-check surprised the triage).
+
+**Side discovery (out of US1's scope, not acted on here)**: while verifying finding #14/#18 (lesson content), the current tree shows `_es` fields for **all 15** lesson files (commit `cfb2fa8` "Spanish translations for all 13 lessons"), which appears to make `docs/open_issues.md`'s separate OI-36 ("only lesson 1 of 13 translated") stale. OI-36 was not re-verified or edited under this US1 batch — flagging for whoever picks it up next.
+
+**If picked up further**: nothing remains under US1. The two US3-owned items (row 3, row 9) close via this spec's US3 (T014–T018); the three Epic-3-owned items (rows 15–17, checklist row 474) stay with Epic 3, Lane A.
 
 ## OI-36 — Spanish lesson content: only lesson 1 of 13 translated; lessons 2–13 (~6,000 words) remain English-only
 
@@ -857,6 +899,25 @@ D1 (offline `_es` sibling fields, human-reviewed, no request-time LLM) shipped f
    - `[term:...]`/`[zone:...]` tags and `columna N` references preserved verbatim.
    - Diff contains **only** added `_es` keys — no reformatting/reordering churn.
 3. `node --env-file=server/.env scripts/translate-lessons.mjs --lesson <id>` (real run), then `git diff` line-by-line before committing.
+
+**UPDATE 2026-08-01 (spec `053`/Epic 7 — surfaced during the OI-35 re-triage, not acted on):** the
+headline "only lesson 1 of 13 translated" is **stale**. Commit `cfb2fa8` shipped `_es` sibling fields
+across the lesson set, and **all 15** lesson files now carry `text_es` — counted at source
+2026-08-01: `lesson-01` 9, `lesson-02` 9, `lesson-03` 15, `lesson-04` 10, `lesson-05` 8, `lesson-06`
+9, `lesson-07` 9, `lesson-08` 9, `lesson-09` 9, `lesson-10` 9, `lesson-11` 10, `lesson-12` 9,
+`lesson-13` 9, `lesson-14` 9, `lesson-15` 8. (Note the entry's title also predates lessons 14–15
+existing.) This is why spec 053's triage dispositioned the findings file's two "lesson content
+English-only in Spanish mode" findings (rows 14 and 18 of the OI-35 table) as **stale**.
+
+**Left open deliberately, because presence ≠ review.** The blocker this entry actually records was
+never "are the fields there" but "has a human applied the step-2 review checklist — voseo,
+verde/gris vs. the `userPerspective` token trap, `[term:]`/`[zone:]` preservation — before the
+remaining lessons were bulk-translated on an uncalibrated prompt." That review is **not** evidenced
+by the field counts above and was not performed by spec 053 (out of scope: no lesson content or audio
+work). **If picked up**: spot-check 2–3 of the bulk-translated lessons against the step-2 checklist;
+if they hold, close this entry citing `cfb2fa8` — if a systematic voseo or colour-perspective error
+shows up, that is the real remaining work. See [[project_lesson_answer_set_invariant]] and
+`docs/knowledge-base/` for the colour-token mapping.
 4. **After the text is committed**, generate narration audio for that lesson — preferably via the admin editor's "Generate audios" button with the language toggle on **es** (now lang-wired, commit `2201894`); or `curl -sX POST localhost:3001/api/admin/lessons/<id>/generate-audio -H 'Content-Type: application/json' -d '{"lang":"es"}'` (server running locally). Then verify `prune-audio` reports `{deleted: 0}` before trusting it (Task 3's trap: `collectReferencedAudio` must already cover `audio_es`). **Translate and voice in the same pass**: a lesson translated but not yet voiced serves Spanish text with the **English** audio clip (the per-field fallback backfills `audio` from English), which reads worse than silence.
 5. **Terminology drift to fix before/during the bulk pass**: lesson 1 rendered "four-cell window" as both "ventana de cuatro **celdas**" and "ventana de cuatro **casillas**" (visible on one screen). Pin a glossary in the script's prompt so a consistent term is used across all ~6,000 words.
 5. Run `npm run test:fast` once per lesson (or batch) before committing.
@@ -865,12 +926,49 @@ Heaviest remaining lessons by word count: `lesson-11-figure-7-trap.json` (~860 w
 
 ## OI-37 — Accuracy 100% still reads oddly next to a lost game (product question, not a bug)
 
-**Status**: deferred / open (surfaced during Batch B task 18, finding 15)
+**Status**: ✅ RESOLVED 2026-08-01 (spec `053`/Epic 7, US3) — closed with evidence from both triggers;
+no code changed.
 **Area**: `connect-four/src/screens/ReviewScreen.jsx` (Accuracy card)
 
 Task 18 fixed the *copy* contradiction: a 0-mistake resigned/lost game now shows `review.cleanButLost` ("No mistakes on the board — but the game was lost. Review how it ended.") instead of the old "Clean game. Nothing to revisit." copy, and the Past Games card suppresses its "No mistakes" chip when `outcome === 'lost'`. **The Accuracy metric itself (100%) was deliberately left unchanged** — it measures board-move optimality (every scored move matched the solver's best line) and is correct on its own terms; resigning isn't a board move and is out of its denominator by design. Do not "fix" this by folding resignation into the accuracy calculation: doing so would conflate two different questions ("did every move I made match the solver's best line?" vs. "did I finish the game?") into one number, destroying the metric's ability to answer either one cleanly.
 
-Whether a 100%-accuracy badge should still be visually softened, annotated, or paired with an explicit "you resigned" note when the outcome is a loss is a product/UX call, not a mechanical fix — needs its own brainstorm if picked up. Not blocking; the copy fix already removes the "flawless" contradiction from the coach line.
+**Owner-settled 2026-08-01 (spec `053` Settled Decision #4): a minimum-scored-moves threshold was
+considered and explicitly rejected** — *"Forget about the short game threshold. Do nothing special to
+those games. There are more risks of introducing a new issue than anything else."* No threshold,
+suppression rule, or new Stats metric is being added on any surface as a result of this closure.
+
+**Evidence, both triggers:**
+
+1. **Papergames import (342-game dataset, account `69e773d36bf9938bffc1509a`, 171 wins / 160 losses /
+   11 draws)** — across the 160 losses with a non-null accuracy:
+
+   | loss `finish_reason` | n | max accuracy | losses at exactly 100% |
+   |---|---|---|---|
+   | `winner` (decided on the board) | 144 | 94% | 0 |
+   | `resignation` | 4 | 89% | 0 |
+   | `time-up` | 12 | 100% | 7 |
+
+   All 7 accuracy-100% losses are `time-up` (clock) losses (user-move counts 1, 2, 2, 4, 5, 6, 6); no
+   imported `resignation` loss ever hit 100%. This evidence is Papergames-import-only and does not
+   exercise the in-app resign path.
+
+2. **In-app resign repro (verified live 2026-08-01, spec `053`/Epic 7 US3 T016)** — started a sparring
+   game, played only solver-recommended moves for all 12 user moves (confirmed optimal via the in-game
+   Hint toggle, `GameScreen.jsx`'s `handleHintToggle`, matching the highlighted column on every move —
+   coach confirmed "Perfect — you created the double threat" partway through), then resigned via
+   `handleResign`. Landed on `ReviewScreen.jsx` and observed: **`review.cleanButLost` rendered
+   correctly** — "No mistakes on the board — but the game was lost. Review how it ended." — alongside
+   "Accuracy 100%", "Optimal 12", "Suboptimal 0", "Blunder 0". The old "Clean game. Nothing to
+   revisit." copy did **not** appear. The `isLoss` guard at `ReviewScreen.jsx:280` fired correctly for
+   the resign trigger; **no live bug reproduced**, so no code change was made.
+
+**Both triggers now agree**: neither the Papergames-imported `resignation` losses nor the in-app resign
+path shows a stale "clean game" reading. `review.cleanButLost` copy confirmed correct in both languages
+by reading `connect-four/src/i18n/en.json`/`es.json` directly (EN: "No mistakes on the board — but the
+game was lost. Review how it ended."; ES: "No hubo errores en el tablero, pero perdiste la partida.
+Mirá cómo terminó.").
+
+Whether a 100%-accuracy badge should still be visually softened, annotated, or paired with an explicit "you resigned" note when the outcome is a loss remains an open product/UX call if ever picked up again — but the original "reads like a bug" contradiction is resolved and closed.
 
 ## OI-38 — KB term popup summary body has no Spanish fallback for entries missing `short_summary_es`
 
@@ -2313,6 +2411,46 @@ one-word fix that no test covers, which is why it survived. Related memory:
 `project_lesson_audio_generation_traps`, `project_tts_audio_cached_by_text`.
 
 ---
+
+## OI-93 — Anon free deep-reveal spend policy: retire the exclusive-blunder restriction, ship no gate (D2)
+
+**Status**: ✅ RESOLVED 2026-08-01 (spec `053`/Epic 7, US3, D2)
+**Area**: `docs/superpowers/specs/2026-07-13-anon-free-deep-reveal-design.md:41` (doc only); no code
+path — `connect-four/src/lib/anonDeepReveal.js` (the "1 free reveal" quota gate, unaffected),
+`connect-four/server/index.js` (`/api/explain-move-llm`, `/api/games/analyze`).
+
+**Decision (approved 2026-07-16, `docs/superpowers/specs/2026-07-16-qa-remediation-decisions-design.md`
+§D2; restated here per spec-053's requirement that the throwaway `docs/superpowers/` substance also
+land durably):** the anon free deep reveal's original design intent — restrict the free reveal to
+genuine blunders only — is retired, and no code gate of any kind is shipped to enforce it. The reveal
+opens on any stored mistake the anon user clicks (blunder or suboptimal), per spec-042 FR-002. This was
+never actually a live restriction: `ReviewScreen.selectStep` has always navigated to any non-optimal
+move with a stored row, not only blunder rows, so the original design doc's "blunders only" line
+described intent, not implementation.
+
+**Rationale for shipping no gate:**
+- A server-side gate isn't cleanly implementable — the anon gate is keyed by
+  `${movestring}:${col}` (position+column), which maps ambiguously to stored rows: the same
+  position+column can appear across multiple games/users with differing quality, and
+  `POST /api/explain-move-llm` takes no blunder id to disambiguate.
+- A client-only gate would be theatre — `GET /api/blunders/:id` is a public, no-auth permalink, so a
+  client-side check blocks nothing an interested user couldn't bypass directly.
+- Blocking a click the user deliberately made costs conversion for no real security benefit.
+- Shipping a gate here would contradict spec-042's already-shipped invariant that mistake severity is
+  "label + color only, never gates an action."
+
+**Documented reversal trigger (kept live, not closed):** if evidence appears that anonymous users
+routinely spend the free reveal on suboptimal, non-blunder moves, the response is to *steer* users
+toward blunders (copy/UI nudges — e.g. visually distinguishing which mistake is the blunder), never to
+*restrict* which moves the reveal can be spent on.
+
+**What shipped**: `docs/superpowers/specs/2026-07-13-anon-free-deep-reveal-design.md:41` edited to
+remove the "blunders only" line and record this reversal trigger + response in its place. No server or
+client code changed — `grep -rn "blunder" connect-four/server/index.js connect-four/src` around the
+deep-reveal routes/components confirms no move-type check exists anywhere in the spend path (the only
+existing localStorage gate in `anonDeepReveal.js` enforces the unrelated "exactly 1 free reveal" quota,
+not a move-type restriction). `docs/epics/open-issues-epics.md` Epic 7's Settled Decision #5 already
+carried this rationale correctly and needed no edit — verified, not duplicated.
 
 ## OI-92 — `saveLessonFile` read-modify-write race silently loses a generate-audio write
 

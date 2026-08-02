@@ -1,5 +1,19 @@
 # Deploy Runbook
 
+## Pending Pre-Staging Checks
+
+Checks that must be confirmed before the next staging/production sign-off, with a named owner and
+target date (not a generic "pending"). This repo has no separate `docs/deployment_steps.md` file —
+this section is the equivalent home for that requirement (spec `053`/Epic 7 FR-014c).
+
+- **Coach onboarding-greeting real-browser audibility (EN + ES)** — `staging_checks.md:495`,
+  `docs/open_issues.md` OI-21. Requires a human in a real (non-automation) desktop browser, clean
+  incognito session, confirming the coach greeting audibly plays on first interaction after the
+  first-run auto-route lands on `OnboardingMissionScreen`, in both languages. Not yet performed as of
+  2026-08-01 (no human available this session). **Owner: Pablo (repo owner). Target: 2026-08-08.**
+  Does not block OI-21's closeout (the design question — accept first-interaction playback — is
+  already resolved) or any other part of spec `053`.
+
 ## Production Deploy
 
 ### Prerequisites

@@ -507,6 +507,13 @@ For each check record:
     fallback triggers). If it's silently blocked, that's a bug to file, not a pass.
   - **Source**: Feature 1 (onboarding follow-ups, `feature/polish` 2026-07-13); `useCoachSpeech` +
     `OnboardingMissionScreen` mount effect.
+  - **2026-08-01 (spec `053`/Epic 7, US2, T012)**: not yet performed this session — this check is
+    explicitly manual, human-in-the-loop, real (non-automation) browser only (`/app-qa` and
+    chrome-devtools MCP are disallowed here, they fake autoplay permission and would produce a false
+    pass). No human was available to run it this session. **Pending — owner: Pablo (repo owner),
+    target: 2026-08-08.** Also logged in `docs/deploy-runbook.md` and `docs/open_issues.md`'s OI-21
+    body. This does not block OI-21's closeout (design question resolved independent of this check)
+    or the rest of spec `053`.
 
 ## Anon free deep reveal
 
