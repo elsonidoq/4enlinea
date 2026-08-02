@@ -273,6 +273,144 @@ Paddle.js at all — see OI-98).
 
 ---
 
+## Spec 054 (Epic 4) — Server/API data integrity & environment correctness
+
+**Status**: PENDING (nothing has been applied beyond local)
+**When**: migrations run BEFORE the code deploy — one of them is a hard ordering constraint, see below
+**Blocks**: every wrong-answer puzzle write; the candidate-insert retry fix
+**Applies to**: staging and production (local is already fully applied)
+
+All counts below were measured on **2026-08-02** against the real environments (read-only), not
+reasoned about. Re-measure before running — a count taken mid-epic is stale by deploy time.
+
+### 0. CAUTION (not a blocker) — staging's `DATABASE_URL` is on the transaction pooler (port 6543)
+
+Measured 2026-08-02: staging's `DATABASE_URL` (both the Railway-injected value and local
+`server/.env.staging`) is on port **6543**, the transaction-mode pooler. Production is on **5432**.
+`docs/architecture/server-conventions.md:1440` declares 6543 **forbidden** for `migrate.js`.
+
+**But the evidence says it works.** Staging's `schema_migrations` ledger shows migrations applying
+successfully through that 6543 connection five times, most recently `061_security_lints.sql` on
+**2026-07-30**:
+
+```
+2026-07-30  061_security_lints.sql
+2026-07-18  060_paddle_rename_and_payment_events.sql
+2026-07-15  059_explanation_cache_locale.sql
+2026-07-14  058_blunders_device_uuid.sql
+2026-07-14  057_users_onboarding_status.sql
+```
+
+So treat this as **convention drift to fix on its own schedule, not a gate on this deploy.** The
+doc's stated rationale — "each statement may execute on a different backend connection" — describes
+pgbouncer *statement* mode; in *transaction* mode a server connection is pinned for the duration of
+an explicit `BEGIN…COMMIT`, which is exactly what `migrate.js` issues (`server/migrate.js:82-92`).
+That is consistent with the ledger above. The genuine transaction-mode limitations (prepared
+statements, session state, `pg_dump`) are not exercised by this runner.
+
+Nothing in 062/063 is session-dependent — `CREATE UNIQUE INDEX`, `UPDATE`, `ALTER TABLE … ADD
+CONSTRAINT … NOT VALID`, `VALIDATE CONSTRAINT`.
+
+**Residual risk if it does fail**: Railway's start command is
+`node server/migrate.js && node server/index.js`, and `migrate.js` calls `process.exit(1)` on a
+failed migration (`server/migrate.js:96`) — so a failure short-circuits the `&&` and staging's
+server never boots. Watch the deploy log rather than assuming success. Tracked as **OI-31**.
+
+### 1. Migrations 062 and 063 (plus the unapplied 061)
+
+Measured `schema_migrations` state:
+
+| Env | 061_correct_cols | 062 | 063 |
+|---|---|---|---|
+| local | applied | applied | applied |
+| staging | **NOT applied** | **NOT applied** | **NOT applied** |
+| production | **NOT applied** | **NOT applied** | **NOT applied** |
+
+Note a pre-existing numbering collision: staging and production both have a `061_security_lints.sql`
+recorded in `schema_migrations`, but that file **is not on disk** — the on-disk 061 is
+`061_correct_cols.sql`. Two different migrations share the number 061. `migrate.js` tracks by
+filename, so `061_correct_cols.sql` will run on staging/production as part of this deploy even
+though "061" already appears applied. Confirm that is intended before deploying; it is not this
+epic's change.
+
+**Ordering (FR-023a — a deployment constraint, not just a code one):** migration **063 must be
+applied before the code deploy**. The new code emits `outcome: 'incorrect'`, which the *current*
+five-value CHECK constraint rejects — and the rejected insert is swallowed by a fire-and-forget
+`.catch`, so the failure is invisible. Deploying code first means silently losing every wrong-answer
+attempt until the migration lands.
+
+**What 063 changes in already-stored data** (measured):
+- production: **2 rows**, both `outcome='correct_retry'` → remapped to `'correct_first'`
+- staging: 0 rows
+- local: 0 rows
+
+**What 062 changes** (measured): its dedupe `DELETE` matches **0 rows** in all three environments
+(0 duplicate `(generation_run_id, move_string)` groups everywhere), so it is a proven no-op; the
+`CREATE UNIQUE INDEX` is the only real effect.
+
+### Run it
+
+```bash
+# Staging — ONLY after step 0 is fixed.
+cd connect-four
+node --env-file=server/.env.staging server/migrate.js
+
+# Production.
+node --env-file=server/.env.production server/migrate.js
+```
+
+### Verify
+
+```sql
+-- 1. Both migrations recorded:
+SELECT filename FROM schema_migrations WHERE filename LIKE '06%' ORDER BY filename;
+--    success: includes 062_candidates_generation_run_unique.sql AND
+--             063_puzzle_attempts_outcome_narrow.sql
+
+-- 2. The narrowed constraint is live (name confirmed as puzzle_attempts_outcome_check
+--    on BOTH staging and production on 2026-08-02):
+SELECT pg_get_constraintdef(oid) FROM pg_constraint
+ WHERE conrelid='public.puzzle_attempts'::regclass AND conname='puzzle_attempts_outcome_check';
+--    success: CHECK (outcome = ANY (ARRAY['correct_first','tied','incorrect','abandoned']))
+
+-- 3. Zero rows violate it:
+SELECT count(*) FROM puzzle_attempts
+ WHERE outcome NOT IN ('correct_first','tied','incorrect','abandoned');
+--    success: 0
+
+-- 4. The unique index exists:
+SELECT indexname FROM pg_indexes WHERE indexname='idx_candidates_run_move_unique';
+--    success: one row
+```
+
+### Roll back
+
+- **062** — reversible: `DROP INDEX IF EXISTS idx_candidates_run_move_unique;`. Its dedupe DELETE is
+  **not** reversible in general, but measured to affect 0 rows, so there is nothing to restore.
+- **063** — the constraint swap is reversible (re-add the old five-value CHECK). The `UPDATE` remap
+  is **not reversible**: production's 2 `'correct_retry'` rows become `'correct_first'` and the
+  original label is gone. No information is actually lost — the first-vs-retry signal lives in the
+  separate `first_attempt_correct` boolean — but back up `puzzle_attempts` first if you want the
+  literal old values recoverable.
+
+### 2. Behavior change to expect after deploy — `requireAdmin` starts working in production
+
+`server/adminAuth.js` gates on `emails.includes(req.user.email)`. `req.user.email` was **always
+`undefined`** in production before this epic, so that check failed closed for everyone, including
+real admins — admin routes were effectively unreachable there. Threading `email` into `req.user`
+(FR-006) repairs that. It failed *safe*, so this is not a leak being closed, but admin routes do
+become reachable for listed emails on this deploy. Confirm `ADMIN_EMAILS` holds the intended list
+before deploying. **Reasoned from the code, not exercised against production.**
+
+### 3. Not required
+
+- **Secrets / env vars**: none added by this epic.
+- **Caches**: `explanation_cache` and TTS artifacts are untouched — no invalidation needed.
+- **Content pools**: no predicate or detector that `puzzles`/`candidates` rows were generated under
+  changed, and 062 deletes 0 rows, so no pool repair is needed.
+
+---
+
 ## Template for new entries
 
 ```markdown

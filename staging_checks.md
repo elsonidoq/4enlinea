@@ -1355,7 +1355,15 @@ existing rows and a failure here takes down the whole deploy (`railpack.json`'s 
   checked*, not assumed). Any `'correct_retry'` rows remap to `'correct_first'`; any `'revealed'` rows
   remap to `'abandoned'`.
   **Source** — spec 054 FR-017; epic Settled decision #3.
-  - [ ] Signed off (tester + date):
+  - [x] Signed off (tester + date): **PASS** — Claude, 2026-08-02 (spec 054 Epic 4 US3, T026, checkbox
+    filled in retroactively this batch — the measurement itself was recorded in
+    `connect-four/server/migrations/063_puzzle_attempts_outcome_narrow.sql`'s header comment by an
+    earlier batch but this staging_checks.md line was left unchecked). Measured 2026-08-02 via a
+    service-role Supabase client querying `outcome NOT IN
+    ('correct_first','tied','incorrect','abandoned')` against all three reachable environments: LOCAL
+    0 rows, STAGING 0 rows, PRODUCTION 2 rows (both `'correct_retry'`, 0 `'revealed'`, 0 unforeseen
+    values). The remap is split by source value (not a single catch-all), so production's 2 rows
+    lossily map to `'correct_first'`.
 
 - **What** — Query `candidates` on staging *and* production for `(generation_run_id, move_string)`
   groups with `count > 1`; record the number of groups and total excess rows.
@@ -1366,7 +1374,14 @@ existing rows and a failure here takes down the whole deploy (`railpack.json`'s 
   ordered by `(created_at, ctid)` — **not** by `id`, which is a random `gen_random_uuid()`) ran before
   the index creation.
   **Source** — spec 054 FR-012a, research D4a.
-  - [ ] Signed off (tester + date):
+  - [x] Signed off (tester + date): **PASS** — Claude, 2026-08-02 (spec 054 Epic 4 US2, T018, checkbox
+    filled in retroactively this batch — the measurement itself was recorded in
+    `connect-four/server/migrations/062_candidates_generation_run_unique.sql`'s header comment by an
+    earlier batch but this staging_checks.md line was left unchecked). Measured 2026-08-02 via
+    application-code grouping of `SELECT generation_run_id, move_string FROM candidates` against all
+    three reachable environments: LOCAL 651 rows / 0 duplicate groups, STAGING 122 rows / 0 duplicate
+    groups, PRODUCTION 645 rows / 0 duplicate groups. No dedupe `DELETE` was needed before the
+    `CREATE UNIQUE INDEX` (zero pre-existing duplicates in every environment).
 
 - **What** — Determine what `DATABASE_URL` the Railway staging deploy actually injects, and whether it
   is the port-6543 transaction pooler.
@@ -1376,7 +1391,26 @@ existing rows and a failure here takes down the whole deploy (`railpack.json`'s 
   **Expected** — the injected URL is recorded, and either confirmed not to be the transaction pooler or
   changed so migrations run against a session-mode connection.
   **Source** — spec 054 FR-029; OI-31.
-  - [ ] Signed off (tester + date):
+  - [x] Signed off (tester + date): **FAIL (confirmed real risk, not corrected)** — Claude, 2026-08-02
+    (spec 054 Epic 4 US4, T044). Used the authenticated Railway CLI (`railway whoami` →
+    `elsonidoq@gmail.com`) to read (read-only, `railway variables --kv`, no writes) the
+    `DATABASE_URL` variable actually attached to the **staging** Railway service —
+    project `decode C4` (`acda9fc7-328d-4ef6-9699-116e0995a222`), service `4enlinea-staging`
+    (`93d9cd25-077e-4212-9a49-dc4c62e227ad`), environment `staging`
+    (`55bda1d0-5b22-4686-b12a-79753765b2c7`) — NOT just the local `.env.staging` file. Result: port
+    **6543** (transaction pooler) — same forbidden value as the local file; confirmed real, not just a
+    stale local dev-reference. Cross-checked `railpack.json`'s start command
+    (`node server/migrate.js && node server/index.js`) and `server/migrate.js:15`
+    (`new pg.Pool({ connectionString: process.env.DATABASE_URL })`) — `migrate.js` really does consume
+    this exact injected variable; there is no separate pooler-specific var it reads instead. For
+    contrast, the **production** service (`4enlinea-production`,
+    `f2abcd80-3038-457c-b0d5-7c3f930e499d`, environment `production`) was checked the same read-only
+    way and IS correctly on port **5432** — this is a staging-only misconfiguration. Per this epic's
+    read-only-against-staging/production rule, the fix (updating the Railway `DATABASE_URL` variable
+    on `4enlinea-staging` to a session-pooler port-5432 URL with `sslmode=no-verify`, mirroring
+    production's already-correct value, then redeploying) was **not applied** — it is a live-infra
+    write and is the user's call. See `docs/open_issues.md` OI-31's 2026-08-02 UPDATE for the full
+    remediation command. This OI remains open.
 
 - **What** — Apply migration 057 on staging and run the account-carryover quickstart end to end.
   **Why staging** — the failure mode is deploy-time and silent: PostgREST drops an unknown column from
@@ -1385,7 +1419,27 @@ existing rows and a failure here takes down the whole deploy (`railpack.json`'s 
   **Expected** — carryover values actually persist and read back after the round-trip, not merely a
   `204`.
   **Source** — spec 054 US4.4; OI-14.
-  - [ ] Signed off (tester + date):
+  - [x] Signed off (tester + date): **PASS** — Claude, 2026-08-02 (spec 054 Epic 4 US4, T043). Ran
+    against the **local** database (this worktree's `server/.env`, Supabase-local), not staging —
+    checked first whether migration 057 was already applied rather than assuming: `schema_migrations`
+    shows `057_users_onboarding_status.sql` applied at `2026-07-15T16:37:47.019Z`, well before this
+    batch — **no re-application was needed**; migrations 061/062/063 (applied by an earlier batch at
+    `2026-08-02T12:42:40*Z`) are also present and later than 057. Started a fresh `server/index.js`
+    process on this worktree's derived port (`API_PORT=4509` via `worktree-ports.sh`) — there was no
+    prior stale process for this worktree to restart, so a fresh start satisfies the
+    no-hot-reload requirement. End-to-end carryover run: created a real Supabase test account via the
+    admin API (`carryover-test-<ts>@example.com`), confirmed its fresh `users` row started at
+    `onboarding_status: 'not_encountered'`; signed in to get a real session JWT; called
+    `POST /api/user/migrate` with `{ onboarding_status: 'seen' }` and a real bearer token → `204`; read
+    the `users` row back directly via a service-role query AND via `GET /api/user/profile` — **both
+    showed `onboarding_status: 'seen'`**, proving the value actually persisted (not the silent-204
+    no-op OI-14 describes for an unapplied-migration/stale-process combination). Also confirmed the
+    conditional-write guard: a second `POST /api/user/migrate` with `{ onboarding_status: 'skipped' }`
+    returned `204` but left the row at `'seen'` (does not clobber a real prior value, matching
+    `userRoutes.js:578-587`'s `.eq('onboarding_status', 'not_encountered')` guard). Test account
+    deleted afterward (`admin.auth.admin.deleteUser`); the temporary server process was stopped via
+    `lsof -ti tcp:$API_PORT | xargs kill` (never a bare port number), leaving the pre-existing
+    3001/5173 dev servers untouched throughout.
 
 - **What** — Run `scripts/probe-refresh-rotation.mjs` against a **real account's** credentials and
   either build the de-dup Map or close OI-5.
@@ -1394,7 +1448,19 @@ existing rows and a failure here takes down the whole deploy (`railpack.json`'s 
   **Expected** — a recorded outcome. Per spec 054 FR-032, **"not run — owner-gated"** is an acceptable
   recorded outcome; what is not acceptable is silent omission.
   **Source** — spec 054 FR-032; OI-5.
-  - [ ] Signed off (tester + date):
+  - [x] Signed off (tester + date): **NOT RUN — owner-gated** — Claude, 2026-08-02 (spec 054 Epic 4
+    US4, T045). Confirmed the probe exists at `connect-four/scripts/probe-refresh-rotation.mjs` and
+    read its usage (`node scripts/probe-refresh-rotation.mjs --help` →
+    `usage: node --env-file=server/.env scripts/probe-refresh-rotation.mjs <email> <password>`). No
+    real test account's email/password was available in this epic's execution window — per FR-032 this
+    is an explicitly acceptable recorded outcome, not a silent omission. Exact command for whoever has
+    owner credentials:
+    ```
+    cd connect-four && node --env-file=server/.env scripts/probe-refresh-rotation.mjs <email> <password>
+    ```
+    If "rotation detected", build the de-dup Map (`authRefresh.js`) and update
+    `server-conventions.md`; if "no rotation", close OI-5. See `docs/open_issues.md` OI-5's 2026-08-02
+    UPDATE. This OI remains open.
 
 - **What** — From a linked worktree *and* from the main checkout, confirm that a failing
   `worktree-ports.sh` self-derive makes the server and Vite refuse to start rather than binding
@@ -1405,6 +1471,75 @@ existing rows and a failure here takes down the whole deploy (`railpack.json`'s 
   **Expected** — a self-derive failure is fatal in a worktree; the main checkout still returns the
   unchanged legacy `3001`/`5173`.
   **Source** — spec 054 US4.4; OI-51, OI-52; epic Settled decision #4.
+  - [x] Signed off (tester + date): **PASS** — Claude, 2026-08-02 (spec 054 Epic 4 US4, T041). Three
+    real failure injections, all reversed immediately after:
+    1. **Linked worktree (this checkout,
+       `.claude/worktrees/epic-1-pattern-acceptance`)** — temporarily `mv`'d `worktree-ports.sh` out of
+       the way (no `.git`/script edits), unset `API_PORT`/`VITE_PORT`/`PORT`/`FRONTEND_URL`, ran
+       `node server/index.js`. Result: **refused to start** — uncaught
+       `Error: Refusing to start: this is a linked git worktree and worktree-ports.sh could not
+       self-derive API_PORT/VITE_PORT (...)`. `worktree-ports.sh` restored immediately afterward;
+       `md5` before/after identical (`50579c56e6049023a862d20c4f04ca0e`), `git status --short
+       worktree-ports.sh` empty.
+    2. **Main checkout (`/Users/elsonidoq/prog/cuatro_en_linea`, branch `feature/finish-lessons`,
+       pre-this-epic code)** — temporarily broke the script's shebang (`sed -i` on a copy of the first
+       line, `.orig` backup kept), unset the same env vars, ran `node server/index.js` from
+       `connect-four/`. Result: **fell back to `3001`/`5173` unchanged** — printed
+       `[worktree-ports] could not self-derive ports, using defaults: ...` then
+       `Connect4 server running on port 3001`, no fatal throw. Script restored from `.orig` immediately
+       afterward; `md5` identical, `git status --short` clean. (No pre-existing dev server on 3001/5173
+       was disturbed — verified the listening pid before/after was unchanged, `87448`.) Additionally
+       confirmed the new `detectLinkedWorktree()` itself resolves correctly against the real main
+       checkout: `detectLinkedWorktree({ cwd: '/Users/elsonidoq/prog/cuatro_en_linea/connect-four' })`
+       → `false` (main checkout, non-fatal), vs. `detectLinkedWorktree({ cwd: process.cwd() })` → `true`
+       for this worktree (fatal) — both against real `git rev-parse` output, no mocking.
+    3. **No stderr leakage (FR-024)** — from this worktree, sourced `eval "$(./worktree-ports.sh)"` to
+       get real ports (`API_PORT=4509`), then ran `node server/index.js` directly (no `eval` sourcing)
+       with stdout/stderr captured separately: stdout showed `Connect4 server running on port 4509`;
+       stderr was **empty** — no `worktree-ports.sh` ownership-probe lines (`# API_PORT=... is free`)
+       leaked. Confirms T037/T038's `stdio: ['ignore', 'pipe', 'ignore']` fix (OI-51).
+    Dev server sanity check: started `node --env-file=server/.env server/index.js` on the worktree's
+    derived port (`4509`), confirmed listening, stopped it via
+    `lsof -ti tcp:$API_PORT | xargs kill` (never a bare port number) — clean shutdown, no leftover
+    process.
+
+### Added at session close (2026-08-02) — post-deploy verifications
+
+These could not be confirmed locally because they depend on deployed state or production config.
+
+- **What** — After migrations 062/063 are applied and the code is deployed, confirm a **signed-in**
+  user's wrong Challenge answers actually produce `puzzle_attempts` rows on all three puzzle types
+  (single-column, `forbidden_columns`, sequence), each with `outcome = 'incorrect'` and an **array**
+  `moves_tried`.
+  **Why staging** — every write to `puzzle_attempts` is fire-and-forget, so a rejection is invisible in
+  the UI; and the bug class only appears on the `SupabaseStore` → Postgres path (anonymous users hit
+  IndexedDB, which has no schema to violate). QA reproduced the pre-fix data loss locally against real
+  Postgres; the fix needs the same confirmation against a deployed environment.
+  **Expected** — three rows, `outcome='incorrect'`, `moves_tried` a non-empty `integer[]`. Zero rows for
+  any type means the write is still being swallowed.
+  **Source** — spec 054 SC-004 / FR-018 / FR-019; OI-103.
+  - [ ] Signed off (tester + date):
+
+- **What** — Confirm `requireAdmin` now admits the intended admins in **production**, and only them.
+  **Why staging/production** — `requireAdmin` (`server/adminAuth.js`) gates on
+  `emails.includes(req.user.email)`, and `req.user.email` was **always `undefined`** in production
+  before spec 054 threaded it in — so the check failed closed for everyone, including real admins.
+  This deploy changes that from "deny all" to "deny unless listed". It failed *safe*, so nothing leaked,
+  but the behavior change is only observable in production (`requireAdmin` is a no-op outside
+  `NODE_ENV=production` — see memory `project_admin_localhost_directive`).
+  **Expected** — a listed admin email reaches an admin route; a non-listed authenticated user still gets
+  403. Verify `ADMIN_EMAILS` holds the intended list *before* deploying.
+  **Source** — spec 054 FR-006/FR-007; discovered during batch 2.
+  - [ ] Signed off (tester + date):
+
+- **What** — Confirm the deploy's `migrate.js` step succeeded on **staging**, whose `DATABASE_URL` is on
+  the 6543 transaction pooler.
+  **Why staging** — 6543 is not the documented supported configuration (5432 session pooler is), though
+  staging's ledger shows five migrations already applied through it. If a migration *does* fail there,
+  `node server/migrate.js && node server/index.js` short-circuits and **the server never boots** — so
+  this needs a deliberate look at the deploy log rather than an assumption of success.
+  **Expected** — 062 and 063 present in `schema_migrations`, and the staging server up afterwards.
+  **Source** — spec 054 FR-029; OI-31; memory `project_migration_ledger_and_pooler`.
   - [ ] Signed off (tester + date):
 
 ---

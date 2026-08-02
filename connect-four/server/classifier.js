@@ -485,6 +485,19 @@ export function getImmediateThreats(board, colHeights, player) {
 }
 
 /**
+ * Thrown by `chooseSparringMove` when the board has no playable column (full
+ * board, FR-008). Distinct from a generic Error so `POST /api/scores` can
+ * translate it into an explicit 4xx response instead of a 500 or a silent
+ * `col: undefined`.
+ */
+export class NoLegalMoveError extends Error {
+  constructor(message) {
+    super(message);
+    this.name = 'NoLegalMoveError';
+  }
+}
+
+/**
  * Per-turn probability that the non-perfect sparring AI makes a deliberate mistake.
  * The only difficulty knob (softmax was removed): every other move is optimal.
  */
@@ -514,6 +527,9 @@ export const SPARRING_MISTAKE_RATES = {
  * @param {number[]} scores   per-column solver scores
  * @param {() => number} rng  uniform [0,1) source (default Math.random)
  * @returns {number} chosen 0-indexed column
+ * @throws {NoLegalMoveError} when the board has no playable column (full board,
+ *   FR-008) — callers MUST translate this into an explicit terminal/4xx signal
+ *   rather than letting a `col: undefined` reach the response body.
  */
 export function chooseSparringMove(board, difficulty, scores, rng = Math.random) {
   const me = board.currentPlayer;
@@ -526,6 +542,9 @@ export function chooseSparringMove(board, difficulty, scores, rng = Math.random)
   // Legal columns and the optimal (argmax) set.
   const playable = [];
   for (let c = 0; c < COLS; c++) if (board.colHeights[c] < ROWS) playable.push(c);
+  if (playable.length === 0) {
+    throw new NoLegalMoveError('no legal move: board is full');
+  }
   const best = Math.max(...playable.map(c => scores[c]));
   const bestCols = playable.filter(c => scores[c] === best);
 

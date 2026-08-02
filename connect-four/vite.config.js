@@ -3,6 +3,7 @@ import react from '@vitejs/plugin-react'
 import { execSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 import { dirname, resolve } from 'node:path'
+import { handleSelfDeriveFailure } from './server/worktreePorts.js'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 
@@ -15,15 +16,24 @@ function resolvePorts() {
     // rather than failing the production build.
     try {
       const scriptPath = resolve(__dirname, '..', 'worktree-ports.sh')
-      const output = execSync(scriptPath, { encoding: 'utf8' })
+      // stdio: only capture stdout (the `export KEY=value` lines); suppress
+      // worktree-ports.sh's ownership-probe stderr on a raw, un-sourced run
+      // (FR-024 / OI-51).
+      const output = execSync(scriptPath, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] })
       for (const line of output.split('\n')) {
         const match = line.match(/^export (\w+)=(.+)$/)
         if (!match) continue
         if (match[1] === 'API_PORT' && !apiPort) apiPort = match[2]
         if (match[1] === 'VITE_PORT' && !vitePort) vitePort = match[2]
       }
-    } catch {
-      // fall through to defaults below
+    } catch (err) {
+      // FR-025/FR-026: inside a linked worktree, a self-derive failure is
+      // fatal (refuse to build/start) rather than silently falling back to
+      // the main checkout's 3001/5173 — see server/worktreePorts.js. Outside
+      // a linked worktree (main checkout, or no .git at all — e.g. the
+      // Railway build container), this falls through to the defaults below,
+      // unchanged.
+      handleSelfDeriveFailure(err)
     }
   }
   return { apiPort: Number(apiPort) || 3001, vitePort: Number(vitePort) || 5173 }

@@ -401,6 +401,16 @@ Sites 2 and 3 are the promotion path (candidate → puzzle) and are the ones tha
 
 ## Puzzle Attempts — `outcome` values and the serving pool
 
-`puzzle_attempts.outcome` is constrained (migration `003_puzzles.sql`) to `'correct_first' | 'correct_retry' | 'revealed' | 'tied' | 'abandoned'`.
+`puzzle_attempts.outcome` is constrained (migration `063_puzzle_attempts_outcome_narrow.sql`,
+narrowing the original five-value list from `003_puzzles.sql`) to exactly four values:
+`'correct_first' | 'tied' | 'incorrect' | 'abandoned'`. `'correct_retry'` is retired: a
+correct-on-retry attempt is now stored as `'correct_first'`, and `first_attempt_correct`
+(already a separate boolean column) is the sole first-vs-retry signal — do not read the retired
+value as a sign of a missed case. `'revealed'` was also dropped from the CHECK; no writer emits it.
 
-See `docs/open_issues.md` OI-49 for the open question of whether the serving pool should filter on this column — currently it does not.
+`GET /api/puzzles/draw`'s non-exclusion of solved/revealed puzzles is a **deliberate, closed
+design decision** (see `docs/open_issues.md` OI-49, resolved), not an open question: the query
+filters only on `category`, `is_active`, and non-null `position`, ordered by `position` — it never
+joins `puzzle_attempts`, and no attempt-history exclusion, exhaustion policy, or unseen-first
+ordering is planned. A player can be served (and re-answer) a puzzle they already solved or gave
+up on.

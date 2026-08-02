@@ -9,7 +9,7 @@ import * as Sentry from '@sentry/node';
 import rateLimit from 'express-rate-limit';
 import helmet from 'helmet';
 import { assignHeatmaps } from './heatmap.js';
-import { classify, checkWin, Board, getImmediateThreats, tagBlunder, NotABlunderError, classifyPattern, chooseSparringMove, SPARRING_MISTAKE_RATES } from './classifier.js';
+import { classify, checkWin, Board, getImmediateThreats, tagBlunder, NotABlunderError, classifyPattern, chooseSparringMove, SPARRING_MISTAKE_RATES, NoLegalMoveError } from './classifier.js';
 import { loadKBShortSummary } from './llmCoachHelpers.js';
 import { computeMechanism } from './mechanismExplainer.mjs';
 import { VALID_BLUNDER_TAGS } from './blunderTags.js';
@@ -18,8 +18,11 @@ import { computeStatsAggregate } from './statsAggregate.js';
 import { computeBlunderCountsForGames } from './blunderCountsForGames.js';
 import { computeWeaknessMapFallback } from './weaknessMapFallback.js';
 import { insertGameBlunder } from './insertGameBlunder.js';
+import { cookieOpts, ACCESS_TOKEN_MAX_AGE, REFRESH_TOKEN_MAX_AGE } from './cookieConfig.js';
+import { resolveDeviceUuid } from './deviceIdentity.js';
 import { resolveGameBlunderOwner, resolveQueueOwner, resolveExplainQuota } from './anonBlunderAccess.js';
 import { evaluatePredicate, buildPredicatePuzzle } from './predicates.js';
+import { toStoredOutcome } from './outcomeVocabulary.js';
 import { createEvaluateMoveHandler } from './evaluateMoveHandler.js';
 import { buildPromotedPuzzleRow } from './promotePuzzleRow.js';
 import { registerUserRoutes } from './userRoutes.js';
@@ -58,6 +61,8 @@ import { buildCacheFilter } from './explainCacheKey.mjs';
 import { FREE_DEEP_REVEAL_WEEKLY_LIMIT, resolveResetAt, isPastReset, effectiveDeepRevealCount, peekQuota } from './quotaLimits.js';
 import { entitlementForRequest } from './entitlement.js';
 import { buildLessonResponse } from './lessonEntitlement.js';
+import { comparePlayedWell, compareWorstBlunders, compareRecent } from './gamesSort.js';
+import { handleSelfDeriveFailure } from './worktreePorts.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -65,13 +70,22 @@ function resolveWorktreePortEnv() {
   if (process.env.PORT && process.env.FRONTEND_URL) return;
   try {
     const scriptPath = join(__dirname, '..', '..', 'worktree-ports.sh');
-    const output = execSync(scriptPath, { encoding: 'utf8' });
+    // stdio: only capture stdout (the `export KEY=value` lines); suppress
+    // worktree-ports.sh's ownership-probe stderr on a raw, un-sourced run
+    // (FR-024 / OI-51).
+    const output = execSync(scriptPath, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] });
     for (const line of output.split('\n')) {
       const match = line.match(/^export (\w+)=(.+)$/);
       if (!match) continue;
       if (!process.env[match[1]]) process.env[match[1]] = match[2];
     }
   } catch (err) {
+    // FR-025/FR-026: inside a linked worktree, a self-derive failure is fatal
+    // (refuse to start) rather than silently falling back to the main
+    // checkout's 3001/5173 — see server/worktreePorts.js. Outside a linked
+    // worktree (main checkout, or no .git at all), this falls through to the
+    // legacy defaults below, unchanged.
+    handleSelfDeriveFailure(err);
     console.warn('[worktree-ports] could not self-derive ports, using defaults:', err.message);
   }
 }
@@ -332,18 +346,6 @@ try {
 // guards on `!supabase` (created alongside authClient) before reaching this.
 const attemptRefresh = createAttemptRefresh({ authClient });
 
-function cookieOpts() {
-  return {
-    httpOnly: true,
-    sameSite: 'lax',
-    secure: process.env.NODE_ENV === 'production',
-    path: '/',
-  };
-}
-
-const ACCESS_TOKEN_MAX_AGE = 3600_000; // 1 hour
-const REFRESH_TOKEN_MAX_AGE = 60 * 24 * 3600_000; // 60 days
-
 // GET /api/auth/oauth/google — redirect to Supabase Google OAuth
 app.get('/api/auth/oauth/google', (req, res) => {
   if (!supabase) return res.status(503).json({ error: 'Auth not configured' });
@@ -525,7 +527,9 @@ async function loadUser(req, _res, next) {
         .then(({ data: created }) => { if (created) profile = created; });
     }
 
-    req.user = profile ? { id: data.user.id, ...profile } : { id: data.user.id, ...defaultUserProfile() };
+    req.user = profile
+      ? { id: data.user.id, email: data.user.email, ...profile }
+      : { id: data.user.id, email: data.user.email, ...defaultUserProfile() };
   } catch {
     // Non-fatal: treat as anonymous
   }
@@ -999,12 +1003,31 @@ app.post('/api/scores', async (req, res) => {
   }
 
   try {
+    // FR-008: a full board (every column at height 6) has no legal move for the
+    // solver to score at all — c4solver returns an empty line for it, which the
+    // wrapper turns into a generic "Invalid position" throw, caught below as a
+    // 500 "internal error". That masks chooseSparringMove's NoLegalMoveError
+    // signal, which is never reached because solver.query() throws first. Check
+    // board-full state up front (sparring path only — difficulty !== undefined)
+    // so the intended explicit 400 ships instead of a 500.
+    if (difficulty !== undefined && new Board(moves).colHeights.every(h => h >= 6)) {
+      return res.status(400).json({ error: 'no legal move: board is full' });
+    }
+
     const scores = (moves === '' && !depth)
       ? EMPTY_BOARD_SCORES
       : (depth ? await queryDepth(moves, depth) : await solver.query(moves));
 
     if (difficulty !== undefined) {
-      const col = chooseSparringMove(new Board(moves), difficulty, scores);
+      let col;
+      try {
+        col = chooseSparringMove(new Board(moves), difficulty, scores);
+      } catch (err) {
+        if (err instanceof NoLegalMoveError) {
+          return res.status(400).json({ error: 'no legal move: board is full' });
+        }
+        throw err;
+      }
       return res.json({ scores, col });
     }
     res.json({ scores });
@@ -1894,7 +1917,12 @@ app.post('/api/games', async (req, res) => {
   try {
     const insertPayload = {
       user_id: req.user?.id ?? null,
-      device_uuid: device_uuid || req.user?.id || 'anonymous',
+      // Precedence is unchanged from the pre-fix `device_uuid || req.user?.id || 'anonymous'`:
+      // a client-supplied device_uuid still wins over req.user.id (GameScreen.jsx sends
+      // profile.device_uuid whenever a local profile exists). Only the final `'anonymous'`
+      // fallback changes — resolveDeviceUuid mints/reads the dc4_device_uuid cookie instead
+      // (FR-002: "only its ''-fallback gap needs the server-minted cookie").
+      device_uuid: resolveDeviceUuid(req, res, device_uuid || req.user?.id),
       moves,
       difficulty,
       side,
@@ -2100,19 +2128,11 @@ app.get('/api/games', async (req, res) => {
     }
 
     if (sortBy === 'played_well') {
-      unified.sort((a, b) => {
-        const aAcc = a.accuracy ?? -Infinity;
-        const bAcc = b.accuracy ?? -Infinity;
-        if (bAcc !== aAcc) return bAcc - aAcc;
-        return new Date(b.created_at) - new Date(a.created_at);
-      });
+      unified.sort(comparePlayedWell);
     } else if (sortBy === 'worst_blunders') {
-      unified.sort((a, b) => {
-        if (b.blunder_count !== a.blunder_count) return b.blunder_count - a.blunder_count;
-        return new Date(b.created_at) - new Date(a.created_at);
-      });
+      unified.sort(compareWorstBlunders);
     } else {
-      unified.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+      unified.sort(compareRecent);
     }
 
     const total = unified.length;
@@ -2124,6 +2144,82 @@ app.get('/api/games', async (req, res) => {
     res.status(500).json({ error: 'internal error' });
   }
 });
+
+// Spec 054 (Epic 4) User Story 3 / FR-013 / T031. Shared by both the authenticated and
+// anonymous branches of POST /api/games/analyze's cache-check below (Constitution Principle
+// II / research.md D6 — one reconstruction path, not a copy-paste per branch). Reconstructs
+// the same move-by-move analysis shape the solver-driven path below produces, but from
+// already-stored `blunders` rows instead of re-running the solver. Returns the exact response
+// body (not res.json itself) so both call sites can add branch-specific fields identically.
+function reconstructAnalysisFromBlunders({ existingBlunders, moves, side, difficulty, created_at, isPapergames }) {
+  const blunderMap = new Map(existingBlunders.map(b => [b.move_index, b]));
+  const cachedMoves = [];
+  let cScored = 0, cOptimal = 0, cSuboptimal = 0, cBlunder = 0;
+  let cOrdinal = 0;
+
+  for (let i = 0; i < moves.length; i++) {
+    const isUserPly = side === 'first' ? (i % 2 === 0) : (i % 2 === 1);
+    if (!isUserPly) continue;
+    cOrdinal++;
+    cScored++;
+
+    const blunder = blunderMap.get(i);
+    if (blunder) {
+      cachedMoves.push({
+        moveIndex: cOrdinal,
+        col: blunder.move_played,
+        quality: blunder.quality,
+        score: null,
+        bestScore: null,
+        bestCol: null,
+        patternTag: blunder.pattern_category,
+        reason: blunder.reason,
+        direction: blunder.direction,
+        blunderSeverity: blunder.blunder_severity,
+      });
+      if (blunder.quality === 'suboptimal') cSuboptimal++;
+      else cBlunder++;
+    } else {
+      cachedMoves.push({
+        moveIndex: cOrdinal,
+        col: parseInt(moves[i], 10),
+        quality: 'optimal',
+        score: null,
+        bestScore: null,
+        bestCol: null,
+        patternTag: null,
+        reason: null,
+        direction: null,
+        blunderSeverity: null,
+      });
+      cOptimal++;
+    }
+  }
+
+  const cAccuracy = cScored > 0 ? Math.round(cOptimal / cScored * 100) : 0;
+  // FR-006: "no mistakes"/"clean game" phrasing must not fire when suboptimal
+  // mistakes exist even if there are zero blunders — a game with 0 blunders and
+  // >=1 suboptimal move is still a game with mistakes.
+  const phrasePool = (cBlunder === 0 && cSuboptimal === 0)
+    ? 'coach.spoken.sparring.review.clean'
+    : 'coach.spoken.sparring.review.mistakes';
+  const cSummaryKey = pickFromPool(i18nTranslations, phrasePool) ?? `${phrasePool}.0`;
+
+  return {
+    moves: cachedMoves,
+    accuracy: cAccuracy,
+    optimalCount: cOptimal,
+    suboptimalCount: cSuboptimal,
+    blunderCount: cBlunder,
+    scored: cScored,
+    summaryPhraseKey: cSummaryKey,
+    fullMovestring: moves,
+    difficulty,
+    side,
+    gameDate: created_at,
+    source: isPapergames ? 'papergames' : 'ai',
+  };
+}
 
 // POST /api/games/analyze — analyze all user plies in a completed game
 // Returns move-by-move quality breakdown, accuracy, and a summary phrase key.
@@ -2185,88 +2281,32 @@ app.post('/api/games/analyze', async (req, res) => {
     }
   }
 
-  // Cache check: if user is logged in and blunders already exist for this game,
-  // reconstruct the analysis from stored data instead of re-running the solver.
-  if (req.user) {
+  // Cache check: if the caller (logged-in user, OR anonymous caller matched by
+  // device_uuid) already has blunders stored for this game, reconstruct the analysis
+  // from stored data instead of re-running the solver. Spec 054 (Epic 4) US3 / FR-013 /
+  // T031 (OI-22): extended from authenticated-only to also short-circuit the anonymous
+  // caller — matched by the already-captured `gameDeviceUuid` with `user_id IS NULL`,
+  // mirroring the authenticated branch's `.eq('user_id', req.user.id)`. Both branches
+  // share reconstructAnalysisFromBlunders (defined above) rather than duplicating the
+  // ~70-line reconstruction loop.
+  if (req.user || gameDeviceUuid) {
     const gameFilter = isPapergames
       ? { papergames_game_id: gameId }
       : { game_id: gameId };
 
-    const { data: existingBlunders } = await supabase
+    let blunderQuery = supabase
       .from('blunders')
       .select('move_index, move_played, quality, pattern_category, reason, direction, blunder_severity')
-      .eq('user_id', req.user.id)
       .match(gameFilter)
       .order('move_index', { ascending: true });
+    blunderQuery = req.user
+      ? blunderQuery.eq('user_id', req.user.id)
+      : blunderQuery.is('user_id', null).eq('device_uuid', gameDeviceUuid);
+
+    const { data: existingBlunders } = await blunderQuery;
 
     if (existingBlunders && existingBlunders.length > 0) {
-      const blunderMap = new Map(existingBlunders.map(b => [b.move_index, b]));
-      const cachedMoves = [];
-      let cScored = 0, cOptimal = 0, cSuboptimal = 0, cBlunder = 0;
-      let cOrdinal = 0;
-
-      for (let i = 0; i < moves.length; i++) {
-        const isUserPly = side === 'first' ? (i % 2 === 0) : (i % 2 === 1);
-        if (!isUserPly) continue;
-        cOrdinal++;
-        cScored++;
-
-        const blunder = blunderMap.get(i);
-        if (blunder) {
-          cachedMoves.push({
-            moveIndex: cOrdinal,
-            col: blunder.move_played,
-            quality: blunder.quality,
-            score: null,
-            bestScore: null,
-            bestCol: null,
-            patternTag: blunder.pattern_category,
-            reason: blunder.reason,
-            direction: blunder.direction,
-            blunderSeverity: blunder.blunder_severity,
-          });
-          if (blunder.quality === 'suboptimal') cSuboptimal++;
-          else cBlunder++;
-        } else {
-          cachedMoves.push({
-            moveIndex: cOrdinal,
-            col: parseInt(moves[i], 10),
-            quality: 'optimal',
-            score: null,
-            bestScore: null,
-            bestCol: null,
-            patternTag: null,
-            reason: null,
-            direction: null,
-            blunderSeverity: null,
-          });
-          cOptimal++;
-        }
-      }
-
-      const cAccuracy = cScored > 0 ? Math.round(cOptimal / cScored * 100) : 0;
-      // FR-006: "no mistakes"/"clean game" phrasing must not fire when suboptimal
-      // mistakes exist even if there are zero blunders — a game with 0 blunders and
-      // >=1 suboptimal move is still a game with mistakes.
-      const phrasePool = (cBlunder === 0 && cSuboptimal === 0)
-        ? 'coach.spoken.sparring.review.clean'
-        : 'coach.spoken.sparring.review.mistakes';
-      const cSummaryKey = pickFromPool(i18nTranslations, phrasePool) ?? `${phrasePool}.0`;
-
-      return res.json({
-        moves: cachedMoves,
-        accuracy: cAccuracy,
-        optimalCount: cOptimal,
-        suboptimalCount: cSuboptimal,
-        blunderCount: cBlunder,
-        scored: cScored,
-        summaryPhraseKey: cSummaryKey,
-        fullMovestring: moves,
-        difficulty,
-        side,
-        gameDate: created_at,
-        source: isPapergames ? 'papergames' : 'ai',
-      });
+      return res.json(reconstructAnalysisFromBlunders({ existingBlunders, moves, side, difficulty, created_at, isPapergames }));
     }
   }
 
@@ -2510,14 +2550,14 @@ app.post('/api/puzzles/:id/check', async (req, res) => {
   const isSuccess = evaluation.result === 'correct' || evaluation.result === 'tied';
 
   // Record puzzle attempt (fire-and-forget)
+  const deviceUuid = req.user?.device_uuid || resolveDeviceUuid(req, res, req.body.deviceUuid);
   if (supabase) {
-    const deviceUuid = req.user?.device_uuid || req.body.deviceUuid || 'anonymous';
     const attemptData = {
       puzzle_id: puzzleId,
       device_uuid: deviceUuid,
       user_id: req.user?.id ?? null,
       moves_tried: moveHistory,
-      outcome: evaluation.result,
+      outcome: toStoredOutcome(evaluation.result),
       first_attempt_correct: moveHistory.length === 0 && isSuccess,
       time_ms: req.body.timeMs ?? null,
     };
@@ -2548,6 +2588,7 @@ app.post('/api/puzzles/:id/check', async (req, res) => {
     tiedWith: evaluation.tiedWith ?? null,
     threatCells: evaluation.threatCells ?? null,
     forbiddenCols: evaluation.forbiddenCols ?? null,
+    deviceUuid,
   });
 });
 
@@ -2996,10 +3037,16 @@ app.post('/api/admin/generate', requireLocalhost, async (req, res) => {
     // batch. Do NOT retry solver calls (generateCandidates() above) — that's a different
     // failure (IPC deadlock under concurrent load, memory project_integration_test_slowness)
     // with a different fix; only this insert is retried.
+    // Migration 062 (spec 054 Epic 4 US2 / OI-50): candidates has a unique index on
+    // (generation_run_id, move_string), and this insert now upserts with
+    // ignoreDuplicates so a retry after a lost post-commit acknowledgment is a
+    // provable no-op instead of resending an already-committed batch as a plain
+    // insert (which would violate the unique index and fail the whole batched
+    // statement atomically — see research.md D4).
     const MAX_INSERT_ATTEMPTS = 3;
     let insertError = null;
     for (let attempt = 1; attempt <= MAX_INSERT_ATTEMPTS; attempt++) {
-      const { error } = await supabase.from('candidates').insert(rows);
+      const { error } = await supabase.from('candidates').upsert(rows, { onConflict: 'generation_run_id,move_string', ignoreDuplicates: true });
       if (!error) { insertError = null; break; }
       insertError = error;
       logError(`[admin/generate] insert attempt ${attempt}/${MAX_INSERT_ATTEMPTS} failed`, error);
@@ -3140,6 +3187,7 @@ app.get('/api/admin/candidates', requireLocalhost, async (req, res) => {
     .eq('category', category)
     .eq('status', status)
     .order('created_at', { ascending: true })
+    .order('id', { ascending: true })
     .range(offset, offset + limit - 1);
 
   if (error) { logError('[admin/candidates]', error); return res.status(500).json({ error: 'internal error' }); }

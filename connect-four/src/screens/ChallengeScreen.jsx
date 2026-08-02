@@ -405,7 +405,7 @@ export function ChallengeScreen({
           puzzle_id: current.id,
           device_uuid: 'local',
           moves_tried: [col],
-          outcome: isCorrect ? 'correct_first' : 'abandoned',
+          outcome: isCorrect ? 'correct_first' : 'incorrect',
           first_attempt_correct: isCorrect,
           time_ms: Date.now() - startTimeRef.current,
           ...(sessionIdRef.current ? { session_id: sessionIdRef.current } : {}),
@@ -580,8 +580,13 @@ export function ChallengeScreen({
     store?.recordPuzzleAttempt({
       puzzle_id: current.id,
       device_uuid: 'local',
-      moves_tried: cols.length,
-      outcome: quality === 'optimal' ? 'correct_first' : 'abandoned',
+      // The columns actually selected, not a count — puzzle_attempts.moves_tried is
+      // `integer[] NOT NULL` (003_puzzles.sql:28) and Postgres rejects a scalar with
+      // "malformed array literal", which the fire-and-forget write path then swallows.
+      // No consumer reads this field, so storing the list rather than the count is
+      // strictly more information (OI-103 / spec 054 SC-004).
+      moves_tried: cols,
+      outcome: quality === 'optimal' ? 'correct_first' : 'incorrect',
       first_attempt_correct: quality === 'optimal',
       time_ms: Date.now() - startTimeRef.current,
       ...(sessionIdRef.current ? { session_id: sessionIdRef.current } : {}),
@@ -655,7 +660,8 @@ export function ChallengeScreen({
         store?.recordPuzzleAttempt({
           puzzle_id: current.id,
           device_uuid: 'local',
-          moves_tried: 1,
+          // Array, not a scalar — see the sibling failure-branch write below and OI-103.
+          moves_tried: [col],
           outcome: 'correct_first',
           first_attempt_correct: true,
           time_ms: Date.now() - startTimeRef.current,
@@ -672,6 +678,22 @@ export function ChallengeScreen({
           text: data.reason ?? t('coach.spoken.forced_win.blunder.0'),
           mood: 'oops',
         }]);
+        store?.recordPuzzleAttempt({
+          puzzle_id: current.id,
+          device_uuid: 'local',
+          // puzzle_attempts.moves_tried is `integer[] NOT NULL` (003_puzzles.sql:28) —
+          // a scalar is rejected by Postgres with `malformed array literal` and the
+          // insert is then silently swallowed by the fire-and-forget .catch on the
+          // write path. Must be an array. (The sibling success write above and the
+          // forbidden_columns site were fixed the same way — see OI-103.)
+          moves_tried: [col],
+          outcome: 'incorrect',
+          first_attempt_correct: false,
+          time_ms: Date.now() - startTimeRef.current,
+          ...(sessionIdRef.current ? { session_id: sessionIdRef.current } : {}),
+        });
+        store?.recordActivityDay().catch(() => {});
+        track('puzzle_solved_wrong', { puzzleId: current.id, category });
         setIsSubmitting(false); // T006: explicit clear (option B, no finally)
       }
     } catch {

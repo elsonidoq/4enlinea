@@ -52,6 +52,47 @@ and silently recreate a collision by skipping the `eval` step. Sourcing the scri
 yourself is still the recommended habit (it also runs the ownership probe below), but
 it is not a silent single point of failure.
 
+Both self-derive `execSync` calls pass `stdio: ['ignore', 'pipe', 'ignore']`, so only
+stdout (the `export KEY=value` lines) is captured — `worktree-ports.sh`'s ownership-probe
+stderr lines (`# API_PORT=... is free/bound by pid(s): ...`) never print on a raw,
+un-sourced invocation (OI-51). They still print when you source the script yourself via
+`eval "$(./worktree-ports.sh)"`, since that runs the script directly rather than through
+one of these two self-derive call sites.
+
+## Fail-loudly guarantee — a self-derive failure is fatal inside a linked worktree
+
+If `worktree-ports.sh` is missing, non-executable, or throws (e.g. `git`/`cksum`/`lsof`
+unavailable, or the file was deleted/renamed) while `API_PORT`/`VITE_PORT`/`PORT`/
+`FRONTEND_URL` are unset, **what happens next depends on where the process is running**
+(OI-52, spec 054 Epic 4 US4 / FR-025–FR-027):
+
+- **Inside a linked worktree** — `resolvePorts()` (`connect-four/vite.config.js`) and
+  `resolveWorktreePortEnv()` (`connect-four/server/index.js`) both refuse to start:
+  they throw a fatal error naming the problem, rather than silently falling back to the
+  main checkout's `3001`/`5173` — the exact port collision this whole scheme exists to
+  prevent. Fix or restore `worktree-ports.sh`, or run `eval "$(./worktree-ports.sh)"`
+  yourself to set the env vars before starting.
+- **In the main checkout (not a linked worktree)** — unchanged: falls back to the
+  legacy `3001`/`5173` defaults, exactly as before this guarantee existed.
+- **Not a git checkout at all (no `.git`, e.g. the Railway build container)** —
+  unchanged: falls back to the legacy defaults. This case is deliberately **never**
+  fatal — see the "Production/Railway" section below for why getting this wrong breaks
+  the production deploy.
+
+Both consumers detect which of these three cases applies using the same `GIT_DIR`/
+`GIT_COMMON` check `worktree-ports.sh` itself uses (`worktree-ports.sh:15-17`),
+re-implemented as a shared, unit-tested Node module at
+`connect-four/server/worktreePorts.js` (`detectLinkedWorktree()` for the detection,
+`handleSelfDeriveFailure()` for the fatal-vs-fallback decision) — imported by both
+`vite.config.js` and `server/index.js` rather than duplicated. The detection itself is
+wrapped in its own try/catch, separate from the port-derivation try/catch: a failure
+there (no `.git` at all) is treated as "not a linked worktree," never as "linked
+worktree with a broken self-derive."
+
+Verified 2026-08-02 by real failure injection from both this linked worktree (refused
+to start) and the main checkout (fell back to `3001`/`5173` unchanged) — see
+`staging_checks.md`'s "Epic 4" section for the dated results.
+
 ## Kill discipline
 
 Only ever kill a server by the **exact port you derived**:

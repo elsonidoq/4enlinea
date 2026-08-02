@@ -1432,17 +1432,22 @@ describe('Spec 045 US1 — 60-day rolling refresh-token cookie window', () => {
   const __filename = fileURLToPath(import.meta.url);
   const __dirname = path.dirname(__filename);
   const indexSource = fs.readFileSync(path.join(__dirname, 'index.js'), 'utf8');
+  // Spec 054 T005 extracted cookieOpts()/ACCESS_TOKEN_MAX_AGE/REFRESH_TOKEN_MAX_AGE out of
+  // index.js into cookieConfig.js (index.js can't be imported directly — it calls
+  // app.listen() at module scope), so the constant *definitions* now live there; index.js
+  // still imports and uses them at every cookie-set call site below.
+  const cookieConfigSource = fs.readFileSync(path.join(__dirname, 'cookieConfig.js'), 'utf8');
 
   it('REFRESH_TOKEN_MAX_AGE is defined as 60 days in milliseconds', () => {
-    const match = indexSource.match(/const REFRESH_TOKEN_MAX_AGE = ([^;]+);/);
-    assert.ok(match, 'REFRESH_TOKEN_MAX_AGE constant not found in server/index.js');
+    const match = cookieConfigSource.match(/const REFRESH_TOKEN_MAX_AGE = ([^;]+);/);
+    assert.ok(match, 'REFRESH_TOKEN_MAX_AGE constant not found in server/cookieConfig.js');
     const value = Function(`return (${match[1]});`)();
     assert.equal(value, 60 * 24 * 3600_000, `expected 60-day maxAge, got expression "${match[1]}" = ${value}`);
   });
 
   it('ACCESS_TOKEN_MAX_AGE remains 1 hour (unchanged by the 60-day rollout)', () => {
-    const match = indexSource.match(/const ACCESS_TOKEN_MAX_AGE = ([^;]+);/);
-    assert.ok(match, 'ACCESS_TOKEN_MAX_AGE constant not found in server/index.js');
+    const match = cookieConfigSource.match(/const ACCESS_TOKEN_MAX_AGE = ([^;]+);/);
+    assert.ok(match, 'ACCESS_TOKEN_MAX_AGE constant not found in server/cookieConfig.js');
     const value = Function(`return (${match[1]});`)();
     assert.equal(value, 3600_000);
   });
@@ -1467,8 +1472,8 @@ describe('Spec 045 US1 — 60-day rolling refresh-token cookie window', () => {
       !/7\s*\*\s*24\s*\*\s*3600_000/.test(indexSource),
       'found a lingering 7-day maxAge literal (7 * 24 * 3600_000) in server/index.js'
     );
-    // The constant definition line itself must be 60 days.
-    assert.ok(/const REFRESH_TOKEN_MAX_AGE = 60 \* 24 \* 3600_000/.test(indexSource));
+    // The constant definition line itself must be 60 days (now in cookieConfig.js).
+    assert.ok(/const REFRESH_TOKEN_MAX_AGE = 60 \* 24 \* 3600_000/.test(cookieConfigSource));
   });
 
   /** Extract the source text of an Express handler starting at `marker`, up to its closing `});`. */

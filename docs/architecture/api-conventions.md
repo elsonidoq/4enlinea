@@ -29,6 +29,8 @@
 3. Fetches the user's `tier`, `deep_reveal_count`, `deep_reveal_reset_at`, `device_uuid`, `papergames_id`, `last_import_at` from `public.users`.
 4. Populates `req.user` (null for anonymous/invalid token).
 
+**`req.user` shape** (once signed in): `{ id, email, tier, deep_reveal_count, deep_reveal_reset_at, device_uuid, papergames_id, last_import_at, paddle_customer_id, onboarding_status }`. Every field except `id` and `email` comes from `USER_PROFILE_SELECT_COLUMNS`/`defaultUserProfile()` (`server/userHelpers.js`). `email` is `data.user.email` — the raw Supabase auth user object already returned by `authClient.auth.getUser(token)` (spec 054 FR-006) — **not** a `public.users` column; no schema change was needed to add it. `req.user` is `null` for anonymous/invalid-token requests, unchanged. **Degrades-to-`undefined` case**: if the Supabase auth record itself has no email set, `data.user.email` is `undefined`, so `req.user.email` is `undefined` and silently absent from any JSON response that spreads it in (e.g. it simply would not appear in the body) — this must degrade gracefully, not error.
+
 **Frontend auth**: The client uses `credentials: 'include'` (not `Authorization` header). The session object stores only `{ user }` — no `access_token` field. The token lives exclusively in the httpOnly cookie and is never exposed to client-side JS. Sending `Authorization: Bearer` with a stale/undefined value shadows the cookie fallback.
 
 **MUST NOT**: Any route skip `loadUser` — it is registered globally via `app.use(loadUser)`.
@@ -506,6 +508,7 @@ Returns spoken (TTS) audio for a cached deep-reveal explanation. The client poin
 - **Sparring-move mode (`difficulty` present)**: the response is `{ scores, col }`, where `col` is the AI's chosen 0-indexed move computed **server-side** by `chooseSparringMove(board, difficulty, scores)` (`server/classifier.js`). An unknown `difficulty` value → 400. This is the single move-selection path for the sparring AI (`src/lib/useGameBoard.js` `makeAiMove` POSTs `{ moves, difficulty }` and plays `col`; on any error it falls back to a random legal column). The Hint overlay calls the same endpoint **without** `difficulty` and consumes `scores` only.
 - **Move selection is NOT softmax anymore**: the old client-side softmax/temperature + `secondBestColumn` mechanic (`src/lib/aiDifficulty.js`) was **deleted**. `chooseSparringMove` = own-win-first → `SPARRING_MISTAKE_RATES[difficulty]` roll → optimal (argmax) on no-mistake, else block an opponent win-in-1 / sample uniformly from strictly-worse-and-non-forbidden columns.
 - **Design consequence — difficulties differ only by mistake rate**: `SPARRING_MISTAKE_RATES` (`server/classifier.js`) is `{ easy: 1/2, medium: 1/4, hard: 1/8, perfect: 0 }`. Every "mistake" the roll produces is still a tactically sound, non-forbidden move (see roll logic above) — so even `easy` never falls for a one-move trap; `medium`/`hard`/`perfect` differ from `easy` only in how often the mistake roll fires, not in move quality. Deliberate design goal: never let the user win by just stacking discs.
+- **Full-board terminal signal (spec 054, FR-008)**: with `difficulty` present and a board that has **no playable column**, the endpoint returns `400 { error: 'no legal move: board is full' }` rather than a response with `col` silently `undefined`. The guard runs **before** `solver.query()` on purpose — c4solver returns an empty line for a full board, which `c4solver-wrapper.js` turns into a generic `"Invalid position"` throw, so a check placed after the query would be unreachable and the endpoint would return a generic 500 instead. `chooseSparringMove` also throws `NoLegalMoveError` (`server/classifier.js`) for the same case, translated by the handler; the ordering is asserted by `tests/unit/scoresValidation.test.js`. Success-path shapes are unchanged.
 - **Do NOT revive depth-limited difficulty**: depth-limited negamax (`-d N`) produces all-zero early-game scores and was abandoned. Tech debt: the endpoint still accepts an optional `depth` body field and `queryDepth` infrastructure remains — both unused.
 
 ## Migrate Endpoint (POST /api/user/migrate)
@@ -673,9 +676,14 @@ The `coachPhraseKey` in the AI-move response is ignored by the client. The clien
   "correctCol": number | null,
   "tiedWith": number[] | null,
   "threatCells": [{"col": 0-6, "row": 0-5}] | null,
-  "forbiddenCols": number[] | null
+  "forbiddenCols": number[] | null,
+  "deviceUuid": string
 }
 ```
+
+**`deviceUuid` (spec 054, FR-001)** is the stable identifier the server resolved for this caller, echoed back so an anonymous client can reproduce it on a later read (e.g. `GET /api/coach/queue?device_uuid=`). It comes from `resolveDeviceUuid(req, res, bodyValue)` (`server/deviceIdentity.js`): request body → existing `dc4_device_uuid` cookie → a freshly minted `crypto.randomUUID()` that is then set as that cookie. It is **never** the literal `'anonymous'` and never a fresh value per request; the endpoint never 400s for a missing identifier. Callers need send nothing — every client fetch already uses `credentials: 'include'`, so the cookie carries it.
+
+Note the stored `outcome` is **not** this `result` value: the writer maps `evaluatePredicate`'s `'correct'|'wrong'|'tied'` through `toStoredOutcome()` (`server/outcomeVocabulary.js`) into the `puzzle_attempts` enum before insert.
 
 - `threatCells`: populated for `double_threat` puzzles when `result` is `correct` or `tied`. Contains the two (or more) major threat cells created by the correct move. Frontend uses these to render `major_threat` highlights after reveal.
 - `forbiddenCols`: populated for `forbidden_columns` puzzles on every response. Contains the full set of 0-indexed columns that are forbidden in the position. Frontend uses this to reveal missed forbidden columns after multi-select submit.

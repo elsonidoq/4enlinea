@@ -108,6 +108,18 @@ The FR-002a empirical check (spec 045 T002, recorded in `specs/045-account-sessi
 **Why deferred**: the shipped behavior is correct for the observed GoTrue config; building a de-dup Map now would be unmotivated machinery (Principle II).
 **If picked up**: re-run T002's two-concurrent-refresh probe against a real email/OAuth session (not anonymous); if the second call fails with `refresh_token_already_used`, build the TTL-bounded single-flight de-dup Map in `authRefresh.js` per research.md R1's design, and update the server-conventions.md note. Also worth pairing with the FR-008 staging check (Supabase dashboard session-timeout config).
 
+**UPDATE 2026-08-02** (spec 054, Epic 4, US4, T045): **not run — owner-gated**, per FR-032's explicit
+carve-out. `connect-four/scripts/probe-refresh-rotation.mjs` was confirmed to exist and its `--help`
+was read (`node scripts/probe-refresh-rotation.mjs --help` → prints the exact usage below); it
+requires a **real** account's email/password, which was not available in this epic's execution
+window. Exact command the user (or a future agent with owner credentials) must run:
+```
+cd connect-four && node --env-file=server/.env scripts/probe-refresh-rotation.mjs <email> <password>
+```
+If it prints "rotation detected", build the de-dup Map per this entry's original guidance and update
+`server-conventions.md`; if "no rotation", mark this OI ✅ RESOLVED. Recorded in `staging_checks.md`
+under the Epic 4 section, dated 2026-08-02. This OI remains **open**.
+
 ---
 
 ## OI-6 — Superseded de-dup language in `contracts/api-auth-session.md`
@@ -336,6 +348,19 @@ then run `specs/048-onboarding-experience/quickstart.md`'s "account carryover" s
 account row's `onboarding_status` reflects the migrated anonymous value. This is already noted in
 `staging_checks.md` under Epic 8. Cross-ref: [[project_user_column_propagation]], [[OI-13]].
 
+**Status: ✅ RESOLVED 2026-08-02** (spec 054, Epic 4, US4, T043). Confirmed end-to-end against the
+local database: `schema_migrations` shows migration 057 already applied (`applied_at:
+2026-07-15T16:37:47.019Z`, pre-dating this batch — no re-application needed). Started a fresh
+`server/index.js` process on this worktree's derived port, created a real Supabase test account
+(admin API, immediately deleted afterward), confirmed its `users` row started at
+`onboarding_status: 'not_encountered'`, called `POST /api/user/migrate` with a real bearer token and
+`{ onboarding_status: 'seen' }` → `204`, then read the `users` row directly (service-role query) AND
+via `GET /api/user/profile` — both showed `onboarding_status: 'seen'`, proving the write actually
+persisted (not the silent-204 no-op this OI describes). Also confirmed the conditional-write guard:
+a second `POST /api/user/migrate` with `onboarding_status: 'skipped'` returned `204` but left the row
+at `'seen'` (does not clobber a real prior value). Recorded in `staging_checks.md` under the Epic 4
+section, dated 2026-08-02.
+
 ## OI-15 — Spanish i18n (`es.json`) ships translations but is never registered; app is English-only
 
 **Status**: 📋 SPEC-READY 2026-07-13 — the remaining translation-content work is now specced at `specs/049-puzzle-scoring-spanish-localization/` (Epic 9, US9.3–US9.4). Switcher machinery already SHIPPED 2026-07-12 (useLanguage hook, es bundle registered, Settings selector). On-disk reality: `es.json` has 3 of 25 top-level sections complete (`setcard`, `onboarding`, `settings`), 22 missing; selecting es renders English via fallback until spec 049 lands. Spec 049 adds a `node:test` en/es key-parity guard (registered in both `test` + `test:fast`).
@@ -385,6 +410,8 @@ directly with a full 42-char movestring + `difficulty`.
 
 **If picked up**: guard `chooseSparringMove` (or the endpoint) to return a 4xx / explicit terminal
 signal when `playable.length === 0`, instead of `undefined`.
+
+**Status: ✅ RESOLVED 2026-08-02** (spec 054, Epic 4, US1). `chooseSparringMove` (`connect-four/server/classifier.js`) now throws a dedicated `NoLegalMoveError` when `playable.length === 0`, instead of falling through to `pick([])` → `undefined`. `POST /api/scores` (`server/index.js`) catches `NoLegalMoveError` specifically and returns `400 { "error": "no legal move: board is full" }`, matching `docs/architecture/api-conventions.md`'s error-response conventions, instead of `{ scores, col: undefined }`. Regression test: `connect-four/tests/unit/chooseSparringMove.test.js`'s `'full board (no playable column) → explicit terminal signal'` block, confirmed RED (asserting `col !== undefined` failed) before the fix and GREEN after.
 
 ## OI-18 — Lesson slide content is hardcoded English, no i18n mechanism (Spanish gap)
 
@@ -485,8 +512,21 @@ unlock mechanism.
 
 ## OI-22 — Anon post-game review re-analysis re-runs the solver (analyze cache-check is `user_id`-only)
 
-**Status**: deferred (accepted deviation from the anon-free-deep-reveal design §2; low impact, 2026-07-13)
-**Area**: `connect-four/server/index.js` — `POST /api/games/analyze` cache-check (`if (req.user) { … }` ~line 2097)
+**Status**: ✅ RESOLVED 2026-08-02 (spec 054, Epic 4, User Story 3, T031). The `POST
+/api/games/analyze` cache-check (`server/index.js`) now reads `if (req.user || gameDeviceUuid) { … }`
+instead of `if (req.user) { … }`: the authenticated branch keeps its unchanged
+`.eq('user_id', req.user.id)` filter, and the new anonymous branch matches
+`.is('user_id', null).eq('device_uuid', gameDeviceUuid)` — `gameDeviceUuid` is the value already
+captured earlier in the handler from the game row itself (`aiGame.device_uuid`), the same value
+the write path already uses via `resolveGameBlunderOwner`, so no new identifier or client field was
+introduced. Both branches now call one shared `reconstructAnalysisFromBlunders(...)` helper
+(extracted verbatim from the pre-existing ~70-line reconstruction block, not copy-pasted per
+Constitution Principle II / research.md D6) instead of duplicating the loop. Verified live against
+the local dev server: a fresh anonymous game's first `POST /api/games/analyze` ran the solver
+(real `score`/`bestScore`/`bestCol` values, ~0.2s); the second call on the same `gameId` hit the new
+cache branch (`score`/`bestScore`/`bestCol` all `null`, ~0.01s) — confirming the anonymous
+short-circuit fires and reconstructs identically to the authenticated path's existing shape.
+**Area**: `connect-four/server/index.js` — `POST /api/games/analyze` cache-check
 **Discovered**: anon free deep reveal — final whole-branch review (2026-07-13)
 
 The analyze endpoint's "reconstruct from stored blunders instead of re-running the solver" cache-check
@@ -731,6 +771,31 @@ The staging connection string points at the **transaction pooler (port 6543)**. 
 
 **If picked up**: either change `.env.staging`'s `DATABASE_URL` port to 5432 (session pooler), or have `migrate.js`/the deploy path rewrite 6543→5432 for staging. Verify what URL the staging Railway deploy actually uses for migrations before editing. Cross-ref: [[reference_supabase_connection]], memory `project_spec031_staging_production_deploy`.
 
+**UPDATE 2026-08-02** (spec 054, Epic 4, US4, T044): the open question — whether Railway's own
+injection (not just the local `.env.staging` file) is also on 6543 — is now **settled: yes**.
+`railway variables --service 4enlinea-staging --environment staging --kv | grep DATABASE_URL` (project
+`decode C4`, service id `93d9cd25-077e-4212-9a49-dc4c62e227ad`, environment id
+`55bda1d0-5b22-4686-b12a-79753765b2c7`) shows `DATABASE_URL` on port **6543** — the same forbidden
+transaction pooler as the local file, confirmed via `railway.json`/`railpack.json`'s start command
+(`node server/migrate.js && node server/index.js`) and `server/migrate.js:15`
+(`new pg.Pool({ connectionString: process.env.DATABASE_URL })`), i.e. `migrate.js` really does consume
+this exact Railway-injected variable — there is no separate pooler-specific var. For comparison, the
+**production** service (`4enlinea-production`) was checked the same way and its `DATABASE_URL` is
+correctly on port **5432** (session pooler) — so this is a staging-only misconfiguration, not a
+systemic one.
+
+This finding was **read-only** (`railway variables --kv`, no writes) per this epic's staging/production
+write ban — the actual remediation (updating the `DATABASE_URL` variable on the `4enlinea-staging`
+Railway service to the session-pooler port 5432, mirroring the value already correct on
+`4enlinea-production`) was **not applied** and requires the user's own action:
+```
+railway variable set 'DATABASE_URL=<session-pooler-url-port-5432-with-sslmode=no-verify>' \
+  --service 4enlinea-staging --environment staging
+```
+followed by a redeploy so `migrate.js` picks up the corrected value before the next migration run.
+Recorded in `staging_checks.md` under the Epic 4 section, dated 2026-08-02. This OI remains **open**
+pending that variable change.
+
 ## OI-32 — Existing English coach + lesson clips are stale-model (tts-1), not regenerated onto gpt-4o-mini-tts
 
 **Status**: deferred (2026-07-14) — content/quality follow-up; harmless mix, each clip still plays
@@ -950,6 +1015,12 @@ The final fallback, `'anonymous'`, is a **string literal**, not a per-device ide
 
 **Do not fix as part of Task 23** — this is a write-path bug, independent of and out of scope for the read-path 401 fix, and deserves its own scoped change (likely: derive/require a real device_uuid client-side before this call, or reject the write with 400 when no identifier is available, rather than defaulting to a shared bucket).
 
+**Status: ✅ RESOLVED 2026-08-02** (spec 054, Epic 4, US1). Fixed by `resolveDeviceUuid(req, res, bodyValue)` (`connect-four/server/deviceIdentity.js`), a shared helper that resolves the identifier as: caller-supplied `bodyValue` → an existing `dc4_device_uuid` cookie (`req.cookies.dc4_device_uuid`) → a freshly minted `crypto.randomUUID()`, cookied via `res.cookie('dc4_device_uuid', ..., { ...cookieOpts(), maxAge: REFRESH_TOKEN_MAX_AGE })` for stability across future requests from the same client. Wired into both write sites that used to fall back to the `'anonymous'` literal:
+- `server/index.js`'s `POST /api/puzzles/:id/check` handler (the actual `puzzle_attempts` insert this issue's OI-40 area line described, mislabeled there as `/api/user/puzzle-attempts` — that endpoint, `server/userRoutes.js:343-344`, is a separate always-authenticated route and was never affected).
+- `server/index.js`'s `POST /api/games` handler (`device_uuid: req.user?.id ?? resolveDeviceUuid(req, res, device_uuid)`).
+
+`cookieOpts()`/`ACCESS_TOKEN_MAX_AGE`/`REFRESH_TOKEN_MAX_AGE` were extracted from `server/index.js` into `server/cookieConfig.js` so `deviceIdentity.js` could import the exact cookie shape without booting the server (`index.js` calls `app.listen()` at module scope). Tests: `connect-four/server/deviceIdentity.test.mjs`. DB check across local/staging/production found zero existing rows with the literal `device_uuid: 'anonymous'` in `puzzle_attempts` or `games` — no backfill/cleanup needed.
+
 ## OI-41 — `/pricing` is a bare static page; needs a real designed pricing page, and its prices are hardcoded
 
 **Status**: deferred / open (created 2026-07-16 while unblocking Paddle domain review)
@@ -1084,12 +1155,20 @@ So once the student clicks Hint, the bubble is pinned to the hint text for the r
 
 ## OI-47 — `GET /api/games` predates the offset-pagination `id`-tiebreaker finding and is unaudited
 
-**Status**: deferred / open
-**Area**: `connect-four/server/index.js` (`GET /api/games`, offset/limit pagination)
+**Status**: ✅ RESOLVED 2026-08-02 (spec 054, Epic 4, US2). `GET /api/games`'s three `unified.sort()`
+comparators (`sortBy === 'played_well'`/`'worst_blunders'`/else) were audited and confirmed
+non-unique on their primary sort key (`accuracy`/`blunder_count`/`created_at`), with the underlying
+risk being the *unordered* Postgres fetch that stable-sort ties over, per research.md D2 (this is
+the "audit, don't copy" case — the fix is a pure JS comparator change at the `unified.sort()` call
+site, not a SQL `.order('id')` clause, since this endpoint has no SQL-level pagination at all).
+Comparators extracted into `connect-four/server/gamesSort.js`
+(`comparePlayedWell`/`compareWorstBlunders`/`compareRecent`), each now breaking ties with a final
+`a.id`-vs-`b.id` string compare; `server/index.js` imports and calls them at the `unified.sort()`
+site. Regression test: `connect-four/server/gamesSort.test.mjs` seeds tied rows across a simulated
+`slice(offset, offset+limit)` page boundary and asserts every row appears exactly once, in a stable
+order, across two successive pages, for all three comparators.
 
-`/api/coach/queue` was fixed to append a unique `id ASC` tiebreaker after its semantic ordering, because `ORDER BY <non-unique columns>` + `OFFSET`/`LIMIT` is nondeterministic when rows share sort-key values (e.g. a batch import stamping many rows with the same `created_at`) — ties can shuffle between pages across separate queries, silently skipping some rows and duplicating others. That rule is documented in `docs/architecture/api-conventions.md`. `GET /api/games` predates the finding and has never been audited against it: it fetches from both `games` and `papergames_games`, sorts/paginates in JS rather than in SQL, so the failure mode may differ from the SQL `OFFSET`/`LIMIT` case — but the underlying risk (a non-unique sort key across a paginated result set) has not been checked.
-
-**If picked up**: verify whether the in-JS sort key used for `/api/games` pagination is unique per row (add an `id` tiebreaker if not), and confirm the two-table merge can't reorder rows across pages independently of the tiebreaker fix.
+**If picked up**: n/a — resolved.
 
 ## OI-48 — Reason engine "Fix 6": a win-forfeiting move is still tagged `drawing_move` upstream
 
@@ -1131,27 +1210,58 @@ validated). `test:fast` green (only the 5 known-unrelated `ENOENT` failures).
 
 ## OI-49 — `/api/puzzles/draw` has no solved/revealed filter; `puzzle_attempts.outcome` enum is partly aspirational
 
-**Status**: deferred / open
+**Status**: ✅ RESOLVED 2026-08-02 (spec 054, Epic 4, User Story 3, T032/T034). The open question is
+answered: the never-exclude design is **deliberate and closed**, not aspirational. T032 re-confirmed
+`GET /api/puzzles/draw`'s filter set is unchanged and stays exactly `.eq('category', …)`,
+`.eq('is_active', true)`, `.not('position', 'is', null)`, `.order('position')` — no
+`puzzle_attempts` join, no exhaustion policy, no unseen-first ordering was added by this epic. The
+"partly aspirational" half is separately resolved by migration `063_puzzle_attempts_outcome_narrow.sql`
+(batch 4 of this epic): `puzzle_attempts.outcome`'s CHECK constraint is narrowed from the original
+five-value list to exactly `'correct_first' | 'tied' | 'incorrect' | 'abandoned'` — `'revealed'` is
+dropped (no writer ever emitted it) and `'correct_retry'` is dropped (the `first_attempt_correct`
+boolean column is the sole first-vs-retry signal; a correct-on-retry attempt is stored as
+`'correct_first'`). `'incorrect'` replaces the previous overloaded use of `'abandoned'` for a
+submitted-but-wrong answer (T029/T030), so `'abandoned'` is now reserved for leaving without
+submitting. `docs/architecture/data-model.md`'s "Puzzle Attempts — `outcome` values and the serving
+pool" section (T034) was rewritten to state both of these as settled facts, replacing its previous
+open-question framing.
 **Area**: puzzle serving (`server/index.js`'s `GET /api/puzzles/draw`) vs. `puzzle_attempts.outcome`
-
-`GET /api/puzzles/draw` filters only on `.eq('category', …)`, `.eq('is_active', true)`, `.not('position','is',null)`, `.order('position')` — it never reads `puzzle_attempts`, so there is no exclusion of already-solved or already-revealed puzzles from the serving pool at all. Meanwhile `puzzle_attempts.outcome` is constrained to `'correct_first' | 'correct_retry' | 'revealed' | 'tied' | 'abandoned'`, but only `'correct_first'` and `'abandoned'` are ever written by any code path (`ChallengeScreen.jsx`) — `'revealed'`, `'correct_retry'`, and `'tied'` are unused. Is the enum aspirational (a filter was planned but never built), or is the intent genuinely "never exclude anything from the pool" (in which case the unused outcomes and their CHECK-constraint entries are dead)?
 
 ## OI-50 — Candidate-insert retry can double-insert rows (no unique constraint)
 
-**Status**: deferred (flagged by the final whole-branch review, QA-remediation 2026-07-16; not fixed — low blast radius)
-**Area**: `connect-four/server/index.js` (the `supabase.from('candidates').insert(rows)` retry added by W11 Task 26); `connect-four/server/migrations/011_category_slugs.sql`
+**Status**: ✅ RESOLVED 2026-08-02 (spec 054, Epic 4, US2). Migration
+`connect-four/server/migrations/062_candidates_generation_run_unique.sql` adds
+`idx_candidates_run_move_unique`, a `CREATE UNIQUE INDEX ... ON public.candidates
+(generation_run_id, move_string)` (preceded by a deterministic `(created_at, ctid)`-ordered dedupe
+`DELETE`, per research.md D4a — a live pre-check against local/staging/production on 2026-08-02
+found 0 pre-existing duplicate groups in all three, so the dedupe deleted 0 rows when applied). The
+candidate-insert retry loop's `.insert(rows)` (`server/index.js`, `POST /api/admin/generate`) was
+switched to `supabase.from('candidates').upsert(rows, { onConflict: 'generation_run_id,move_string',
+ignoreDuplicates: true })` (research.md D4 — a bare `.insert(rows)` retry would violate the new
+unique index and fail the whole batched multi-row `INSERT` atomically on one `23505`, discarding
+every good row; `upsert`/`ignoreDuplicates` makes the retry a provable no-op instead). Regression
+test: `connect-four/server/candidatesUpsert.test.mjs` (DB-free source-parse: asserts migration 062
+defines the unique index, and that `server/index.js` calls `.upsert(...)` with the exact
+`onConflict`/`ignoreDuplicates` shape, not a bare `.insert(rows)`).
 
-Task 26 added bounded retry/backoff on the candidate-insert path so a transient dropped connection no longer aborts a whole category with 0 inserted. But the retry fires on **any** error, including a network blip that lands *after* Postgres has already committed the insert — precisely the failure it targets. On retry, the same `rows` are inserted again.
-
-`candidates` has **no unique constraint** to catch this — only the non-unique `idx_candidates_move_string` (see `011_category_slugs.sql`). So a mid-insert network hiccup can silently double a batch.
-
-**Why deferred**: admin/localhost-only surface, run manually, and duplicate candidates are self-correctable (re-run or dedupe). No user-facing impact.
+**Why previously deferred**: admin/localhost-only surface, run manually, and duplicate candidates
+were self-correctable (re-run or dedupe). No user-facing impact — fixed anyway as part of spec 054's
+broader retry-safety audit.
 
 **If picked up**: the batch already carries `generation_run_id` + `move_string`, so a dedupe key exists — either add a unique index on `(generation_run_id, move_string)` and treat `23505` as success, or only retry on pre-commit error classes (connection-refused/timeout), never on an ambiguous post-send error.
 
 ## OI-51 — worktree-ports self-derive leaks `worktree-ports.sh`'s ownership-probe comments to the dev console
 
-**Status**: deferred (flagged by code review during worktree-port-isolation implementation, 2026-07-17; not fixed — cosmetic only)
+**Status**: ✅ RESOLVED 2026-08-02 (spec 054, Epic 4, US4, T037/T038). Both self-derive
+`execSync` calls (`connect-four/vite.config.js`'s `resolvePorts()` and
+`connect-four/server/index.js`'s `resolveWorktreePortEnv()`) now pass
+`stdio: ['ignore', 'pipe', 'ignore']`, so only stdout (the `export KEY=value` lines) is
+captured and `worktree-ports.sh`'s ownership-probe stderr is suppressed on a raw,
+un-sourced invocation. Verified 2026-08-02 by real injection: `node server/index.js` run
+directly (no `eval "$(...)"` sourcing) inside this linked worktree produced empty stderr
+while stdout still showed `Connect4 server running on port 4509` — see `staging_checks.md`'s
+"Epic 4" section.
+
 **Area**: `connect-four/vite.config.js` (`resolvePorts()`), `connect-four/server/index.js` (`resolveWorktreePortEnv()`)
 
 Both self-derive helpers call `execSync(scriptPath, { encoding: 'utf8' })` with no `stdio` override, so the child's stderr (the `# API_PORT=... is free/bound by pid(s): ...` ownership-probe lines `worktree-ports.sh` prints for humans running `eval "$(./worktree-ports.sh)"` interactively) is inherited by the parent and printed to the console on every raw, un-sourced `npm run dev`/`npm run vite`/`npm run server`/`node server/index.js` invocation. Harmless — stdout parsing (the actual port values) is unaffected — but it's unexpected noise the first time someone sees it.
@@ -1162,7 +1272,28 @@ Both self-derive helpers call `execSync(scriptPath, { encoding: 'utf8' })` with 
 
 ## OI-52 — worktree-ports self-derive silently falls back to legacy `3001`/`5173` if `worktree-ports.sh` fails
 
-**Status**: deferred (flagged by code review during worktree-port-isolation implementation, 2026-07-17; not fixed — low probability)
+**Status**: ✅ RESOLVED 2026-08-02 (spec 054, Epic 4, US4, T039/T040). Both self-derive
+consumers now detect "this is a linked worktree" via the same `GIT_DIR`/`GIT_COMMON`
+check `worktree-ports.sh` itself uses (`worktree-ports.sh:15-17`), re-implemented in a
+new shared, side-effect-free module `connect-four/server/worktreePorts.js`
+(`detectLinkedWorktree()` + `handleSelfDeriveFailure()`) imported by both
+`connect-four/vite.config.js`'s `resolvePorts()` and `connect-four/server/index.js`'s
+`resolveWorktreePortEnv()`. A self-derive failure is now fatal (throws, refusing to
+start) when the process is definitively inside a linked worktree; it remains the
+existing silent fallback to `3001`/`5173` when the check itself throws (no `.git` at
+all — e.g. the Railway build container, which must never be made fatal) or when
+`GIT_DIR === GIT_COMMON` (main checkout). Regression tests:
+`connect-four/server/worktreePorts.test.mjs` (decision logic, both branches, injectable
+detector — no real git shelled out) and `connect-four/tests/unit/worktreePortsConsumers.test.js`
+(source-parse wiring check confirming both consumers delegate to the shared module
+rather than re-implementing the check). Verified 2026-08-02 by real failure injection:
+temporarily removing `worktree-ports.sh` from this linked worktree and running
+`node server/index.js` refused to start with a clear `Refusing to start: this is a
+linked git worktree...` error; the same injection against the main checkout (broken
+shebang) still fell back to `3001`/`5173` unchanged. `worktree-ports.sh` was restored
+immediately after each injection (confirmed byte-identical via checksum, `git status`
+clean). See `staging_checks.md`'s "Epic 4" section for the full dated record.
+
 **Area**: `connect-four/vite.config.js` (`resolvePorts()`), `connect-four/server/index.js` (`resolveWorktreePortEnv()`)
 
 If `worktree-ports.sh` is missing, not executable, or throws (e.g. `git`/`cksum`/`lsof` unavailable, or the file was deleted) while running inside a **linked worktree** with `API_PORT`/`VITE_PORT`/`PORT`/`FRONTEND_URL` unset, both self-derive helpers fall back to the hardcoded legacy defaults (`vite.config.js`: `Number(apiPort) || 3001`, `Number(vitePort) || 5173`; `server/index.js`: `process.env.PORT || 3001` after `resolveWorktreePortEnv()`'s catch-and-warn). That silently rebinds the worktree's dev server into the main checkout's port range — the exact collision this whole feature exists to prevent — rather than failing loudly. `strictPort` only catches this if the main checkout's Vite happens to already be bound to `5173` at that moment; if the main checkout isn't running, the worktree would silently start on `5173`/`3001` with no error.
@@ -1183,6 +1314,8 @@ If `worktree-ports.sh` is missing, not executable, or throws (e.g. `git`/`cksum`
 **Why deferred**: cosmetic UX gap (one extra keystroke-field for the user), not a functional or security defect; pre-existing in the Stripe path this migration mirrors — fixing it is a `loadUser()`/`USER_PROFILE_SELECT_COLUMNS` change outside spec 050 US2's scope.
 
 **If picked up**: thread `data.user.email` into `req.user` in `loadUser()` (`server/index.js`) alongside the `profile` spread — no new DB column needed, the email is already on the Supabase auth user object returned by `authClient.auth.getUser(token)`.
+
+**Status: ✅ RESOLVED 2026-08-02** (spec 054, Epic 4, US1). `loadUser()` (`server/index.js`) now builds `req.user` as `{ id: data.user.id, email: data.user.email, ...profile }` (and the same for the `defaultUserProfile()` fallback branch) — exactly the fix sketched above, no new `public.users` column, `USER_PROFILE_SELECT_COLUMNS` untouched. Verified: `POST /api/paddle/create-checkout` (`server/paddleRoutes.js:50`, unchanged, already read `req.user.email`) now receives a real address — confirmed via a local harness that registers `registerPaddleRoutes` with a mock `paymentProcessor.createCheckout` and a fake `req.user.email`, logging the received `email` argument (`realuser@example.com` observed, not `undefined`). `GET /api/user/profile` (`server/userRoutes.js:109`, explicit-projection response) is unaffected — it does not spread `req.user`. Documented in `docs/architecture/api-conventions.md`'s "Auth Threading" section (`req.user` shape, including the degrades-to-`undefined` no-Supabase-email edge case).
 
 ## OI-54 — Paddle sandbox account has no default payment link set (manual dashboard step blocks full T029 sandbox checkout)
 
@@ -2798,7 +2931,18 @@ never satisfy the Paddle.js requirement. Cross-ref: spec 053 FR-024/FR-025, OI-4
 ---
 ## OI-99 — Every non-tied puzzle attempt through `POST /api/puzzles/:id/check` is silently discarded
 
-**Status**: deferred — scheduled under spec 054 (Epic 4, US4.3); not yet fixed
+**Status**: ✅ RESOLVED 2026-08-02 (spec 054, Epic 4, US3 / FR-015 + FR-016). The handler now writes
+`outcome: toStoredOutcome(evaluation.result)` (`connect-four/server/outcomeVocabulary.js`, a shared
+leaf module imported by both `server/index.js` and its test), translating `evaluatePredicate`'s raw
+`'correct'|'wrong'|'tied'` vocabulary into the stored enum (`'correct'→'correct_first'`,
+`'wrong'→'incorrect'`, `'tied'→'tied'`). Migration
+`connect-four/server/migrations/063_puzzle_attempts_outcome_narrow.sql` narrows the CHECK constraint
+to `'correct_first'|'tied'|'incorrect'|'abandoned'` so `'incorrect'` is now a legal value. Verified
+by real inserts against the local DB: all four kept values accepted, `'revealed'` and
+`'correct_retry'` rejected. Tests: `connect-four/server/outcomeVocabulary.test.mjs` and
+`connect-four/tests/blunder/outcomeConstraint.test.js`.
+**Deploy note**: migration 063 must be applied to staging/production BEFORE the
+`'incorrect'`-emitting build is served — see `docs/deployment_steps.md`.
 **Area**: `connect-four/server/index.js:2520` (the `puzzle_attempts` insert inside the `POST
 /api/puzzles/:id/check` handler at `:2461`), `connect-four/server/predicates.js:95`
 (`evaluatePredicate`), `connect-four/server/migrations/003_puzzles.sql:30` (the `outcome` CHECK)
@@ -2832,7 +2976,16 @@ Two second-order effects worth knowing before touching this area:
 
 ## OI-100 — A wrong answer in a sequence-category puzzle records no attempt row at all
 
-**Status**: deferred — scheduled under spec 054 (Epic 4, US4.3); not yet fixed
+**Status**: ✅ RESOLVED 2026-08-02 (spec 054, Epic 4, US3 / FR-019). A fourth
+`store?.recordPuzzleAttempt({...})` call was added in `handleSequenceClick`'s failure (`else`)
+branch in `connect-four/src/screens/ChallengeScreen.jsx`, writing `outcome: 'incorrect'`. The two
+pre-existing conditional sites (`~:408`, `~:584`) also changed their wrong-answer branch from
+`'abandoned'` to `'incorrect'` (FR-018); the unconditional success-only site (`~:659`) is unchanged
+(FR-020). Test: `connect-four/tests/dom/challengeScreenOutcome.dom.test.jsx` (registered as the 14th
+entry in `test:dom`).
+**Note**: during spec 054's code review this new write was found to pass a scalar `moves_tried` into
+an `integer[] NOT NULL` column — which Postgres rejects, so the row would never have landed. Fixed
+to `moves_tried: [col]` before ship. The two sibling sites carried the same defect and were fixed after the QA pass — see OI-103 (resolved).
 **Area**: `connect-four/src/screens/ChallengeScreen.jsx` — `handleSequenceClick`, the `else` branch at
 ~`:668` sibling to the `data.outcome === 'success'` branch at ~`:659`
 **Discovered**: spec 054 epic review, 2026-08-01
@@ -2856,7 +3009,14 @@ backfill — the distinction cannot be reconstructed from existing rows.
 
 ## OI-101 — `GET /api/admin/candidates` paginates on a non-unique sort key
 
-**Status**: deferred — scheduled under spec 054 (Epic 4, FR-012a); not yet fixed
+**Status**: ✅ RESOLVED 2026-08-02 (spec 054, Epic 4, US2 / FR-012a). `.order('id', { ascending:
+true })` was added after the existing `.order('created_at', { ascending: true })` in the
+`GET /api/admin/candidates` handler (`connect-four/server/index.js`), matching
+`/api/coach/queue`'s `severity DESC, created_at ASC, id ASC` precedent. Test:
+`connect-four/tests/unit/adminCandidatesPagination.test.js` (DB-free source-parse asserting the
+query-builder chain has both `.order()` calls before its `.range()`). The same epic added an
+`id`-based final tiebreaker to all three `GET /api/games` in-JS comparators
+(`connect-four/server/gamesSort.js`).
 **Area**: `connect-four/server/index.js:3135-3143`
 **Discovered**: spec 054 spec review, 2026-08-02
 
@@ -2905,5 +3065,124 @@ connect-four/tests/blunder/blunderTagConstraint.test.js`) to see whether it stil
 current migrations before adding it to a script. It is also a useful **pattern** to copy — it asserts
 code-vs-constraint parity by parsing the newest migration SQL file, with no DB connection, which is the
 only DB-free way to test a CHECK constraint in this repo.
+
+---
+
+## OI-103 — Two `ChallengeScreen.jsx` puzzle-attempt writes pass a scalar `moves_tried` into an `integer[]` column
+
+**Status**: ✅ RESOLVED 2026-08-02 (spec 054, post-QA). Both sites now pass an array:
+`~:584` → `moves_tried: cols` (the columns actually selected, not `cols.length`) and `~:659` →
+`moves_tried: [col]`. Verified no consumer reads the field — a repo-wide search for `moves_tried`
+found only writes, one verbatim passthrough (`server/userHelpers.js:104`), test fixtures, the schema
+line, and docs; there is no reader to break, so storing the list rather than a count is strictly
+more information. Guarded by an `Array.isArray` assertion on all four sites in
+`connect-four/tests/dom/challengeScreenOutcome.dom.test.jsx`, confirmed to go RED when either fix is
+reverted. This closes spec 054's **SC-004** ("100% of wrong Challenge submissions, across every
+puzzle type, recorded as `'incorrect'`"), which could not be claimed while the multi-column write
+was being rejected.
+**Area**: `connect-four/src/screens/ChallengeScreen.jsx` — the `forbidden_columns` write (~`:584`,
+`moves_tried: cols.length`) and the unconditional sequence-puzzle SUCCESS write (~`:659`,
+`moves_tried: 1`); column declared `connect-four/server/migrations/003_puzzles.sql:28`
+**Discovered**: spec 054 code review, 2026-08-02
+
+`puzzle_attempts.moves_tried` is `integer[] NOT NULL DEFAULT '{}'`. Both sites pass a **scalar**
+number, not an array. Postgres rejects that outright — measured against the local DB:
+
+```
+scalar 1  => REJECTED: malformed array literal: "1"
+array [1] => ACCEPTED
+```
+
+The write path is fire-and-forget (`SupabaseStore.recordPuzzleAttempt` → `POST
+/api/user/puzzle-attempts` → `writePuzzleAttempts`, which passes `moves_tried` through verbatim —
+`connect-four/server/userHelpers.js:104`, `src/store/SupabaseStore.js:72` — with no normalization),
+so the rejection is invisible: for a **signed-in** user these two attempts are silently discarded.
+Anonymous users are unaffected because `IndexedDBStore` has no schema to violate.
+
+This is the same silent-discard class as OI-99, in the client writer rather than the server one.
+
+**Confirmed live in the browser (spec 054 QA pass, 2026-08-02)**: submitting a wrong
+`forbidden_columns` answer as a signed-in user produced a `500` from Supabase (visible in the browser
+console) and **no `puzzle_attempts` row was inserted** — 0 rows for that puzzle_id. This is a
+reproducible data-loss bug on a real user path, not a theoretical one.
+
+**Why deferred**: spec 054's client-side scope was fenced to the four named `outcome:` touch points
+(spec.md "Out of Scope" §). The new sequence-failure write it added had the same defect and **was**
+fixed (`moves_tried: [col]`); these two sibling sites are pre-existing, and `~:659` is on the
+success path, so changing what it stores is a data-semantics decision beyond a correctness fix.
+
+**If picked up**: change `~:584` to the actual columns tried (it currently stores a *count*, so the
+fix is a semantic choice — `cols` itself is probably intended) and `~:659` to `[col]`, matching the
+`~:668` write spec 054 shipped. Then check whether any consumer reads `moves_tried` expecting a
+count. Note the DOM test at `connect-four/tests/dom/challengeScreenOutcome.dom.test.jsx` asserted
+the buggy scalar for the ~`:668` site until it was corrected — re-check any fixture you touch
+against a real insert, not against the current code's belief.
+
+---
+
+## OI-104 — A move's `quality` label can change between the live analysis and every later cached view
+
+**Status**: deferred (pre-existing; surfaced by spec 054 QA, out of that epic's scope)
+**Area**: `connect-four/server/index.js` — `reconstructAnalysisFromBlunders()` and the
+`POST /api/games/analyze` solver-driven path; `scoreMove()` vs `classifyStoredMistake()`
+**Discovered**: spec 054 QA pass, 2026-08-02
+
+Reproduced: move #1 of a test game was labelled `"blunder"` on the first (solver-driven) analysis,
+then `"suboptimal"` on every subsequent view of the same game.
+
+The two views compute `quality` from different sources:
+- **live first analysis** — `scoreMove()`, computed from solver scores at request time
+- **cached later views** — the stored `blunders.quality` column, written by
+  `classifyStoredMistake()`'s separate storage-rule threshold
+
+Those two thresholds are allowed to diverge by design, so a move near the boundary gets one label
+live and a different one forever after. The user sees their game silently re-graded on revisit.
+
+**This pre-dates spec 054.** That epic only *extracted* the reconstruction block into a shared
+helper (unchanged logic) and additionally reached it from the anonymous caller — which widens the
+blast radius from signed-in users to everyone, but did not introduce the divergence.
+
+**Why deferred**: fixing it requires deciding which label is authoritative — the live solver
+judgement or the stored storage-rule one — and that is a product/semantics call about what
+`blunders.quality` is *for*, not a mechanical correctness fix. Changing the stored value also
+retroactively re-grades existing rows.
+
+**If picked up**: start by diffing `scoreMove()`'s thresholds against `classifyStoredMistake()`'s
+(memory `project_annotation_gate_and_zones` and `mistakeStorageRule.test.js` cover the storage rule)
+and establish whether the gap is intentional. Related: memory
+`project_puzzle_grading_reads_stored_metadata` documents the same class of trap — stored metadata
+diverging from a recomputed detector.
+
+---
+
+## OI-105 — Migration number 061 is used by two different files; the ledger and disk have diverged
+
+**Status**: deferred (pre-existing; surfaced while measuring spec 054's deploy prerequisites)
+**Area**: `connect-four/server/migrations/`, `schema_migrations` on staging and production
+**Discovered**: spec 054 deploy-prerequisite measurement, 2026-08-02
+
+Measured 2026-08-02 against both environments:
+
+| Env | recorded as applied | on disk |
+|---|---|---|
+| staging | `061_security_lints.sql` (2026-07-30) | `061_correct_cols.sql` |
+| production | `061_security_lints.sql` (2026-07-30) | `061_correct_cols.sql` |
+
+`061_security_lints.sql` **is not in `server/migrations/`**. Two different migrations share the
+number 061, and the on-disk one has never been applied to either environment.
+
+`migrate.js` matches by **filename**, not number, so this is not immediately breaking:
+`061_correct_cols.sql` will simply run on the next deploy. The risks are (a) anyone eyeballing
+"highest applied number" concludes both environments are current through 061 when they are missing an
+061, and (b) the next author picks a number by looking at disk alone and collides again.
+
+**Why deferred**: not blocking — spec 054's own migrations (062, 063) are unaffected, and resolving it
+means deciding what happened to `061_security_lints.sql` (renamed? applied out-of-band and deleted?),
+which is history this session did not have.
+
+**If picked up**: find out where `061_security_lints.sql` came from (`git log --diff-filter=AD --
+'*061*'`) and whether its DDL is still needed. Then decide whether to renumber `061_correct_cols.sql`
+or leave it. Add a `migrate.js` pre-flight that warns when a ledger filename has no counterpart on
+disk. See memory `project_migration_ledger_and_pooler`.
 
 ---

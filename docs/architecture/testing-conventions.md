@@ -332,6 +332,23 @@ const supabase = {
 ```
 Three tests cover: auth gate (null `user_id` skips insert), tag guard (invalid tag → `'suboptimal_move'`), and 23505-as-success (unique violation does not throw).
 
+### Source-parse assertions — when there is no seam at all
+
+Some properties live in a route handler that cannot be extracted without restructuring it, and cannot be reached at all because `server/index.js` calls `app.listen()` unconditionally at module scope (importing it boots the server and binds a port). For those, assert against the **shipped source text**. Precedent: `tests/blunder/blunderTagConstraint.test.js` parses the newest migration SQL to check code-vs-constraint parity "without requiring a DB connection". Spec 054 added `tests/unit/adminCandidatesPagination.test.js` (query-builder chain shape), `server/candidatesUpsert.test.mjs` (migration + call-site shape) and `tests/blunder/outcomeConstraint.test.js` (CHECK value set).
+
+Two rules, both learned the hard way:
+
+- **Anchor on the distinguishing expression, not on a message string.** A first attempt at the `/api/scores` full-board test matched the error text `'no legal move: board is full'` — which also appears in the handler's `catch` branch and in a comment, so the test stayed **green with the guard deleted**. Re-anchored on `colHeights.every(`, it correctly goes red.
+- **Verify the test fails for the right reason** by actually reverting the change and re-running. A source-parse test that never fails is worse than no test: it reads as coverage.
+
+Do **not** reach for a source-parse test when a real seam exists — extract the function instead (above). And do not build a mock-based DB test to stand in for one: that tests your belief about the client library's behavior, not the code (see "Test the real seam, never a copy of it").
+
+### A green unit test does not mean the endpoint works
+
+Spec 054 shipped `NoLegalMoveError` in `chooseSparringMove` with a passing unit test, while `POST /api/scores` still returned a generic 500 for the same input — `solver.query()` runs first and throws its own error, so the new branch was unreachable. The unit test could not see it; a curl against the running server found it immediately.
+
+When you add an error/terminal signal to a function, check what the **calls before it** do with the same input, and assert the endpoint-level property too (extract, or source-parse the ordering).
+
 ### DOM / component tests (React Testing Library)
 
 Pure function extraction covers logic, not rendering — assertions like "does this component mount," "does it re-render on retry," or "is this button reachable via role" need a real DOM. For that, this repo uses **React Testing Library** on jsdom, still driven by `node:test` (no Jest/vitest introduced).

@@ -120,6 +120,37 @@ describe('chooseSparringMove', () => {
     });
   });
 
+  describe('full board (no playable column) → explicit terminal signal', () => {
+    // "012345601234560123456012345601234560123456": all 7 columns filled to 6
+    // discs each (42 plies), [GAME OVER] per ./visualize_board.sh. No column is
+    // legal, so `playable` is empty and `best`/`bestCols` derivations over an
+    // empty array must not silently degrade to an undefined column pick.
+    const board = new Board('012345601234560123456012345601234560123456');
+    const scores = [INV, INV, INV, INV, INV, INV, INV]; // every column full
+
+    test('never returns col: undefined (or any value) on a full board', () => {
+      const rng = seqRng([0.99, 0, 0]);
+      let threw = false;
+      let col;
+      try {
+        col = chooseSparringMove(board, 'easy', scores, rng);
+      } catch (e) {
+        threw = true;
+        col = e;
+      }
+      // FR-008: the caller must be able to detect "no legal move" explicitly —
+      // either chooseSparringMove throws (caller translates to a 4xx) or it
+      // returns a non-numeric terminal sentinel. It must NEVER silently return
+      // `undefined` (which JSON.stringify would drop from the response body,
+      // producing `{ scores }` with `col` invisibly missing).
+      assert.ok(
+        threw || col === null || typeof col !== 'number',
+        `expected an explicit terminal signal (throw or non-numeric), got col=${col} (threw=${threw})`,
+      );
+      assert.notEqual(col, undefined, 'col must not be undefined — that silently disappears from JSON');
+    });
+  });
+
   describe('SPARRING_MISTAKE_RATES config', () => {
     test('exposes the four difficulty levels with perfect at 0', () => {
       assert.deepEqual(SPARRING_MISTAKE_RATES, {

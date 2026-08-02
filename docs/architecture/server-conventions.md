@@ -1437,11 +1437,27 @@ It currently stamps `slides[].windowCounts` (recomputed from each slide's `moves
 
 `DATABASE_URL` **MUST** use the Supabase **session-mode pooler** (port **5432**) with `sslmode=no-verify` appended to the connection string. The connection is still SSL-encrypted; `no-verify` skips certificate chain validation which is necessary because Supabase's pooler uses self-signed certificates. (`sslmode=require` triggers strict certificate verification in the `pg` driver v8.21+, which fails against Supabase poolers.)
 
-The **transaction-mode pooler** (port **6543**) is **forbidden** — it breaks multi-statement transactions (each statement may execute on a different backend connection) and does not support `pg_dump`.
+The **transaction-mode pooler** (port **6543**) is **not the supported configuration** — converge on 5432. Two corrections to the previous wording here, both measured 2026-08-02:
+
+- The old rationale ("each statement may execute on a different backend connection") describes pgBouncer **statement** mode. In **transaction** mode a backend connection is pinned for the duration of an explicit `BEGIN…COMMIT`, which is exactly what `migrate.js` issues (`server/migrate.js`, the `BEGIN` / `query(sql)` / `INSERT INTO schema_migrations` / `COMMIT` sequence) — so multi-statement DDL transactions do work through 6543.
+- Empirically they have: **staging's `DATABASE_URL` is on 6543 and its `schema_migrations` ledger shows five migrations applied through it**, most recently `061_security_lints.sql` on 2026-07-30.
+
+`pg_dump` genuinely does not work over 6543. Treat a 6543 `DATABASE_URL` as **configuration drift to fix on its own schedule, not as a broken deploy** — and never report it as a deploy blocker without checking that environment's ledger first. Tracked for staging as OI-31.
 
 Example correct format:
 ```
 postgresql://postgres.[project-ref]:[password]@aws-0-[region].pooler.supabase.com:5432/postgres?sslmode=no-verify
+```
+
+### The ledger tracks FILENAMES, and can diverge from what is on disk
+
+`migrate.js` compares `server/migrations/*.sql` against `schema_migrations.filename` — by **name, not by number**. Two consequences, both live as of 2026-08-02:
+
+- **Numbers can collide across environments.** Staging and production both record `061_security_lints.sql` as applied, but that file is not in `server/migrations/`; the on-disk 061 is `061_correct_cols.sql`, which neither environment has. Both are "061".
+- **The highest applied number does not mean "up to date through N".** An environment can be missing a lower-numbered on-disk migration while showing a higher number applied. Diff the ledger against `ls server/migrations/` per environment before a deploy — do not compare counts or maxima.
+
+```sql
+SELECT filename, applied_at FROM schema_migrations ORDER BY applied_at DESC LIMIT 10;
 ```
 
 ### schema_migrations ledger table

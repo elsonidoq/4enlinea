@@ -95,6 +95,10 @@ PK: `id`
 | reviewed_at | timestamptz | YES | |
 | created_at | timestamptz | NO | `now()` |
 
+**Unique index `idx_candidates_run_move_unique` on `(generation_run_id, move_string)`** (migration 062, spec 054). It makes the `POST /api/admin/generate` insert-retry idempotent: the retry loop re-sends the identical batch after any error, including one that arrives *after* Postgres committed the first attempt. The insert therefore uses `.upsert(rows, { onConflict: 'generation_run_id,move_string', ignoreDuplicates: true })`, **not** `.insert(rows)` — a bare insert would violate the index and, because it is one batched multi-row statement, fail *atomically*, discarding every good row rather than just the duplicate.
+
+`candidates.id` is a random `gen_random_uuid()`, so **never order by `id` to pick "the first" row** — for dedupe use `(created_at, ctid)`; a batch insert can share one `created_at`.
+
 ---
 
 ## `false_positive_records`
@@ -145,10 +149,14 @@ FK: `puzzle_id` → `puzzles.id`, `user_id` → `users.id`
 | user_id | uuid | YES | |
 | device_uuid | text | NO | |
 | moves_tried | integer[] | NO | `{}` |
-| outcome | text | NO | |
+| outcome | text | NO | CHECK: `correct_first` \| `tied` \| `incorrect` \| `abandoned` |
 | first_attempt_correct | boolean | NO | |
 | time_ms | integer | YES | |
 | created_at | timestamptz | NO | `now()` |
+
+**`outcome` was narrowed by migration 063** (spec 054) from five values to four: `'revealed'` and `'correct_retry'` were dropped (no code path wrote them) and `'incorrect'` was added for a submitted-but-wrong answer, distinct from `'abandoned'` (the user left without answering). A correct-on-retry attempt is now stored as `'correct_first'`; **`first_attempt_correct` is the only remaining first-vs-retry signal.** Historical rows are deliberately not backfilled for the incorrect-vs-abandoned distinction — it is unrecoverable.
+
+**`moves_tried` is an ARRAY.** Passing a scalar (a count, a single column index) is rejected by Postgres with `malformed array literal`, and every writer of this table is fire-and-forget, so the rejection is silent and the row is simply lost. Three client sites did exactly this until spec 054. Always pass `[col]` / the column list.
 
 ---
 
