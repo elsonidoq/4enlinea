@@ -507,6 +507,13 @@ For each check record:
     fallback triggers). If it's silently blocked, that's a bug to file, not a pass.
   - **Source**: Feature 1 (onboarding follow-ups, `feature/polish` 2026-07-13); `useCoachSpeech` +
     `OnboardingMissionScreen` mount effect.
+  - **2026-08-01 (spec `053`/Epic 7, US2, T012)**: not yet performed this session — this check is
+    explicitly manual, human-in-the-loop, real (non-automation) browser only (`/app-qa` and
+    chrome-devtools MCP are disallowed here, they fake autoplay permission and would produce a false
+    pass). No human was available to run it this session. **Pending — owner: Pablo (repo owner),
+    target: 2026-08-08.** Also logged in `docs/deploy-runbook.md` and `docs/open_issues.md`'s OI-21
+    body. This does not block OI-21's closeout (design question resolved independent of this check)
+    or the rest of spec `053`.
 
 ## Anon free deep reveal
 
@@ -1543,3 +1550,102 @@ These could not be confirmed locally because they depend on deployed state or pr
   - [ ] Signed off (tester + date):
 
 ---
+
+## Epic 5 — Audio Verification & TTS Management (open-issues-epics.md, spec 051)
+
+- [ ] **A Spanish lesson clip is genuinely Spanish.**
+  - **What**: In the running app served from `$VITE_PORT` (never `$API_PORT`, which does not serve
+    `public/`), with the language toggle set to Spanish, open a lesson with a Spanish audio clip
+    attached to a slide and listen to it.
+  - **Why staging**: This is not technically impossible in local dev — it can be run against the
+    local dev server on `$VITE_PORT` just as well as staging. It lands here because it requires
+    subjective human listening to confirm the clip is genuinely intelligible Spanish rather than an
+    English recording served under Spanish text (`pickLocalized` falls back to the English `audio`
+    field when a Spanish clip is missing, silently and with no error — memory
+    `project_spanish_output_silent_fallback`), and is deferred to the staging sign-off pass rather
+    than gating local implementation.
+  - **Expected**: The clip that plays is intelligible, natural-sounding Spanish — not an English
+    recording under Spanish text.
+  - **Source**: Epic 5 / spec 051 FR-003, US1 Acceptance Scenario 3.
+  - [ ] Signed off (tester / date):
+
+- [ ] **A Spanish coach clip is genuinely Spanish.**
+  - **What**: In the running app served from `$VITE_PORT`, trigger a coach dialogue whose Spanish
+    audio clip has already been generated and listen to it.
+  - **Why staging**: Same as above — runnable locally on `$VITE_PORT`, but requires subjective human
+    listening rather than a structural check, so it is deferred to the staging sign-off pass.
+  - **Expected**: The clip is genuine, intelligible Spanish audio, not an English fallback.
+  - **Source**: Epic 5 / spec 051 FR-003, US1 Acceptance Scenario 4.
+  - [ ] Signed off (tester / date):
+
+- [ ] **Accent audit — native Buenos Aires / Rioplatense (voseo) speaker.**
+  - **What**: Listen to a sample of Spanish clips, both coach and lesson, and judge accent quality.
+  - **Why staging**: Runnable locally on `$VITE_PORT` — no technical barrier — but this is a purely
+    subjective judgment call (does the voice sound like a native Rioplatense/Argentine speaker, per
+    `docs/architecture/frontend-conventions.md`'s "Spanish = Argentinian voseo" convention, or like an
+    English speaker reading Spanish phonetically), so it is deferred to the staging sign-off pass
+    rather than blocking local implementation.
+  - **Expected**: The sampled Spanish clips sound like a native Buenos Aires/Rioplatense speaker using
+    voseo, not an English speaker reading Spanish phonetically.
+  - **Source**: Epic 5 / spec 051 FR-005, US1 Acceptance Scenario 7.
+  - [ ] Signed off (tester / date):
+
+- [ ] **Audition the 5 regenerated coach clips before authorizing the remaining ~212.**
+  - **What**: On `/admin/audio` served from `$VITE_PORT`, language `en`, play the five clips regenerated
+    on the current model (`gpt-4o-mini-tts`) as a quality sample, all currently `awaiting_approval`:
+    `coach.spoken.sparring.outcome.win`, `coach.spoken.sparring.outcome.loss`,
+    `coach.spoken.immediate_threat.hint.0`, `coach.spoken.figure_7.blunder.2`,
+    `coach.spoken.undercut.optimal.2`. Compare against the older, pre-2026-07-14 clips still in place.
+  - **Why staging**: Runnable locally, but it is a subjective judgment (does the new voice-styled model
+    actually sound better than the legacy unstyled one?) that no automated check can make — and
+    automation Chrome fakes autoplay permission, so an agent can report an `<audio>` element as playing
+    while it ships silence. It must be a human ear.
+  - **Expected**: The five clips sound natural and voice-styled, and are an improvement on the legacy
+    takes. If yes → authorize the bulk pass (`POST /api/admin/audio/generate-all {"scope":"all","lang":"en"}`,
+    then Approve All) plus the 2 stale lesson clips. If no → the voice config in `server/tts-prompt.en.json`
+    needs tuning **before** ~212 clips are regenerated against it.
+  - **Source**: Epic 5 / spec 051 FR-022/FR-023, SC-005; owner decision 2026-07-30 to sample before bulk
+    spend. Blocking gate for closing **OI-32**, which stays open until this is signed off.
+  - [ ] Signed off (tester / date):
+
+---
+
+## Epic 6 — Lesson Learning Surface & Authoring Polish (open-issues-epics.md, spec 052) — added 2026-07-31
+
+- [ ] **`GET /api/lessons` (the list) is now locale-varying — confirm no cross-locale cache bleed.**
+  - **What**: In staging, request the lesson list twice through the real edge/proxy path — once with
+    `Accept-Language: es`, once with `en` — and confirm each returns its own titles ("Amenazas
+    Inmediatas" vs "Immediate Threats"). Then load the Saga screen in Spanish in a fresh session
+    *after* an English session has warmed any cache, and confirm titles are still Spanish. If a CDN or
+    reverse proxy caches this route, verify it emits/honours `Vary: Accept-Language`.
+  - **Why staging**: spec 052 changed this route from locale-independent to locale-scoped
+    (`getLessons(req.locale)`), because the `lesson.<id>.title` i18n keys that used to localize titles
+    client-side were deleted. Local dev has no CDN or shared cache in front of the API, so a
+    missing `Vary` header is structurally invisible there — the failure only appears once something
+    caches the response for more than one user.
+  - **Expected**: Each locale gets its own titles; no session ever sees the other locale's titles.
+  - **Source**: Spec 052 US2 / FR-004, FR-005. Regression caught in code review (see `docs/open_issues.md` OI-44 correction note).
+
+- [ ] **New `goalPrompt` narration clips are actually served in staging.**
+  - **What**: In staging with audio on, open a lesson confirmation challenge in **both** locales
+    (claimeven is the reference case) and confirm the coach prompt narrates, with the Spanish clip
+    differing from the English one. Spot-check that `/audio/lessons/<hash>.mp3` returns `200
+    audio/mpeg` and not an SPA HTML fallback.
+  - **Why staging**: verified locally only against the Vite dev server, which serves `public/`
+    directly. The deployed build serves these through Express/static with an SPA catch-all, so a
+    misrouted path returns `200 text/html` rather than a 404 — which an `<audio>` element fails
+    silently on. Automation Chrome also fakes autoplay, so audible confirmation cannot be scripted.
+  - **Expected**: Both locales narrate; the two clips are audibly different; direct clip URLs return
+    `audio/mpeg`.
+  - **Source**: Spec 052 follow-on (`confirmationChallenges[].goalPromptAudio`), FR-029's successor.
+
+- [ ] **Spanish lesson titles render on every screen that shows one.**
+  - **What**: In staging, set the app to Spanish and walk Saga list → Concept slides → Socratic screen
+    → confirmation challenge for at least three lessons, confirming a Spanish title on each screen and
+    no blank titles.
+  - **Why staging**: local verification used the dev server with a hand-restarted API; the deployed
+    build additionally depends on every client fetch sending `langHeaders()` through the real origin
+    (`SagaScreen`, `StatsScreen`, `ConceptScreen`, `SocraticScreen`, `CLChallengeScreen`). A single
+    missing header degrades silently to English rather than erroring.
+  - **Expected**: Spanish titles everywhere; zero blank or English titles.
+  - **Source**: Spec 052 US2 / SC-002, SC-009.

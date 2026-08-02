@@ -8,6 +8,7 @@ import { useUpgradeCheckout } from '../lib/useUpgradeCheckout.js';
 import { subscribeCheckoutReturn, resetCheckoutReturnState } from '../lib/checkoutReturnFlow.js';
 import { deriveLockReason, dispatchLockAction } from './sagaLock.js';
 import { getEntitlement } from '../lib/entitlement.js';
+import { langHeaders } from '../lib/apiLang.js';
 
 const API = import.meta.env.VITE_API_BASE_URL || '';
 
@@ -112,7 +113,7 @@ function LessonNode({ lesson, state, onTap }) {
             fontSize: 15,
             color: 'var(--ink)',
           }}>
-            {t(`lesson.${lesson.id}.title`, { defaultValue: lesson.title })}
+            {lesson.title}
           </span>
           {lesson.free === false && (
             <span style={{
@@ -178,7 +179,9 @@ export function SagaScreen({ go, goBack, lockAction }) {
     injectPulseStyle();
     track('screen_viewed', { screen: 'saga_map' });
 
-    fetch(`${API}/api/lessons`)
+    // langHeaders(): the list's `title` is locale-scoped as of spec 052 (US2) — the
+    // lesson.<id>.title i18n fallback that used to localize it client-side is gone.
+    fetch(`${API}/api/lessons`, { headers: langHeaders() })
       .then(r => r.json())
       .then(data => setLessons(data))
       .catch(err => console.error('[SagaScreen] fetch lessons error:', err));

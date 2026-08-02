@@ -1,10 +1,13 @@
 import { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import { ChallengeScreen } from './ChallengeScreen.jsx';
 import { useLessonLockGuard } from '../lib/useLessonLockGuard.js';
+import { langHeaders } from '../lib/apiLang.js';
 
 const API = import.meta.env.VITE_API_BASE_URL || '';
 
 export function CLChallengeScreen({ go, goBack, goReplace, lessonId, lessonTitle, confirmationCategory, confirmationCount, confirmationChallenges }) {
+  const { t } = useTranslation();
   // Direct-URL lock guard (PRO tier + lesson order) — mirrors SagaScreen's rules.
   // Must clear before ANY challenge content renders or completion can be recorded
   // (QA 2026-07-25: a free user could complete a PRO lesson via /clchallenge/:id).
@@ -24,7 +27,12 @@ export function CLChallengeScreen({ go, goBack, goReplace, lessonId, lessonTitle
     if (!lessonId) return;
 
     let cancelled = false;
-    fetch(`${API}/api/lessons/${lessonId}`)
+    // langHeaders() is load-bearing since spec 052 wired confirmationChallenges[].goalPrompt
+    // through to the coach bubble: this cold-boot path (direct URL / refresh on
+    // /clchallenge/:id) is the only one that fetches the lesson itself rather than
+    // receiving already-localized props, so without it a Spanish learner gets the English
+    // goalPrompt. See docs/architecture/api-conventions.md §langHeaders.
+    fetch(`${API}/api/lessons/${lessonId}`, { headers: langHeaders() })
       .then(res => {
         if (!res.ok) throw new Error('not_found');
         return res.json();
@@ -58,15 +66,15 @@ export function CLChallengeScreen({ go, goBack, goReplace, lessonId, lessonTitle
   // Locked-safe gate: show the loading state until the guard has decided, and keep
   // showing it after a 'blocked' redirect (this instance unmounts immediately).
   if (lockStatus !== 'allowed') {
-    return <div>Loading…</div>;
+    return <div>{t('common.loading')}</div>;
   }
 
   if (fetchError) {
-    return <div>Lesson not found.</div>;
+    return <div>{t('lesson.notFound')}</div>;
   }
 
   if (!resolvedTitle) {
-    return <div>Loading…</div>;
+    return <div>{t('common.loading')}</div>;
   }
 
   return (

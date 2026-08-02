@@ -91,3 +91,36 @@ test('parseAnswer extracts a JSON object from prose-wrapped output', () => {
   assert.equal(parse_error, null);
   assert.equal(answer.mechanism, 'x');
 });
+
+// ── Locale threading (spec 051 FR-019/020, OI-28) ──────────────────────────────────────────────
+// computeMechanism is the production function behind the ONLY live one-liner-equivalent surface
+// (POST /api/explain-move-llm's `explanation` field, confirmed via a captured live network
+// request — see specs/051-audio-verification-tts/tasks.md T033). It already threads `locale` into
+// buildPromptForCondition, which appends SPANISH_OUTPUT_DIRECTIVE only for locale === 'es'. These
+// tests pin that behavior at the prompt-construction seam (the prompt is what the LLM — and in
+// production, a real Spanish-speaking learner's experience — actually depends on).
+test('locale "es" threads the Spanish output directive into the prompt sent to the LLM', async () => {
+  let seenPrompt;
+  const res = await computeMechanism(MOVESTRING, PLAYED_COL, {
+    solver,
+    locale: 'es',
+    callLLM: async (prompt) => { seenPrompt = prompt; return okAnswer; },
+  });
+  assert.equal(res.notABlunder, false);
+  assert.match(seenPrompt, /Argentinian Spanish/);
+  assert.match(seenPrompt, /vos/);
+});
+
+test('locale "en" (and the default) omit the Spanish output directive — unchanged from current behavior', async () => {
+  let seenPromptEn, seenPromptDefault;
+  await computeMechanism(MOVESTRING, PLAYED_COL, {
+    solver, locale: 'en',
+    callLLM: async (prompt) => { seenPromptEn = prompt; return okAnswer; },
+  });
+  await computeMechanism(MOVESTRING, PLAYED_COL, {
+    solver, // no locale passed — exercises the locale = 'en' default
+    callLLM: async (prompt) => { seenPromptDefault = prompt; return okAnswer; },
+  });
+  assert.doesNotMatch(seenPromptEn, /Argentinian Spanish/);
+  assert.doesNotMatch(seenPromptDefault, /Argentinian Spanish/);
+});

@@ -1,6 +1,7 @@
 {
   "id": "claimeven",
   "title": "Claimeven",
+  "title_es": "Claimeven",
   "free": true,
   "userPerspective": "yellow",
   "slides": [
@@ -443,28 +444,32 @@
     {
       "puzzleId": "0a1e6b52-3d18-4a0c-9f5b-2c7d41e8b930",
       "moveString": "333336122241046612122601314",
-      "goalPrompt": "Exactly one open column has an odd number of empty squares left — every other open column is already even. Drop into it, so all of them pair up and Gray's reply-above strategy carries the win.",
-      "goalPrompt_es": "Exactamente una columna abierta quedó con una cantidad impar de casillas vacías —todas las demás ya son pares. Entrá ahí, para que todas queden emparejadas y la estrategia de responder-encima de Gris asegure la victoria.",
+      "goalPrompt": "Exactly one open column still has an odd number of empties. Drop in to pair them all up, and reply-above carries Gray's win.",
+      "goalPrompt_es": "Solo una columna abierta quedó impar. Entrá ahí para emparejarlas todas y que responder-encima le dé la victoria a Gris.",
       "goalPredicateType": "claimeven",
       "goalPredicateParams": {},
       "cooperativeAiMoves": [],
       "interactionMode": "single_move",
       "highlightMetadata": null,
       "correctCol": 4,
-      "userPlayer": 2
+      "userPlayer": 2,
+      "goalPromptAudio": "/audio/lessons/5de1c51232e058f0.mp3",
+      "goalPromptAudio_es": "/audio/lessons/74ada23bea307a10.mp3"
     },
     {
       "puzzleId": "5a454031-b4c7-43ee-a10a-5dc5d85236fc",
       "moveString": "4313303344010421102",
-      "goalPrompt": "Green just grabbed an even square in the third column — replying directly above it loses. One column has an odd number of empty squares left. Fill it, so every column pairs up evenly and Gray's reply-above strategy carries the win.",
-      "goalPrompt_es": "Verde acaba de tomar una casilla par en la tercera columna —responder justo encima pierde. Una columna quedó con una cantidad impar de casillas vacías. Llenala, para que todas las columnas queden emparejadas y la estrategia de responder-encima de Gris asegure la victoria.",
+      "goalPrompt": "Replying directly above Green's new even square loses. One column is still odd — fill it so every column pairs and Gray wins.",
+      "goalPrompt_es": "Responder justo encima de la casilla par de Verde pierde. Una columna sigue impar: llenala para emparejar todo y que gane Gris.",
       "goalPredicateType": "claimeven",
       "goalPredicateParams": {},
       "cooperativeAiMoves": [],
       "interactionMode": "single_move",
       "highlightMetadata": null,
       "correctCol": 3,
-      "userPlayer": 2
+      "userPlayer": 2,
+      "goalPromptAudio": "/audio/lessons/e2a32ae5b105e152.mp3",
+      "goalPromptAudio_es": "/audio/lessons/6a438a480bfb171d.mp3"
     }
   ],
   "order": 8

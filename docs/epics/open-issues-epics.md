@@ -79,7 +79,7 @@ those four. Run `eval "$(./worktree-ports.sh)"` in every worktree before startin
 | **3** | A | Entitlement & Payments Consolidation | OI-66, OI-39, OI-55, OI-34, OI-41, OI-25 | lesson routes, tier-gate call sites, `paddleProcessor.js`, `pricing.html` | 5 | Full speckit |
 | **4** | A | Server/API Data Integrity & Environment Correctness | OI-40, OI-53, OI-17, OI-47, OI-50, OI-22, OI-49, OI-5, OI-14, OI-31, OI-51, OI-52 | `server/index.js` handlers, `userHelpers.js`, `classifier.js`, `vite.config.js`, migrations/ops | 4 | Full speckit |
 | **5** | B | Audio Verification & TTS Management *(rescoped 2026-07-29 — bulk generation already shipped)* | OI-42, OI-45, OI-26, OI-23, OI-28, OI-32; verify-and-close OI-65, OI-27 | `/admin/audio` (`AdminAudioPage.jsx`), `server/lessonAudio.js`, `server/index.js` TTS routes, `lessons/*.json` | 3 | Full speckit |
-| **6** | B | Lesson Learning Surface & Authoring Polish | OI-46, OI-44, OI-68, OI-69, OI-63, OI-73, OI-19, OI-38, OI-62 | `SocraticScreen.jsx`, `Board.jsx`, `admin/SlideEditor.jsx`, lesson tooling, i18n, KB | 5 | Full speckit |
+| **6** | B | Lesson Learning Surface & Authoring Polish | OI-46, OI-44, OI-68, OI-69, OI-63, OI-73, OI-19, OI-62; count-only fix for OI-38 (translation deferred) | `SocraticScreen.jsx`, `Board.jsx`, `admin/SlideEditor.jsx`, lesson tooling, i18n, KB | 5 | Full speckit |
 | **7** | B | QA Backlog & Product/UX Decisions | OI-35, OI-21, OI-37 | nav stack, onboarding entry, ReviewScreen, `agentic_QA_2026-07-15-1321.md` | 3 | Brainstorm-first, then speckit |
 | **8** | C | Dev Infrastructure & Test-Quality Baseline | OI-70, OI-71, OI-16, OI-29, OI-58, OI-6, OI-72 | `eslint.config.js`, `tests/dom/`, `SplitReveal.jsx`, CSP on `main` | 3 | Full speckit |
 | **9** | C | Legacy `correct_col` Scalar Retirement *(depends on Epic 1/spec 051 having merged)* | OI-81 | `server/index.js`, `server/candidate-generator.js`, `server/predicates.js`, `server/answerSetInvariant.js`, `server/evaluateMoveHandler.js`, `ChallengeScreen.jsx`, a column-drop migration | 5 | Full speckit |
@@ -1023,15 +1023,23 @@ verification in `staging_checks.md` under this epic.
 
 ## Epic 5 — Audio Verification & TTS Management
 
-**Intent:** Give the owner one place to generate, audition, and approve **every** clip in the app, and close
-the TTS defects that survive the content pass. **Rescoped 2026-07-29** (see Non-obvious facts): the bulk
-generation this epic was originally built around has since shipped from a parallel session, so what remains
-is verification, the missing admin surface, and four correctness bugs.
+**Intent:** Give the owner one place to generate, audition, and approve **every** clip in the app; close
+the TTS defects that survive the content pass; and make the stale-model class of drift that produced OI-32
+structurally impossible to repeat. **Rescoped 2026-07-29** (see Non-obvious facts): the bulk generation this
+epic was originally built around has since shipped from a parallel session, so what remains is verification,
+the missing admin surface, three correctness bugs (a fourth, one-liner localization, is its own story —
+US5.4), a confirmed-stale English coach fleet that needs regenerating, and a single-synthesis-path
+guarantee.
 
 **Issues covered:** OI-42 (lesson audio unmanageable from `/admin/audio` — the remaining headline),
-OI-45 (regenerating an approved clip publishes it unapproved), OI-26 (cleanup nulls audio cross-locale),
-OI-23 (deep-reveal TTS 400s on the opening move), OI-28 (blunder one-liner has no locale context),
-OI-32 (stale `tts-1` English coach clips — **status unverified**, see below).
+OI-45 (regenerating an approved clip publishes it unapproved — decision settled below),
+OI-26 (cleanup nulls audio cross-locale), OI-23 (deep-reveal TTS 400s on the opening move),
+OI-28 (blunder one-liner has no locale context — own user story, see below),
+OI-32 (stale `tts-1` English coach clips — **CONFIRMED STALE**, see below),
+OI-78 (no pacing-aware tooling for corpus-wide **lesson** audio regeneration — the coach fleet already has
+a working server-side bulk path, `generate-all scope:'all'`; the real gap is the per-lesson,
+per-language admin endpoint, which makes a full lesson-corpus pass 15 × 2 = 30 separate HTTP requests
+against the shared rate limiter).
 **Verify-and-close only** (content appears shipped, not yet confirmed end-to-end): OI-65 (subsumes OI-9,
 OI-43's remaining half, OI-64 item 2), OI-27.
 
@@ -1043,33 +1051,90 @@ OI-43's remaining half, OI-64 item 2), OI-27.
    in a second index. Any admin UI must respect that.
 3. Generation runs **locally only** (FR-012a) — `OPENAI_API_KEY` is in `connect-four/server/.env`; remote
    containers have no `.env` at all, which is why OI-65 stalled.
+4. **OI-45: keep publish-immediately, add a warning (not an approval gate).** A re-recorded clip at an
+   already-approved slug goes live at once, same as today — it does not go silent pending review. The gap
+   this leaves (a bad take can go live) is closed by adding an explicit warning to the admin UI's per-clip
+   generate button, matching the warning the CLI (`connect-four/scripts/generate-tts.js`) already shows.
+   Rejected alternative: gating playback on approval, because it can take a *working* clip offline the
+   moment someone clicks regenerate.
+5. **Single synthesis path is config-ownership-by-the-shared-path, not a consolidation (owner
+   requirement).** `connect-four/server/ttsProvider.js` is **already** the only file in the codebase that
+   talks to the TTS provider directly, and all six call sites (`server/index.js:3688,3727,3761,3953`,
+   `server/lessonAudio.js:24`, `scripts/generate-tts.js:364`) already import `synthesize()`/
+   `buildTtsRequest()` from it — there is no consolidation left to do. Five of the six already pass full
+   per-language config (voice, speed, model, `instructions` from `readTtsConfig(lang)` +
+   `buildTtsInstructions`). The **sole** defective caller is `scripts/generate-tts.js:363-366`, whose
+   `synthesizeAndWrite()` calls `synthesize(value)` with no options at all — hardcoded fallback voice
+   `alloy`, no instructions, and its `lang` argument never reaching synthesis. The fix is **not** "wire up
+   the last caller" as a one-off — it's making omission **inexpressible**: the shared entry point's
+   signature must resolve voice model/voice/speed/instructions internally from the requested language, so a
+   caller can supply only text + language and cannot supply or omit the rest. Concretely:
+   - Change `ttsProvider.js`'s shared entry point signature so voice configuration is resolved internally
+     from the requested language; no caller constructs or supplies its own model/voice/instructions.
+   - That entry point must **refuse** a legacy model (`tts-1`, `tts-1-hd`) rather than silently degrade:
+     those models ignore `instructions` outright, so a model override is equivalent to shipping an unstyled
+     clip — exactly how OI-32 happened. Also remove `tts-1`/`tts-1-hd` from every selectable set
+     (`VALID_TTS_MODELS` in `ttsConfig.mjs`, the `TTS_MODELS` dropdown in `AdminAudioPage.jsx`'s config
+     editor and preview sandbox) so an unsynthesizable config can't even be saved.
+   - Add a regression test at the seam asserting every synthesis request carries the current voice model
+     and non-empty, **language-correct** `instructions`; a grep-based lint that no file outside the shared
+     module constructs a TTS request directly is an acceptable complement, not a substitute for the test.
+   - This is what makes OI-32 closable as "fixed and prevented," not just "fixed once."
 
 **Non-obvious facts**
-- **Content state, re-measured 2026-07-29 after the rescope** (the epic's original "12 of 15 lessons have no
-  audio" premise is dead — a parallel session shipped the generation mid-authoring):
-  - **Lesson narration: complete on disk.** All 15 lessons carry `audio` **and** `audio_es` on every
-    message, and **all 282 referenced paths resolve to a file that exists** (checked, not assumed).
+- **Content state, re-measured 2026-07-29 through the production walkers** (`collectMessages()` /
+  `collectReferencedAudio()` in `connect-four/server/lessonAudio.js` — the epic's original "12 of 15 lessons
+  have no audio" premise is dead; a parallel session shipped the generation mid-authoring):
+  - **Lesson narration: complete on disk, across all three audio field families.** `collectMessages()` yields
+    three families, not two — `audio` (coach + socratic messages) **and** `infoProseAudio` (the slide prose
+    paragraph, added by commit `65b703b` "info prose audios", 2026-07-29, the same day this epic was
+    written). Measured through the real walker: `audio` family n=141 (enText/enAudio/esText/esAudio all 141);
+    `infoProseAudio` family n=66 (all 66). **Totals: 207 messages / 414 audio fields / 348 unique mp3s** —
+    not "282 referenced paths" as an earlier draft of this epic stated. `missing audio for existing text: 0`;
+    `referenced 348, disk 348, ORPHANS 0, refs-missing-on-disk 0` — the fleet is already clean and
+    `prune-audio` reporting `{deleted: 0}` is achievable today.
   - **Spanish coach fleet: complete.** `public/audio/coach/es/` holds 217 mp3s; `server/tts-registry.es.json`
     has 218 entries, 217 `approved` + 1 `ineligible` — identical counts to English. OI-27 is effectively done.
-  - **OI-32 (English clips still on `tts-1`) is UNVERIFIED and must be settled first.** The registry records
-    `key/slug/status/reason/generated_at/approved_at` and **no `model` field**, so it cannot answer the
-    question. All 217 English clips share an `mtime` of 2026-07-18 12:11 — consistent with a bulk
-    regeneration after the model switch, but `mtime` is also what a `git checkout` produces, so it is not
-    evidence. Determine it from `generated_at` versus the model-switch commit, or by re-synthesising one key
-    and comparing bytes — do not assume either way.
+  - **OI-32 (English clips still on `tts-1`) is CONFIRMED STALE, not unverified.** The registry has no
+    `model` field, but it does have `generated_at`, and that settles it: `server/tts-registry.json`
+    `generated_at` histogram `{2026-06-19: 215, 2026-07-13: 1, 2026-07-14: 1}`, max
+    `2026-07-14T19:58:29.012Z`; `server/tts-registry.es.json` histogram `{2026-07-17: 217}` (entirely
+    post-switch — Spanish is fine). Model-switch commits: `9d0e952` (2026-07-14 16:53:48 -0300) and
+    `ff196c9` (2026-07-14 17:16:59 -0300) "default TTS model to gpt-4o-mini-tts (retire tts-1)". **215 of 217
+    English coach clips were synthesized ~3.5 weeks before the switch.** The default model lives at
+    `connect-four/server/ttsProvider.js:18` (`buildTtsRequest(text, { voice = 'alloy', model =
+    'gpt-4o-mini-tts', speed = 1.0, instructions } = {})`); `tts-1`/`tts-1-hd` are legacy, English-accented,
+    and **ignore `instructions`** entirely.
+  - **OI-32 covers coach *and* lesson clips — do not narrow it to coach-only.** The coach-clip half is
+    confirmed stale (above). The lesson mp3s were rewritten 2026-07-28/29 and are plausibly current, but
+    that **must be checked, not assumed** — verifying it is a task in US5.1, not an assumption baked into
+    this epic.
   - **Still genuinely open, confirmed at source:** `/admin/audio` has **zero** occurrences of "lesson"
     (OI-42); the TTS guard is still `if (!moveString || …)` (OI-23); the cleanup still filters
     `.in('position_hash', hashes)` with no locale (OI-26).
-  - Re-run before speccing, because this repo has concurrent sessions:
+  - Re-run before speccing, because this repo has concurrent sessions — walk the tree the same way the
+    generator and pruner do, not with `grep`, which is blind to `infoProseAudio`:
     ```bash
-    cd connect-four && for f in lessons/lesson-*.json; do \
-      echo "$(basename $f) audio:$(grep -c '"audio"' $f) audio_es:$(grep -c '"audio_es"' $f)"; done
+    cd connect-four && node -e "
+      const { collectMessages } = require('./server/lessonAudio');
+      const fs = require('fs');
+      let byKey = {};
+      for (const f of fs.readdirSync('lessons').filter(f => f.startsWith('lesson-'))) {
+        const lesson = JSON.parse(fs.readFileSync('lessons/' + f));
+        for (const m of collectMessages(lesson)) {
+          const k = m.audioKey || 'audio';
+          byKey[k] = byKey[k] || { n: 0 };
+          byKey[k].n++;
+        }
+      }
+      console.log(byKey);
+    "
     ```
   - **A resolving path is not a working clip.** Every check above is static; none proves an `es` mp3 contains
     Spanish, plays in the browser, or survives `prune-audio`. That is exactly what US5.1 exists to establish.
 - Audio is content-addressed by a **hash of the text**, so changing model/voice/prompt does **not**
-  regenerate anything (memory `project_tts_audio_cached_by_text`) — this is why OI-32's ~220 English clips
-  are still `tts-1` with no voice styling.
+  regenerate anything (memory `project_tts_audio_cached_by_text`) — this is why OI-32's ~217 English coach
+  clips are still `tts-1` with no voice styling, and exactly the failure mode Settled decision 5 closes off.
 - **Server-cache clobber trap (OI-43, memory `project_lesson_disk_edit_cache_clobber`):** nothing watches
   `lessons/`. A server booted before a disk edit holds a stale cache; `generate-audio` reads that cache and
   `saveLessonFile`s it back, **reverting the edit while returning 200**. Restart `$API_PORT` first and
@@ -1080,33 +1145,47 @@ OI-43's remaining half, OI-64 item 2), OI-27.
 - Serve audio from `$VITE_PORT`, never `$API_PORT` — the API does not serve `public/`
   (memory `project_lesson_progression_audio_traps`).
 - Approval gates **entry into the manifest**, not playback: a regenerated clip at an already-approved slug
-  goes live immediately, unreviewed, and the old take is recoverable only via `git checkout` (OI-45).
+  goes live immediately, unreviewed, and the old take is recoverable only via `git checkout` (OI-45 — kept
+  as the intended behaviour per Settled decision 4, now with an admin-UI warning).
 - OI-23 is a one-character class of bug: `!moveString` rejects the empty-but-valid opening movestring while
   the regex itself allows `{0,42}`.
+- The TTS generator CLI lives at **`connect-four/scripts/generate-tts.js`** (575 lines) — **not**
+  `connect-four/server/scripts/`.
+- OI-28's actual blocker is upstream of the prompt string: the blunder one-liner is generated in the
+  server-side harvest pipeline with **no request/`req.locale` context**, so `Accept-Language` cannot reach
+  it. The `LANGUAGE_RULE` edit at `connect-four/server/llmCoachHelpers.js:617` is necessary but not
+  sufficient — see US5.4.
 
 **Authoritative sources of truth**
 - `docs/architecture/lesson-editor.md` §"Window counts", §"Fields the learner UI ignores", the
   translate-and-voice rule
 - `docs/architecture/coach-audio-conventions.md` (registry/manifest drift, cache TRUNCATE on deploy)
-- `docs/open_issues.md` — OI-65, OI-27, OI-32, OI-42, OI-45, OI-26, OI-23, OI-28
+- `docs/open_issues.md` — OI-65, OI-27, OI-32, OI-42, OI-45, OI-26, OI-23, OI-28, OI-78
 - `docs/architecture/frontend-conventions.md` (Spanish = Argentinian voseo)
+- `connect-four/server/lessonAudio.js` — `collectMessages()`/`collectReferencedAudio()`, the shared walkers
+- `connect-four/server/ttsProvider.js` — `buildTtsRequest`, the natural home for the single synthesis path
 - memories: `project_tts_audio_cached_by_text`, `project_lesson_disk_edit_cache_clobber`,
   `project_lesson_progression_audio_traps`, `project_spanish_output_silent_fallback`
 
 **User stories & tasks**
 
 **US5.1 — Prove the shipped audio actually works, then close its issues (8 tasks).** Everything here is
-verification of a parallel session's output — assume nothing from the static checks above. Add a test
-asserting every `text`/`text_es` has a matching `audio`/`audio_es` **whose file exists** (the static check
-becomes a permanent gate); run `prune-audio` and confirm `{deleted: 0}` — the `collectReferencedAudio` /
-`generateLessonAudio` walkers are independent, so a partially-wired generation pass shows up here as
-orphan deletions; play at least one `es` lesson clip and one `es` coach clip in a real browser on
-`$VITE_PORT` (**not** `$API_PORT`, which does not serve `public/`) and confirm they are Spanish, not an
-English fallback; run the OI-43 V7 Socratic checks (bubble narrates, stops on navigate-away, mp3 200) in a
-hint-free run and a separate hint run; audition a sample for Argentinian-accent quality; settle **OI-32**
-(are the 217 English coach clips `tts-1` or `gpt-4o-mini-tts`?) from `generated_at` vs the model-switch
-commit, and regenerate + re-approve only if the answer is `tts-1`; close out OI-65/OI-27 — and OI-32 if it
-proves already done — per the Issue closeout convention.
+verification of a parallel session's output — assume nothing from the static checks above, and do not
+re-add bulk generation tasks. Add a test asserting every entry `collectMessages()` yields has a populated
+`audio`/`audio_es` (and, where applicable, `infoProseAudio`/`infoProseAudio_es`) field per language **whose
+file exists** — derived from the production walker, never a hand-listed set of field names, so it stays
+correct if a fourth field family is ever added; run `prune-audio` and confirm `{deleted: 0}` — the
+`collectReferencedAudio` / `generateLessonAudio` walkers are independent, so a partially-wired generation
+pass shows up here as orphan deletions; run the OI-43 V7 Socratic checks (bubble narrates, stops on
+navigate-away, mp3 200) in a hint-free run and a separate hint run, as an **automated** test (audio-element
+playback state), not owner listening; check whether the lesson mp3s (rewritten 2026-07-28/29) are in fact
+current post-model-switch — the lesson-clip half of OI-32 — rather than assuming it from the rewrite date;
+close out OI-65/OI-27 per the Issue closeout convention (OI-32 itself does not close here — see US5.5).
+**The by-ear checks — one `es` lesson clip and one `es` coach clip confirmed genuinely Spanish, plus an
+Argentinian-accent audit — are not performed or gated here.** They are appended to `staging_checks.md`
+("Epic 5 — Audio Verification & TTS Management (open-issues-epics.md, spec 051)") as staging sign-off
+items and do not block US5.1 or US5.5; the silent-failure risk they guard against (a missing Spanish clip
+falling back to English with no error) remains covered by the blocking structural checks above.
 
 **US5.2 — Lesson audio in `/admin/audio` (9 tasks).** Add a Lessons section listing each lesson's messages
 per language with status **derived live from the lesson JSON**; inline player resolving the `sha256(text)`
@@ -1114,22 +1193,56 @@ filename; per-message generate; respect the en/es toggle; do not introduce a sec
 `lesson-editor.md`. This is now the epic's headline: it is the only way to audition a lesson clip in-app,
 and US5.1 will make its absence felt immediately.
 
-**US5.3 — TTS correctness fixes (8 tasks).** OI-45: decide whether approval gates playback (remove the slug
-from the manifest on regenerate) or stays a publishing record, and apply the prompt/warning to the admin UI
-path too — with 217 approved clips per language now live, an unreviewed regeneration is no longer
-hypothetical; OI-26: scope the cleanup `.update()` by `(position_hash, locale)`; OI-23: accept the empty
-movestring; OI-28: thread a locale into `buildBlunderExplainPrompt`'s `LANGUAGE_RULE`; regression-test each.
+**US5.3 — TTS correctness fixes (6 tasks).** OI-45: apply the regenerate-warning to the admin UI's per-clip
+generate button (Settled decision 4 — publish-immediately stays, the CLI's existing warning is the model);
+OI-26: scope the cleanup `.update()` by `(position_hash, locale)`; OI-23: accept the empty movestring;
+regression-test each.
+
+**US5.4 — Localize the blunder one-liner, OI-28 (6 tasks).** Its own story because the fix is not just the
+`LANGUAGE_RULE` string: name where a locale comes from through the server-side harvest pipeline (today it
+has no request/`req.locale` context at all, so `Accept-Language` never reaches
+`buildBlunderExplainPrompt` at `connect-four/server/llmCoachHelpers.js:586`); thread that locale from the
+chosen caller down to the English-only `LANGUAGE_RULE` at `:617`; and decide what happens to one-liners
+already cached in English in `explanation_cache` — the same table OI-26 touches, whose primary key became
+composite `(position_hash, locale)` in migration 059 — either backfill them or explicitly document them as
+not backfilled in `NOT included`.
+
+**US5.5 — Regenerate the stale English coach fleet and lock in a single synthesis path (sequenced after
+US5.2, and after the single-synthesis-path fix below — regenerating through today's still-defective CLI
+path would just produce 217 fresh but still-unstyled clips) (10 tasks).** OI-32's coach-clip half is
+confirmed stale (see Non-obvious facts) — this story fixes it and prevents recurrence. First, implement
+Settled decision 5's single synthesis path (resolve voice config internally from the requested language in
+`ttsProvider.js`, refuse legacy models, add the seam regression test). Then regenerate all 217 English
+coach clips onto `gpt-4o-mini-tts` using the **existing** `POST /api/admin/audio/generate-all`
+(`scope: 'all'`) endpoint — this already re-synthesizes every eligible key server-side inside one HTTP
+request with no rate-limiter exposure, so it needs **no new tooling**; re-approve all 217 using the US5.2
+admin surface, which is what makes re-approving 217 clips tractable. Separately, build the OI-78
+pacing-aware `connect-four/scripts/generate-lesson-audio.mjs` tool — the real gap, because the **lesson**
+admin path is per-lesson, per-language (`POST /api/admin/lessons/:id/generate-audio`), making a full
+corpus pass 15 × 2 = 30 requests against the shared rate limiter — and use it only if US5.1's currency
+check finds the lesson fleet is in fact stale; otherwise **confirm** (do not regenerate) that the lesson
+clips are current, closing the loop opened in US5.1. Close out **OI-32** and **OI-78** per the Issue
+closeout convention once the regeneration, the lesson-tool deliverable, and the single-path guarantee all
+land.
 
 **Acceptance criteria**
-- Every `coachMessages[]` and `socratic.messages[][]` entry in all 15 lessons has both `audio` and
-  `audio_es` **and both files exist**; a test asserts it (not a one-off script run).
+- Every entry `collectMessages()` yields (across the `audio` and `infoProseAudio` families, in all 15
+  lessons) has a populated audio field per language **and both files exist**; a test derived from
+  `collectMessages()` asserts it (not a one-off script run, and not a hand-listed set of field names).
 - `prune-audio` reports `{deleted: 0}`.
-- A Spanish learner never hears an English clip under Spanish text — verified by ear in a real browser, not
-  by field presence.
-- OI-32 is answered with evidence: either the English fleet is confirmed on `gpt-4o-mini-tts`, or it is
-  regenerated and re-approved.
+- A Spanish learner never hears an English clip under Spanish text: guarded structurally in-story by the
+  two checks above; the by-ear confirmation (one lesson clip, one coach clip, plus an accent audit) is a
+  `staging_checks.md` sign-off item, not a blocking in-story gate.
+- OI-32 is closed with evidence for **both** halves: the English coach fleet has been regenerated onto
+  `gpt-4o-mini-tts` and re-approved, and the lesson clips have been explicitly confirmed current (not
+  assumed from their rewrite date).
+- Exactly one code path synthesizes any TTS clip; it always applies the current voice model and non-empty
+  voice-style `instructions`; it refuses legacy models that ignore `instructions`; a regression test at the
+  seam enforces this.
 - The deep reveal of an opening-move blunder is spoken.
 - Every clip in the app — coach *and* lesson, both languages — can be auditioned from `/admin/audio`.
+- The blunder one-liner is generated in the learner's locale, with an explicit, documented decision on
+  already-cached English rows in `explanation_cache`.
 - Every `OI-N` under this epic's **Issues covered** is closed out in `docs/open_issues.md` per the
   Issue closeout convention at the top of this file — resolved-with-date, or still open with a dated
   UPDATE naming exactly what remains. A shipped fix with a stale backlog entry is an incomplete story.
@@ -1138,10 +1251,11 @@ movestring; OI-28: thread a locale into `buildBlunderExplainPrompt`'s `LANGUAGE_
 - Translating any new text (all 15 lessons are already translated).
 - Changing the TTS vendor or the text-hash caching scheme.
 - Lesson *content* edits (Epic 6).
+- Gating clip playback behind approval (OI-45 Option A) — rejected, see Settled decision 4.
 
 **Open questions**
-- OI-45: gate playback on approval (a regeneration can silently take a working clip offline) or keep the
-  current publish-immediately behavior with an explicit warning?
+- None currently open for this epic. OI-45 (approval-gating vs. publish-immediately) is resolved — see
+  Settled decision 4.
 
 ---
 
@@ -1151,10 +1265,15 @@ movestring; OI-28: thread a locale into `buildBlunderExplainPrompt`'s `LANGUAGE_
 content lives, and harden the authoring/verification tooling so the next content pass is machine-checked.
 
 **Issues covered:** OI-46 (sticky `showHint` makes the `correct` message unreachable), OI-44
-(`lesson.<id>.title` duplicates the lesson JSON's `title`; `socratic.goalPrompt` is authored dead data),
-OI-68 (capsules tint the discs they cover; one sparse window), OI-69 (editor cosmetics + multi-board
-`aria-label` ambiguity), OI-63 (six verifier/finder robustness gaps), OI-73 (`lesson.*` namespace collision),
-OI-19 (remaining hardcoded English strings), OI-38 (KB `short_summary_es` coverage), OI-62 (two KB edits).
+(`lesson.<id>.title` duplicates the lesson JSON's `title`; `socratic.goalPrompt` is authored but unrendered —
+counts corrected below), OI-69 (editor cosmetics + multi-board `aria-label` ambiguity), OI-63
+(six verifier/finder robustness gaps), OI-73 (`lesson.*` namespace collision), OI-19 (remaining hardcoded
+English strings), OI-62 (two KB edits). OI-68 (capsules tint the discs they cover) is **removed from Epic 6
+scope entirely** (resolved 2026-07-30, owner ruling) — closed as a recorded decision, not fixed; see NOT
+included and US6.4. OI-38 (KB `short_summary_es` coverage) is **deferred out of this
+epic** — see Deferred, below — and is no longer active Epic 6 scope. Also folds in two undated `[major]`
+copy findings from `agentic_QA_2026-07-25-0015.md` (no OI number) that `goalPrompt` wiring fixes as a
+side effect.
 
 **Settled decisions**
 1. **Owner ruling (2026-07-16), still binding:** *lesson content is a thing in itself and must not be
@@ -1162,80 +1281,164 @@ OI-19 (remaining hardcoded English strings), OI-38 (KB `short_summary_es` covera
 2. `lesson.node.*` / `lesson.confirmation.*` are **UI chrome**, not lesson content — leave them in i18n.
 3. Verify a negative claim at source before acting on it: OI-44 asserts `goalPrompt` renders nowhere; confirm
    before deleting.
+4. **`goalPrompt` is wired, not deleted** (resolved 2026-07-30, overriding OI-44's own "wire or delete"
+   framing and `lesson-editor.md`'s "to change a challenge prompt, edit i18n, not the lesson"). `goalPrompt`
+   becomes a per-lesson override of the shared `coach.spoken.<category>.prompt.*` text, falling back to the
+   shared random prompt when absent. The shared copy must stay outcome-neutral (it also serves DB-drawn
+   practice boards); the per-lesson override is where board-specific, outcome-correct copy belongs. This is
+   the fix for both undated `agentic_QA_2026-07-25-0015.md` `[major]` findings: the claimeven confirmation
+   prompt currently says "secure a draw" on solver-**won** boards, and the undercut prompt tells the learner
+   to play the column the grader rejects — the lesson JSON's `goalPrompt` already states the corrected task
+   in both cases and today is never shown.
+5. **Spec matchers declare the production detector *and side* they validate against** (resolved 2026-07-30,
+   applying OI-74's shape). No epic-wide "just validate against the production detector" — see US6.3.
+6. **Hint yields to phase** (OI-46, resolved 2026-07-30): reset `showHint` on every phase transition
+   (`useEffect(() => setShowHint(false), [phase])`). Hint and phase messages do **not** coexist in the
+   bubble — the 120px coach cap on every screen (`project_lesson_text_overflow_traps`) would truncate
+   exactly the reward text this story exists to restore.
+7. **Lesson editor puzzle-existence verification is not Epic 6 scope** (resolved 2026-07-30) — see US6.3 and
+   Deferred, below.
 
 **Non-obvious facts**
-- OI-46's one-line likely fix (`useEffect(() => setShowHint(false), [phase])`) has a real question behind it:
-  should hint-then-wrong-move drop the hint, or should hint and phase messages coexist in the bubble?
+- Counts in OI-44 are stale; re-measured 2026-07-30: **all 15** `connect-four/lessons/lesson-*.json` carry
+  `goalPrompt`, and **13 of 15** carry `goalPrompt_es` (not "9 of 13, English only").
 - **Do not "simplify" the OI-43 V7 browser pass back into one run** — a linear pass that clicks Hint can
   never reach `correct`, which is why it is deliberately split in two.
-- `windowHighlights` cells must be **ORDERED** (drawn first→last, unchecked), use opaque colours, and must
-  **never** be fed into `syncLegend`/`legendItems` (memory `project_lesson_window_highlights_traps`).
-- Capsules sit at `zIndex: 2` above the discs. Do **not** lower opacity — 0.4 is already near the visibility
-  floor; the real options are dropping below the discs or an outline-only variant.
+- **OI-68's capsule/disc-tinting fix is removed from Epic 6 scope entirely** (resolved 2026-07-30, owner
+  ruling): "we are over complicating things — assume slides will not have overlapped overlays; keep the
+  overlays as they are." No rendering change ships; OI-68 closes in `docs/open_issues.md` as a recorded
+  decision, not a fix. See US6.4 and NOT included.
 - `find_lesson_boards.mjs`'s spec matchers are independent re-implementations of `classifier.js` concepts and
   measurably diverge (the z-threat column was solver-optimal in only 25 of 50 `z_threat_socratic`
-  candidates). `undercut_t2_adjacent` was fixed 2026-07-28; the rest were not.
+  candidates). `undercut_t2_adjacent` was fixed 2026-07-28 to validate against
+  `detectUndercutBeneficiary` (the opposite-side detector, per OI-74) rather than `detectUndercut`; the
+  other matchers (`z_threat_socratic`, claimeven, `figure_7`, `overcut_active`/`overcut_shared_cell`) were
+  not. `detectOvercut`'s `perspective` is separately unsound (OI-76), and OI-76 is **Epic 2, Lane A**,
+  running concurrently — validating the overcut matcher against today's `detectOvercut` would be
+  invalidated by that lane's fix. See US6.3 for the resulting per-matcher policy.
 - The strict tests' REMEDIATED gate is **inverted-risk**: it exempts nothing today but would silently exempt
   any future lesson added to the list. Flip it to an empty exemption set.
 - Every script needs a real `--help` printing purpose + options + defaults and exiting 0 **before**
   required-arg validation (house convention; `find_lesson_boards.mjs` violates it).
 - Lesson text clips silently: a 120px coach cap applies on **every** screen, and splitting a long message
   makes it worse (memory `project_lesson_text_overflow_traps`).
+- `lesson.<id>.title` has **three** call sites with **different** fallbacks when the i18n key is removed:
+  `SocraticScreen.jsx:201` uses `defaultValue: ''` (blank TopBar title), while `ConceptScreen.jsx:183` and
+  `SagaScreen.jsx:114` use `defaultValue: lesson.title`. Migrating `title` into the lesson JSON as sole
+  authority must update SocraticScreen's default too, or that screen ships an empty title.
 
 **Authoritative sources of truth**
-- `docs/architecture/lesson-editor.md` (the authoring contract; §"Fields the learner UI ignores")
-- `docs/architecture/frontend-conventions.md` (Board API, voseo, the z-threat badge spec for outline styling)
+- `docs/architecture/lesson-editor.md` (the authoring contract; §"Fields the learner UI ignores",
+  §"Confirmation Challenges")
+- `docs/architecture/frontend-conventions.md` (Board API, voseo, the z-threat badge spec for outline styling
+  — §"Z-threat badge visual spec (decided, do not reopen)")
 - `docs/knowledge-base/README.md`, `allen-j-configuration.md`, `community-figure-7.md`
-- `docs/open_issues.md` — OI-46, OI-44, OI-68, OI-69, OI-63, OI-73, OI-19, OI-38, OI-62
+- `agentic_QA_2026-07-25-0015.md` — the two undated `[major]` `goalPrompt` copy findings
+- `docs/open_issues.md` — OI-46, OI-44, OI-68, OI-69, OI-63, OI-73, OI-19, OI-62, OI-74 (carve-out
+  precedent), OI-76 (cross-lane dependency, Epic 2); OI-38 referenced but deferred, see Deferred below
 - memories: `project_lesson_window_highlights_traps`, `project_lesson_json_fields_not_rendered`,
   `project_lesson_text_overflow_traps`, `project_lesson_slide_field_wiring`
 
 **User stories & tasks**
 
-**US6.1 — Socratic phase/hint interaction (6 tasks).** Decide the hint-vs-phase semantics; implement; add a
-DOM test (`npm run test:dom`) that the `correct` message renders and narrates after a solve; keep the split
-V7 browser procedure; verify the Continue button still keys off `phase`; document the decision.
+**US6.1 — Socratic phase/hint interaction (6 tasks).** Implement the settled hint-vs-phase semantics
+(`useEffect(() => setShowHint(false), [phase])`); add a DOM test (`npm run test:dom`) that the `correct`
+message renders and narrates after a solve; keep the split V7 browser procedure; verify the Continue button
+still keys off `phase`; document the decision in `lesson-editor.md` and close OI-46.
 
-**US6.2 — One home for lesson content (7 tasks).** Verify `goalPrompt`'s deadness at source; migrate
-`lesson.<id>.title` to the lesson JSON as the single authority (or the reverse, with a stated rationale);
-remove the superseded i18n keys from both locales; either wire `goalPrompt` or delete it plus its
-`localizeLesson` branch; update `lesson-editor.md`; assert key parity still passes.
+**US6.2 — One home for lesson content (9 tasks).** Verify `goalPrompt`'s deadness at source (confirmed:
+still dead in the learner path); migrate `lesson.<id>.title` to the lesson JSON as the single authority,
+updating **all three** call sites' fallbacks (`SocraticScreen.jsx:201` currently `defaultValue: ''`,
+`ConceptScreen.jsx:183` / `SagaScreen.jsx:114` currently `defaultValue: lesson.title`) so none regresses to
+a blank or mismatched title; remove the superseded i18n keys from both locales; wire `goalPrompt` as a
+per-lesson override of `coach.spoken.<category>.prompt.*`, falling back to the shared random prompt when
+`goalPrompt` is absent, keeping the shared copy outcome-neutral; close the two `agentic_QA_2026-07-25-0015.md`
+`[major]` findings (claimeven "secure a draw" on won boards; undercut prompt naming the grader-rejected
+column) as acceptance evidence that the override actually renders the corrected copy; rewrite
+`lesson-editor.md`'s "To change a challenge prompt, edit i18n, not the lesson" paragraph, which contradicts
+Settled decision 1 and is now also factually wrong; correct OI-44's stale counts in this epic (now 15/15
+lessons carry `goalPrompt`, 13/15 carry `goalPrompt_es`, measured 2026-07-30); assert key parity still
+passes.
 
-**US6.3 — Verifier/finder hardening (8 tasks).** Wrap `solver.query` per check so a bad movestring produces a
-FAIL row, not a crashed run; add a conventional `--help` to `find_lesson_boards.mjs`; make each spec matcher
-validate against the production detector and require the pattern column be solver-optimal; per-overlay
+**US6.3 — Verifier/finder hardening (10 tasks).** Wrap `solver.query` per check so a bad movestring produces
+a FAIL row, not a crashed run; add a conventional `--help` to `find_lesson_boards.mjs`; for each spec
+matcher, declare in code/comments which production detector **and side** it validates against — apply the
+OI-74 carve-out explicitly (`undercut_t2_adjacent` validates against `detectUndercutBeneficiary`, the
+opposite-side detector, not `detectUndercut`) rather than forcing every matcher onto the naive
+same-side-as-detector rule; leave the overcut matcher (`overcut_active`/`overcut_shared_cell`) either
+deferred until Epic 2 lands OI-76's `detectOvercut` perspective fix, or explicitly re-pointed at whatever
+Epic 2 ships, and record that cross-lane dependency in this epic's text (not just in memory); require the
+pattern column be solver-optimal for the matchers being hardened, and state the policy for an
+already-shipped lesson board that fails the new gate (25 of 50 `z_threat_socratic` candidates fail it
+today): flag it as a FAIL row for a human decision, do not auto-replace — replacing a board is a content
+edit and must not silently expand into "writing new lessons" (NOT included, below); per-overlay
 `_overlayIntent`; extend the static scan to i18n lesson titles; flip the REMEDIATED gate to an empty
-exemption set.
+exemption set; correct `lesson-editor.md` §"Confirmation Challenges"' stale "that is Epic 6 scope" pointer
+(Decision 2, below) and file the retargeted OI entry.
 
-**US6.4 — Visual + editorial review items (6 tasks).** Decide the capsule/disc tinting fix (below-discs vs
-outline-only, per the settled z-threat badge spec); apply and re-check all 48 windows in the browser; take
-the editorial call on `opening-centre` slide 1's sparse window; `fontFamily: 'inherit'` on the `infoProse`
-textarea (or record that monospace is intentional); leave the multi-board `aria-label` ambiguity unless an
-a11y pass is in scope, with the reason recorded.
+**US6.4 — Editor cosmetics + OI-68 closeout (3 tasks).** **Decision (resolved 2026-07-30, owner ruling):**
+the capsule/disc-tinting fix is removed from Epic 6 scope entirely — assume authored slides do not have
+overlapping overlays, and keep window-highlight overlays exactly as they render today; no rendering change
+ships. `fontFamily: 'inherit'` on the `infoProse` textarea (or record that monospace is intentional); leave
+the multi-board `aria-label` ambiguity unless an a11y pass is in scope, with the reason recorded; close OI-68
+in `docs/open_issues.md` with a dated note recording this decision — resolved as "overlays kept as-is," not
+as a code fix.
 
-**US6.5 — String and KB coverage (7 tasks).** Wire `PlayOnlineScreen`'s remaining hardcoded titles to `t()`;
+**US6.5 — String and KB coverage (6 tasks).** Wire `PlayOnlineScreen`'s remaining hardcoded titles to `t()`;
 sweep `src/screens`/`src/components` for user-facing literals (`title=`, `aria-label=`, button/label
 children) and add keys to both locales; add the two-line guard that no lesson id collides with a reserved
-`lesson.*` sub-key (OI-73); audit which of the 45 KB entries lack `short_summary_es` and translate in
-reviewed batches; make the two OI-62 KB edits and re-run `npm run sync-kb`.
+`lesson.*` sub-key (OI-73); make the two OI-62 KB edits and re-run `npm run sync-kb`; correct OI-38's stale
+count in this epic and in `docs/open_issues.md` (measured 2026-07-30: `docs/knowledge-base/` holds 49 `.md`
+files, but `README.md` and `_sketches.md` are not entries, leaving 47 entries; 4 carry `short_summary_es`;
+43 missing — not "45 of 49"); record the KB-translation deferral (see Deferred, below) instead of doing the
+translation here.
 
 **Acceptance criteria**
 - Solving a Socratic exercise after clicking Hint shows **and speaks** the `correct` message.
-- No lesson string is assembled from i18n keys; `lesson-editor.md` states where content lives.
+- No lesson string is assembled from i18n keys; `lesson-editor.md` states where content lives, including a
+  corrected "goalPrompt is a per-lesson override, edited in the lesson JSON" statement (not "edit i18n").
+- Both `agentic_QA_2026-07-25-0015.md` `[major]` `goalPrompt` copy findings render the corrected text in the
+  app (claimeven, undercut).
 - `verify_lesson_content.mjs` produces a FAIL row (not a crash) for an invalid movestring, and
   `find_lesson_boards.mjs --help` exits 0.
+- Each spec matcher's declared detector-and-side is documented in `find_lesson_boards.mjs`; the
+  `undercut_t2_adjacent` carve-out is explicit, not implicit.
 - `npm run test:fast` and `npm run test:dom` green; lesson audit still 39/39.
 - Every `OI-N` under this epic's **Issues covered** is closed out in `docs/open_issues.md` per the
   Issue closeout convention at the top of this file — resolved-with-date, or still open with a dated
   UPDATE naming exactly what remains. A shipped fix with a stale backlog entry is an incomplete story.
+  OI-38 closes as "deferred to a standalone content spec", not as done.
 
 **NOT included**
 - Generating any audio (Epic 5).
-- Writing new lessons or re-tiering the curriculum (resolved 2026-07-25).
+- Writing new lessons or re-tiering the curriculum (resolved 2026-07-25). Replacing a lesson board that
+  fails the new US6.3 solver-optimal gate is a content edit under this same boundary — flag it, do not
+  silently author a replacement board as part of this epic.
 - OI-72's stale `windowCounts` round-trip — a recorded decision, not a defect; document only.
+- **OI-68's capsule/disc-tinting fix** (resolved 2026-07-30, owner ruling) — removed from scope entirely.
+  Assume authored slides do not have overlapping overlays; keep window-highlight overlays exactly as they
+  render today. Closed in `docs/open_issues.md` as a recorded decision (see US6.4), not implemented as a
+  code fix.
+- Bulk translation of the 43 KB entries missing `short_summary_es` — see Deferred, below.
+- The lesson editor verifying that puzzles exist for a chosen confirmation category — see Deferred, below.
 
 **Open questions**
-- Capsule tinting: below-the-discs (loses the highlighter feel) or an outline-only variant?
+- None. Capsule tinting (OI-68) is fully resolved by owner decision — removed from scope entirely, overlays
+  kept as-is; there is no remaining scope sub-question to decide (see NOT included and US6.4).
+
+**Deferred**
+- **KB `short_summary_es` translation (43 of 47 entries).** Split out of Epic 6 into a standalone content
+  spec: this is a bulk reviewed-translation content effort (voseo, verde/gris, no fabrication) with its own
+  write target (`npm run sync-kb` mirrors into `connect-four/server/kb/`, parity pinned by
+  `tests/unit/kbSync.test.js`), and folding it into an already nine/ten-task-per-story epic would either
+  bloat Epic 6 or get silently dropped. OI-38's count is corrected here — `docs/knowledge-base/` holds 49
+  `.md` files, but `README.md` and `_sketches.md` are not entries, leaving 47 entries / 43 missing / 4
+  present, measured 2026-07-30 — but the translation work itself is out of scope.
+- **Lesson editor puzzle-existence check for confirmation categories.** Declared out of Epic 6 scope
+  (Decision 2) and retargeted to a new `docs/open_issues.md` entry — admin-only authoring surface with no
+  learner-facing impact, so it does not compete with this epic's learner-facing fixes. The doc-pointer
+  correction in `lesson-editor.md` §"Confirmation Challenges" and filing the new OI entry stay in US6.3,
+  since the stale "that is Epic 6 scope" pointer is how the gap would survive another cycle if left alone.
 
 ---
 
@@ -1250,26 +1453,123 @@ autoplay on a cold onboarding load), OI-37 (100% accuracy beside a lost game).
 **Settled decisions**
 1. **`agentic_QA_2026-07-15-1321.md` at the repo root is the authoritative work-list** for OI-35 — this epic
    is a pointer, not a re-listing. Read the file (per-finding severity, code location, repro) before speccing.
-2. **Do not fold resignation into the accuracy calculation** (OI-37). It measures board-move optimality and is
-   correct on its own terms; conflating it with "did you finish the game" destroys both answers. The copy fix
-   already shipped; what remains is a presentation question.
-3. OI-21's runtime bug is **fixed** — the greeting plays on first interaction. What remains is designing an
-   entry that elicits a gesture, and it must not reintroduce a flash of the sparring game or break
-   `shouldAutoRouteToOnboarding`'s anonymous-only semantics.
+   Confirmed present (83,360 bytes) but **untracked**: `git status --short` reports `?? agentic_QA_2026-07-15-1321.md`
+   and `git log --diff-filter=A -- agentic_QA_2026-07-15-1321.md` returns empty — no commit on any branch has
+   ever added it. US7.1 must (a) commit the file so the work-list stops being a single-machine artifact, and
+   (b) write the durable triage result into `docs/open_issues.md` under OI-35 — updating the findings file
+   in place is not sufficient on its own.
+2. **Do not fold game outcome into the accuracy calculation** (OI-37). It measures board-move optimality and
+   is correct on its own terms; conflating it with "did you finish the game" destroys both answers. **Scoped
+   finding, not a full correction**: in the 342-game Papergames import measured during this brainstorm (see
+   Non-obvious facts), every accuracy-100% loss is a `time-up` (clock) loss and real `resignation` losses top
+   out at 89%. That is a statement about one imported dataset, not a general refutation of the epic's original
+   "resigns after playing perfectly" framing — the findings file (`agentic_QA_2026-07-15-1321.md`, Batch A,
+   "[minor] Lost games report 'No mistakes' / 100% accuracy") contains an explicit **in-app** repro of the
+   resignation case that this import did not exercise, and the in-app resign path remains unmeasured. The
+   rationale for leaving the calculation untouched still holds regardless of which trigger produces the badge.
+   The copy fix (`review.cleanButLost`) already shipped; what remains is reproducing the in-app repro (US7.3's
+   first accuracy-half task, before any close-as-not-a-bug claim) and then closing OI-37 with evidence covering
+   **both** triggers.
+3. **OI-21: accept first-interaction playback (status quo).** No new splash screen, no welcome card, no
+   routing change, no speaker affordance. The greeting plays on whatever the user first touches; the epic's
+   own acceptance criterion already permits this ("... or the accepted alternative is documented"). What
+   remains is documenting the alternative and its rationale, verifying the coach's **text bubble** fully
+   conveys the greeting in English and Spanish (so a user who never hears the audio loses nothing), signing
+   off the `staging_checks.md` item, and closing OI-21. `shouldAutoRouteToOnboarding`'s anonymous-only
+   semantics and the no-flash-of-the-sparring-game constraint still apply and are not being touched.
+4. **OI-37 short-game half: a minimum-scored-moves threshold was considered and rejected.** All 7 observed
+   accuracy-100% losses are very short, 1–6 user-move `time-up` (clock) losses (movestring lengths 2, 5, 5, 8,
+   11, 13, 13), and a threshold of 7 user moves would have suppressed the badge on all 7 of them at a cost of
+   48 / 342 games (14.0%, see Non-obvious facts for the full trade-off table). The owner rejected building it:
+   the change touches multiple render surfaces (in-app Review, Past Games, and — if a Papergames derivation
+   were added — the imported-game badge) for a narrow cosmetic case, and carries more regression risk than the
+   problem is worth. Nothing is shipped for the short-game half; the measured trade-off data is kept for the
+   record, not as a spec-phase pick.
+5. **US7.3's deep-reveal spend policy is already decided — record-and-close, ship no gate.** Approved
+   2026-07-16 (`docs/superpowers/specs/2026-07-16-qa-remediation-decisions-design.md` §D2): retire the
+   "blunders only" constraint from the anon design doc, ship no code. A server-side gate isn't cleanly
+   implementable (the anon gate is keyed by position+column, which maps ambiguously to stored rows); a
+   client-only gate is theatre (`/api/blunders/:id` is a public no-auth permalink); and blocking a click the
+   user deliberately made costs conversion. This also avoids contradicting shipped spec-042's invariant that
+   severity is "label + color only, never gates an action." Because `docs/superpowers/` is throwaway by repo
+   convention, D2's substance is restated here and must also land in `docs/open_issues.md`, not left as a
+   pointer.
 
 **Non-obvious facts**
 - Browsers block `audio.play()` until a user gesture; the mission screen is reached by an **auto-route** with
   no prior gesture. This is a hard browser rule, not a code bug.
 - OI-35's headline unfixed item is a **cold-load-specific** nav bug: `/mistakes ↔ /stats` infinite-toggles on
-  a cold-loaded `/mistakes` (empty nav stack); in-session navigation unwinds correctly.
+  a cold-loaded `/mistakes` (empty nav stack); in-session navigation unwinds correctly. This was **not**
+  re-verified during the brainstorm — check it live before sizing US7.1.
 - OI-35's "lesson content is English-only in Spanish mode" finding is **stale** — all 15 lessons now carry
-  `text_es`; only audio remains (Epic 5). Re-triage the file against the current tree before speccing.
+  `text_es`; only audio remains (Epic 5). Re-triage the file against the current tree before speccing: much of
+  the 23-finding backlog (25 `####` blocks minus 2 `[passes]` entries, which record successes rather than
+  findings; plus 4 additional `❌ fail` checklist rows outside any `####` header that must be separately
+  swept) has shipped since 2026-07-16 (verified at source: `review.cleanButLost` is live in
+  `ReviewScreen.jsx:293` and in both `en.json`/`es.json` at line 1005; `server/index.js:577` now reads
+  `FREE_DEEP_REVEAL_WEEKLY_LIMIT` from `quotaLimits.js` rather than the old hardcoded `5`) — **US7.1's first
+  task is a re-triage, not a fix sweep.** `docs/superpowers/plans/2026-07-16-qa-2026-07-15-remediation.md`
+  (§"Finding Inventory → Workstream Map", lines ~51–83) holds a 25-item workstream map useful as a
+  cross-check, but the findings file remains the authority and 23 is the correct disposition count (the map's
+  25 counts 2 `[passes]` entries that are not findings). The `/api/scores` 500 on a malformed movestring
+  and the remaining English-in-Spanish leaks were also not re-verified — check live before sizing US7.1.
 - The candidate-generation "fetch failed" finding was **reclassified as an environmental flake**, not a bug
   (memory `project_generate_candidates_fetch_failed_flake`) — do not re-open it.
+- **OI-37 finish-reason evidence (342-game Papergames import, run during this brainstorm):** account
+  `69e773d36bf9938bffc1509a` was imported to 342 rows (171 wins / 160 losses / 11 draws;
+  `node --env-file=server/.env server/scripts/import_papergames_blunders.mjs --user-id 4b8dac6d-c8db-4c01-9458-cb5781f3df56 --limit 300`,
+  292 imported / 8 skipped / 171.6s). Across the 160 losses with a non-null accuracy:
+
+  | loss `finish_reason` | n | max accuracy | losses at exactly 100% |
+  |---|---|---|---|
+  | `winner` (decided on the board) | 144 | 94% | 0 |
+  | `resignation` | 4 | 89% | 0 |
+  | `time-up` | 12 | 100% | 7 |
+
+  All 7 accuracy-100% losses are `time-up` (clock) losses; the evidence is Papergames-only, the in-app
+  (non-imported) resign path was not measured and US7.3 must verify it separately before closing OI-37. The
+  full observed `finish_reason` enum across the 342-row dataset is exactly three values: `winner`, `time-up`,
+  `resignation`. Full-board draws also carry `finish_reason = 'winner'` (with `result = 'draw'`, n=11) — a
+  "decided on the board" filter, if one were ever needed, is exactly `finish_reason === 'winner'`. This is
+  recorded as a measured fact only; no such filter is being built by this epic.
+- **`StatsScreen`'s "avg accuracy" card is puzzle accuracy, not game accuracy.** Verified at source:
+  `StatsScreen.jsx:37` sets `accuracy` from `store.getStats()`, which aggregates `puzzle_attempts`
+  (`server/statsAggregate.js:64,72`; `server/userRoutes.js:57,83`) — `stats.avg_accuracy` is only an i18n
+  label key (`grep -rn avg_accuracy src/ server/ server/migrations/` returns exactly that one hit), not a data
+  field. There is no average-game-accuracy metric anywhere in the app; `PastGamesListScreen.jsx:91-92,102-103`
+  renders per-game badges only, with no aggregate. Do not re-derive an aggregate-accuracy threshold question
+  from `StatsScreen` — there is nothing there to threshold.
+- **OI-37 threshold trade-off (measured over all 342 games; kept for the record — see Settled decision #4,
+  the threshold itself was considered and rejected):**
+
+  | threshold (user moves) | games whose badge is suppressed | of the 7 perfect losses caught |
+  |---|---|---|
+  | 4 | 22 / 342 (6.4%) | 3 / 7 |
+  | 5 | 27 / 342 (7.9%) | 4 / 7 |
+  | 6 | 32 / 342 (9.4%) | 5 / 7 |
+  | **7** | **48 / 342 (14.0%)** | **7 / 7** |
+  | 8 | 65 / 342 (19.0%) | 7 / 7 |
+  | 10 | 103 / 342 (30.1%) | 7 / 7 |
+
+  The 7 perfect-loss user-move counts were 1, 2, 2, 4, 5, 6, 6 (movestring lengths 2, 5, 5, 8, 11, 13, 13).
+  Genuinely-earned 100% scores exist at 13, 17, and 18 user moves and must **not** be suppressed.
+- **Scored-count facts, verified at source (kept for the record; no rule needed now the threshold is
+  rejected):** the in-app Review screen has the real scored count client-side —
+  `ReviewScreen.jsx:299` reads `analysis && analysis.scored > 0`, and `ReviewScreen.jsx:145` computes accuracy
+  from `data.scored`. The Papergames path does **not** store a scored count: `papergamesImporter.js:167`
+  computes `const accuracy = scored > 0 ? Math.round(optimalCount / scored * 100) : null` and discards
+  `scored`; `papergames_games` (migration `038_papergames_games.sql`, accuracy added in
+  `039_papergames_accuracy.sql`) has no such column, and `papergamesImporter.js:112`
+  (`if (legalCount <= 1) continue`) skips forced moves from scoring, so any moves-string-derived count would
+  only ever be an upper bound on the real `scored`. This in-app-exact vs. derived-upper-bound mismatch was
+  part of why a cross-surface threshold was rejected as more regression risk than the problem is worth — no
+  `scored_moves` column, no migration, no backfill is being built.
 - The anon free deep reveal being spendable on a *suboptimal* move contradicts the "blunders only" design
-  intent and is a **product call**, not a mechanical fix.
+  intent — this is now a **closed** product call (see Settled decision #5), not an open one.
 - Automation Chrome fakes autoplay permission, so audio can ship silent and pass an agentic QA pass
   (memory `project_app_qa_setup_gotchas`) — verify onboarding audio in a real browser.
+- `agentic_QA_2026-07-25-0015.md` at the repo root is a **lessons-only** run belonging to Epic 6 — do not
+  mistake it for the 2026-07-15 general run this epic is scoped to.
 
 **Authoritative sources of truth**
 - `agentic_QA_2026-07-15-1321.md` (repo root) — the full findings list
@@ -1281,42 +1581,88 @@ autoplay on a cold onboarding load), OI-37 (100% accuracy beside a lost game).
 
 **User stories & tasks**
 
-**US7.1 — Re-triage and fix the QA backlog (9 tasks).** Walk `agentic_QA_2026-07-15-1321.md` against the
-current tree and mark each finding fixed / stale / open; fix the cold-load `/mistakes ↔ /stats` nav loop and
-add a cold-boot nav-stack test; fix `/api/scores`'s 500 on a malformed movestring; confirm the anon
-challenge-progress 401 fix still holds; sweep the remaining English-in-Spanish leaks; update the findings
-file in place with the triage result.
+**US7.1 — Re-triage, commit, and route the QA backlog (8 tasks).** This is a **triage-and-route** story, not
+a fix sweep: commit `agentic_QA_2026-07-15-1321.md` to the repo (it is currently untracked); re-triage every
+finding against the current tree and give each one exactly one of five dispositions — **fixed** (already
+shipped, cite the evidence), **stale** (no longer applicable), **fix-here** (in scope for this epic — limited
+to the three live-check items below), **owned-by-Epic-N** (record a pointer only, do not edit — see NOT
+included for the two known cross-epic findings), or **new `OI-N`** (confirmed still open, not fixed here —
+file it in `docs/open_issues.md`); live-check the three items not yet re-verified (`/mistakes ↔ /stats`
+cold-load nav loop, `/api/scores`'s 500 on a malformed movestring, and any remaining English-in-Spanish leak
+**not** already owned by Epic 6 US6.5) and fix only those three if still confirmed open; confirm the anon
+challenge-progress 401 fix still holds; update the findings file in place with the triage result; write the
+durable triage outcome (including every owned-by-Epic-N pointer and every new `OI-N`) into `docs/open_issues.md`
+under OI-35.
 
-**US7.2 — Gesture-first onboarding entry (7 tasks).** Brainstorm the entry (splash CTA vs
-tap-to-enter auto-route vs speaker affordance vs accepting first-interaction playback); prototype the chosen
-one; ensure no flash of the sparring game before the gesture; keep the anonymous-only auto-route semantics;
-verify in a **real** browser, not automation Chrome; sign off the `staging_checks.md` item.
+**US7.2 — Document the accepted onboarding alternative (4 tasks).** Write up the accepted alternative
+(first-interaction playback, status quo) and its rationale in `docs/open_issues.md` under OI-21; verify the
+coach's text bubble fully conveys the onboarding greeting in English and Spanish with no audio; sign off the
+`staging_checks.md` item; close OI-21. No prototyping, no routing change — the design question is resolved,
+this story only records and verifies it. Four tasks is correct for its scope, not a floor to pad to — this
+epic is deliberately mostly record-and-close.
 
-**US7.3 — Product calls on the review surface (9 tasks).** Two decisions that share one screen and one
-session, taken and shipped together:
-- *Deep-reveal spend policy* — decide whether the anonymous free reveal may be spent on a suboptimal move or
-  only on a blunder; implement the gate; message the user when it is withheld; test both paths; document in
-  `api-conventions.md`.
-- *Accuracy vs outcome* — decide whether a 100% accuracy badge is softened, annotated, or paired with an
-  explicit "you resigned" note on a lost game; implement the chosen presentation; leave the metric's
-  calculation untouched (a Settled decision); add a test for the lost-but-clean case; verify the
-  already-shipped `review.cleanButLost` copy still reads correctly alongside it.
+**US7.3 — Verify-and-close on the review surface (5 tasks).** Two independent halves that share one screen,
+both landing as record-and-close (no threshold, no gate — see NOT included). Five tasks is correct for its
+scope, not a floor to pad to:
+- *Deep-reveal spend policy* — record D2's already-approved outcome (retire the "blunders only" constraint,
+  ship no gate) in this epic and in `docs/open_issues.md`; delete the stale "blunders only" line from the
+  anon design doc, noting the documented reversal trigger (evidence anonymous users routinely spend the
+  reveal on suboptimal moves); close the issue. Ship no gate code.
+- *Accuracy vs outcome* — **first**, before any close-as-not-a-bug claim, reproduce the findings file's
+  in-app repro: play a sparring game with only optimal board moves, then resign — check whether Review still
+  shows "Clean game. Nothing to revisit." / Accuracy 100%. If it still reproduces, that is a live bug and this
+  story fixes it. Either way, close OI-37's finish-reason question in `docs/open_issues.md` with evidence
+  covering **both** triggers — the 342-game Papergames clock-loss breakdown and the in-app verification
+  result; verify the already-shipped `review.cleanButLost` copy still reads correctly.
 
 **Acceptance criteria**
 - Every finding in `agentic_QA_2026-07-15-1321.md` is marked fixed, stale, or explicitly deferred with a
-  reason — none silently unaddressed.
+  reason — none silently unaddressed — and the file itself is committed to the repo.
 - Back navigation from a cold-loaded `/mistakes` reaches Home.
-- The onboarding greeting is audible on arrival in a real browser, or the accepted alternative is documented.
+- The onboarding greeting text bubble fully conveys the greeting in English and Spanish, and the accepted
+  first-interaction-playback alternative is documented in `docs/open_issues.md` and `staging_checks.md`.
+- The findings file's in-app resign repro has been reproduced (or found not to reproduce) before OI-37 is
+  closed, and the OI-37 closeout text in `docs/open_issues.md` records evidence covering **both** triggers —
+  the 342-game Papergames `finish_reason` breakdown and the in-app verification result — before the issue is
+  closed.
+- No accuracy-badge threshold or suppression logic is added on any surface; the accuracy calculation and its
+  display are unchanged from before this epic.
+- The deep-reveal spend-policy decision (D2) is recorded in this epic and in `docs/open_issues.md`, and the
+  stale "blunders only" line is removed from the anon design doc.
 - Every `OI-N` under this epic's **Issues covered** is closed out in `docs/open_issues.md` per the
   Issue closeout convention at the top of this file — resolved-with-date, or still open with a dated
   UPDATE naming exactly what remains. A shipped fix with a stale backlog entry is an incomplete story.
 
 **NOT included**
-- Lesson content or audio work (Epics 3 and 4).
+- Lesson content or audio work (audio is Epic 5, lessons are Epic 6).
 - Re-running a full `/app-qa` pass (that is a separate session, not this epic).
 - Re-opening the candidate-generation "fetch failed" finding.
+- Implementing any anonymous deep-reveal spend gate — Settled decision #5 rules this out; the story is
+  record-and-close only.
+- Any onboarding entry redesign (splash, welcome card, routing change, speaker affordance) — Settled
+  decision #3 accepts first-interaction playback as-is.
+- ~~i18n literal sweeps in `src/screens`/`src/components` — owned by Epic 6 US6.5; US7.1 records a pointer
+  for any such finding rather than fixing it here.~~ **Exclusion lifted 2026-08-01.** Original rationale
+  (kept for history): this exclusion existed to avoid Epic 7 duplicating or conflicting with Epic 6 US6.5's
+  own sweep, which was running concurrently. **Epic 6 has since shipped** (commit `4d78aa2`, "Spec 052
+  (Epic 6)") — the conflict the exclusion guarded against no longer exists, so a leak Epic 6's sweep missed
+  is cheap to fix in place and US7.1 now fixes it under FR-006 rather than merely pointing at it. Scope
+  stays narrow: this authorizes fixing only the specific leaks US7.1's triage actually finds, not a fresh
+  repo-wide re-sweep of `src/screens`/`src/components` — that work already happened under Epic 6.
+- Upgrade-funnel / payments findings (e.g. OI-35's "upgrade funnel has orphaned ends") — owned by Epic 3,
+  Lane A, which runs in a parallel worktree; US7.1 records a pointer, does not edit.
+- Any minimum-move / minimum-scored-move threshold on the accuracy badge — considered and rejected, see
+  Settled decision #4.
 
-**Open questions** — all three are the brainstorm agenda; expect `BRAINSTORM_NEEDED` on this epic.
+**Open questions** — the three brainstorm items are resolved; see Settled decisions #1–#5. No bounded
+spec-phase picks remain: the short-game threshold's exact value and the derive-vs-column choice for the
+Papergames scored-move count are both moot now that the threshold itself was rejected (Settled decision #4).
+
+### Deferred
+- **Anonymous deep-reveal spend gate.** Not implemented now; the documented reversal trigger is evidence that
+  anonymous users routinely spend the free reveal on suboptimal (non-blunder) moves — if that evidence
+  appears, the response is to *steer* users toward blunders (e.g. copy/UI nudges), not to *restrict* the
+  reveal, per the D2 rationale.
 
 ---
 
@@ -1574,11 +1920,13 @@ Every open `OI-N` maps to exactly one epic.
 | 3 | A | OI-25, OI-34, OI-39, OI-41, OI-55, OI-66 |
 | 4 | A | OI-5, OI-14, OI-17, OI-22, OI-31, OI-40, OI-47, OI-49, OI-50, OI-51, OI-52, OI-53 |
 | 5 | B | OI-9†, OI-23, OI-26, OI-27, OI-28, OI-32, OI-42, OI-43†, OI-45, OI-64†, OI-65 |
-| 6 | B | OI-19, OI-38, OI-44, OI-46, OI-62, OI-63, OI-68, OI-69, OI-73 |
+| 6 | B | OI-19, OI-38‡, OI-44, OI-46, OI-62, OI-63, OI-68, OI-69, OI-73 |
 | 7 | B | OI-21, OI-35, OI-37 |
 | 8 | C | OI-6, OI-16, OI-29, OI-58, OI-70, OI-71, OI-72 |
 | 9 | C | OI-81 |
 
 † subsumed by OI-65 — the remaining work is identical (generate the clips).
+‡ Epic 6 corrects OI-38's stale count (47 entries / 43 missing `short_summary_es` / 4 present) but defers the
+translation itself to a standalone content spec — see Epic 6's Deferred section.
 
 **Excluded as resolved:** OI-1, 2, 3, 4, 7, 8, 10, 11, 12, 13, 15, 18, 20, 24, 36, 54, 56, 57, 59, 67, 74, 77.

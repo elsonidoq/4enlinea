@@ -38,9 +38,20 @@ support", and "make chips non-clickable".
    (the aha); a second, different reveal shows the sign-up gate (reuse existing `coach.deepRevealGate`
    copy) → existing `AuthModal`. The reveal view itself stays un-nagged.
 
-4. **Which mistakes:** **blunders only.** Only genuine blunders open the reveal — that is what the
-   explanation is built to explain, so the aha lands hard. Suboptimal chips keep the current in-place
-   board preview.
+4. **Which mistakes:** **any stored mistake, not restricted to genuine blunders.** ~~The original design
+   restricted the free reveal to genuine blunders exclusively, so the aha would land hard.~~ **RETIRED
+   2026-08-01 (spec `053`/Epic 7, US3, D2).** The free reveal opens on any stored mistake the anon user
+   clicks — blunder or suboptimal alike — per spec-042 FR-002; the exclusive-restriction gate described
+   above was never actually implemented (no client branch, no server gate ever existed) and rested on a
+   false premise about `ReviewScreen.selectStep`, which navigates for any non-optimal move with a stored
+   row, not only blunder rows. **Documented reversal trigger:** if evidence appears that anonymous users
+   routinely spend the free reveal on suboptimal, non-blunder moves, the response is to *steer* toward
+   blunders via copy/UI nudges (e.g. highlighting which mistake is the blunder), never to *restrict*
+   which moves the reveal can be spent on — a server-side gate is not cleanly implementable (the anon
+   gate is keyed by position+column, which maps ambiguously to stored rows across games/users) and a
+   client-only gate is theatre against the public no-auth `/api/blunders/:id` permalink. Full rationale:
+   `docs/superpowers/plans/2026-07-13-anon-free-deep-reveal.md:18` (already `RETIRED 2026-07-16`, cited
+   here as evidence D2 shipped) and `docs/open_issues.md`.
 
 5. **Presentation:** the **existing** `MistakeDetailScreen` (`blunderDetail`) path, unchanged — because
    the blunder rows now exist, in-app navigation, "X of Y", Prev/Next all work as for signed-in users.

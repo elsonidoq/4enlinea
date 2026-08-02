@@ -12,7 +12,10 @@ const STATUS_LABELS = {
 const STATUS_ORDER = ['awaiting_approval', 'needs_audio', 'approved', 'ineligible'];
 
 const TTS_VOICES = ['alloy','ash','coral','echo','fable','nova','onyx','sage','shimmer'];
-const TTS_MODELS = ['gpt-4o-mini-tts', 'tts-1', 'tts-1-hd'];
+// Legacy tts-1/tts-1-hd removed (FR-028): they ignore voice-style `instructions`
+// entirely, so no UI should be able to select or save them for either the
+// config editor or the preview sandbox — server/ttsProvider.js refuses them too.
+const TTS_MODELS = ['gpt-4o-mini-tts'];
 
 // --- TTS sandbox styles (same inline idiom as the rest of this page) ---
 const sbLabelStyle = { display: 'block', fontSize: 12, fontWeight: 700, opacity: 0.6, marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.05em' };
@@ -86,6 +89,23 @@ export function AdminAudioPage() {
   const [promptSaved, setPromptSaved] = useState(false);
   const [lang, setLang] = useState('en');
 
+  // --- Lessons section state ---------------------------------------------
+  // Deliberately reuses the page's single `lang` toggle above (FR-012) — no
+  // second language selector. Status is never cached client-side beyond this
+  // render's state: every lesson select / lang change / generate action
+  // refetches `audio-status` fresh, matching FR-009's "live" requirement.
+  const [lessons, setLessons] = useState([]);
+  const [lessonsError, setLessonsError] = useState(null);
+  const [selectedLessonId, setSelectedLessonId] = useState('');
+  const [lessonStatus, setLessonStatus] = useState(null);
+  const [lessonStatusLoading, setLessonStatusLoading] = useState(false);
+  const [lessonStatusError, setLessonStatusError] = useState(null);
+  const [busyLocators, setBusyLocators] = useState(new Set());
+  // Cache-busting counters, per locator: same text -> same hash -> same audioPath,
+  // so a regenerated clip's URL is byte-identical to before and the browser would
+  // otherwise keep serving the pre-regeneration bytes from cache.
+  const [lessonAudioTick, setLessonAudioTick] = useState({});
+
   // --- TTS sandbox state -------------------------------------------------
   // Deliberately SEPARATE from the saved-config state above (prompt/speed/
   // voice/model). Tuning here must never write the saved config; promotion is
@@ -129,6 +149,65 @@ export function AdminAudioPage() {
       })
       .catch(() => {});
   }, [lang]);
+
+  // --- Lessons section: fetch/generate ------------------------------------
+
+  const fetchLessonAudioStatus = useCallback(async (lessonId) => {
+    if (!lessonId) { setLessonStatus(null); return; }
+    try {
+      setLessonStatusLoading(true);
+      setLessonStatusError(null);
+      const res = await fetch(`${API}/api/admin/lessons/${encodeURIComponent(lessonId)}/audio-status?lang=${lang}`);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const json = await res.json();
+      setLessonStatus(json);
+    } catch (err) {
+      setLessonStatus(null);
+      setLessonStatusError(err.message);
+    } finally {
+      setLessonStatusLoading(false);
+    }
+  }, [lang]);
+
+  // Lesson list — fetched once; id/title only, doesn't depend on `lang`.
+  useEffect(() => {
+    fetch(`${API}/api/admin/lessons`)
+      .then(r => {
+        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        return r.json();
+      })
+      .then(list => {
+        setLessons(Array.isArray(list) ? list : []);
+        setLessonsError(null);
+      })
+      .catch(err => setLessonsError(err.message));
+  }, []);
+
+  // Re-fetch status whenever the selected lesson or the shared lang toggle changes.
+  // eslint-disable-next-line react-hooks/set-state-in-effect
+  useEffect(() => { fetchLessonAudioStatus(selectedLessonId); }, [selectedLessonId, fetchLessonAudioStatus]);
+
+  async function handleGenerateLessonMessage(locator) {
+    if (!selectedLessonId) return;
+    setBusyLocators(prev => new Set([...prev, locator]));
+    try {
+      const res = await fetch(`${API}/api/admin/lessons/${encodeURIComponent(selectedLessonId)}/generate-audio`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ lang, locator }),
+      });
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.error || `HTTP ${res.status}`);
+      }
+      setLessonAudioTick(prev => ({ ...prev, [locator]: (prev[locator] || 0) + 1 }));
+      await fetchLessonAudioStatus(selectedLessonId);
+    } catch (err) {
+      alert(`Generate failed: ${err.message}`);
+    } finally {
+      setBusyLocators(prev => { const s = new Set(prev); s.delete(locator); return s; });
+    }
+  }
 
   function handleSpeedChange(val) {
     setSpeed(val);
@@ -227,6 +306,27 @@ export function AdminAudioPage() {
   }
 
   async function handleGenerate(key) {
+    // OI-45 / FR-015: regenerating an already-approved clip overwrites the
+    // recording a human signed off on, in place, at the same path — and
+    // because the manifest still lists the slug, the new take goes live
+    // immediately without re-approval. Warn before sending the request (not
+    // an approval gate — publish-immediately stays the model; see
+    // scripts/generate-tts.js:409-421 for the CLI's equivalent warning,
+    // adapted here without the `git checkout` recovery line, which is
+    // CLI-specific).
+    const currentStatus = STATUS_ORDER
+      .flatMap(s => data?.[s] ?? [])
+      .find(item => item.key === key)?.status;
+    if (currentStatus === 'approved') {
+      const proceed = window.confirm(
+        `"${key}" is an APPROVED clip.\n\n` +
+        `    • the existing recording is overwritten in place\n` +
+        `    • status 'approved' → 'awaiting_approval'\n` +
+        `    • the manifest still lists this slug, so the NEW take goes live immediately, unapproved\n` +
+        `    • costs one TTS API call`,
+      );
+      if (!proceed) return;
+    }
     setBusyKeys(prev => new Set([...prev, key]));
     try {
       const res = await fetch(`${API}/api/admin/audio/generate`, {
@@ -719,6 +819,142 @@ export function AdminAudioPage() {
           </div>
         );
       })}
+
+      {/* ── Lessons section (spec 051 US2) ──────────────────────────────
+          Independent of the coach-audio status list above: separate fetch,
+          separate state, reuses only the page's shared `lang` toggle. Status
+          is always fetched fresh from /audio-status — no client cache. */}
+      <div style={{ marginTop: 32, paddingTop: 24, borderTop: '1px solid rgba(255,255,255,0.12)' }}>
+        <h1 style={{ fontSize: 20, fontWeight: 800, margin: '0 0 16px', fontFamily: 'var(--font-display)' }}>
+          Lesson Audio Manager
+        </h1>
+
+        {lessonsError && (
+          <div style={{ marginBottom: 12, fontSize: 13, color: 'var(--red)' }}>
+            Failed to load lessons: {lessonsError}
+          </div>
+        )}
+
+        <div style={{ marginBottom: 20, display: 'flex', alignItems: 'center', gap: 8 }}>
+          <label style={{ fontSize: 12, fontWeight: 700, opacity: 0.6, textTransform: 'uppercase', letterSpacing: '0.05em', whiteSpace: 'nowrap' }}>
+            Lesson
+          </label>
+          <select
+            value={selectedLessonId}
+            onChange={e => setSelectedLessonId(e.target.value)}
+            style={{
+              padding: '6px 10px',
+              borderRadius: 8,
+              border: '1px solid rgba(255,255,255,0.12)',
+              background: 'var(--surface-2)',
+              color: 'var(--text)',
+              fontFamily: 'var(--font-body)',
+              fontSize: 13,
+              cursor: 'pointer',
+              minWidth: 260,
+            }}
+          >
+            <option value="">Select a lesson…</option>
+            {lessons.map(l => (
+              <option key={l.id} value={l.id}>{l.title || l.id}</option>
+            ))}
+          </select>
+        </div>
+
+        {selectedLessonId && lessonStatusLoading && (
+          <div style={{ fontSize: 13, opacity: 0.6 }}>Loading lesson audio status...</div>
+        )}
+
+        {selectedLessonId && lessonStatusError && (
+          <div style={{ fontSize: 13, color: 'var(--red)' }}>Error: {lessonStatusError}</div>
+        )}
+
+        {selectedLessonId && !lessonStatusLoading && !lessonStatusError && lessonStatus && (
+          lessonStatus.groups.length === 0 ? (
+            <div style={{ fontSize: 13, opacity: 0.5 }}>No narratable messages found for this lesson.</div>
+          ) : (
+            lessonStatus.groups.map(group => (
+              <div key={group.label} style={{ marginBottom: 24 }}>
+                <h2 style={{ fontSize: 15, fontWeight: 700, margin: '0 0 8px', fontFamily: 'var(--font-display)', display: 'flex', alignItems: 'center', gap: 8 }}>
+                  {group.label}
+                  <span style={{ fontSize: 12, opacity: 0.5, fontWeight: 400 }}>({group.messages.length})</span>
+                </h2>
+
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  {group.messages.map(msg => {
+                    const isBusy = busyLocators.has(msg.locator);
+                    const tick = lessonAudioTick[msg.locator] || 0;
+
+                    return (
+                      <div
+                        key={msg.locator}
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: 10,
+                          padding: '8px 12px',
+                          borderRadius: 10,
+                          background: 'var(--surface-2)',
+                          flexWrap: 'wrap',
+                        }}
+                      >
+                        <div style={{ flex: 1, minWidth: 200 }}>
+                          <div style={{ fontSize: 11, opacity: 0.5, wordBreak: 'break-all', marginBottom: 2 }}>
+                            {msg.locator}
+                          </div>
+                          <div style={{ fontSize: 13, lineHeight: 1.35 }}>
+                            {msg.text}
+                          </div>
+                        </div>
+
+                        <span
+                          style={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            padding: '2px 8px',
+                            borderRadius: 6,
+                            fontSize: 11,
+                            fontWeight: 700,
+                            whiteSpace: 'nowrap',
+                            background: msg.hasAudio ? '#dcfce7' : '#f3f4f6',
+                            color: msg.hasAudio ? '#166534' : '#374151',
+                          }}
+                        >
+                          {msg.hasAudio ? 'Has Audio' : 'Missing'}
+                        </span>
+
+                        {msg.hasAudio && (
+                          <audio
+                            key={`${msg.locator}-${lang}-${tick}`}
+                            controls
+                            preload="none"
+                            src={`${msg.audioPath}${tick ? `?t=${tick}` : ''}`}
+                            style={{ height: 28, width: 200 }}
+                          />
+                        )}
+
+                        <button
+                          onClick={() => handleGenerateLessonMessage(msg.locator)}
+                          disabled={isBusy}
+                          style={{
+                            padding: '4px 12px', borderRadius: 6, border: 'none',
+                            background: 'var(--disc-green)', color: '#fff',
+                            fontWeight: 700, fontSize: 12, cursor: isBusy ? 'not-allowed' : 'pointer',
+                            opacity: isBusy ? 0.5 : 1, whiteSpace: 'nowrap',
+                            fontFamily: 'var(--font-display)',
+                          }}
+                        >
+                          {isBusy ? '...' : msg.hasAudio ? 'Regenerate' : 'Generate'}
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            ))
+          )
+        )}
+      </div>
     </div>
   );
 }

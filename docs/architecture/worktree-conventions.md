@@ -161,3 +161,31 @@ entire build with `/bin/sh: 1: /worktree-ports.sh: not found`. Fixed by wrapping
 **Lesson: any dev-convenience shell-out added to build-time code (a `vite.config.js`
 top-level call, not just runtime `server/index.js` code) must degrade gracefully — the
 Railway build container does not have this repo's dev tooling available.**
+
+## Trap: `res.sendFile()` 404s inside a worktree (the `.claude/` dot-segment)
+
+Worktrees live under `.claude/worktrees/<branch>/`, so **every absolute path the server
+builds from `__dirname` contains a dot-segment**. Express's `res.sendFile()` delegates to
+`send`, whose `dotfiles` option defaults to `'ignore'` — it refuses any path with a
+dot-segment and raises `NotFoundError`, which the global error handler then surfaces as a
+generic **500 `{"error":"Internal server error"}`**. The file exists; an `existsSync()`
+guard immediately above the `sendFile()` call passes; nothing in the response hints at the
+real cause.
+
+It works fine on the main checkout (`/Users/.../cuatro_en_linea/`, no dot-segment), so this
+reproduces **only** in a worktree — i.e. only in the normal way feature branches are run here.
+
+This has bitten twice:
+- the legal-page routes (`/privacy`, `/terms`, `/pricing`, `/refunds`, `/legal.css`) — fixed
+  via `LEGAL_PAGE_OPTS = { dotfiles: 'allow' }` in `connect-four/server/index.js`
+- `GET /api/admin/audio/play/:slug` — every coach clip on `/admin/audio` failed to play
+
+**Rule: any new `res.sendFile()` in this codebase must pass `{ dotfiles: 'allow' }`.** It
+carries no path-traversal risk at these call sites because the filename is either hardcoded
+or built from an already-sanitised token (the audio route restricts `slug` to alphanumerics
+and hyphens — no dots, no slashes — and is `requireLocalhost`-gated). `express.static()` is
+**not** affected: its `dotfiles` check applies to the request path relative to `root`, not to
+`root` itself.
+
+Symptom to recognise: a static asset route returning 500 (or 404) in a worktree while the
+same route works on the main checkout, with `NotFoundError ... send/index.js` in the log.

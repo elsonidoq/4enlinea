@@ -1,6 +1,7 @@
 {
   "id": "overcut",
   "title": "The Overcut",
+  "title_es": "El Overcut",
   "free": false,
   "userPerspective": "yellow",
   "slides": [
@@ -361,8 +362,8 @@
     {
       "puzzleId": "7c4f2ab9-15e0-4d63-8a71-b9e5c0d3f682",
       "moveString": "333236002233151546",
-      "goalPrompt": "Gray's only completing cell in the fifth column is the very next square in it — and two rows higher, that same column holds a square where you complete four. Enter the column: your disc takes Gray's square away, and what is left ripens for you.",
-      "goalPrompt_es": "La única casilla que completa Gris en la quinta columna es justo la siguiente casilla de esa columna —y dos filas más arriba, esa misma columna tiene una casilla donde completás cuatro. Entrá en la columna: tu ficha le saca esa casilla a Gris, y lo que queda madura para vos.",
+      "goalPrompt": "Gray completes on the next square of the fifth column; two rows higher, you complete four. Enter it and take Gray's square away.",
+      "goalPrompt_es": "Gris completa en la casilla siguiente de la quinta columna; dos filas más arriba, completás cuatro. Entrá y sacale esa casilla.",
       "goalPredicateType": "overcut",
       "goalPredicateParams": {},
       "cooperativeAiMoves": [],
@@ -383,13 +384,15 @@
         ]
       },
       "correctCol": null,
-      "userPlayer": 1
+      "userPlayer": 1,
+      "goalPromptAudio": "/audio/lessons/fd70106fcc82394e.mp3",
+      "goalPromptAudio_es": "/audio/lessons/3818b17d7c02ed3a.mp3"
     },
     {
       "puzzleId": "b87536d6-5fca-4b06-b246-d3755d5c2702",
       "moveString": "413520424420116155020",
-      "goalPrompt": "One column stacks your completing cells around Green's lone one. Enter it: your drop makes an immediate threat, and Green's forced block lifts the column straight into a cell where you complete four.",
-      "goalPrompt_es": "Una columna apila tus casillas que completan alrededor de la única de Verde. Entrá ahí: tu ficha crea una amenaza inmediata, y el bloqueo forzado de Verde eleva la columna directo a una casilla donde completás cuatro.",
+      "goalPrompt": "One column stacks your completing cells around Green's lone one. Enter: your threat forces a block that lifts you into four.",
+      "goalPrompt_es": "Una columna apila tus casillas alrededor de la única de Verde. Entrá: tu amenaza fuerza un bloqueo que te eleva a cuatro.",
       "goalPredicateType": "overcut",
       "goalPredicateParams": {},
       "cooperativeAiMoves": [],
@@ -410,7 +413,9 @@
         ]
       },
       "correctCol": null,
-      "userPlayer": 2
+      "userPlayer": 2,
+      "goalPromptAudio": "/audio/lessons/da02d3f74d15162f.mp3",
+      "goalPromptAudio_es": "/audio/lessons/6e688b6b518d15ee.mp3"
     }
   ],
   "order": 12

@@ -213,7 +213,7 @@ export function PastGamesListScreen({ go, goBack }) {
           <div style={{ width: 72, height: 72, borderRadius: '50%', background: 'rgba(0,0,0,0.06)', display: 'grid', placeItems: 'center', color: 'var(--ink-soft)' }}>
             <Icon name="user" size={34} />
           </div>
-          <div style={{ fontWeight: 700, fontSize: 19, color: 'var(--ink)' }}>Sign in to see your past games</div>
+          <div style={{ fontWeight: 700, fontSize: 19, color: 'var(--ink)' }}>{t('games.signin_prompt')}</div>
         </div>
       </div>
     );

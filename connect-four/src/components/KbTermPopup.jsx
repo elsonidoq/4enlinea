@@ -142,7 +142,7 @@ export function KbTermPopup({
             color: 'var(--ink-soft, #888)',
             padding: '0 0 0 8px',
           }}
-          aria-label="Close"
+          aria-label={t('common.close')}
         >
           ×
         </button>

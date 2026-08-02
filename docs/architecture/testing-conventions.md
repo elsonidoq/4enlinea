@@ -257,15 +257,33 @@ Lesson JSON is data, not code, so ordinary unit tests don't cover it. Two gates 
 whether the check needs the solver:
 
 - **`tests/unit/lessonContent.test.js`** — pure **static** invariants over every lesson JSON
-  (`node:test`, registered in **both** `test` and `test:fast`). No solver, no network. It holds a
-  `REMEDIATED` set of lesson ids opted into the strict checks; **add every new lesson id to it** or the
-  lesson ships unchecked. (That gate is now vestigial and inverted-risk — every lesson is in it, so it
-  exempts nothing today but would silently exempt a *future* one. Flipping it to strict-by-default is
-  tracked in `docs/open_issues.md` OI-63.)
+  (`node:test`, registered in **both** `test` and `test:fast`). No solver, no network. **Every check in
+  it is unconditional** — there is no opt-in list and no exemption mechanism, so a new lesson is
+  checked the moment its file lands. (Until 2026-07-30 it held a `REMEDIATED` set of ids opted into
+  the strict checks. Spec 052 **deleted** the set and its three guards rather than emptying them:
+  an exemption list that exempts nothing today still silently exempts whatever a future author adds.
+  Do not reintroduce one — closes `docs/open_issues.md` OI-63 item 4.)
+  Two gates added by spec 052 live here: **no `lesson.<id>.title` key may reappear** in `en.json`/`es.json`
+  (the migration that moved titles into the lesson JSON), and **every lesson must carry a non-empty
+  `title_es`** — that one exists because deleting the i18n keys removed the only thing localizing
+  titles, silently shipping 14 of 15 in English to Spanish learners with every other test green.
+- **`tests/unit/i18nKeyParity.test.js`** also holds the **lesson-id namespace-collision guard**: no
+  lesson `id` may collide with a reserved `lesson.*` sub-key. The reserved set is **derived at run time**
+  from `en.json`'s `lesson` object (today `confirmation`, `node`, `notFound`, `windowCounts`), never
+  hardcoded, so a newly-added chrome key joins the guard automatically.
+- **`tests/lessons/lessonAudioCoverage.test.js`** has **two independent halves** and a run can pass one
+  while failing the other: every collected text has an on-disk clip, *and* prune-parity (no orphaned
+  clip on disk). Both walk `collectMessages`, so **adding a field to that walker immediately demands
+  clips for every instance of it in both languages** — there is no single-lesson version that stays
+  green. Editing already-voiced text orphans its old clip (lesson audio is text-hashed, so the filename
+  changes); clear it with `POST /api/admin/lessons/prune-audio`.
 - **`server/scripts/verify_lesson_content.mjs`** — **solver-gated** content verification: a socratic
   `correctCol` must be the solver's max-scoring column, positions must not be lost for their owner, and
-  every `tg`/`td` overlay must be a real threat of that color (opt out per slide with
-  `_overlayIntent: "annotation"`). A socratic with no `movestring` **FAILs** rather than being skipped.
+  every `tg`/`td` overlay must be a real threat of that color (opt out with
+  `_overlayIntent: "annotation"` on the slide/socratic node, or on an individual `overlays[]` entry to
+  override the node-level default — see `docs/architecture/lesson-editor.md` §"Overlay intent").
+  Every `solver.query` and `Board` construction is isolated, so a malformed movestring yields one FAIL
+  row and the run continues instead of crashing (spec 052 / FR-013). A socratic with no `movestring` **FAILs** rather than being skipped.
 
   **This is a script, not a `node:test` file — it is in neither `test` nor `test:fast`, and nothing runs
   it for you.** Run it by hand (`node server/scripts/verify_lesson_content.mjs`, from `connect-four/`)
@@ -277,7 +295,7 @@ whether the check needs the solver:
   `isStraightLineWindow` geometry predicate (`src/lib/lessonWindows.js`). `lessonContent.test.js`
   applies that same predicate to every authored window, plus known-`type` and `label` ⇒ `label_es`.
 
-  **These window checks are unconditional — deliberately not gated on `REMEDIATED`** (the field is
+  **These window checks are unconditional**, like every other check in that file (the field is
   new, so every use of it is new). They exist because the capsule renderer draws blindly from
   `cells[0]` to `cells[last]`: an unordered, bent, or gapped array produces a plausible-looking
   capsule over the *wrong* squares, which no other layer catches — `verify_lesson_content.mjs` knows
@@ -415,6 +433,63 @@ that exercises **keyboard/focus interaction** — e.g. `Board`'s Enter/Space col
 (spec 043 FR-001..006), currently covered only at the pure-helper layer in
 `tests/unit/boardA11y.test.js`. Real focus management and key sequences are where `user-event`
 genuinely beats hand-dispatched `keyDown`.
+
+#### Stub `window.confirm`/`window.alert` on `window`, **not** just `globalThis`
+
+In this jsdom harness `window` and `globalThis` are **not** the same object, and React event
+handlers resolve `window.confirm` off `window`. Assigning only `globalThis.confirm` leaves the
+component calling jsdom's built-in stub ("not implemented"), so a test asserting "a confirmation
+appeared" silently records zero calls. Set **both**, and restore them in `after()`:
+
+```js
+let confirmCalls = [];
+before(() => {
+  const fake = (msg) => { confirmCalls.push(msg); return true; };
+  globalThis.confirm = fake;
+  window.confirm = fake;   // ← the one that actually gets called
+});
+```
+
+Worked example: `tests/dom/AdminAudioPageWarning.dom.test.jsx` (spec 051 FR-015).
+
+#### A page that fetches on mount needs **every** URL stubbed, not just the one under test
+
+`AdminAudioPage` now issues `GET /api/admin/audio/status`, `GET /api/admin/lessons`, and (on
+selection) `GET /api/admin/lessons/:id/audio-status`. A `fetch` stub that only answers the endpoint
+a test cares about leaves the others rejecting, producing unhandled rejections that surface as
+unrelated noise or a flaky pass. Match on URL and return a minimal valid shape for each.
+
+This cuts the other way too: **adding a section to a shared page changes what every existing DOM
+test of that page renders.** After extending such a page, re-run the whole `test:dom` suite, not
+just your new file.
+
+#### Prefer an exported pure resolver over module mocking for a static ESM import
+
+This repo has **no** module-mocking precedent (`grep -ran "mock.module" tests/ server/` → zero hits)
+and a static ESM binding cannot be patched from outside. When a function's behaviour depends on a
+statically imported helper you need to vary (config readers, clock, env), export a **pure resolver**
+and give it an optional test-only DI parameter, then assert against that:
+
+```js
+// production callers pass nothing; only the test passes readConfig
+export function resolveSynthesisConfig(lang, { readConfig = readTtsConfig } = {}) { … }
+```
+
+`server/ttsProvider.js`'s `resolveSynthesisConfig` exists solely as this seam — it lets
+`server/ttsProvider.test.js` drive a fake legacy-model config through the real refusal logic without
+touching the module graph. Keep such a seam **test-only by convention** and say so in its JSDoc, so a
+future production caller doesn't start threading config back in through the back door.
+
+#### Grep-as-lint tests must not use bare `grep`
+
+Several guarantees here are enforced by a test that greps the tree for a forbidden pattern (no file
+outside `ttsProvider.js` constructing an OpenAI TTS request; no file importing `synthesizeRaw`).
+**Bare `grep` silently reports zero matches** in this environment — the non-UTF-8 locale makes
+multibyte files read as binary — so such a lint passes vacuously and proves nothing. Either use
+`grep -a` or, preferably, do the walk in Node with `fs.readFileSync` + a regex, which sidesteps the
+locale entirely. **Prove the lint works by temporarily inserting a real violation and confirming it
+goes red** — a lint that has never been seen failing is not known to work. Match on actual import
+syntax rather than a bare substring, or a doc comment naming the symbol will trip it.
 
 ### `node --test` Conventions
 

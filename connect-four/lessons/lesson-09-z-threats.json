@@ -1,6 +1,7 @@
 {
   "id": "z-threats",
   "title": "Z-Threats",
+  "title_es": "Amenazas-Z",
   "free": true,
   "order": 9,
   "userPerspective": "yellow",
@@ -390,7 +391,9 @@
         "badgeCount": 3
       },
       "correctCol": 1,
-      "userPlayer": 1
+      "userPlayer": 1,
+      "goalPromptAudio": "/audio/lessons/6526be0bff756792.mp3",
+      "goalPromptAudio_es": "/audio/lessons/53fcbb306ece4f8f.mp3"
     },
     {
       "puzzleId": "3f6a20c8-8b47-49de-a5c1-0d7e93b4f156",
@@ -409,7 +412,9 @@
         "badgeCount": 3
       },
       "correctCol": 6,
-      "userPlayer": 2
+      "userPlayer": 2,
+      "goalPromptAudio": "/audio/lessons/6526be0bff756792.mp3",
+      "goalPromptAudio_es": "/audio/lessons/53fcbb306ece4f8f.mp3"
     }
   ]
 }

@@ -91,11 +91,24 @@ worked_examples:
       Black to play and loses. The triple threat (F3, G3, G4) is equivalent to a
       major odd-row threat.
     expected_behavior: "solver score: Red wins; position has triple minor threat equivalent to major odd-row threat"
-    solver_verified: PENDING
+    solver_verified: true    # verified 2026-07-30 (spec 052 / OI-62)
     notes: |
       Allen's Diagram 63 notation: "D1! d2 D3! el E2 d4 E3 (8)" (exclamation marks
       denote best moves). Converted to numeric column notation: D=4, E=5,
       using 1-indexed columns A-G = 1-7.
+
+      Solver verification 2026-07-30 (`./visualize_board.sh 3334434`, spec 052 / OI-62),
+      replacing the previous `solver_verified: PENDING`. After the 7 moves it is Gray
+      (Black / P2) to move, and **every** column score is negative — `[-5, -3, -4, -5, -4,
+      -5, -5]` for columns 1..7 — so Black loses no matter what he plays. That is exactly
+      the claim this example makes ("Black to play and loses" ⇒ Red wins).
+      Board layout confirmed as well: Green (Red / P1) holds col4 row1, col4 row3, col5
+      row2, col5 row3 — i.e. {D1, D3, E2, E3}, the canonical J — and the three claimed
+      threat cells F3, G3, G4 (col6 row3, col7 row3, col7 row4) all show as Green minor
+      threats with no major threat yet on the board, matching "triple minor threat
+      equivalent to a major odd-row threat".
+      (Rows/cols quoted here in the KB's 1-indexed A–G / 1–6 notation, as elsewhere in
+      this file; project code is 0-indexed.)
 
   - movestring: "43344032"
     description: |

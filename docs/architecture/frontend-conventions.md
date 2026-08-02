@@ -683,6 +683,21 @@ Audio(path))`. Reuses the same shared module-level speech queue as deep-reveal T
 Manifest" below) — it does NOT go through `speakCoachMessage(key)`/the manifest, since lesson audio is
 identified by a stored path, not an i18n key.
 
+> **The two speech entry points gate differently — this is the trap when adding narration to a screen.**
+> `speakCoachMessage(key)` checks `speechEnabled` **internally** and no-ops when muted.
+> `speakLessonAudio(path)` does **NOT** — its doc comment states the caller owns that check. A screen
+> that has only ever used the coach path (as `ChallengeScreen` had) will narrate to a muted learner the
+> moment it adds a `speakLessonAudio` call, unless it wraps it in its own `speechEnabled` guard.
+> `ConceptScreen`/`SocraticScreen` get this for free because `getNarrationQueue` takes `speechEnabled`
+> and returns `[]` when false; a direct `speakLessonAudio` call has no such filter in front of it.
+
+**Mixing the two on one screen.** `ChallengeScreen` narrates a *pooled* prompt by i18n key and a
+*per-lesson `goalPrompt` override* by path. It keeps two mutually-exclusive refs — `lastCoachKeyRef`
+(key) and `lastLessonAudioRef` (path) — set in the same branch that picks the text, with exactly one
+non-null at a time, and a single narration effect that prefers the key. Follow that shape rather than
+overloading one ref with two identity schemes: the schemes are not interchangeable (see
+`coach-audio-conventions.md`), and a path handed to `speakCoachMessage` silently no-ops.
+
 `ConceptScreen.jsx` drives narration in an effect keyed `[lesson, slideIndex, speechEnabled]`, calling
 `stopSpeech()` on cleanup (slide change, unmount, or narration/speech toggle) so playback never bleeds
 across slides. **`SocraticScreen.jsx` is intentionally NOT wired to this** — Socratic-phase messages

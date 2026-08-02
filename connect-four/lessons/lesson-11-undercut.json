@@ -1,6 +1,7 @@
 {
   "id": "undercut",
   "title": "The Undercut",
+  "title_es": "El Undercut",
   "free": false,
   "userPerspective": "yellow",
   "slides": [
@@ -514,8 +515,8 @@
     {
       "puzzleId": "744957c2-0d06-49d5-9ae3-14415993f71b",
       "moveString": "2342444423322500664032500",
-      "goalPrompt": "Your threat in this column has been undercut: Green's completing cell sits directly below yours, so entering the column hands Green the win first. Show you see it — play any other column.",
-      "goalPrompt_es": "Tu amenaza en esta columna fue undercut: la casilla que completa Verde está justo debajo de la tuya, así que entrar en la columna le entrega la victoria a Verde primero. Demostrá que lo ves — jugá cualquier otra columna.",
+      "goalPrompt": "Your threat here is undercut — Green completes directly below you, so entering hands Green the win. Play any other column.",
+      "goalPrompt_es": "Tu amenaza acá está undercut: Verde completa justo debajo, así que entrar le da la victoria. Jugá cualquier otra columna.",
       "goalPredicateType": "undercut",
       "goalPredicateParams": {},
       "cooperativeAiMoves": [],
@@ -536,13 +537,15 @@
         ]
       },
       "correctCol": null,
-      "userPlayer": 2
+      "userPlayer": 2,
+      "goalPromptAudio": "/audio/lessons/de75de81d4a8cd8b.mp3",
+      "goalPromptAudio_es": "/audio/lessons/19f83b9310c86271.mp3"
     },
     {
       "puzzleId": "dceec0c6-79e7-4d28-a53c-9df44d39d5d6",
       "moveString": "332154334424356",
-      "goalPrompt": "Your threat in this column has been undercut: Green's completing cell sits directly below yours, so entering the column hands Green the win first. Show you see it — play any other column.",
-      "goalPrompt_es": "Tu amenaza en esta columna fue undercut: la casilla que completa Verde está justo debajo de la tuya, así que entrar en la columna le entrega la victoria a Verde primero. Demostrá que lo ves — jugá cualquier otra columna.",
+      "goalPrompt": "Your threat here is undercut — Green completes directly below you, so entering hands Green the win. Play any other column.",
+      "goalPrompt_es": "Tu amenaza acá está undercut: Verde completa justo debajo, así que entrar le da la victoria. Jugá cualquier otra columna.",
       "goalPredicateType": "undercut",
       "goalPredicateParams": {},
       "cooperativeAiMoves": [],
@@ -563,7 +566,9 @@
         ]
       },
       "correctCol": null,
-      "userPlayer": 2
+      "userPlayer": 2,
+      "goalPromptAudio": "/audio/lessons/de75de81d4a8cd8b.mp3",
+      "goalPromptAudio_es": "/audio/lessons/19f83b9310c86271.mp3"
     }
   ],
   "order": 11

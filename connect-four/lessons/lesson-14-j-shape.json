@@ -1,6 +1,7 @@
 {
   "id": "j-shape",
   "title": "J-Shape",
+  "title_es": "Forma-J",
   "free": false,
   "userPerspective": "yellow",
   "slides": [
@@ -393,8 +394,8 @@
     {
       "puzzleId": "d5b70e64-9c21-4f8a-a3e6-7148bd2c05f9",
       "moveString": "3334304400153301214210",
-      "goalPrompt": "You are Green. Three-quarters of a J already sits across the fourth and fifth columns. One move completes it, and the square it lands on is an odd row — the rows Green collects. Spot the J pattern and play the move that builds it.",
-      "goalPrompt_es": "Sos Verde. Tres cuartos de una J ya están repartidos entre la cuarta y la quinta columna. Una jugada la completa, y la casilla donde cae está en una fila impar —las filas que se queda Verde. Encontrá el patrón de la J y jugá la movida que la construye.",
+      "goalPrompt": "You are Green. Three-quarters of a J spans the fourth and fifth columns. Play the move that completes it on an odd row.",
+      "goalPrompt_es": "Sos Verde. Tres cuartos de una J cruzan la cuarta y la quinta columna. Jugá la movida que la completa en fila impar.",
       "goalPredicateType": "j_shape",
       "goalPredicateParams": {},
       "cooperativeAiMoves": [],
@@ -420,13 +421,15 @@
         ]
       },
       "correctCol": 4,
-      "userPlayer": 1
+      "userPlayer": 1,
+      "goalPromptAudio": "/audio/lessons/b972f88496e69cab.mp3",
+      "goalPromptAudio_es": "/audio/lessons/112609d6aa6df223.mp3"
     },
     {
       "puzzleId": "9e3c81d7-4a56-4b2f-8c90-6de2f5713a4b",
       "moveString": "433353554335044022255",
-      "goalPrompt": "You are Gray this time. Your discs on the fifth column's third row and the fourth column's fourth and fifth rows are three-quarters of a J. Spot the J pattern and play the move that completes it.",
-      "goalPrompt_es": "Esta vez sos Gris. Tus fichas en la tercera fila de la quinta columna y en la cuarta y quinta fila de la cuarta columna son tres cuartos de una J. Encontrá el patrón de la J y jugá la movida que la completa.",
+      "goalPrompt": "You are Gray. Your discs across the fourth and fifth columns are three-quarters of a J. Play the move that completes it.",
+      "goalPrompt_es": "Esta vez sos Gris. Tus fichas en la cuarta y la quinta columna son tres cuartos de una J. Jugá la movida que la completa.",
       "goalPredicateType": "j_shape",
       "goalPredicateParams": {},
       "cooperativeAiMoves": [],
@@ -452,7 +455,9 @@
         ]
       },
       "correctCol": 4,
-      "userPlayer": 2
+      "userPlayer": 2,
+      "goalPromptAudio": "/audio/lessons/f6d4be47fd2df05f.mp3",
+      "goalPromptAudio_es": "/audio/lessons/eca909adc00d626d.mp3"
     }
   ],
   "order": 14

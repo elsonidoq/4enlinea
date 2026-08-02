@@ -1,6 +1,7 @@
 {
   "id": "immediate-threat",
   "title": "Immediate Threats",
+  "title_es": "Amenazas Inmediatas",
   "free": true,
   "userPerspective": "yellow",
   "order": 1,
@@ -411,7 +412,9 @@
       "highlightMetadata": null,
       "correctCol": null,
       "userPlayer": 1,
-      "goalPrompt_es": "Encontrá la jugada ganadora."
+      "goalPrompt_es": "Encontrá la jugada ganadora.",
+      "goalPromptAudio": "/audio/lessons/5f583cb1fed34dbc.mp3",
+      "goalPromptAudio_es": "/audio/lessons/ca69117820255b22.mp3"
     },
     {
       "puzzleId": "b328e328-4ffd-4d2b-b287-461ade18d70d",
@@ -424,7 +427,9 @@
       "highlightMetadata": null,
       "correctCol": null,
       "userPlayer": 2,
-      "goalPrompt_es": "Encontrá la jugada ganadora."
+      "goalPrompt_es": "Encontrá la jugada ganadora.",
+      "goalPromptAudio": "/audio/lessons/5f583cb1fed34dbc.mp3",
+      "goalPromptAudio_es": "/audio/lessons/ca69117820255b22.mp3"
     },
     {
       "puzzleId": "985e11e3-1a41-405d-ae89-ded3b0b5edff",
@@ -437,7 +442,9 @@
       "highlightMetadata": null,
       "correctCol": null,
       "userPlayer": 1,
-      "goalPrompt_es": "Encontrá la jugada ganadora."
+      "goalPrompt_es": "Encontrá la jugada ganadora.",
+      "goalPromptAudio": "/audio/lessons/5f583cb1fed34dbc.mp3",
+      "goalPromptAudio_es": "/audio/lessons/ca69117820255b22.mp3"
     },
     {
       "puzzleId": "de6f2e12-2be9-48b0-ae47-6df1fd31ed74",
@@ -450,7 +457,9 @@
       "highlightMetadata": null,
       "correctCol": null,
       "userPlayer": 2,
-      "goalPrompt_es": "Encontrá la jugada ganadora."
+      "goalPrompt_es": "Encontrá la jugada ganadora.",
+      "goalPromptAudio": "/audio/lessons/5f583cb1fed34dbc.mp3",
+      "goalPromptAudio_es": "/audio/lessons/ca69117820255b22.mp3"
     }
   ]
 }

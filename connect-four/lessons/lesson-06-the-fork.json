@@ -1,6 +1,7 @@
 {
   "id": "the-fork",
   "title": "The Fork",
+  "title_es": "La Bifurcación",
   "free": true,
   "userPerspective": "yellow",
   "slides": [
@@ -385,7 +386,9 @@
       "interactionMode": "single_move",
       "highlightMetadata": null,
       "correctCol": null,
-      "userPlayer": 1
+      "userPlayer": 1,
+      "goalPromptAudio": "/audio/lessons/9eb641979ba4b7fb.mp3",
+      "goalPromptAudio_es": "/audio/lessons/06e8ab8ef2b664ec.mp3"
     },
     {
       "puzzleId": "b9ad0136-8665-4994-860d-64f6123df557",
@@ -398,7 +401,9 @@
       "interactionMode": "single_move",
       "highlightMetadata": null,
       "correctCol": null,
-      "userPlayer": 1
+      "userPlayer": 1,
+      "goalPromptAudio": "/audio/lessons/9eb641979ba4b7fb.mp3",
+      "goalPromptAudio_es": "/audio/lessons/06e8ab8ef2b664ec.mp3"
     },
     {
       "puzzleId": "c910e365-38ce-48c8-8d2e-51bac76f6c0d",
@@ -411,7 +416,9 @@
       "interactionMode": "single_move",
       "highlightMetadata": null,
       "correctCol": null,
-      "userPlayer": 1
+      "userPlayer": 1,
+      "goalPromptAudio": "/audio/lessons/9eb641979ba4b7fb.mp3",
+      "goalPromptAudio_es": "/audio/lessons/06e8ab8ef2b664ec.mp3"
     },
     {
       "puzzleId": "0198f91c-4772-4016-b229-0c5046ad8f69",
@@ -424,7 +431,9 @@
       "interactionMode": "single_move",
       "highlightMetadata": null,
       "correctCol": null,
-      "userPlayer": 1
+      "userPlayer": 1,
+      "goalPromptAudio": "/audio/lessons/9eb641979ba4b7fb.mp3",
+      "goalPromptAudio_es": "/audio/lessons/06e8ab8ef2b664ec.mp3"
     }
   ],
   "order": 6

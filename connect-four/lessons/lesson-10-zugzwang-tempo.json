@@ -1,6 +1,7 @@
 {
   "id": "zugzwang-tempo",
   "title": "Zugzwang & Tempo",
+  "title_es": "Zugzwang y Tempo",
   "free": true,
   "order": 10,
   "userPerspective": "red",

@@ -1,6 +1,7 @@
 {
   "id": "block-before-build",
   "title": "Block Before Build",
+  "title_es": "Bloqueá Antes de Construir",
   "free": true,
   "userPerspective": "yellow",
   "slides": [
@@ -403,7 +404,9 @@
       "interactionMode": "single_move",
       "highlightMetadata": null,
       "correctCol": null,
-      "userPlayer": 2
+      "userPlayer": 2,
+      "goalPromptAudio": "/audio/lessons/26d756f256f9c7c4.mp3",
+      "goalPromptAudio_es": "/audio/lessons/0a2eabb51fabc681.mp3"
     },
     {
       "puzzleId": "25bb4952-abb5-416c-97d6-21b6b1bad830",
@@ -416,7 +419,9 @@
       "interactionMode": "single_move",
       "highlightMetadata": null,
       "correctCol": null,
-      "userPlayer": 2
+      "userPlayer": 2,
+      "goalPromptAudio": "/audio/lessons/26d756f256f9c7c4.mp3",
+      "goalPromptAudio_es": "/audio/lessons/0a2eabb51fabc681.mp3"
     }
   ],
   "order": 2

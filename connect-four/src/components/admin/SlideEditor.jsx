@@ -377,7 +377,10 @@ export default function SlideEditor({ slide, index, total, lang = 'en', onChange
           value={slide[fk('infoProse')] ?? ''}
           onChange={e => updateField(fk('infoProse'), e.target.value)}
           rows={3}
-          style={{ ...input, resize: 'vertical' }}
+          // fontFamily/lineHeight mirror the coach-message textarea above: the shared `input`
+          // style sets no font-family, so a bare <textarea> falls back to the UA's monospace
+          // default and visibly mismatches the rest of the editor (OI-69 / spec 052 FR-021).
+          style={{ ...input, resize: 'vertical', fontFamily: 'inherit', lineHeight: 1.4 }}
           placeholder={lang === 'es' ? '(no Spanish translation yet)' : 'Explanatory text shown below the board'}
         />
       </div>

@@ -1,6 +1,7 @@
 {
   "id": "figure-7",
   "title": "Figure-7 Trap",
+  "title_es": "La Trampa Figura-7",
   "free": false,
   "userPerspective": "yellow",
   "slides": [
@@ -562,8 +563,8 @@
     {
       "puzzleId": "7cba318c-adfe-4f36-a538-6c720d34cded",
       "moveString": "314514544333321115542524",
-      "goalPrompt": "You are Green, and your discs hold a Mirror-7: its two completing cells stack in the first column, on the third and fourth rows. Press the trap — play the column that holds both threat cells.",
-      "goalPrompt_es": "Sos Verde, y tus fichas forman un Mirror-7: sus dos casillas que completan se apilan en la primera columna, en la tercera y cuarta fila. Aplicá la trampa — jugá la columna que tiene las dos casillas de amenaza.",
+      "goalPrompt": "You are Green, holding a Mirror-7 whose two completing cells stack in the first column. Play the column holding both.",
+      "goalPrompt_es": "Sos Verde, con un Mirror-7 cuyas dos casillas que completan se apilan en la primera columna. Jugá esa columna.",
       "goalPredicateType": "figure_7",
       "goalPredicateParams": {},
       "cooperativeAiMoves": [],
@@ -599,7 +600,9 @@
         ]
       },
       "correctCol": 0,
-      "userPlayer": 1
+      "userPlayer": 1,
+      "goalPromptAudio": "/audio/lessons/937637575dd8fae6.mp3",
+      "goalPromptAudio_es": "/audio/lessons/7218aa6fb5ccdaef.mp3"
     },
     {
       "puzzleId": "b4d7b8d8-8feb-48a7-96fc-2baa51abcb65",
@@ -636,7 +639,9 @@
         ]
       },
       "correctCol": 3,
-      "userPlayer": 2
+      "userPlayer": 2,
+      "goalPromptAudio": "/audio/lessons/27803c92cd8591d4.mp3",
+      "goalPromptAudio_es": "/audio/lessons/e7cc60a11c5401d5.mp3"
     }
   ],
   "order": 13
