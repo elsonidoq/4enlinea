@@ -4096,3 +4096,39 @@ and against the known-red baseline in OI-82, and update
 its verification technique.
 
 **Closes when shipped**: OI-102 (registration drift), and the `detectClaimodd` phantom entry above.
+
+## OI-119 — `react-hooks/*` and `react-refresh/*` ESLint findings demoted to `warn`, not fixed (Epic 8)
+
+**Status**: open — tracked for a future UI-behavior-change pass
+**Area**: `connect-four/eslint.config.js` `src/**` block; the 14 `src/` production React files listed
+below
+**Discovered**: 2026-08-02, spec 055 (Epic 8: Dev Infrastructure & Test-Quality Baseline) T014/T015
+
+FR-019(c) requires `npm run lint` to exit 0, but forbids fixing `react-hooks/*`/`react-refresh/*`
+violations as part of this epic — actually fixing them means changing effect timing, ref usage, or
+component/memoization boundaries, which is a behavior-affecting UI refactor out of scope for a
+lint/test-infra epic. Instead, `eslint.config.js`'s `src/**` block demotes the six affected rules from
+`error` to `warn` (with a one-line comment pointing at this issue), so `npm run lint` exits 0 while the
+findings stay visible as warnings rather than being silently disabled.
+
+**Fresh measurement** (`npx eslint . -f json`, post-split config, 2026-08-02) — 36 findings total, all
+inside `src/` production React components:
+
+| Rule | Count | Files:lines |
+|---|---|---|
+| `react-hooks/set-state-in-effect` | 21 | `src/App.jsx:65,138`; `src/components/admin/PuzzlePickerModal.jsx:33`; `src/components/CurationWorkspace.jsx:121`; `src/components/DeepRevealPane.jsx:140`; `src/components/RejectModal.jsx:19,23`; `src/lib/useGameBoard.js:118,124`; `src/lib/useLessonLockGuard.js:44`; `src/pages/AdminDeepRevealEvalPage.jsx:265,282,300`; `src/pages/AdminFvSuffPage.jsx:237,488`; `src/screens/AdminLessonEditorScreen.jsx:109`; `src/screens/AdminLessonListScreen.jsx:31`; `src/screens/CategoryListScreen.jsx:54`; `src/screens/MistakesListScreen.jsx:80`; `src/screens/PastGamesListScreen.jsx:185`; `src/screens/ReviewScreen.jsx:105` |
+| `react-hooks/refs` | 5 | `src/lib/useBoardState.js:47,49,59`; `src/lib/useDragSplit.js:66,69` |
+| `react-hooks/static-components` | 4 | `src/App.jsx:195,199,203,207` |
+| `react-refresh/only-export-components` | 4 | `src/components/InfoProsePanel.jsx:24`; `src/context/DebugContext.jsx:32`; `src/screens/AdminLessonEditorScreen.jsx:35`; `src/store/ProfileStore.jsx:121` |
+| `react-hooks/immutability` | 1 | `src/lib/useDragSplit.js:108` |
+| `react-hooks/preserve-manual-memoization` | 1 | `src/pages/AdminFvSuffPage.jsx:531` |
+
+(`react-hooks/exhaustive-deps`, 11 findings, is already `warn` by default in
+`reactHooks.configs.flat.recommended` — not part of this demotion, not in scope for this issue.)
+
+**Next step**: a future pass should burn these down file-by-file as an intentional UI-behavior change
+(re-verify each fix against the app, not just the lint output — `set-state-in-effect` in particular
+often signals a real render-loop or stale-state bug, not just a style nit), then re-promote the six
+rules above back to `error` in `eslint.config.js`'s `src/**` block.
+
+**Closes when shipped**: all 36 findings fixed and the six rules restored to `error`.
