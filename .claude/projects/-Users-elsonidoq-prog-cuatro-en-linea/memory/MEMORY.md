@@ -91,7 +91,7 @@
 - [Inline Node scripts](reference_inline_node_scripts.md) — TOOLS/compute_feature_vector.mjs first; absolute imports; solver hangs (try/finally); shell for-loop → EMPTY
 - [Rate limit kills bulk loops](project_api_rate_limit_breaks_bulk_scripts.md) — 120/min per IP shared with browser QA; PLAIN-TEXT 429 → opaque JSON decode error; no handler log line
 - [Scripts need real --help](feedback_scripts_meaningful_help.md) — purpose + options + defaults, exit 0 BEFORE required-arg validation
-- [Open-issues epic backlog](reference_open_issues_epics.md) — epic #s are LANE-major not priority; closing the OI entry is acceptance criteria; 7 OIs already stale-resolved
+- [Open-issues epic backlog](reference_open_issues_epics.md) — epic #s LANE-major not priority; launch blockers in a SEPARATE file; first-line-only status scan undercounts resolved
 
 ## QA, worktrees & Papergames
 
@@ -109,7 +109,7 @@
 - [Bare grep silently finds nothing](project_grep_silent_zero_matches.md) — multibyte ⇒ binary, ZERO matches, no error; grep is ugrep (use /usr/bin/grep); `node --test` counts start with `ℹ` not `#`
 - [Verify at the source layer](feedback_verify_at_the_source_layer.md) — every false belief hides in a layer: signature NOT doc comment, diff NOT agent report, real output NOT your fixture, all-N NOT a sample
 - [Measurements expire](feedback_measurement_expires.md) — re-measure against FINAL code; an UNCHANGED line ≠ an unfixed bug (the fix may have landed in another file) — git log --grep first
-- [Implemented ≠ deployable](feedback_implemented_vs_deployable.md) — answer both; per-change prereqs → `docs/deployment_steps.md` (EXISTS since e0b0e39; the "never existed" note is STALE), standing procedure → `deploy-runbook.md`; + an OI; never write to staging/prod
+- [Implemented ≠ deployable](feedback_implemented_vs_deployable.md) — answer both; per-change prereqs → `docs/deployment_steps.md` = a WORK QUEUE (producers append only; reset only after all-DONE-in-prod; non-empty = not shipped); standing procedure → `deploy-runbook.md`; `staging_checks.md` is at the REPO ROOT + untracked, not `docs/`
 - [A wrong test is part of the bug](feedback_wrong_test_is_part_of_the_bug.md) — never keep a test green over a fix; read the fixture not its name; a test can be VACUOUS: f(a)===f(a) reads as coverage
 - [Sub-agent reports are scoped claims](feedback_subagent_reports_are_scoped_claims.md) — a batch's green test run may be its WORKING TREE not its commit; it reports only what the handoff schema asked for
 - [Concurrent agents clobber](feedback_concurrent_agents_clobber.md) — the user runs agents in parallel; two in one tree overwrite SILENTLY; line numbers stale within the hour

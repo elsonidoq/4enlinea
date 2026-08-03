@@ -5,7 +5,7 @@ metadata:
   node_type: memory
   type: feedback
   originSessionId: 09ab1bbf-3752-44fc-9a64-d05aa25d0cce
-  modified: 2026-08-03T17:14:47.221Z
+  modified: 2026-08-03T17:31:36.579Z
 ---
 
 The user separates **implemented** (code complete and verified) from **deployable** (no outstanding
@@ -23,8 +23,17 @@ separates them. Scope answers to what was asked — if the question is "is it do
 that, and keep the deploy discussion separate rather than relitigating it. Don't re-argue caveats
 already accepted; state them once, then treat them as settled. Deploy prerequisites belong in the
 runbook plus an `OI-N` so they survive the conversation; this is now a required step in
-`/coordinate-implementation` (Step 8). Measuring against live environments is fine
+`/coordinate-implementation` (Step 8) and `/finish-session` (Step 3), and `/epics-manager` requires a
+`deployment_steps.md` task in `plan_create`/`tasks_create`. Measuring against live environments is fine
 and expected; **writing** to staging or production is the user's call, never the agent's.
+
+**`docs/deployment_steps.md` is a work queue with a lifecycle, not an archive** (see its "Lifecycle"
+section, added 2026-08-03). Three roles, never mix them: *producers* (the commands above) only
+append; the *deploy agent* runs each PENDING entry for the target env and marks it `DONE <date>
+(<env>)`; the *reset* — deleting all per-change entries, leaving only the header, standing checklist,
+and template — happens **only after every entry is DONE in production**, and is a deploy action, not
+a tidy-up. Corollary worth stating back to the user: **a non-empty file means the branch is not fully
+shipped.** Never reset because entries look old or were done in staging.
 
 **CORRECTED 2026-08-02: `docs/deployment_steps.md` now EXISTS and is the right destination.** It was
 created by commit `e0b0e39` ("Spec 052 working-tree carryover + OI-94/OI-95") *after* this memory's
@@ -36,6 +45,17 @@ content-pool repairs, cache invalidations) — this is where a new epic's entry 
 holds the *standing deploy procedure* (how to push to staging/production, verification steps) plus
 spec 053's "Pending Pre-Staging Checks" section. Still **`ls` both paths before writing** rather than
 trusting any single source — that habit is what caught this file's own staleness.
+
+**There is a THIRD destination and its path is wrong in most docs: `staging_checks.md` lives at the
+REPO ROOT and is untracked.** Verified 2026-08-03: `ls docs/staging_checks.md` fails, `git ls-files`
+returns nothing for it, and `find . -name "staging_checks*"` finds `./staging_checks.md` plus a
+worktree copy. Yet `docs/deploy-runbook.md`, `docs/index.md`, `docs/architecture/{api,server,worktree,parallel-lane}-conventions.md`,
+`docs/epics/open-issues-epics.md` and several `OI-N` entries all cite it as if it were under `docs/`.
+This bites hardest inside `/finish-session`, whose Step 3 instructs the agent to append to it — an
+agent that trusts the citation writes a brand-new `docs/staging_checks.md` and the real append-only
+log silently stops growing. Being untracked also means it is **absent from every fresh worktree**
+(same class as the `.env` copy step). Same lesson as the paragraph above: `ls` the path, don't trust
+the reference.
 
 **Ordering is the part that gets written wrong, and it is written confidently.** A runbook entry's
 "run the migration before/after the code deploy" is a *claim about what is currently deployed*, and

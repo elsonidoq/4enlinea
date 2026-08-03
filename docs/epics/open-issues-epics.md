@@ -40,6 +40,12 @@ an epic get a **new** `OI-N` entry per
 The only `##` headings that name an epic are `## Epic 1 …` through `## Epic 9 …`; `## Overview`,
 `## Already resolved`, and `## Traceability` are not epics.
 
+> **Launch gating lives elsewhere.** [`docs/epics/pre-launch-mvp-epic.md`](pre-launch-mvp-epic.md)
+> (**Epic 10 — MVP Launch Gate**, Lane D, runs alone) carries the 16 `OI-N`s judged blocking for a
+> public paid launch, several of which are *not* covered by Epics 1–9 because they were filed after
+> this file was written (OI-92, OI-104, OI-126, OI-130, …). The two files do not overlap in scope and
+> neither renumbers the other; the epics here are quality/correctness work, not a launch checklist.
+
 ---
 
 ## Overview
