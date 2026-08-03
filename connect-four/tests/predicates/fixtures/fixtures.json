@@ -225,7 +225,7 @@
       "moveString": "33223344",
       "goalPredicateType": "claimeven",
       "highlightMetadata": null,
-      "correctCol": 2
+      "correctCols": [2]
     },
     "candidateCol": 2,
     "scores": [
@@ -247,7 +247,7 @@
       "moveString": "33223344",
       "goalPredicateType": "claimeven",
       "highlightMetadata": null,
-      "correctCol": 2
+      "correctCols": [2]
     },
     "candidateCol": 5,
     "scores": [

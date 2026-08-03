@@ -167,11 +167,11 @@ describe('checkClaimevenPredicate — end-to-end', () => {
   }, { timeout: 60_000 });
 });
 
-describe('evalClaimeven — from correctCol', () => {
+describe('evalClaimeven — from correctCols', () => {
   test('correct col returns correct', () => {
     const puzzle = {
       id: 99, category: 'claimeven', moveString: '2122222445',
-      highlightMetadata: null, correctCol: 2,
+      highlightMetadata: null, correctCols: [2],
     };
     const result = evaluatePredicate(puzzle, 2, []);
     assert.equal(result.result, 'correct');
@@ -181,7 +181,7 @@ describe('evalClaimeven — from correctCol', () => {
   test('wrong col returns wrong', () => {
     const puzzle = {
       id: 99, category: 'claimeven', moveString: '2122222445',
-      highlightMetadata: null, correctCol: 2,
+      highlightMetadata: null, correctCols: [2],
     };
     const result = evaluatePredicate(puzzle, 5, []);
     assert.equal(result.result, 'wrong');

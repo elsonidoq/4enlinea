@@ -132,18 +132,18 @@ async function buildEvaluationResponse({ movestring, colInt, category, isAiMove,
 
 export function createEvaluateMoveHandler({ solver, i18nTranslations, supabase }) {
   return async function evaluateMoveHandler(req, res) {
-    const { movestring: bodyMovestring, col, category: bodyCategory, correctCol: bodyCorrectCol, highlightMetadata: bodyHighlightMetadata, puzzleId } = req.body;
+    const { movestring: bodyMovestring, col, category: bodyCategory, correctCols: bodyCorrectCols, highlightMetadata: bodyHighlightMetadata, puzzleId } = req.body;
 
     let movestring = bodyMovestring;
     let category = bodyCategory;
-    let correctCol = bodyCorrectCol;
+    let correctCols = bodyCorrectCols;
     let highlightMetadata = bodyHighlightMetadata;
 
     // Spec 051 US3 (FR-024/FR-024a/FR-025): stored-set grading branch. When puzzleId is present,
     // look up the row and grade directly against its stored correct_cols — the seven pattern
     // evaluators (evaluatePredicate/buildPredicatePuzzle) are never consulted for this branch.
     // If correct_cols is NULL (not yet backfilled), fall through to the computed-live branch
-    // below using the row's own category/move_string/correct_col/highlight_metadata as inputs
+    // below using the row's own category/move_string/correct_cols/highlight_metadata as inputs
     // (fail-open, not an error). Absence of puzzleId is unchanged — it always selects the
     // pre-existing computed-live branch (Decision D2 / FR-028).
     if (puzzleId) {
@@ -151,7 +151,7 @@ export function createEvaluateMoveHandler({ solver, i18nTranslations, supabase }
       if (supabase) {
         const { data } = await supabase
           .from('puzzles')
-          .select('id, category, move_string, highlight_metadata, correct_col, correct_cols')
+          .select('id, category, move_string, highlight_metadata, correct_cols')
           .eq('id', puzzleId)
           .eq('is_active', true)
           .single();
@@ -208,7 +208,7 @@ export function createEvaluateMoveHandler({ solver, i18nTranslations, supabase }
       if (puzzle) {
         movestring = puzzle.move_string;
         category = puzzle.category;
-        correctCol = puzzle.correct_col ?? null;
+        correctCols = puzzle.correct_cols ?? [];
         highlightMetadata = puzzle.highlight_metadata ?? null;
       }
     }
@@ -247,7 +247,7 @@ export function createEvaluateMoveHandler({ solver, i18nTranslations, supabase }
       // callers (ChallengeScreen.jsx and others) — see server-conventions.md.
       let accepted = null;
       if (MULTI_SOLUTION_CATEGORIES.has(category) || SINGLE_ANSWER_CATEGORIES.has(category)) {
-        const predicatePuzzle = buildPredicatePuzzle(category, movestring, { correctCol, highlightMetadata });
+        const predicatePuzzle = buildPredicatePuzzle(category, movestring, { correctCols, highlightMetadata });
         const predicateResult = evaluatePredicate(predicatePuzzle, colInt, scores);
         accepted = predicateResult.result === 'correct' || predicateResult.result === 'tied';
       }

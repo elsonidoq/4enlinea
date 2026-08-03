@@ -121,14 +121,14 @@ describe('POST /api/evaluate-move — accepted for the six SINGLE_ANSWER_CATEGOR
 
     test('taught column is accepted:true', async () => {
       const data = await postEvaluateMove(baseUrl, {
-        movestring: ms, col: correctCol, category: 'claimeven', correctCol,
+        movestring: ms, col: correctCol, category: 'claimeven', correctCols: [correctCol],
       });
       assert.equal(data.accepted, true);
     });
 
     test('non-pattern column is accepted:false', async () => {
       const data = await postEvaluateMove(baseUrl, {
-        movestring: ms, col: 5, category: 'claimeven', correctCol,
+        movestring: ms, col: 5, category: 'claimeven', correctCols: [correctCol],
       });
       assert.equal(data.accepted, false);
     });
@@ -141,14 +141,14 @@ describe('POST /api/evaluate-move — accepted for the six SINGLE_ANSWER_CATEGOR
 
     test('taught column is accepted:true', async () => {
       const data = await postEvaluateMove(baseUrl, {
-        movestring: F7_PRE, col: correctCol, category: 'figure_7', correctCol,
+        movestring: F7_PRE, col: correctCol, category: 'figure_7', correctCols: [correctCol],
       });
       assert.equal(data.accepted, true);
     });
 
     test('non-pattern column is accepted:false', async () => {
       const data = await postEvaluateMove(baseUrl, {
-        movestring: F7_PRE, col: 0, category: 'figure_7', correctCol,
+        movestring: F7_PRE, col: 0, category: 'figure_7', correctCols: [correctCol],
       });
       assert.equal(data.accepted, false);
     });
@@ -161,14 +161,14 @@ describe('POST /api/evaluate-move — accepted for the six SINGLE_ANSWER_CATEGOR
 
     test('taught column is accepted:true', async () => {
       const data = await postEvaluateMove(baseUrl, {
-        movestring: J_PRE, col: correctCol, category: 'j_shape', correctCol,
+        movestring: J_PRE, col: correctCol, category: 'j_shape', correctCols: [correctCol],
       });
       assert.equal(data.accepted, true);
     });
 
     test('non-pattern column is accepted:false', async () => {
       const data = await postEvaluateMove(baseUrl, {
-        movestring: J_PRE, col: 0, category: 'j_shape', correctCol,
+        movestring: J_PRE, col: 0, category: 'j_shape', correctCols: [correctCol],
       });
       assert.equal(data.accepted, false);
     });

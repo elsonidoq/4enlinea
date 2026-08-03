@@ -233,7 +233,7 @@ describe('checkPredicate() — FR-014 regression: z_threat/overcut/claimeven sin
     assert.deepEqual(result.correctCols, [6]);
     assert.equal(result.correct_col, 6);
 
-    const puzzle = { category: 'claimeven', moveString: ms, correctCol: result.correct_col };
+    const puzzle = { category: 'claimeven', moveString: ms, correctCols: result.correctCols };
     const wrongCol = evaluatePredicate(puzzle, 0, scores);
     assert.equal(wrongCol.result, 'wrong', 'counterexample: non-answer column must remain wrong');
   });

@@ -71,19 +71,19 @@ function currentPlayer(moveCount) {
 // @param {string} category - the puzzle category slug
 // @param {string} movestring - 0-indexed move string for the position being evaluated
 // @param {object} [opts]
-// @param {number} [opts.correctCol] - camelCase scalar answer column (claimeven/figure_7/j_shape)
+// @param {number[]} [opts.correctCols] - camelCase array-of-columns answer set (claimeven/figure_7/j_shape)
 // @param {object} [opts.highlightMetadata] - camelCase answer metadata (z_threat/undercut/overcut)
 // @param {object} [opts.puzzle] - optional richer puzzle object (as sent to /inline) to source
 //   goalPredicateType/goalPredicateParams/moveString overrides from
 // @returns {object} a predicate-ready puzzle object for evaluatePredicate()
-export function buildPredicatePuzzle(category, movestring, { correctCol, highlightMetadata, puzzle } = {}) {
+export function buildPredicatePuzzle(category, movestring, { correctCols, highlightMetadata, puzzle } = {}) {
   return {
     moveString: puzzle?.moveString || movestring,
     category,
     goalPredicateType: puzzle?.goalPredicateType || category,
     goalPredicateParams: puzzle?.goalPredicateParams ?? null,
     highlightMetadata: highlightMetadata ?? puzzle?.highlightMetadata ?? null,
-    correctCol: correctCol !== undefined ? correctCol : puzzle?.correctCol,
+    correctCols: correctCols !== undefined ? correctCols : puzzle?.correctCols,
   };
 }
 
@@ -321,13 +321,12 @@ function evalZThreat(candidateCol, puzzle) {
 // recomputing live here would additionally re-run the same solver-simulation cost on every graded
 // request, not just re-derive a cheap structural predicate — a strictly worse violation of FR-011
 // than the figure_7/j_shape case (which only risked a stale *notion* of "correct", not a live
-// solver call). So this evaluator reads the already-enumerated `puzzle.correctCols` (falling back
-// to the legacy scalar `puzzle.correctCol` for callers that don't thread a set — same fallback
-// shape as evalFigure7/evalJShape/evalOddEvenThreat). Deliberately NO uniqueness constraint
+// solver call). So this evaluator reads the already-enumerated `puzzle.correctCols` directly (the
+// legacy scalar fallback was retired — Epic 9 spec 056). Deliberately NO uniqueness constraint
 // (FR-012) — claimeven legitimately has no uniqueness rule; a board with 2+ independently valid
 // response columns keeps every one of them correct.
 function evalClaimeven(candidateCol, puzzle) {
-  const correctCols = puzzle.correctCols ?? (puzzle.correctCol != null ? [puzzle.correctCol] : []);
+  const correctCols = puzzle.correctCols ?? [];
   if (correctCols.length === 0) return { result: 'wrong' };
   if (correctCols.includes(candidateCol)) {
     const others = correctCols.filter(c => c !== candidateCol);
@@ -379,12 +378,10 @@ function evalOvercut(candidateCol, puzzle) {
 // kernel is already fully formed and the correct move exploits the resulting threat column
 // (verified at source 2026-07-29: detectFigure7 matches identically before AND after that move,
 // since the answer column sits outside the kernel entirely). Recomputing detectFigure7 live here
-// broke that lesson's answer set; reading the stored/threaded `correctCols` (falling back to the
-// legacy scalar `correctCol` for callers that don't yet thread a set — buildPredicatePuzzle,
-// spec 051 US1, was not extended to carry `correctCols`) preserves both the old scalar callers
-// and the new multi-column T011 fixtures.
+// broke that lesson's answer set; reading the stored/threaded `correctCols` directly (the legacy
+// scalar fallback was retired — Epic 9 spec 056) preserves the multi-column T011 fixtures.
 function evalFigure7(candidateCol, puzzle) {
-  const correctCols = puzzle.correctCols ?? (puzzle.correctCol != null ? [puzzle.correctCol] : []);
+  const correctCols = puzzle.correctCols ?? [];
   if (correctCols.length === 0) return { result: 'wrong' };
   if (correctCols.includes(candidateCol)) {
     const others = correctCols.filter(c => c !== candidateCol);
@@ -397,7 +394,7 @@ function evalFigure7(candidateCol, puzzle) {
 
 // j_shape (T012, FR-003/FR-009): set membership, same threaded/fallback reasoning as evalFigure7.
 function evalJShape(candidateCol, puzzle) {
-  const correctCols = puzzle.correctCols ?? (puzzle.correctCol != null ? [puzzle.correctCol] : []);
+  const correctCols = puzzle.correctCols ?? [];
   if (correctCols.length === 0) return { result: 'wrong' };
   if (correctCols.includes(candidateCol)) {
     const others = correctCols.filter(c => c !== candidateCol);

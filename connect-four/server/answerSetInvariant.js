@@ -39,8 +39,8 @@ export function isSolverSafe(col, scores) {
 
 // The production grader's accepted set: every legal column evaluatePredicate does not reject.
 // 'tied' is an acceptance, not a rejection — see the caller sweep at the top of predicates.js.
-export function acceptedCols(category, moveString, scores, { correctCol, highlightMetadata } = {}) {
-  const puzzle = buildPredicatePuzzle(category, moveString, { correctCol, highlightMetadata });
+export function acceptedCols(category, moveString, scores, { correctCols, highlightMetadata } = {}) {
+  const puzzle = buildPredicatePuzzle(category, moveString, { correctCols, highlightMetadata });
   return legalCols(scores).filter(c => {
     const r = evaluatePredicate(puzzle, c, scores).result;
     return r === 'correct' || r === 'tied';

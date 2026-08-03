@@ -7,7 +7,7 @@
 // This file serves two use cases:
 //   1. Puzzle generation: during gameplay simulation, the classifier detects whether
 //      the current board is a valid candidate for a specific puzzle type. A candidate
-//      is a position where playing `correct_col` *creates* the target pattern.
+//      is a position where playing the correct column *creates* the target pattern.
 //   2. Sparring hints: during live play against the solver, the classifier identifies
 //      tactics the learner could apply ("you could build a Figure-7 here") or tactics
 //      the AI is about to use ("beware, the AI is one move from a Figure-7").
@@ -1715,7 +1715,7 @@ export async function detectClaimeven(board, solver, perspective = board.current
       categoryEvidence: {
         subtype: legacySubtype,
         baseinverse_pair: legacyBaseinversePair,
-        correct_col: legacyCorrectCol,
+        correctCol: legacyCorrectCol,
         simulation_trace: simByCol.get(legacyCorrectCol).trace,
       },
     };
@@ -1733,7 +1733,7 @@ export async function detectClaimeven(board, solver, perspective = board.current
     categoryEvidence: {
       subtype: 'standard',
       baseinverse_pair: [firstCol],
-      correct_col: firstCol,
+      correctCol: firstCol,
       simulation_trace: simByCol.get(firstCol).trace,
     },
   };
