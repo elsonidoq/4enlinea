@@ -29,10 +29,10 @@ function stubFetchResult(category, moveString) {
   if (moveString === NO_CONCEPT_ROW.move_string || moveString === CANDIDATE_EMPTY_ROW.move_string) {
     return { passes: false, correctCols: [] };
   }
-  return { passes: true, correctCols: [2, 5], correct_col: 2 };
+  return { passes: true, correctCols: [2, 5] };
 }
 
-// Mirrors applyPlan's real usage: `.update({correct_cols, correct_col}).eq('id', id)` per row for
+// Mirrors applyPlan's real usage: `.update({correct_cols}).eq('id', id)` per row for
 // updates (a real supabase upsert's INSERT-path NOT NULL checks fire even on a conflict-bound
 // row — verified against the real local DB, see backfill-correct-cols.mjs's applyPlan comment —
 // so applyPlan uses per-row `.update().eq()`, not `.upsert()`), and

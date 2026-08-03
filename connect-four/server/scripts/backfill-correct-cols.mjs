@@ -128,7 +128,7 @@ export async function computeCorrectColsForRow(category, moveString, solver) {
 }
 
 // Given a flat list of rows ({ id, table, category, move_string }) and a solver, build the write
-// plan: which rows get an updated correct_cols/correct_col, and which get deactivated (FR-016b).
+// plan: which rows get an updated correct_cols, and which get deactivated (FR-016b).
 // `fetchResult` is injectable so tests can substitute a stub without a live solver — production
 // callers always use the default (the real checkPredicate).
 export async function buildBackfillPlan(rows, solver, { fetchResult = computeCorrectColsForRow } = {}) {
@@ -144,7 +144,6 @@ export async function buildBackfillPlan(rows, solver, { fetchResult = computeCor
         table: row.table,
         category: row.category,
         correct_cols: result.correctCols,
-        correct_col: result.correct_col ?? null,
       });
     }
   }
@@ -164,13 +163,13 @@ export async function applyPlan(supabase, plan) {
   // INSERT-path NOT NULL checks (category/move_string/goal_prompt/... are NOT NULL on both
   // tables) fire even when the row is expected to hit the ON CONFLICT UPDATE branch — verified at
   // source (a real run against local errored `null value in column "category" ... violates
-  // not-null constraint` since this payload only ever carries id/correct_cols/correct_col).
+  // not-null constraint` since this payload only ever carries id/correct_cols).
   // Batched via `Promise.all` over small chunks (research.md D5's own sanctioned alternative to a
   // single multi-row upsert) rather than sequential row-by-row awaits.
   for (const [table, rows] of Object.entries(byTable(plan.updates))) {
     for (const batch of chunk(rows, 20)) {
       const results = await Promise.all(batch.map((r) =>
-        supabase.from(table).update({ correct_cols: r.correct_cols, correct_col: r.correct_col }).eq('id', r.id)
+        supabase.from(table).update({ correct_cols: r.correct_cols }).eq('id', r.id)
       ));
       const failed = results.find((res) => res.error);
       if (failed) throw new Error(`update failed on ${table}: ${failed.error.message}`);

@@ -495,7 +495,6 @@ describe('checkUndercutPredicate — end-to-end', () => {
       const result = checkUndercutPredicate(ms, scores);
       if (result.passes) {
         assert.ok(result.correctCols.length >= 1, 'must have at least one correct col');
-        assert.equal(result.correct_col, null, 'correct_col must be null for undercut');
         assert.equal(result.highlight_metadata.type, 'cells');
         const killing = result.highlight_metadata.cells.find(c => c.role === 'killing_threat');
         assert.ok(killing, 'must have killing_threat in highlight_metadata');
@@ -522,7 +521,6 @@ describe('checkOvercutPredicate — end-to-end', () => {
       const result = checkOvercutPredicate(ms, scores);
       if (result.passes) {
         assert.ok(result.correctCols.length >= 1);
-        assert.equal(result.correct_col, null, 'correct_col must be null for overcut');
         assert.equal(result.highlight_metadata.type, 'cells');
         const major = result.highlight_metadata.cells.find(c => c.role === 'major_threat');
         assert.ok(major, 'must have major_threat in highlight_metadata');

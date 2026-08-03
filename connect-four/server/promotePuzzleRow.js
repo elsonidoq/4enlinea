@@ -37,10 +37,9 @@ export function buildPromotedPuzzleRow(candidate, { goalPrompt, goalPredicateTyp
     is_active: true,
     interaction_mode: candidate.category === 'forced_win' ? 'sequence' : 'single_move',
     highlight_metadata: candidate.highlight_metadata ?? null,
-    // Spec 051: the stored answer set, and the legacy scalar kept in sync alongside it (FR-017 —
-    // deliberately NOT dropped in that feature). Both come from the candidate row as written at
-    // generation time; neither is recomputed here.
-    correct_col: candidate.correct_col ?? null,
+    // Spec 051: the stored answer set. Comes from the candidate row as written at generation time;
+    // not recomputed here. The legacy scalar column this used to also copy was retired by the
+    // correct-column-retirement feature (Commit 2) — see data-model.md "Correct Column Storage".
     correct_cols: candidate.correct_cols ?? null,
     highlight_cells: candidate.highlight_cells ?? null,
     // 0-indexed convention: an even-length movestring means P1 is to move.

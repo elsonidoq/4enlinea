@@ -142,8 +142,7 @@ describe('checkFigure7Predicate — transition logic', () => {
   test('finds correctCol from pre-completion position', () => {
     const result = checkFigure7Predicate(F7_PRE, null);
     assert.equal(result.passes, true, 'must find completing column');
-    assert.equal(result.correct_col, 2, 'col 2 completes the Figure-7');
-    assert.deepEqual(result.correctCols, [2]);
+    assert.deepEqual(result.correctCols, [2], 'col 2 completes the Figure-7');
     assert.equal(result.highlight_metadata.type, 'cells');
     assert.equal(result.highlight_metadata.cells.length, 5, 'fully-formed pattern has 5 cells');
   });
@@ -159,8 +158,7 @@ describe('checkJShapePredicate — transition logic', () => {
   test('finds correctCol from pre-completion position', () => {
     const result = checkJShapePredicate(J_PRE, null);
     assert.equal(result.passes, true, 'must find completing column');
-    assert.equal(result.correct_col, 1, 'col 1 completes the J-shape');
-    assert.deepEqual(result.correctCols, [1]);
+    assert.deepEqual(result.correctCols, [1], 'col 1 completes the J-shape');
     assert.equal(result.highlight_metadata.type, 'cells');
     assert.equal(result.highlight_metadata.cells.length, 4);
   });

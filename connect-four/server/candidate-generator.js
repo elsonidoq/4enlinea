@@ -211,7 +211,7 @@ export function checkForcedWinPredicate(ms) {
     if (new Board(msEnd).hasWon(initiator)) correctCols.push(c);
   }
 
-  return { passes: correctCols.length === 1, correctCols, correct_col: correctCols[0] ?? null };
+  return { passes: correctCols.length === 1, correctCols };
 }
 
 // Forbidden columns predicate: a column is forbidden if Red plays there (without winning),
@@ -241,7 +241,6 @@ export function checkForbiddenColumnsPredicate(ms) {
   return {
     passes: forbiddenCols.length >= 1 && safeCols.length >= 1,
     correctCols: safeCols,
-    correct_col: safeCols[0] ?? null,
   };
 }
 
@@ -314,7 +313,6 @@ export function checkZThreatPredicate(ms, scores) {
   return {
     passes: true,
     correctCols,
-    correct_col: correctCols[0],
     highlight_metadata: result.highlightMetadata,
     category_evidence: result.categoryEvidence,
   };
@@ -335,7 +333,6 @@ export async function checkClaimevenPredicate(ms, scores, solver) {
   return {
     passes: true,
     correctCols: result.correctCols,
-    correct_col: result.correctCol,
     highlight_metadata: result.highlightMetadata, // null for claimeven
     category_evidence: result.categoryEvidence,
   };
@@ -358,7 +355,6 @@ export function checkUndercutPredicate(ms, scores) {
   return {
     passes: correctCols.length >= 1,
     correctCols,
-    correct_col: null, // undercut has no single correct col; eval derives from highlight_metadata
     highlight_metadata: result.highlightMetadata,
     category_evidence: result.categoryEvidence,
   };
@@ -381,7 +377,6 @@ export function checkOvercutPredicate(ms, scores) {
   return {
     passes: true,
     correctCols: result.correctCols,
-    correct_col: null, // overcut eval derives from highlight_metadata
     highlight_metadata: result.highlightMetadata,
     category_evidence: result.categoryEvidence,
   };
@@ -414,7 +409,6 @@ export function checkFigure7Predicate(ms) {
   return {
     passes: true,
     correctCols,
-    correct_col: correctCols[0],
     highlight_metadata: firstMatch.highlightMetadata,
     category_evidence: firstMatch.categoryEvidence,
   };
@@ -445,7 +439,6 @@ export function checkJShapePredicate(ms) {
   return {
     passes: true,
     correctCols,
-    correct_col: correctCols[0],
     highlight_metadata: firstMatch.highlightMetadata,
     category_evidence: firstMatch.categoryEvidence,
   };
@@ -457,14 +450,13 @@ export function checkOddEvenThreatPredicate(ms, scores) {
   return {
     passes: true,
     correctCols: result.correctCols ?? [result.correctCol],
-    correct_col: result.correctCol,
     highlight_metadata: result.highlightMetadata, // null for odd_even_threat
     category_evidence: result.categoryEvidence,
   };
 }
 
 // Check whether the current position satisfies the category predicate.
-// Returns { passes, correctCols, correct_col?, highlight_metadata?, category_evidence? }.
+// Returns { passes, correctCols, highlight_metadata?, category_evidence? }.
 // Wraps checkPredicateRaw with two cross-cutting generation-time rejection rules (spec 044 US1/US2):
 //   US1 (FR-001-003): immediate_threat/forced_block candidates that would cast the learner as the
 //     wrong color are rejected outright, not silently corrected.
@@ -520,13 +512,11 @@ export async function checkPredicate(category, moveString, scores, solver) {
     return { passes: false, correctCols: [] };
   }
 
-  // Centralized sort + scalar sync (D6, FR-016a/FR-019) — the single point both generation
-  // (T039/T040) and the backfill (T043) write from. Do NOT duplicate either rule inside any
-  // individual check*Predicate function.
+  // Centralized sort (D6, FR-016a/FR-019) — the single point both generation (T039/T040) and the
+  // backfill (T043) write from. Do NOT duplicate this rule inside any individual check*Predicate
+  // function. The scalar-sync step that used to live here was removed by the correct-column
+  // retirement feature (Commit 2) — correctCols is now the only source of truth.
   result.correctCols = [...result.correctCols].sort((a, b) => a - b);
-  result.correct_col = (category === 'undercut' || category === 'overcut')
-    ? null
-    : (result.correctCols[0] ?? null);
 
   return result;
 }
@@ -561,7 +551,7 @@ async function checkPredicateRaw(category, moveString, scores, solver) {
     const r = evaluatePredicate(puzzle, c, scores);
     return r.result === 'correct' || r.result === 'tied';
   });
-  return { passes: correctCols.length >= 1, correctCols, correct_col: correctCols[0] ?? null };
+  return { passes: correctCols.length >= 1, correctCols };
 }
 
 // Reject positions that violate per-category board-quality constraints.
@@ -646,7 +636,6 @@ export async function generateCandidates(category, count, seed) {
       let matched = null;
       let matchedHighlightMetadata = null;
       let matchedCategoryEvidence = null;
-      let matchedCorrectCol = null;
       const plies = [];
       for await (const pos of playGame(solver, rng, { maxMistakeProb: 0.25 })) {
         plies.push({ ply: pos.plyIndex, player: pos.player, scores: [...pos.scores], sampled_col: pos.movePlayed });
@@ -658,7 +647,6 @@ export async function generateCandidates(category, count, seed) {
         matched = { moveString: pos.ms, scores: pos.scores, correctCols: predicateResult.correctCols };
         matchedHighlightMetadata = predicateResult.highlight_metadata ?? null;
         matchedCategoryEvidence = predicateResult.category_evidence ?? null;
-        matchedCorrectCol = predicateResult.correct_col ?? null;
         break;
       }
       if (!matched) { stats.noMatch++; continue; }
@@ -688,7 +676,6 @@ export async function generateCandidates(category, count, seed) {
         highlight_cells,
         highlight_metadata: matchedHighlightMetadata,
         category_evidence: matchedCategoryEvidence,
-        correct_col: matchedCorrectCol,
         correctCols,
       });
 
