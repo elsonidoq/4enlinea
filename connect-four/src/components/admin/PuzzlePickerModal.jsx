@@ -111,7 +111,7 @@ export default function PuzzlePickerModal({ category, existingPuzzles, onAdd, on
                     <div style={{ fontSize: 11, color: '#888' }}>
                       {puzzle.move_string}
                       {/* Spec 056 (Epic 9) T022: undercut/overcut historically showed nothing
-                          here as an EMERGENT side effect of the legacy correct_col scalar being
+                          here as an EMERGENT side effect of the legacy scalar column being
                           NULL for those two categories; this explicit check reproduces the same
                           behavior now that correct_cols stays fully populated for them. */}
                       {!SUPPRESSED_SINGLE_COLUMN_CATEGORIES.has(puzzle.category) &&

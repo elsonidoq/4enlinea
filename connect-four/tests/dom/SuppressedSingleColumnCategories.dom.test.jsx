@@ -1,6 +1,6 @@
 // Spec 056 (Epic 9) T026 / FR-016: `undercut`/`overcut` used to show "nothing" for a correct-
-// column hint everywhere as an EMERGENT side effect of the legacy `correct_col` scalar being NULL
-// for exactly those two categories, while `correct_cols` stayed fully populated. Retiring that
+// column hint everywhere as an EMERGENT side effect of the legacy scalar column being NULL for
+// exactly those two categories, while `correct_cols` stayed fully populated. Retiring that
 // scalar (T009-T023) replaced the free NULL with an explicit, shared
 // SUPPRESSED_SINGLE_COLUMN_CATEGORIES check at five sites. This file pins that the three sites with
 // no other automated coverage (PuzzlePickerModal.jsx's column label, PuzzlePickerRow.jsx's row —
