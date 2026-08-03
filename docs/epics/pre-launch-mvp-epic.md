@@ -180,8 +180,9 @@ Harvested and verified 2026-08-03 against this working tree. Re-verify before de
   [[project_repo_worktree_setup]]
 - **`lint` is a real gate now** — `test:fast` runs it first, so a lint *error* means zero tests run.
   47 warnings is the healthy baseline. [[project_eslint_config_traps]]
-- **`staging_checks.md` is at the REPO ROOT and is untracked** — not `docs/staging_checks.md`. Several
-  docs (including `open-issues-epics.md`) cite the wrong path; `ls docs/staging_checks.md` fails.
+- **`staging_checks.md` is at the REPO ROOT**, not under `docs/` like the rest of the deploy paperwork.
+  It is tracked, and every doc that cites it uses the bare path correctly — just don't prefix `docs/`
+  out of habit, because `ls docs/staging_checks.md` fails and reads as "the file doesn't exist".
 - **The migration ledger tracks FILENAMES, not numbers** (OI-105): `061_security_lints.sql` is recorded
   as applied on both staging and production but **is not in `server/migrations/`**, while the on-disk
   `061_correct_cols.sql` has never been applied to either. Not immediately breaking — `migrate.js`
@@ -216,7 +217,7 @@ Read before writing code — not the memory summaries, the actual files.
 | Test placement, registration, the no-discovery rule | `docs/architecture/testing-conventions.md` |
 | Per-change deploy prerequisites (US1's repair script, US5's migration) | `docs/deployment_steps.md` |
 | Standing deploy procedure | `docs/deploy-runbook.md` |
-| Manual staging sign-off items | `staging_checks.md` **(repo root, untracked)** |
+| Manual staging sign-off items | `staging_checks.md` **(repo root, not `docs/`)** |
 | Strategic concepts named in US1 (overcut, undercut, figure-7…) | `docs/knowledge-base/<slug>.md` — read the `formal_predicate` and `false_positives` before touching a detector |
 | Board reasoning | `./visualize_board.sh <movestring>` — never reason about a movestring blind |
 

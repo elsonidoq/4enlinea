@@ -5,7 +5,7 @@ metadata:
   node_type: memory
   type: feedback
   originSessionId: 09ab1bbf-3752-44fc-9a64-d05aa25d0cce
-  modified: 2026-08-03T17:31:36.579Z
+  modified: 2026-08-03T17:40:23.967Z
 ---
 
 The user separates **implemented** (code complete and verified) from **deployable** (no outstanding
@@ -46,16 +46,12 @@ holds the *standing deploy procedure* (how to push to staging/production, verifi
 spec 053's "Pending Pre-Staging Checks" section. Still **`ls` both paths before writing** rather than
 trusting any single source — that habit is what caught this file's own staleness.
 
-**There is a THIRD destination and its path is wrong in most docs: `staging_checks.md` lives at the
-REPO ROOT and is untracked.** Verified 2026-08-03: `ls docs/staging_checks.md` fails, `git ls-files`
-returns nothing for it, and `find . -name "staging_checks*"` finds `./staging_checks.md` plus a
-worktree copy. Yet `docs/deploy-runbook.md`, `docs/index.md`, `docs/architecture/{api,server,worktree,parallel-lane}-conventions.md`,
-`docs/epics/open-issues-epics.md` and several `OI-N` entries all cite it as if it were under `docs/`.
-This bites hardest inside `/finish-session`, whose Step 3 instructs the agent to append to it — an
-agent that trusts the citation writes a brand-new `docs/staging_checks.md` and the real append-only
-log silently stops growing. Being untracked also means it is **absent from every fresh worktree**
-(same class as the `.env` copy step). Same lesson as the paragraph above: `ls` the path, don't trust
-the reference.
+**The third destination is `staging_checks.md`, at the REPO ROOT** — not under `docs/`, unlike almost
+everything else this memory names. It is tracked, and every doc that references it writes the bare
+path correctly, so there is nothing to work around: just don't type `docs/` in front of it out of
+habit. (A 2026-08-03 note here claiming it was untracked and mis-cited across the docs was wrong on
+both counts and has been deleted — see [[project_grep_silent_zero_matches]] for how a `| head` on the
+listing produced it.)
 
 **Ordering is the part that gets written wrong, and it is written confidently.** A runbook entry's
 "run the migration before/after the code deploy" is a *claim about what is currently deployed*, and

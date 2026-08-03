@@ -5,7 +5,7 @@ metadata:
   node_type: memory
   type: project
   originSessionId: 8ed43e4a-f425-4b94-a1c8-c8ecaef77223
-  modified: 2026-08-03T12:30:22.656Z
+  modified: 2026-08-03T17:40:44.335Z
 ---
 
 In Claude Code Bash sessions on this repo the shell locale is not UTF-8, so **`grep` treats any file
@@ -39,6 +39,16 @@ since they inherit the same shell.
   `grep -E "^# (tests|pass|fail)"` therefore returns **nothing at all** — no counts — which reads as
   "the suite printed nothing" or "it hung". Match `^ℹ (tests|pass|fail)` with `-a`, or just
   `fail [0-9]+`. This is how a healthy 1688-test run can look like a broken one.
+
+**A third, dumber one that cost more than either (2026-08-03): `| head` turns a complete listing into a
+false negative.** `git ls-files | /usr/bin/grep -i "staging_checks\|deploy" | head` showed 10 lines
+ending in `specs/031-.../spec.md`; I read that as exhaustive and concluded `staging_checks.md` was
+untracked. It is the **11th** line — the pattern sorts last. That single truncated pipe produced a wrong
+memory, a wrong line in an epic file, and a wrong claim to the user, all asserting a negative. **Never
+end a command whose output backs a negative claim with `head`** — use `| wc -l` first, or `-c`, or let it
+print. If you must cap it, say "showing first N" in your own reasoning and re-run uncapped before writing
+the conclusion anywhere. Same rule as CLAUDE.md's "all N instances, not a sample of 3", applied to your
+own shell pipeline rather than to the code.
 
 Related: [[feedback_verify_at_the_source_layer]] — this is that rule's failure mode at the *tool* layer:
 the grep output is a representation of the file, and it lied. Same family:
