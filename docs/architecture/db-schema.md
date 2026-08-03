@@ -54,7 +54,6 @@ PK: `id`
 | user_player | smallint | NO | `1` |
 | interaction_mode | text | NO | `'single_move'` |
 | highlight_metadata | jsonb | YES | |
-| correct_col | integer | YES | |
 | correct_cols | integer[] | YES | `NULL` |
 | simulation_trace | jsonb | NO | `'[]'` |
 | shape_key | text | YES | |
@@ -64,7 +63,7 @@ PK: `id`
 
 `puzzles` has no `approved`/`status` column — approval is `is_active` (boolean). `candidates` uses `status` (text) instead. Querying a nonexistent `approved` column returns Postgres `42703`.
 
-**`correct_cols`** (migration `061_correct_cols.sql`, spec 051 Epic 1): the stored, solver-gated **answer set** for a row — an ascending-sorted `integer[]` of every 0-indexed column that grades `correct`/`tied` for that puzzle's category. `NULL` means "not yet backfilled" (fail-open at grading time — see `data-model.md`'s "Correct Column Storage" section for the full `NULL` vs `{}` distinction and how it relates to `correct_col`).
+**`correct_cols`** (migration `061_correct_cols.sql`, spec 051 Epic 1): the **sole** stored, solver-gated **answer set** for a row — an ascending-sorted `integer[]` of every 0-indexed column that grades `correct`/`tied` for that puzzle's category. `NULL` means "not yet backfilled" (fail-open at grading time — see `data-model.md`'s "Correct Column Storage" section for the full `NULL` vs `{}` distinction). The legacy scalar `correct_col` column was dropped by migration `064_drop_correct_col.sql` (spec 056, closing `docs/open_issues.md` OI-81) and no longer exists on this table.
 
 **`shape_key`** / **`position`** / **`highlight_cells`** were added in migration 044. `shape_key` is the canonical shape fingerprint computed by `shapeKeyForPuzzle` (`server/shapeDescriptor.js`); `position` is the draw-order index that interleaves shapes for variety; both are assigned in bulk by the localhost-only `POST /api/admin/puzzles/reindex` endpoint (`server/index.js`), which groups a category's active puzzles by `shape_key` and round-robins `position` across the groups. `GET /api/puzzles/draw` returns puzzles `ORDER BY position`, so consecutive puzzles tend to differ in shape. Migration 044 grants `SELECT` on these three columns to `anon`/`authenticated`. `highlight_cells` mirrors the same column on `candidates`. The `shapeDescriptor.js` serializer MUST stay deterministic (sorted keys, `key=value|` fields, `(...)` nesting) — two different serializations of the same shape split identical shapes into separate `shape_key` groups and silently break the round-robin.
 
@@ -90,7 +89,6 @@ PK: `id`
 | highlight_metadata | jsonb | YES | |
 | category_evidence | jsonb | YES | |
 | debug_trace | jsonb | YES | |
-| correct_col | integer | YES | |
 | correct_cols | integer[] | YES | `NULL` |
 | reviewed_at | timestamptz | YES | |
 | created_at | timestamptz | NO | `now()` |

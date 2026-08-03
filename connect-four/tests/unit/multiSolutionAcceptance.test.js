@@ -173,7 +173,6 @@ describe('checkPredicate() — FR-013/FR-014 regression: undercut avoid-the-patt
     const result = await checkPredicate('undercut', ms, scores, null);
     assert.equal(result.passes, true);
     assert.deepEqual(result.correctCols.slice().sort(), [0, 1, 2]);
-    assert.equal(result.correct_col, null, 'undercut has no single correct_col');
   });
 
   test('undercut counterexample: the killing column itself must score wrong via evaluatePredicate', async () => {
@@ -199,7 +198,6 @@ describe('checkPredicate() — FR-014 regression: z_threat/overcut/claimeven sin
     const result = await checkPredicate('z_threat', ms, scores, null);
     assert.equal(result.passes, true);
     assert.deepEqual(result.correctCols, [1]);
-    assert.equal(result.correct_col, 1);
 
     const puzzle = { category: 'z_threat', moveString: ms, highlightMetadata: result.highlight_metadata };
     const wrongCol = evaluatePredicate(puzzle, 0, scores);
@@ -231,9 +229,8 @@ describe('checkPredicate() — FR-014 regression: z_threat/overcut/claimeven sin
     const result = await checkPredicate('claimeven', ms, scores, solver);
     assert.equal(result.passes, true);
     assert.deepEqual(result.correctCols, [6]);
-    assert.equal(result.correct_col, 6);
 
-    const puzzle = { category: 'claimeven', moveString: ms, correctCol: result.correct_col };
+    const puzzle = { category: 'claimeven', moveString: ms, correctCols: result.correctCols };
     const wrongCol = evaluatePredicate(puzzle, 0, scores);
     assert.equal(wrongCol.result, 'wrong', 'counterexample: non-answer column must remain wrong');
   });

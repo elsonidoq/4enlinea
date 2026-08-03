@@ -88,7 +88,6 @@ describe('detectClaimeven — T018 full per-column enumeration (3 odd columns)',
     const result = await checkClaimevenPredicate(ms, scores, solver);
     assert.equal(result.passes, true);
     assert.deepEqual([...result.correctCols].sort((a, b) => a - b), [2, 4, 6]);
-    assert.ok(result.correctCols.includes(result.correct_col));
   }, { timeout: 60_000 });
 });
 
@@ -159,19 +158,18 @@ describe('checkClaimevenPredicate — end-to-end', () => {
     const result = await checkClaimevenPredicate(ms, scores, solver);
 
     if (result.passes) {
-      assert.ok(typeof result.correct_col === 'number', 'correct_col must be a number');
-      assert.ok(result.correctCols.includes(result.correct_col), 'correctCols must include correct_col');
+      assert.ok(Array.isArray(result.correctCols) && result.correctCols.length >= 1, 'correctCols must be a non-empty array');
       assert.equal(result.highlight_metadata, null, 'claimeven highlight_metadata must be null');
       assert.ok(result.category_evidence.subtype === 'A' || result.category_evidence.subtype === 'B');
     }
   }, { timeout: 60_000 });
 });
 
-describe('evalClaimeven — from correctCol', () => {
+describe('evalClaimeven — from correctCols', () => {
   test('correct col returns correct', () => {
     const puzzle = {
       id: 99, category: 'claimeven', moveString: '2122222445',
-      highlightMetadata: null, correctCol: 2,
+      highlightMetadata: null, correctCols: [2],
     };
     const result = evaluatePredicate(puzzle, 2, []);
     assert.equal(result.result, 'correct');
@@ -181,7 +179,7 @@ describe('evalClaimeven — from correctCol', () => {
   test('wrong col returns wrong', () => {
     const puzzle = {
       id: 99, category: 'claimeven', moveString: '2122222445',
-      highlightMetadata: null, correctCol: 2,
+      highlightMetadata: null, correctCols: [2],
     };
     const result = evaluatePredicate(puzzle, 5, []);
     assert.equal(result.result, 'wrong');

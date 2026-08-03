@@ -27,21 +27,18 @@ const Z_THREAT_CANDIDATE = {
   move_string: '33333555543222060200251661',
   status: 'pending',
   highlight_metadata: null,
-  correct_col: 4,
   correct_cols: [4],
   category_evidence: {},
   highlight_cells: null,
 };
 
-// figure_7 is genuinely multi-column after this feature (FR-009), so correct_cols has 2 entries
-// while correct_col holds the first — the FR-016a/FR-019 relationship.
+// figure_7 is genuinely multi-column after this feature (FR-009), so correct_cols has 2 entries.
 const FIGURE_7_CANDIDATE = {
   id: 'cand-2',
   category: 'figure_7',
   move_string: '325655363345242660221551',
   status: 'pending',
   highlight_metadata: null,
-  correct_col: 1,
   correct_cols: [1, 4],
   category_evidence: {},
   highlight_cells: null,
@@ -60,7 +57,6 @@ describe('buildPromotedPuzzleRow — T041 correct_cols propagation (both promoti
 
     assert.notEqual(row.correct_cols, null, 'correct_cols must be non-null when the candidate had one');
     assert.deepEqual(row.correct_cols, [4]);
-    assert.equal(row.correct_col, 4);
   });
 
   it('propagates a multi-element correct_cols, as the approve-batch route calls it', () => {
@@ -73,7 +69,6 @@ describe('buildPromotedPuzzleRow — T041 correct_cols propagation (both promoti
     });
 
     assert.deepEqual(row.correct_cols, [1, 4], 'the full set must survive promotion, not just the first column');
-    assert.equal(row.correct_col, 1, 'the legacy scalar is correct_cols[0] (FR-019)');
     assert.deepEqual(row.cooperative_ai_moves, [], 'defaults to [] for the batch route');
   });
 
@@ -82,12 +77,11 @@ describe('buildPromotedPuzzleRow — T041 correct_cols propagation (both promoti
     // handler's FR-024a fallback keys off. `undefined` would be dropped by PostgREST, and `[]`
     // would wrongly read as "the invariant rejected every column" (FR-016b).
     const row = buildPromotedPuzzleRow(
-      { ...Z_THREAT_CANDIDATE, correct_col: null, correct_cols: null },
+      { ...Z_THREAT_CANDIDATE, correct_cols: null },
       { goalPrompt: 'x', goalPredicateType: 'z_threat', difficulty: 2 },
     );
 
     assert.equal(row.correct_cols, null);
-    assert.equal(row.correct_col, null);
   });
 
   it('carries the rest of the row shape both routes depend on', () => {

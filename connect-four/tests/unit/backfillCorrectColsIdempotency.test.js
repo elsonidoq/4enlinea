@@ -2,19 +2,17 @@
 //
 // FR-016: re-running the backfill's core recompute-and-write logic against already-backfilled
 // rows MUST produce the identical answer set both times, identical in ORDER as well as
-// membership (a fixed order matters because correct_col is synced as correctCols[0] — see D6/
-// checkPredicate's centralized sort+sync, already regression-tested for all 12 categories in
-// tests/unit/checkPredicateSortAndScalarSync.test.js).
+// membership (a fixed order matters — see D6/checkPredicate's centralized sort, previously also
+// regression-tested via the scalar sync in tests/unit/checkPredicateSortAndScalarSync.test.js,
+// deleted by the correct-column-retirement feature per FR-018).
 //
 // This exercises buildBackfillPlan() — the pure core extracted from
 // server/scripts/backfill-correct-cols.mjs (Pure Function Extraction pattern,
 // testing-conventions.md) — twice against the SAME real, solver-verified fixture rows and the
 // real checkPredicate (never a stub re-derivation, mirroring FR-015's "same detection logic"
-// requirement), and asserts the two plans are byte-identical in both correct_cols (members +
-// order) and correct_col.
+// requirement), and asserts the two plans are byte-identical in correct_cols (members + order).
 //
-// Fixtures below are the same real, checkPredicate-passing boards used by
-// tests/unit/checkPredicateSortAndScalarSync.test.js (harvested via gameSampling.js#playGame /
+// Fixtures below are real, checkPredicate-passing boards (harvested via gameSampling.js#playGame /
 // reused from existing production fixtures, never hand-constructed) — non-claimeven categories
 // only, to keep this test fast (claimeven's own solver cost is already covered by
 // tests/integration/claimeven.test.js).
@@ -37,7 +35,7 @@ const ROWS = [
 ];
 
 describe('buildBackfillPlan() — T045 idempotency (FR-016)', () => {
-  test('re-running against the same rows produces byte-identical correct_cols (order + members) and correct_col', async () => {
+  test('re-running against the same rows produces byte-identical correct_cols (order + members)', async () => {
     const first = await buildBackfillPlan(ROWS, solver);
     const second = await buildBackfillPlan(ROWS, solver);
 
@@ -52,7 +50,6 @@ describe('buildBackfillPlan() — T045 idempotency (FR-016)', () => {
       const b = second.updates[i];
       assert.equal(a.id, b.id);
       assert.deepEqual(a.correct_cols, b.correct_cols, `${a.id}: correct_cols must be byte-identical (members + order) across runs`);
-      assert.equal(a.correct_col, b.correct_col, `${a.id}: correct_col must be identical across runs`);
     }
   });
 });

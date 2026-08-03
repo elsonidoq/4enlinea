@@ -1718,3 +1718,56 @@ shipped; these are the acceptance items that a local run could not settle.
     original "zoom stays constant" wording in `quickstart.md` is stale — the freeze was deliberately
     reverted (see `docs/open_issues.md` OI-127) — so do **not** sign off against zoom invariance.
   - **Source**: spec 042 T058 / FR-022 / SC-009, as amended by `SplitReveal.jsx:49-72`.
+## Epic 9 — Legacy `correct_col` Scalar Retirement (open-issues-epics.md, spec 056) — added 2026-08-03
+
+Spec 056 retired the `correct_col` scalar column and its singular `correctCol` wire field, and
+dropped the column (migration `064_drop_correct_col.sql`). The migration was applied to **local
+only**; staging and production still have the column and still run pre-056 code. Full runbook:
+`docs/deployment_steps.md` § "Spec 056". Note the ordering is **code deploy first, migration
+after** — the reverse breaks production (pre-056 code `SELECT`s the column, and PostgREST errors
+on a missing selected column).
+
+- [ ] **Pre-flight data-loss gate — STAGING**
+  - **What**: run the `at_risk` query from `docs/deployment_steps.md` § Spec 056 "Pre-flight"
+    against staging (`correct_cols IS NULL AND correct_col IS NOT NULL`, both tables).
+  - **Why staging**: never measured. The implementing session was blocked from connecting to
+    staging; only local was counted (322 active puzzles, 1 NULL `correct_cols`; 179 pending
+    candidates, 0 NULL). Staging's count is **unknown** and must not be assumed to match local.
+  - **Expected**: `at_risk` = 0 for both `puzzles` and `candidates`. Non-zero ⇒ STOP, run spec 051's
+    `backfill-correct-cols.mjs` against staging first — `DROP COLUMN` is irreversible and would
+    discard those rows' only answer.
+  - **Source**: spec 056 FR-005 / FR-022; `docs/deployment_steps.md` § Spec 056.
+
+- [ ] **Pre-flight data-loss gate — PRODUCTION**
+  - **What / Expected / Why**: as above, against production, immediately before its migration.
+  - **Source**: same.
+
+- [ ] **Wire rename deployed atomically (server + frontend in one release)**
+  - **What**: after deploying to staging, confirm `GET /api/puzzles/:id` returns `correctCols`
+    (array) with no singular `correctCol`, and that the deployed frontend sends `correctCols` on
+    `POST /api/evaluate-move`.
+  - **Why staging**: locally the two always ship together from one worktree, so a split deploy is
+    structurally unreproducible. The singular field was retired with **no deprecated alias**.
+  - **Expected**: only the array field on both request and response; no interaction carries both.
+  - **Source**: spec 056 FR-008 / SC-003.
+
+- [ ] **Lesson-sourced inline-challenge grading survives the deploy**
+  - **What**: on staging, open a lesson with an inline/confirmation challenge and submit the
+    correct answer.
+  - **Why staging**: this is the request path with **no `puzzleId`**, graded entirely from the
+    client-supplied answer field. It has no automated coverage and is the specific failure a split
+    or mis-ordered deploy produces — silently, with no error and no log line.
+  - **Expected**: the correct answer grades **correct**. A verdict of "wrong" on a known-correct
+    answer means the deploy was split or the migration ran before the code.
+  - **Source**: spec 056 US2 Acceptance Scenario 8 / FR-013.
+
+- [ ] **`undercut` / `overcut` grading and display on real staging data**
+  - **What**: on staging, play one `undercut` and one `overcut` puzzle, submit a **correct**
+    answer for each; then check the curation workspace and the admin puzzle picker for both.
+  - **Why staging**: these categories sit behind `PAID_CATEGORIES`, so local QA had to verify
+    grading via `POST /api/evaluate-move` (ungated) rather than the paywalled `/api/puzzles/:id/check`
+    path a real paid user takes. Staging has production-like data and entitlements.
+  - **Expected**: correct answers grade **correct** (suppression is display-only and must never
+    reach a grading input); the curation hint marker and picker column label render **nothing** for
+    these two categories, while a non-suppressed category still shows its column.
+  - **Source**: spec 056 FR-010 / FR-011 / SC-004; local QA out-of-scope note on `PAID_CATEGORIES`.

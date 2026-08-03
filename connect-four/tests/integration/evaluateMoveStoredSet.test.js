@@ -89,7 +89,6 @@ describe('POST /api/evaluate-move — stored-set grading branch (Spec 051 US3, T
           category: 'double_threat',
           move_string: MS,
           highlight_metadata: null,
-          correct_col: 1,
           correct_cols: [1, 2, 5],
         },
       });
@@ -140,7 +139,6 @@ describe('POST /api/evaluate-move — stored-set grading branch (Spec 051 US3, T
           category: 'double_threat',
           move_string: MS,
           highlight_metadata: null,
-          correct_col: null,
           correct_cols: null,
         },
       });

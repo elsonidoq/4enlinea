@@ -31,7 +31,7 @@ import { createPaddleProcessor } from './paddleProcessor.js';
 import { Paddle, Environment } from '@paddle/paddle-node-sdk';
 import { createSolverProcess } from './c4solver-wrapper.js';
 import { checkForcedWinPredicate, checkForbiddenColumnsPredicate } from './candidate-generator.js';
-import { VALID_CATEGORIES, PAID_CATEGORIES, CATEGORY_ORDER } from './categories.js';
+import { VALID_CATEGORIES, PAID_CATEGORIES, CATEGORY_ORDER, SUPPRESSED_SINGLE_COLUMN_CATEGORIES } from './categories.js';
 import { CHALLENGE_SETS } from './challengeSets.js';
 import { scoreMove, computeBlunderSeverity } from './moveQualityScorer.js';
 import { classifyStoredMistake } from './mistakeStorageRule.js';
@@ -227,6 +227,19 @@ function makeLimit(max, windowMs = 60_000) {
 /** Assert a 0-indexed column value (integer 0–6). */
 function isValidCol0(col) {
   return typeof col === 'number' && Number.isInteger(col) && col >= 0 && col <= 6;
+}
+
+// Spec 056 (Epic 9) FR-010/FR-011 (D2): the shared suppression check every non-exempt
+// correct-column DISPLAY site must use, now that retiring the legacy singular scalar column
+// removes the free NULL that used to make undercut/overcut "show nothing" for free. Reads
+// SUPPRESSED_SINGLE_COLUMN_CATEGORIES (T015) — never SINGLE_ANSWER_CATEGORIES, which is a
+// disjoint-purpose superset. Exported because server/index.js is where it is first consumed, but
+// this is the single source every display site (puzzle-detail response, curation workspace,
+// puzzle picker) is expected to import rather than re-deriving the check inline. The ONE exempt
+// site is `/api/puzzles/:id/check`'s internal predicate-builder input (FR-011) — that site must
+// NOT call this helper; it needs the full accepted-answer set to grade correctly.
+export function isSuppressedSingleColumnCategory(category) {
+  return SUPPRESSED_SINGLE_COLUMN_CATEGORIES.has(category);
 }
 
 /** Validate a highlight_metadata object. Returns null if valid, error string if not. */
@@ -1035,7 +1048,7 @@ app.get('/api/admin/puzzles', requireLocalhost, requireAdmin, async (req, res) =
   try {
     const { data: puzzles, error } = await supabase
       .from('puzzles')
-      .select('id, category, move_string, goal_prompt, goal_predicate_type, goal_predicate_params, cooperative_ai_moves, interaction_mode, highlight_metadata, correct_col, user_player, created_at')
+      .select('id, category, move_string, goal_prompt, goal_predicate_type, goal_predicate_params, cooperative_ai_moves, interaction_mode, highlight_metadata, correct_cols, user_player, created_at')
       .eq('is_active', true)
       .eq('category', category)
       .order('created_at', { ascending: true });
@@ -1690,7 +1703,7 @@ app.get('/api/puzzles/draw', async (req, res) => {
       for (const cat of CATEGORY_ORDER) {
         const { data: catPuzzles } = await supabase
           .from('puzzles')
-          .select('id, category, move_string, interaction_mode, highlight_metadata, correct_col, user_player, shape_key, highlight_cells')
+          .select('id, category, move_string, interaction_mode, highlight_metadata, correct_cols, user_player, shape_key, highlight_cells')
           .eq('category', cat)
           .eq('is_active', true)
           .not('position', 'is', null)
@@ -1725,7 +1738,7 @@ app.get('/api/puzzles/draw', async (req, res) => {
         const offset = Math.floor(Math.random() * Math.max(0, totalIndexed - n + 1));
         const { data: result, error: resultErr } = await supabase
           .from('puzzles')
-          .select('id, category, move_string, interaction_mode, highlight_metadata, correct_col, user_player, shape_key, highlight_cells')
+          .select('id, category, move_string, interaction_mode, highlight_metadata, correct_cols, user_player, shape_key, highlight_cells')
           .eq('category', category)
           .eq('is_active', true)
           .not('position', 'is', null)
@@ -1741,7 +1754,7 @@ app.get('/api/puzzles/draw', async (req, res) => {
           const remaining = n - puzzles.length;
           const { data: wrap } = await supabase
             .from('puzzles')
-            .select('id, category, move_string, interaction_mode, highlight_metadata, correct_col, user_player, shape_key, highlight_cells')
+            .select('id, category, move_string, interaction_mode, highlight_metadata, correct_cols, user_player, shape_key, highlight_cells')
             .eq('category', category)
             .eq('is_active', true)
             .not('position', 'is', null)
@@ -1766,7 +1779,7 @@ app.get('/api/puzzles/draw', async (req, res) => {
         // Resume — re-fetch puzzles in original draw order
         const { data: rows } = await supabase
           .from('puzzles')
-          .select('id, category, move_string, interaction_mode, highlight_metadata, correct_col, user_player, shape_key, highlight_cells')
+          .select('id, category, move_string, interaction_mode, highlight_metadata, correct_cols, user_player, shape_key, highlight_cells')
           .in('id', existing.puzzle_ids)
           .eq('is_active', true);
         const map = Object.fromEntries((rows || []).map(p => [p.id, p]));
@@ -2527,7 +2540,7 @@ app.get('/api/puzzles/:id', async (req, res) => {
 
   const { data: puzzle, error } = await supabase
     .from('puzzles')
-    .select('id, category, move_string, goal_prompt, goal_predicate_type, goal_predicate_params, cooperative_ai_moves, difficulty, interaction_mode, highlight_metadata, correct_col, user_player, simulation_trace')
+    .select('id, category, move_string, goal_prompt, goal_predicate_type, goal_predicate_params, cooperative_ai_moves, difficulty, interaction_mode, highlight_metadata, correct_cols, user_player, simulation_trace')
     .eq('id', id)
     .eq('is_active', true)
     .single();
@@ -2547,7 +2560,9 @@ app.get('/api/puzzles/:id', async (req, res) => {
     difficulty: puzzle.difficulty,
     interactionMode: puzzle.interaction_mode ?? 'single_move',
     highlightMetadata: puzzle.highlight_metadata ?? null,
-    correctCol: puzzle.correct_col ?? null,
+    // FR-011: the ONE server/index.js response site the suppression check covers — undercut/
+    // overcut must show nothing here, reproducing the NULL-driven behavior this feature retires.
+    correctCols: isSuppressedSingleColumnCategory(puzzle.category) ? [] : (puzzle.correct_cols ?? []),
     userPlayer: puzzle.user_player ?? 1,
     simulationTrace: puzzle.simulation_trace ?? [],
   });
@@ -2568,7 +2583,7 @@ app.post('/api/puzzles/:id/check', async (req, res) => {
   if (supabase) {
     const { data } = await supabase
       .from('puzzles')
-      .select('id, category, move_string, goal_prompt, goal_predicate_type, goal_predicate_params, cooperative_ai_moves, interaction_mode, highlight_metadata, correct_col')
+      .select('id, category, move_string, goal_prompt, goal_predicate_type, goal_predicate_params, cooperative_ai_moves, interaction_mode, highlight_metadata, correct_cols')
       .eq('id', puzzleId)
       .eq('is_active', true)
       .single();
@@ -2592,6 +2607,9 @@ app.post('/api/puzzles/:id/check', async (req, res) => {
     return res.status(500).json({ error: 'Solver unavailable' });
   }
 
+  // FR-011 EXEMPT site: this is the accepted-answer set fed to the grading evaluator, not a
+  // display field — do NOT apply isSuppressedSingleColumnCategory here. Suppressing it would
+  // grade every correct undercut/overcut answer as wrong.
   const puzzleForPredicate = {
     id: puzzle.id,
     category: puzzle.category,
@@ -2599,7 +2617,7 @@ app.post('/api/puzzles/:id/check', async (req, res) => {
     goalPredicateType: puzzle.goal_predicate_type,
     goalPredicateParams: puzzle.goal_predicate_params,
     highlightMetadata: puzzle.highlight_metadata ?? null,
-    correctCol: puzzle.correct_col ?? null,
+    correctCols: puzzle.correct_cols ?? [],
   };
 
   const evaluation = evaluatePredicate(puzzleForPredicate, candidateCol, scores);
@@ -3084,7 +3102,6 @@ app.post('/api/admin/generate', requireLocalhost, async (req, res) => {
       highlight_cells: c.highlight_cells ?? null,
       highlight_metadata: c.highlight_metadata ?? null,
       category_evidence: c.category_evidence ?? null,
-      correct_col: c.correct_col ?? null,
       correct_cols: c.correctCols ?? null,
     }));
     // Task 26 (finding 23): a transient dropped DB connection previously aborted the whole
@@ -3164,7 +3181,7 @@ app.post('/api/admin/puzzles/reindex', requireLocalhost, async (req, res) => {
 
   const { data: puzzles, error } = await supabase
     .from('puzzles')
-    .select('id, category, move_string, highlight_metadata, correct_col, highlight_cells')
+    .select('id, category, move_string, highlight_metadata, correct_cols, highlight_cells')
     .eq('category', category)
     .eq('is_active', true);
 
@@ -3239,7 +3256,7 @@ app.get('/api/admin/candidates', requireLocalhost, async (req, res) => {
 
   const { data, error, count } = await supabase
     .from('candidates')
-    .select('id, category, move_string, solver_scores, classifier_tags, status, rejection_reason, created_at, debug_trace, highlight_cells, highlight_metadata, category_evidence, correct_col', { count: 'exact' })
+    .select('id, category, move_string, solver_scores, classifier_tags, status, rejection_reason, created_at, debug_trace, highlight_cells, highlight_metadata, category_evidence, correct_cols', { count: 'exact' })
     .eq('category', category)
     .eq('status', status)
     .order('created_at', { ascending: true })
@@ -3331,12 +3348,17 @@ app.get('/api/admin/scores', requireLocalhost, async (req, res) => {
     const { correctCols } = checkForbiddenColumnsPredicate(preClickMoves);
     predicatePass = correctCols.includes(candidateCol);
   } else {
-    const correctColRaw = req.query.correct_col !== undefined ? parseInt(req.query.correct_col, 10) : null;
-    if (correctColRaw !== null && !isValidCol0(correctColRaw)) {
-      return res.status(400).json({ error: 'correct_col must be integer 0-6' });
+    // D3's three-case contract: absent -> null (do not split); present-but-empty -> treated
+    // identically to absent (never let ''.split(',') become [NaN] and wrongly 400); present and
+    // non-empty -> comma-separated list, every element validated via isValidCol0.
+    let correctCols = null;
+    if (req.query.correct_cols !== undefined && req.query.correct_cols !== '') {
+      correctCols = req.query.correct_cols.split(',').map(s => parseInt(s, 10));
+      if (correctCols.some(c => !isValidCol0(c))) {
+        return res.status(400).json({ error: 'correct_cols must be a comma-separated list of integers 0-6' });
+      }
     }
-    const correctCol = correctColRaw;
-    const puzzle = { category, moveString: preClickMoves, correctCol };
+    const puzzle = { category, moveString: preClickMoves, correctCols };
     const evalResult = evaluatePredicate(puzzle, candidateCol, scores);
     predicatePass = evalResult.result === 'correct' || evalResult.result === 'tied';
   }
@@ -3363,7 +3385,7 @@ app.post('/api/admin/candidates/:id/approve', requireLocalhost, async (req, res)
 
   const { data: candidate, error: fetchErr } = await supabase
     .from('candidates')
-    .select('id, category, move_string, status, highlight_metadata, correct_col, correct_cols, category_evidence, highlight_cells')
+    .select('id, category, move_string, status, highlight_metadata, correct_cols, category_evidence, highlight_cells')
     .eq('id', id)
     .single();
 
@@ -3373,8 +3395,8 @@ app.post('/api/admin/candidates/:id/approve', requireLocalhost, async (req, res)
   const hmErr = validateHighlightMetadata(candidate.highlight_metadata);
   if (hmErr) return res.status(400).json({ error: `Invalid highlight_metadata: ${hmErr}` });
 
-  if (candidate.correct_col !== null && !isValidCol0(candidate.correct_col)) {
-    return res.status(400).json({ error: `correct_col out of range: ${candidate.correct_col}` });
+  if (candidate.correct_cols != null && candidate.correct_cols.some(c => !isValidCol0(c))) {
+    return res.status(400).json({ error: `correct_cols out of range: ${JSON.stringify(candidate.correct_cols)}` });
   }
 
   // Validate cooperative_ai_moves for multi-move categories
@@ -3415,7 +3437,7 @@ app.post('/api/admin/candidates/approve-batch', requireLocalhost, async (req, re
 
   const { data: candidates, error: fetchErr } = await supabase
     .from('candidates')
-    .select('id, category, move_string, status, highlight_metadata, correct_col, correct_cols, category_evidence, highlight_cells')
+    .select('id, category, move_string, status, highlight_metadata, correct_cols, category_evidence, highlight_cells')
     .eq('category', category)
     .eq('status', 'pending');
 
@@ -3432,8 +3454,8 @@ app.post('/api/admin/candidates/approve-batch', requireLocalhost, async (req, re
     const hmErr = validateHighlightMetadata(candidate.highlight_metadata);
     if (hmErr) { errors.push({ id: candidate.id, error: `Invalid highlight_metadata: ${hmErr}` }); continue; }
 
-    if (candidate.correct_col !== null && !isValidCol0(candidate.correct_col)) {
-      errors.push({ id: candidate.id, error: `correct_col out of range: ${candidate.correct_col}` });
+    if (candidate.correct_cols != null && candidate.correct_cols.some(c => !isValidCol0(c))) {
+      errors.push({ id: candidate.id, error: `correct_cols out of range: ${JSON.stringify(candidate.correct_cols)}` });
       continue;
     }
 

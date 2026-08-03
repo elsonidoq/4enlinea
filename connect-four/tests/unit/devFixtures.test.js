@@ -9,7 +9,7 @@ test('buildDevPuzzle produces the inline puzzle shape for a correctCol category'
   assert.equal(p.category, 'figure_7');
   assert.equal(p.move_string, '041015021326');
   assert.equal(p.interaction_mode, 'single_move');
-  assert.equal(p.correct_col, 2);
+  assert.deepEqual(p.correct_cols, [2]);
   assert.equal(p.highlight_metadata, null);
 });
 
@@ -17,7 +17,7 @@ test('buildDevPuzzle produces the inline puzzle shape for a highlightMetadata ca
   const hm = { type: 'capsule', column: 6, fromRow: 1, toRow: 5, badgeCount: 5 };
   const p = buildDevPuzzle({ movestring: '3333302444422222060315555054', category: 'z_threat', highlightMetadata: hm });
   assert.deepEqual(p.highlight_metadata, hm);
-  assert.equal(p.correct_col, null);
+  assert.equal(p.correct_cols, null);
 });
 
 test('every single-answer fixture carries the metadata its category requires (anti-drift)', () => {

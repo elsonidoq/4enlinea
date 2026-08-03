@@ -64,7 +64,7 @@ describe('ChallengeScreen.jsx source — request body shape guard (T015/T021 orp
   // wrong answer — no error, no 400) per FR-007. This asserts the remap fields are present in
   // the request-body construction, source-text only (mirrors the `data.accepted === true` check
   // above).
-  test('the /api/evaluate-move request body remaps current.correct_col and current.highlight_metadata to camelCase', () => {
+  test('the /api/evaluate-move request body remaps current.correct_cols and current.highlight_metadata to camelCase', () => {
     const src = readFileSync(
       join(__dir, '../../src/screens/ChallengeScreen.jsx'),
       'utf8'
@@ -72,7 +72,7 @@ describe('ChallengeScreen.jsx source — request body shape guard (T015/T021 orp
     const fetchBlockMatch = src.match(/fetch\(`\$\{API\}\/api\/evaluate-move`[\s\S]{0,1200}/);
     assert.ok(fetchBlockMatch, 'expected to find the /api/evaluate-move fetch call in ChallengeScreen.jsx');
     const block = fetchBlockMatch[0];
-    assert.match(block, /correctCol:\s*current\.correct_col/, 'request body must remap correctCol from current.correct_col');
+    assert.match(block, /correctCols:\s*current\.correct_cols/, 'request body must remap correctCols from current.correct_cols');
     assert.match(block, /highlightMetadata:\s*current\.highlight_metadata/, 'request body must remap highlightMetadata from current.highlight_metadata');
   });
 

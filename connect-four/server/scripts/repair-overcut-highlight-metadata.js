@@ -10,8 +10,8 @@
  *     1. STALE METADATA — the detector now matches an earlier column via a new mechanism, so the
  *        stored `highlight_metadata` names a different cell pair than the current code derives.
  *        This is player-facing: `evalOvercut` grades the answer against the STORED metadata
- *        (overcut rows carry `correct_col: null`), so a player who plays the newly-valid column
- *        is marked wrong.
+ *        (overcut rows carry no single correct column), so a player who plays the newly-valid
+ *        column is marked wrong.
  *     2. AMBIGUOUS — the widened detector finds TWO structurally valid overcut columns, tripping
  *        `checkOvercutPredicate`'s singleton guard. The board was always ambiguous; the old
  *        detector simply could not see the second column. These are not repairable by rewriting

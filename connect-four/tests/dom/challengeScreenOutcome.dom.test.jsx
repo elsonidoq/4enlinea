@@ -80,7 +80,7 @@ function renderChallengeScreen({ store, category }) {
 
 test('ChallengeScreen ~:408 — a wrong single-answer submission records outcome "incorrect"', async () => {
   const { store, attemptCalls } = makeStore();
-  const PUZZLE = { id: 'puzzle-single-1', category: 'demo_single', move_string: '', correct_col: null, highlight_metadata: null, interaction_mode: 'single_move' };
+  const PUZZLE = { id: 'puzzle-single-1', category: 'demo_single', move_string: '', correct_cols: null, highlight_metadata: null, interaction_mode: 'single_move' };
 
   globalThis.fetch = makeFetchMock([
     ['/api/puzzles/draw', () => Promise.resolve({ ok: true, json: () => Promise.resolve({ puzzles: [PUZZLE], session_id: null, resume_idx: 0 }) })],
@@ -110,7 +110,7 @@ test('ChallengeScreen ~:408 — a wrong single-answer submission records outcome
 
 test('ChallengeScreen ~:584 — a wrong forbidden_columns submission records outcome "incorrect"', async () => {
   const { store, attemptCalls } = makeStore();
-  const PUZZLE = { id: 'puzzle-forbidden-1', category: 'forbidden_columns', move_string: '', correct_col: null, highlight_metadata: null, interaction_mode: 'single_move' };
+  const PUZZLE = { id: 'puzzle-forbidden-1', category: 'forbidden_columns', move_string: '', correct_cols: null, highlight_metadata: null, interaction_mode: 'single_move' };
 
   globalThis.fetch = makeFetchMock([
     ['/api/puzzles/draw', () => Promise.resolve({ ok: true, json: () => Promise.resolve({ puzzles: [PUZZLE], session_id: null, resume_idx: 0 }) })],
@@ -145,7 +145,7 @@ test('ChallengeScreen ~:584 — a wrong forbidden_columns submission records out
 
 test('ChallengeScreen ~:668 — a wrong sequence-puzzle submission now records outcome "incorrect" (T030: previously recorded nothing)', async () => {
   const { store, attemptCalls } = makeStore();
-  const PUZZLE = { id: 'puzzle-sequence-1', category: 'forced_win', move_string: '', correct_col: null, highlight_metadata: null, interaction_mode: 'sequence' };
+  const PUZZLE = { id: 'puzzle-sequence-1', category: 'forced_win', move_string: '', correct_cols: null, highlight_metadata: null, interaction_mode: 'sequence' };
 
   globalThis.fetch = makeFetchMock([
     ['/api/puzzles/draw', () => Promise.resolve({ ok: true, json: () => Promise.resolve({ puzzles: [PUZZLE], session_id: null, resume_idx: 0 }) })],
@@ -175,7 +175,7 @@ test('ChallengeScreen ~:668 — a wrong sequence-puzzle submission now records o
 
 test('ChallengeScreen ~:659 — the unconditional sequence-puzzle SUCCESS write is unchanged (FR-020)', async () => {
   const { store, attemptCalls } = makeStore();
-  const PUZZLE = { id: 'puzzle-sequence-2', category: 'forced_win', move_string: '', correct_col: null, highlight_metadata: null, interaction_mode: 'sequence' };
+  const PUZZLE = { id: 'puzzle-sequence-2', category: 'forced_win', move_string: '', correct_cols: null, highlight_metadata: null, interaction_mode: 'sequence' };
 
   globalThis.fetch = makeFetchMock([
     ['/api/puzzles/draw', () => Promise.resolve({ ok: true, json: () => Promise.resolve({ puzzles: [PUZZLE], session_id: null, resume_idx: 0 }) })],

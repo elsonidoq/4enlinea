@@ -18,6 +18,7 @@
 import { readdirSync, readFileSync, writeFileSync, existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
+import { SUPPRESSED_SINGLE_COLUMN_CATEGORIES } from '../server/categories.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -76,7 +77,7 @@ for (const filename of lessonFiles) {
   // Fetch puzzles in deterministic order
   const { data: puzzles, error } = await supabase
     .from('puzzles')
-    .select('id, category, move_string, goal_prompt, goal_predicate_type, goal_predicate_params, cooperative_ai_moves, interaction_mode, highlight_metadata, correct_col, user_player')
+    .select('id, category, move_string, goal_prompt, goal_predicate_type, goal_predicate_params, cooperative_ai_moves, interaction_mode, highlight_metadata, correct_cols, user_player')
     .eq('is_active', true)
     .eq('category', lesson.confirmationCategory)
     .order('created_at', { ascending: true })
@@ -106,7 +107,10 @@ for (const filename of lessonFiles) {
     cooperativeAiMoves: p.cooperative_ai_moves ?? [],
     interactionMode: p.interaction_mode || 'single_move',
     highlightMetadata: p.highlight_metadata ?? null,
-    correctCol: p.correct_col,
+    // Spec 056 (Epic 9): the legacy scalar column is retired; derive the same observable shape
+    // from correct_cols, suppressing undercut/overcut the same way the other
+    // puzzle→lesson adapters do (AdminLessonEditorScreen.jsx, audit_answer_ambiguity.mjs).
+    correctCol: SUPPRESSED_SINGLE_COLUMN_CATEGORIES.has(p.category) ? null : (p.correct_cols?.[0] ?? null),
     userPlayer: p.user_player,
   }));
 

@@ -62,7 +62,7 @@ describe('lessonAnswerSets: no lesson board grades a winning move wrong', () => 
         const category = ch.goalPredicateType || lesson.confirmationCategory;
         const scores = await solver.query(ch.moveString);
         const accepted = acceptedCols(category, ch.moveString, scores, {
-          correctCol: ch.correctCol,
+          correctCols: Number.isInteger(ch.correctCol) ? [ch.correctCol] : undefined,
           highlightMetadata: ch.highlightMetadata,
         });
         const optimal = optimalCols(scores);

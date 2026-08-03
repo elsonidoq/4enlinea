@@ -5,6 +5,7 @@ import SocraticEditor from '../components/admin/SocraticEditor.jsx';
 import PuzzlePickerModal from '../components/admin/PuzzlePickerModal.jsx';
 import PuzzlePickerRow from '../components/admin/PuzzlePickerRow.jsx';
 import { lessonToJsonPayload } from '../lib/lessonPayload.js';
+import { SUPPRESSED_SINGLE_COLUMN_CATEGORIES } from '../lib/categories.js';
 
 function authHeaders() {
   const sb = localStorage.getItem('supabase.auth.token');
@@ -213,7 +214,13 @@ export default function AdminLessonEditorScreen({ lessonId, onBack }) {
         cooperativeAiMoves: puzzleData.cooperative_ai_moves ?? [],
         interactionMode: puzzleData.interaction_mode || 'single_move',
         highlightMetadata: puzzleData.highlight_metadata ?? null,
-        correctCol: puzzleData.correct_col,
+        // Spec 056 (Epic 9) T020: the legacy scalar column is retired. undercut/overcut
+        // used to show nothing here as an EMERGENT side effect of that scalar being NULL for
+        // those two categories; now that correct_cols stays fully populated for them, this
+        // explicit suppression check reproduces the same observable behavior.
+        correctCol: SUPPRESSED_SINGLE_COLUMN_CATEGORIES.has(puzzleData.category)
+          ? null
+          : puzzleData.correct_cols?.[0] ?? null,
         userPlayer: puzzleData.user_player,
       }],
     }));

@@ -405,7 +405,7 @@ describe('detectOddEvenThreat()', () => {
   });
 
   // Negative: '5444422336' col3 creates a double threat (wins at col1 and col5) — must filter
-  test('negative: correct_col creates double threat — must not match', () => {
+  test('negative: converting move creates double threat — must not match', () => {
     const board = new Board('5444422336');
     const result = detectOddEvenThreat(board, [1, 1, 1, 1, 1, 1, 1]);
     assert.equal(result.matched, false, 'should not match when the converting move creates a double threat');

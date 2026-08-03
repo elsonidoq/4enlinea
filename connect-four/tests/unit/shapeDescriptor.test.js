@@ -92,7 +92,7 @@ test('descriptorForPuzzle: immediate_threat horizontal win', () => {
   const puzzle = {
     category: 'immediate_threat',
     move_string: '44452556366',
-    correct_col: 3,
+    correct_cols: [3],
   };
   const desc = descriptorForPuzzle(puzzle);
   assert.equal(desc.orientation, 'H');
@@ -102,12 +102,12 @@ test('descriptorForPuzzle: immediate_threat horizontal win', () => {
 });
 
 test('descriptorForPuzzle: immediate_threat vertical win', () => {
-  // "414243": P1 builds 3 in col4 (rows 0,1,2), then correct_col=4 gives vertical win
+  // "414243": P1 builds 3 in col4 (rows 0,1,2), then correct_cols=[4] gives vertical win
   // Length 6 → current player = P1, landing row = 3 (0-indexed)
   const puzzle = {
     category: 'immediate_threat',
     move_string: '414243',
-    correct_col: 4,
+    correct_cols: [4],
   };
   const desc = descriptorForPuzzle(puzzle);
   assert.equal(desc.orientation, 'V');
@@ -119,11 +119,11 @@ test('descriptorForPuzzle: immediate_threat vertical win', () => {
 // ─── forced_block (board-replay) ─────────────────────────────────────────────
 
 test('descriptorForPuzzle: forced_block', () => {
-  // Fixture: "00113", correct_col=2
+  // Fixture: "00113", correct_cols=[2]
   const puzzle = {
     category: 'forced_block',
     move_string: '00113',
-    correct_col: 2,
+    correct_cols: [2],
   };
   const desc = descriptorForPuzzle(puzzle);
   // Should produce a valid descriptor (orientation/subtype from win orientation)
@@ -139,7 +139,7 @@ test('descriptorForPuzzle: forbidden_columns', () => {
   const puzzle = {
     category: 'forbidden_columns',
     move_string: '0123456',
-    correct_col: 2,
+    correct_cols: [2],
   };
   const desc = descriptorForPuzzle(puzzle);
   assert.equal(desc.orientation, null);
@@ -151,11 +151,11 @@ test('descriptorForPuzzle: forbidden_columns', () => {
 // ─── claimeven (board-replay positional) ─────────────────────────────────────
 
 test('descriptorForPuzzle: claimeven', () => {
-  // Fixture: "33223344", correct_col=2
+  // Fixture: "33223344", correct_cols=[2]
   const puzzle = {
     category: 'claimeven',
     move_string: '33223344',
-    correct_col: 2,
+    correct_cols: [2],
   };
   const desc = descriptorForPuzzle(puzzle);
   assert.equal(desc.orientation, null);
@@ -167,12 +167,12 @@ test('descriptorForPuzzle: claimeven', () => {
 // ─── double_threat (board-replay) ────────────────────────────────────────────
 
 test('descriptorForPuzzle: double_threat returns nested arm1/arm2', () => {
-  // Fixture: "3344", correct_col=2
+  // Fixture: "3344", correct_cols=[2]
   // After playing, should create double threat for the opponent
   const puzzle = {
     category: 'double_threat',
     move_string: '3344',
-    correct_col: 2,
+    correct_cols: [2],
   };
   const desc = descriptorForPuzzle(puzzle);
   assert.ok('arm1' in desc);
@@ -193,7 +193,7 @@ test('descriptorForPuzzle: z_threat capsule', () => {
   const puzzle = {
     category: 'z_threat',
     move_string: '012345',
-    correct_col: 3,
+    correct_cols: [3],
     highlight_metadata: {
       type: 'capsule',
       column: 3,
@@ -213,7 +213,7 @@ test('descriptorForPuzzle: z_threat empty metadata', () => {
   const puzzle = {
     category: 'z_threat',
     move_string: '012345',
-    correct_col: 3,
+    correct_cols: [3],
     highlight_metadata: null,
   };
   const desc = descriptorForPuzzle(puzzle);
@@ -227,7 +227,7 @@ test('descriptorForPuzzle: undercut with killing_threat', () => {
   const puzzle = {
     category: 'undercut',
     move_string: '012345',
-    correct_col: 0,
+    correct_cols: [0],
     highlight_metadata: {
       type: 'cells',
       cells: [
@@ -249,7 +249,7 @@ test('descriptorForPuzzle: overcut with major_threat', () => {
   const puzzle = {
     category: 'overcut',
     move_string: '012345',
-    correct_col: 4,
+    correct_cols: [4],
     highlight_metadata: {
       type: 'cells',
       cells: [
@@ -276,7 +276,7 @@ test('descriptorForPuzzle: figure_7 canonical orientation', () => {
   const puzzle = {
     category: 'figure_7',
     move_string: '012345',
-    correct_col: 3,
+    correct_cols: [3],
     highlight_metadata: {
       type: 'cells',
       cells: [
@@ -301,7 +301,7 @@ test('descriptorForPuzzle: figure_7 mirror orientation', () => {
   const puzzle = {
     category: 'figure_7',
     move_string: '012345',
-    correct_col: 3,
+    correct_cols: [3],
     highlight_metadata: {
       type: 'cells',
       cells: [
@@ -324,7 +324,7 @@ test('descriptorForPuzzle: j_shape canonical', () => {
   const puzzle = {
     category: 'j_shape',
     move_string: '012345',
-    correct_col: 3,
+    correct_cols: [3],
     highlight_metadata: {
       type: 'cells',
       cells: [
@@ -346,7 +346,7 @@ test('descriptorForPuzzle: j_shape mirror', () => {
   const puzzle = {
     category: 'j_shape',
     move_string: '012345',
-    correct_col: 3,
+    correct_cols: [3],
     highlight_metadata: {
       type: 'cells',
       cells: [
@@ -366,7 +366,7 @@ test('descriptorForPuzzle: forced_win ascending', () => {
   const puzzle = {
     category: 'forced_win',
     move_string: '012345',
-    correct_col: 0,
+    correct_cols: [0],
     highlight_cells: [
       { column: 1, row: 0, role: 'hint' },
       { column: 2, row: 1, role: 'loser' },
@@ -386,7 +386,7 @@ test('descriptorForPuzzle: forced_win returning', () => {
   const puzzle = {
     category: 'forced_win',
     move_string: '012345',
-    correct_col: 0,
+    correct_cols: [0],
     highlight_cells: [
       { column: 3, row: 0, role: 'hint' },
       { column: 2, row: 1, role: 'loser' },
@@ -403,7 +403,7 @@ test('descriptorForPuzzle: forced_win descending', () => {
   const puzzle = {
     category: 'forced_win',
     move_string: '012345',
-    correct_col: 0,
+    correct_cols: [0],
     highlight_cells: [
       { column: 5, row: 0, role: 'hint' },
       { column: 4, row: 1, role: 'loser' },
@@ -420,7 +420,7 @@ test('descriptorForPuzzle: forced_win empty highlight_cells returns all nulls', 
   const puzzle = {
     category: 'forced_win',
     move_string: '012345',
-    correct_col: 0,
+    correct_cols: [0],
     highlight_cells: [],
   };
   const desc = descriptorForPuzzle(puzzle);
@@ -436,7 +436,7 @@ test('shapeKeyForPuzzle: returns serialized string', () => {
   const puzzle = {
     category: 'claimeven',
     move_string: '33223344',
-    correct_col: 2,
+    correct_cols: [2],
   };
   const key = shapeKeyForPuzzle(puzzle);
   assert.ok(typeof key === 'string');
@@ -463,7 +463,7 @@ test('shapeKeyForPuzzle: same puzzle always produces same key', () => {
   const puzzle = {
     category: 'immediate_threat',
     move_string: '001122',
-    correct_col: 3,
+    correct_cols: [3],
   };
   const key1 = shapeKeyForPuzzle(puzzle);
   const key2 = shapeKeyForPuzzle(puzzle);
@@ -476,7 +476,7 @@ test('descriptorForPuzzle: unknown category returns all nulls', () => {
   const puzzle = {
     category: 'nonexistent_category',
     move_string: '012345',
-    correct_col: 0,
+    correct_cols: [0],
   };
   const desc = descriptorForPuzzle(puzzle);
   assert.equal(desc.orientation, null);

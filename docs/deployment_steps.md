@@ -474,6 +474,178 @@ OI-58. Nothing was written to staging or production.
   `npm install` and also installs eslint. No dependency was added or changed, so the strict `npm ci`
   in the Railway build is unaffected.
 
+## Spec 056 — Legacy `correct_col` scalar retirement (Epic 9)
+
+**Status**: PENDING (applied to local only)
+**When**: **AFTER the code deploy** — this is a hard ordering constraint (see below), not a
+preference. Running it first takes production down.
+**Blocks**: nothing — but it is blocked BY the code deploy, and the code deploy is itself blocked by
+the pre-flight check below
+**Applies to**: staging and production (local is already fully applied)
+
+### What's wrong (or: what this sets up)
+
+Migration `connect-four/server/migrations/064_drop_correct_col.sql` drops the legacy scalar column
+`correct_col` from both `public.puzzles` and `public.candidates`. `correct_cols integer[]` (migration
+061) has been the sole storage contract read by server code since User Story 2 of this spec landed —
+every sync-writer stopped writing `correct_col` and every reader was migrated to read `correct_cols`
+exclusively (verified locally: zero remaining references outside the two historical migration files
+and this drop migration — see "Verify" below). This closes `docs/open_issues.md` OI-81.
+
+**This is also a breaking HTTP wire rename, not just a schema change.** The singular `correctCol`
+request/response field is retired with **no deprecated alias** on `GET /api/puzzles/:id`, `GET
+/api/puzzles/draw`, and `POST /api/evaluate-move` (request body and response) — only `correctCols:
+number[]` is sent/accepted. **Server and frontend MUST deploy together.** A server-only deploy makes
+`POST /api/evaluate-move` stop understanding a still-old frontend's `correctCol` singular field,
+silently breaking lesson-sourced inline-challenge grading (the learner's answer always grades
+`wrong`, with no error — the same hazard class `ChallengeScreen.jsx`'s T019 change and
+`evaluateMoveMultiSolution.test.js`'s T027 update guard against locally). A frontend-only deploy has
+the same failure in reverse. Do not split this deploy across two releases.
+
+**Ordering relative to the migration: deploy the code FIRST, then run the migration. Running the
+migration first causes a production outage.**
+
+An earlier draft of this entry said the opposite, on the premise that "User Story 2 already shipped
+and is running in production". That premise was false and the conclusion drawn from it was
+dangerous. The facts, verified 2026-08-03:
+
+- **Nothing from this spec has shipped anywhere.** The whole feature — User Stories 1, 2 and 3 —
+  lives on the unmerged branch `worktree-epic-9-correct-col-retirement` (not present on any remote;
+  114 commits ahead of `origin/main`). Staging and production are running **pre-056** code.
+- **Pre-056 code reads `correct_col` explicitly.** `git show <pre-056-commit>:connect-four/server/index.js
+  | /usr/bin/grep -c "correct_col"` → **21** occurrences, including PostgREST `.select(...)` strings
+  such as `.select('id, category, move_string, …, highlight_metadata, correct_col, user_player, …')`.
+  PostgREST **errors** on a selected column that does not exist — it does not silently omit it. So
+  dropping the column while that code is live turns those endpoints (puzzle detail, `/api/puzzles/draw`,
+  the admin puzzle lists) into hard failures.
+
+The safe order therefore is:
+
+1. **Pre-flight check** (below) against the target environment — gates everything else.
+2. **Deploy the code** (server + frontend **together** — see the wire-rename warning above). The new
+   code never reads `correct_col`, and the column still being present is harmless to it.
+3. **Run the migration** to drop the now-unread column.
+
+Note the consequence for rollback: once step 3 has run, **reverting the code deploy is no longer
+safe** — the old code would again `SELECT` a column that no longer exists. If you need a revert
+window, leave a gap between steps 2 and 3 and confirm the new code is healthy first.
+
+### Pre-flight (REQUIRED — run per environment, immediately before that environment's migration)
+
+**This was NOT measured for staging or production during implementation.** Local was measured
+(2026-08-03: 322 active `puzzles`, of which **1** had `correct_cols IS NULL` — a stray `forced_win`
+row created after the last backfill run; 179 pending `candidates`, 0 NULL). Staging and production
+were **not reachable from the implementing session** and their counts are **unknown** — do not assume
+they match local, and do not assume they are zero.
+
+This matters because `DROP COLUMN` is irreversible: any row where `correct_cols` is NULL but
+`correct_col` is not is a row whose only answer is about to be discarded.
+
+Run this against the TARGET environment. Both counts must be 0.
+
+```sql
+SELECT 'puzzles' AS tbl, count(*) AS at_risk
+  FROM public.puzzles     WHERE correct_cols IS NULL AND correct_col IS NOT NULL
+UNION ALL
+SELECT 'candidates', count(*)
+  FROM public.candidates  WHERE correct_cols IS NULL AND correct_col IS NOT NULL;
+```
+
+**Success**: `at_risk` = 0 for BOTH rows.
+**Non-zero**: STOP. Do not deploy and do not migrate. Run spec 051's backfill
+(`connect-four/server/scripts/backfill-correct-cols.mjs`) against that environment, re-run this
+query, and proceed only once it returns 0.
+
+How to run it — either the Supabase SQL editor for the target project, or from the repo:
+
+```bash
+cd connect-four
+# Substitute .env.production for the production run. Prints one line per table.
+node --env-file=server/.env.staging -e '
+  const { createClient } = require("@supabase/supabase-js");
+  const sb = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
+  (async () => {
+    for (const t of ["puzzles", "candidates"]) {
+      const { count, error } = await sb.from(t).select("*", { count: "exact", head: true })
+        .is("correct_cols", null).not("correct_col", "is", null);
+      if (error) { console.log(t, "ERROR:", error.message); process.exitCode = 1; continue; }
+      console.log(t, "at_risk =", count);
+    }
+  })();
+'
+```
+
+Gotchas that have bitten here before: the env file is at `connect-four/server/.env.*`, **not** the
+repo root; the service key variable is `SUPABASE_SERVICE_ROLE_KEY` (not `SUPABASE_SERVICE_KEY`); and
+the command must run from `connect-four/` so `@supabase/supabase-js` resolves. If the column has
+already been dropped in that environment, the query errors with "column correct_col does not exist"
+— which is itself proof the migration already ran there.
+
+### Run it
+
+Do the whole sequence for **staging** first, verify it, then repeat for **production**.
+
+**Step 1 — pre-flight** (above). `at_risk` must be 0 for both tables. Do not continue otherwise.
+
+**Step 2 — deploy the code** (server + frontend together, one release — see the wire-rename warning
+above). Merge the branch and deploy per the standing procedure in `docs/deploy-runbook.md`; this
+entry does not restate it. Confirm the deployed app is healthy before step 3 — this is your last
+safe revert point.
+
+**Step 3 — run the migration** (only after step 2 is deployed and healthy):
+
+```bash
+cd connect-four
+
+# Staging first.
+node --env-file=server/.env.staging server/migrate.js
+
+# Then production — only after staging is verified below.
+node --env-file=server/.env.production server/migrate.js
+```
+
+### Verify
+
+```bash
+# 1. Migration recorded in the ledger for the target environment:
+#    (psql "$DATABASE_URL" or the Supabase SQL editor)
+SELECT filename FROM schema_migrations WHERE filename = '064_drop_correct_col.sql';
+--    success: one row
+
+# 2. The column is actually gone (query the live schema, not just the ledger):
+SELECT table_name, column_name FROM information_schema.columns
+ WHERE table_name IN ('puzzles','candidates') AND column_name = 'correct_col';
+--    success: zero rows, for BOTH puzzles and candidates
+
+# 3. Re-run the same zero-reference grep this spec used locally, against the code actually
+#    checked out in the target environment's deploy. Run this BEFORE step 3 of "Run it" —
+#    it is what proves the deployed code no longer needs the column:
+/usr/bin/grep -rn "correct_col\b" server src scripts tests
+--    success: matches in exactly three files — server/migrations/016_correct_col.sql,
+--    server/migrations/061_correct_cols.sql (both historical), and
+--    server/migrations/064_drop_correct_col.sql (this drop migration). Any other match means a
+--    consumer was missed and this migration must NOT be applied to that environment yet.
+```
+
+**4. Smoke-test the app after the migration** — the failure this ordering protects against is silent
+in logs but obvious in the product. On the deployed environment, open a puzzle and submit a **correct**
+answer for an `undercut` or `overcut` puzzle and confirm it grades **correct** (not "wrong"), and play
+one lesson with an inline/confirmation challenge and confirm the same. Those are the two paths the
+wire rename and the display-suppression check touch; if the deploy was split or the migration ran
+early, this is where it shows.
+
+### Roll back
+
+**Not reversible — back up first.** `DROP COLUMN` discards the column's data outright; there is no
+`ADD COLUMN IF NOT EXISTS correct_col` that restores the original values, only one that recreates an
+empty/NULL column. Before running against staging or production, take a snapshot/backup of the
+`puzzles` and `candidates` tables (e.g. `pg_dump` scoped to those two tables, or a Supabase point-in-
+time-recovery checkpoint) if you want the ability to restore the pre-drop `correct_col` values. Given
+`correct_col` had already been fully superseded by `correct_cols` for the duration of this spec (User
+Story 2), the dropped values are redundant with `correct_cols[0]` at drop time for every row that had
+been backfilled — but any row's exact pre-drop `correct_col` value (e.g. for an unbackfilled row) is
+only recoverable from a backup, not from `correct_cols`.
+
 ## Template for new entries
 
 ```markdown

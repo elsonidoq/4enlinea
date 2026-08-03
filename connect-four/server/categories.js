@@ -40,6 +40,20 @@ export const SINGLE_ANSWER_CATEGORIES = new Set([
   'z_threat', 'overcut', 'claimeven', 'undercut', 'figure_7', 'j_shape', 'odd_even_threat',
 ]);
 
+// Spec 056 (Epic 9) FR-010/FR-011: categories whose "correct column" display is suppressed
+// entirely — undercut/overcut historically showed nothing wherever a correct-column hint was
+// rendered, but that was an EMERGENT side effect of the legacy singular scalar column being NULL
+// for these two categories while the array column stayed fully populated (see checkPredicate's
+// NULL carve-out in candidate-generator.js). Retiring that legacy scalar removes the free NULL, so
+// this explicit list is now what every display/hint site must consult instead. Deliberately NOT the
+// same list as SINGLE_ANSWER_CATEGORIES above (a membership SUBSET of it, disjoint in PURPOSE):
+// SINGLE_ANSWER_CATEGORIES governs which categories get a solver-gated answer-set `accepted` field
+// at all; this set governs which of THOSE categories must never show a correct-column hint to a
+// player/admin (grading itself is NEVER suppressed — see FR-011's explicit `/api/puzzles/:id/check`
+// exemption). Mirrored (duplicate-and-sync, NOT cross-imported) in src/lib/categories.js — keep
+// both literals identical by hand.
+export const SUPPRESSED_SINGLE_COLUMN_CATEGORIES = new Set(['undercut', 'overcut']);
+
 export const CATEGORY_NAMES = {
   immediate_threat:  'Immediate Threat',
   forced_block:      'Forced Block',

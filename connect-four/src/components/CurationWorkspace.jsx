@@ -3,7 +3,7 @@ import { Board } from './Board.jsx';
 import { PredicateChecklist } from './PredicateChecklist.jsx';
 import { RejectModal } from './RejectModal.jsx';
 import { MultiMoveSequencer } from './MultiMoveSequencer.jsx';
-import { CATEGORY_NAMES, GOAL_PROMPTS } from '../lib/categories.js';
+import { CATEGORY_NAMES, GOAL_PROMPTS, SUPPRESSED_SINGLE_COLUMN_CATEGORIES } from '../lib/categories.js';
 
 const API = import.meta.env.VITE_API_BASE_URL || '';
 const ROWS = 6;
@@ -155,8 +155,10 @@ export function CurationWorkspace({ category, status = 'pending', onBack }) {
     setScoresLoading(true);
     try {
       const movesWithClick = candidate.move_string + col.toString();
-      const correctColParam = candidate.correct_col != null ? `&correct_col=${candidate.correct_col}` : '';
-      const res = await fetch(`${API}/api/admin/scores?moves=${encodeURIComponent(movesWithClick)}&category=${category}${correctColParam}`);
+      const correctColsParam = (candidate.correct_cols && candidate.correct_cols.length > 0)
+        ? `&correct_cols=${candidate.correct_cols.join(',')}`
+        : '';
+      const res = await fetch(`${API}/api/admin/scores?moves=${encodeURIComponent(movesWithClick)}&category=${category}${correctColsParam}`);
       const data = await res.json();
       if (res.ok) {
         setClickedScores(data.scores);
@@ -259,8 +261,14 @@ export function CurationWorkspace({ category, status = 'pending', onBack }) {
     for (const { column, row, role } of candidate.highlight_metadata.cells) {
       highlightedCells.push([row, column, role]);
     }
-    if (candidate.correct_col != null && heights[candidate.correct_col] < ROWS) {
-      highlightedCells.push([heights[candidate.correct_col], candidate.correct_col, 'hint']);
+    // Spec 056 (Epic 9) T021: explicit suppression check reproducing the old NULL-based
+    // behavior — this branch only ever runs for figure_7/j_shape (never undercut/overcut, which
+    // take the branch above), so the check is always true here, but it keeps this site
+    // consistent with the other four suppression sites rather than relying on correct_cols
+    // presence alone.
+    const figureHintCol = candidate.correct_cols?.[0];
+    if (!SUPPRESSED_SINGLE_COLUMN_CATEGORIES.has(category) && figureHintCol != null && heights[figureHintCol] < ROWS) {
+      highlightedCells.push([heights[figureHintCol], figureHintCol, 'hint']);
     }
     // figure_7: also highlight the two derived threat cells in amber
     if (category === 'figure_7' && candidate.category_evidence?.threat_cells) {

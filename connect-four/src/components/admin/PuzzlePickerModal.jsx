@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Board } from '../Board.jsx';
 import { buildBoard } from '../../lib/board.js';
+import { SUPPRESSED_SINGLE_COLUMN_CATEGORIES } from '../../lib/categories.js';
 
 function authHeaders() {
   const sb = localStorage.getItem('supabase.auth.token');
@@ -108,7 +109,13 @@ export default function PuzzlePickerModal({ category, existingPuzzles, onAdd, on
                       {puzzle.goal_prompt || puzzle.goal_predicate_type || category}
                     </div>
                     <div style={{ fontSize: 11, color: '#888' }}>
-                      {puzzle.move_string} · col {puzzle.correct_col}
+                      {puzzle.move_string}
+                      {/* Spec 056 (Epic 9) T022: undercut/overcut historically showed nothing
+                          here as an EMERGENT side effect of the legacy scalar column being
+                          NULL for those two categories; this explicit check reproduces the same
+                          behavior now that correct_cols stays fully populated for them. */}
+                      {!SUPPRESSED_SINGLE_COLUMN_CATEGORIES.has(puzzle.category) &&
+                        ` · col ${(puzzle.correct_cols || []).join(', ')}`}
                     </div>
                     <div style={{ fontSize: 10, color: '#666', marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                       ID: {puzzle.id}

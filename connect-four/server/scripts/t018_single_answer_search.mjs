@@ -30,7 +30,7 @@ for (let seed = 1; seed <= 300; seed++) {
       if (found[category]) continue;
       const result = await checkPredicate(category, pos.ms, pos.scores, solver);
       if (result.passes) {
-        found[category] = { ms: pos.ms, scores: pos.scores, correctCols: result.correctCols, correct_col: result.correct_col };
+        found[category] = { ms: pos.ms, scores: pos.scores, correctCols: result.correctCols };
         console.log(`${category}: ${JSON.stringify(found[category])}`);
       }
     }

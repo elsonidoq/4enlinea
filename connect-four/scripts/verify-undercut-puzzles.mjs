@@ -27,7 +27,7 @@ async function main() {
 
   const { data: puzzles, error } = await supabase
     .from('puzzles')
-    .select('id, move_string, correct_col, highlight_metadata, category')
+    .select('id, move_string, correct_cols, highlight_metadata, category')
     .eq('category', 'undercut')
     .eq('approved', true)
     .limit(50);

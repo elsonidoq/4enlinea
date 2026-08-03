@@ -26,7 +26,7 @@ export function buildDevPuzzle({ movestring, category, correctCol, highlightMeta
     move_string: movestring,
     interaction_mode: 'single_move',
     highlight_metadata: highlightMetadata ?? null,
-    correct_col: Number.isInteger(correctCol) ? correctCol : null,
+    correct_cols: Number.isInteger(correctCol) ? [correctCol] : null,
     user_player: userPlayer ?? CATEGORY_USER_PLAYER[category] ?? undefined,
   };
 }

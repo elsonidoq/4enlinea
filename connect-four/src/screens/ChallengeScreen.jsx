@@ -183,7 +183,7 @@ export function ChallengeScreen({
             move_string: ch.moveString,
             interaction_mode: ch.interactionMode || 'single_move',
             highlight_metadata: ch.highlightMetadata ?? null,
-            correct_col: ch.correctCol,
+            correct_cols: [ch.correctCol],
             user_player: ch.userPlayer,
             // Spec 052 US2 (T017): already locale-resolved by localizeLesson's
             // confirmationChallenges[].goalPrompt merge (server/lessonLoader.js) —
@@ -299,11 +299,11 @@ export function ChallengeScreen({
         // Top-level rename only — the inner highlight_metadata JSON (.column, .cells[].role)
         // passes through unmodified. Sent unconditionally; harmless no-op for categories that
         // don't consume it.
-        correctCol: current.correct_col,
+        correctCols: current.correct_cols,
         highlightMetadata: current.highlight_metadata,
         // Spec 051 (Epic 1) US3 T054 / FR-027 — lets the server's stored-set grading branch
         // (server/evaluateMoveHandler.js) look the row up and grade directly against its stored
-        // correct_cols instead of recomputing. Kept alongside correctCol/highlightMetadata (not a
+        // correct_cols instead of recomputing. Kept alongside correctCols/highlightMetadata (not a
         // replacement, FR-017) — those still serve the FR-024a NULL-correct_cols fallback and any
         // request this endpoint gets with no puzzle row at all (lesson inline challenges).
         //

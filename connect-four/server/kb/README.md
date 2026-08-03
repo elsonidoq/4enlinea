@@ -4,7 +4,7 @@
 
 This KB documents **complete strategic patterns**: what a tactic looks like when fully formed on the board and why it wins. It is the source of truth for strategic theory — formal predicates, worked examples, false positives, and known limitations all describe the *finished* configuration.
 
-**This KB does not document puzzle generation or classifier logic.** The classifier (`connect-four/server/classifier.js`) implements a different, complementary predicate: it detects the *one-move-away* state — the position where playing `correct_col` will create the pattern. These two predicates are related but intentionally distinct. Read `classifier.js` and its header comment for that layer.
+**This KB does not document puzzle generation or classifier logic.** The classifier (`connect-four/server/classifier.js`) implements a different, complementary predicate: it detects the *one-move-away* state — the position where playing the correct column will create the pattern. These two predicates are related but intentionally distinct. Read `classifier.js` and its header comment for that layer.
 
 ---
 

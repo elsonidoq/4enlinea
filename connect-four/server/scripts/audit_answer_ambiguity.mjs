@@ -159,8 +159,10 @@ async function auditLessons(solver, filterIds) {
     for (const [i, ch] of (lesson.confirmationChallenges ?? []).entries()) {
       const category = ch.goalPredicateType || lesson.confirmationCategory;
       const scores = await solver.query(ch.moveString);
+      // ch.correctCol is the lesson-JSON authored field (out of scope, FR-026) — a single column,
+      // never an array. Wrap it for acceptedCols' correctCols param rather than migrating it.
       const accepted = acceptedCols(category, ch.moveString, scores, {
-        correctCol: ch.correctCol,
+        correctCols: ch.correctCol != null ? [ch.correctCol] : [],
         highlightMetadata: ch.highlightMetadata,
       });
       const optimal = optimalCols(scores);
@@ -186,7 +188,7 @@ async function auditPuzzles(solver, category, env) {
   // of circulation. Auditing retired rows would keep reporting boards we deliberately took out
   // and make a clean run impossible.
   let q = sb.from('puzzles')
-    .select('id,category,move_string,correct_col,correct_cols,highlight_metadata')
+    .select('id,category,move_string,correct_cols,highlight_metadata')
     .eq('is_active', true);
   if (category) q = q.eq('category', category);
   const { data, error } = await q;
@@ -196,7 +198,7 @@ async function auditPuzzles(solver, category, env) {
   for (const p of data) {
     const scores = await solver.query(p.move_string);
     const accepted = acceptedCols(p.category, p.move_string, scores, {
-      correctCol: p.correct_col,
+      correctCols: p.correct_cols,
       highlightMetadata: p.highlight_metadata,
     });
     const optimal = optimalCols(scores);
@@ -293,7 +295,7 @@ async function repairPuzzles(category, env) {
       for (const c of fresh.slice(0, wanted)) {
         const scores = await solver.query(c.move_string);
         const accepted = acceptedCols(category, c.move_string, scores, {
-          correctCol: c.correct_col, highlightMetadata: c.highlight_metadata,
+          correctCols: c.correctCols, highlightMetadata: c.highlight_metadata,
         });
         const v = verdict(accepted, optimalCols(scores), scores);
         if (v !== 'OK') { console.log(`  skipped a generated board (${v}): ${c.move_string}`); continue; }
@@ -308,7 +310,6 @@ async function repairPuzzles(category, env) {
           is_active: true,
           interaction_mode: template.interaction_mode,
           highlight_metadata: c.highlight_metadata ?? null,
-          correct_col: c.correct_col ?? null,
           correct_cols: c.correctCols ?? null,
           highlight_cells: c.highlight_cells ?? null,
           user_player: c.move_string.length % 2 === 0 ? 1 : 2,
@@ -337,7 +338,7 @@ async function sourceBoards(category, count) {
       for (const c of res.candidates) {
         const scores = await solver.query(c.move_string);
         const accepted = acceptedCols(category, c.move_string, scores, {
-          correctCol: c.correct_col, highlightMetadata: c.highlight_metadata,
+          correctCols: c.correctCols, highlightMetadata: c.highlight_metadata,
         });
         const optimal = optimalCols(scores);
         if (verdict(accepted, optimal, scores) !== 'OK') continue;
@@ -345,7 +346,7 @@ async function sourceBoards(category, count) {
         // already be lost for the side to move. A drill whose best move still loses teaches
         // resignation (see the "no lost-position lessons" rule).
         if (optimal.length === 0 || scores[optimal[0]] < 0) continue;
-        found.push({ move_string: c.move_string, correct_col: c.correct_col ?? null,
+        found.push({ move_string: c.move_string, correct_cols: c.correctCols ?? null,
           highlight_metadata: c.highlight_metadata ?? null, scores, accepted, optimal });
         if (found.length >= count) break;
       }
@@ -354,7 +355,7 @@ async function sourceBoards(category, count) {
   console.log(`\n── ${found.length} verified ${category} board(s) ──`);
   for (const f of found) {
     console.log(`  ${f.move_string}`);
-    console.log(`    userPlayer ${f.move_string.length % 2 === 0 ? 1 : 2}  correct_col ${f.correct_col}  accepted ${showCols(f.accepted)}  optimal ${showCols(f.optimal)}`);
+    console.log(`    userPlayer ${f.move_string.length % 2 === 0 ? 1 : 2}  correct_cols ${showCols(f.correct_cols ?? [])}  accepted ${showCols(f.accepted)}  optimal ${showCols(f.optimal)}`);
     console.log(`    scores ${JSON.stringify(f.scores)}`);
     if (f.highlight_metadata) console.log(`    highlight_metadata ${JSON.stringify(f.highlight_metadata)}`);
   }

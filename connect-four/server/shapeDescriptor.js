@@ -324,7 +324,7 @@ export function descriptorForPuzzle(puzzle) {
     if (fromCells) return fromCells;
 
     // Fallback: compute highlight cells via board replay
-    const cells = computeForcedWinHighlight(puzzle.move_string, [puzzle.correct_col]);
+    const cells = computeForcedWinHighlight(puzzle.move_string, puzzle.correct_cols ?? []);
     return descriptorForForcedWin(cells) || {
       orientation: null, subtype: null, col_zone: null, row_zone: null,
     };
@@ -335,9 +335,9 @@ export function descriptorForPuzzle(puzzle) {
   const player = board.currentPlayer;
 
   if (category === 'immediate_threat' || category === 'forced_block') {
-    let correctCol = puzzle.correct_col;
+    let correctCol = puzzle.correct_cols?.[0] ?? null;
     if (correctCol == null) {
-      // Fallback for puzzles approved before correct_col was stored:
+      // Fallback for puzzles approved before correct_cols was stored:
       // immediate_threat → column where current player wins immediately
       // forced_block → column where opponent wins immediately (must be blocked)
       const searchPlayer = category === 'immediate_threat' ? player : board.opponent;
@@ -349,11 +349,11 @@ export function descriptorForPuzzle(puzzle) {
   }
 
   if (category === 'double_threat') {
-    return descriptorForDoubleThreat(board, puzzle.correct_col, player);
+    return descriptorForDoubleThreat(board, puzzle.correct_cols?.[0] ?? null, player);
   }
 
   if (category === 'forbidden_columns' || category === 'claimeven' || category === 'odd_even_threat') {
-    let correctCol = puzzle.correct_col;
+    let correctCol = puzzle.correct_cols?.[0] ?? null;
     if (correctCol == null && category === 'forbidden_columns') {
       // Fallback: derive a safe col from the board (any col that isn't forbidden)
       const result = checkForbiddenColumnsPredicate(puzzle.move_string);

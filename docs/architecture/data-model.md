@@ -348,8 +348,12 @@ The `explorer` screen was removed. `ReviewScreen` now routes all non-optimal mov
 
 ## Correct Column Storage
 
-`puzzles.correct_col` and `candidates.correct_col` store the 0-indexed correct column for categories where it is computed at generation time (`claimeven`, `figure_7`, `j_shape`).
-`z_threat` and `undercut`/`overcut` store their answer inside `highlight_metadata` (column or cells array with role annotations).
+`puzzles.correct_cols` and `candidates.correct_cols` (`integer[]`) are the **sole** storage
+contract for a row's accepted answer set — see the next section. The legacy scalar
+`puzzles.correct_col`/`candidates.correct_col` was dropped by migration
+`064_drop_correct_col.sql` (spec 056, closing `docs/open_issues.md` OI-81); it no longer exists in
+either table. `z_threat` and `undercut`/`overcut` store their answer inside `highlight_metadata`
+(column or cells array with role annotations), not in `correct_cols`.
 
 ### `correct_cols` — the stored answer set (spec 051, Epic 1, FR-013–FR-019)
 
@@ -371,13 +375,11 @@ read directly at grading time rather than re-derived (FR-024/FR-025 — see
 - **Ascending-order guarantee (FR-016a)**: `checkPredicate` sorts `correctCols` ascending
   (`[...correctCols].sort((a, b) => a - b)`) immediately before returning, so every writer above
   inherits sorted order for free — no writer sorts independently.
-- **`correct_col` sync-and-carve-out (FR-017/FR-019)**: the same `checkPredicate` call also
-  writes the legacy scalar `correct_col = correctCols[0]`, keeping it in sync rather than
-  retiring it (retirement is deferred, tracked as `docs/open_issues.md` OI-81, out of scope for
-  this feature). **Carve-out**: for `undercut` and `overcut`, `correct_col` is always written as
-  `NULL` regardless of `correctCols[0]` — both categories deliberately store no single correct
-  column (there is no canonical "the" answer among several safe non-killing columns), so syncing
-  a scalar from an arbitrary array element would fabricate a false canonical answer.
+- **`undercut`/`overcut` carve-out**: these two categories deliberately have no single correct
+  column — there is no canonical "the" answer among several safe non-killing columns. Every
+  display site suppresses a single-column rendering for these two categories (see
+  `SUPPRESSED_SINGLE_COLUMN_CATEGORIES` in `server/categories.js`/`src/lib/categories.js`); this is
+  a display-only suppression and is never applied to `correct_cols` itself or to grading inputs.
 - **`NULL` vs `{}` (FR-016b)**: these are two different, non-interchangeable states, never
   conflated:
   - `correct_cols IS NULL` — **not yet backfilled**. The row predates this feature and hasn't
