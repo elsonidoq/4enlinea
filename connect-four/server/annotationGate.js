@@ -117,28 +117,43 @@ export function checkP1(zoneSpecs) {
 // ---------------------------------------------------------------------------
 
 /**
- * Check P2: for every colN zone, scan inner text for col/column references.
- * If any explicit col reference names a different column number, fail.
+ * Check P2: for every zone that resolves to real board cells, scan its inner text
+ * for col/column references. If the text names a column the zone does not actually
+ * occupy, fail — the annotation would highlight one column while the prose points
+ * the reader at another.
+ *
+ * Generalised from colN-only to any cell-bearing spec (`colN`, `cNrM`, `cells:...`)
+ * by comparing against the set of columns the spec expands to. For a `colN` zone
+ * that set is exactly `{N}`, so the original behaviour is preserved as a special
+ * case rather than kept as a separate branch. A multi-column zone (e.g. a
+ * horizontal threat spanning `cells:c3r1,c4r1,c5r1,c6r1`) legitimately satisfies a
+ * reference to ANY of the columns it covers.
+ *
+ * Zones that expand to no cells are skipped: `tg` is a client-only spec that
+ * resolves to `[]` server-side, and a malformed spec also yields `[]` — P1 owns
+ * reporting those, so failing them here too would double-report one defect.
  *
  * @param {Array<{ spec: string, innerText: string }>} zones
  * @returns {string[]}  failure codes
  */
 export function checkP2(zones) {
   const failures = [];
-  const colZoneRegex = /^col(\d+)$/;
 
   for (const { spec, innerText } of zones) {
-    const specMatch = spec.match(colZoneRegex);
-    if (!specMatch) continue; // P2 only runs on colN zones
+    const cells = expandSpec(spec);
+    if (cells.length === 0) continue; // 'tg' (client-only) or invalid spec — P1's job
 
-    const specColNum = parseInt(specMatch[1], 10); // 1-indexed
+    // 1-indexed, to compare against how columns are written in prose.
+    const specCols = new Set(cells.map(({ col }) => col + 1));
 
-    // Scan inner text for explicit column references
+    // Scan inner text for explicit column references. Declared inside the loop:
+    // a /g/ regex carries lastIndex across calls, so hoisting it would make each
+    // zone resume mid-string from wherever the previous zone stopped.
     const refRegex = /col(?:umn)?\s*([1-7])/gi;
     let refMatch;
     while ((refMatch = refRegex.exec(innerText)) !== null) {
       const refColNum = parseInt(refMatch[1], 10);
-      if (refColNum !== specColNum) {
+      if (!specCols.has(refColNum)) {
         failures.push(`P2:col_mismatch:${spec}`);
         break; // one failure per zone is enough
       }
@@ -473,17 +488,9 @@ export function validateAnnotation(explanation, board, allowedSet = null) {
   console.log('[DEBUG validateAnnotation] parsed zones:', JSON.stringify(zones.map(z => z.spec)));
   console.log('[DEBUG validateAnnotation] allowedSet:', JSON.stringify(allowedSet));
 
-  // Build expandedCellsMap for P2 (and potential reuse by callers)
-  const expandedCellsMap = new Map();
-  for (const { spec } of zones) {
-    if (!expandedCellsMap.has(spec)) {
-      expandedCellsMap.set(spec, expandSpec(spec));
-    }
-  }
-
   const failures = [
     ...checkP1(zones),
-    ...checkP2(zones, expandedCellsMap),
+    ...checkP2(zones),
     ...checkP3(explanation),
     ...checkP5(board, zones, allowedSet),
     ...checkP6(zones),

@@ -98,7 +98,7 @@ describe('checkP1', () => {
 describe('checkP2', () => {
   test('58f99d33: col mismatch — zone col4 but text references column 3 → P2:col_mismatch:col4', () => {
     const zones = [{ spec: 'col4', innerText: 'Play in column 3 to set up the threat' }];
-    const failures = checkP2(zones, new Map());
+    const failures = checkP2(zones);
     assert.ok(
       failures.includes('P2:col_mismatch:col4'),
       `expected P2:col_mismatch:col4 in ${JSON.stringify(failures)}`
@@ -107,14 +107,40 @@ describe('checkP2', () => {
 
   test('zone col4, text references column 4 → no failures', () => {
     const zones = [{ spec: 'col4', innerText: 'Play in column 4 to set up the threat' }];
-    const failures = checkP2(zones, new Map());
+    const failures = checkP2(zones);
     assert.deepEqual(failures, []);
   });
 
-  test('non-col zone → skipped by P2', () => {
+  // The three cases below cover cell-bearing specs. P2 originally skipped anything
+  // that was not `colN`, so a single-cell or `cells:` zone could contradict its own
+  // prose unchecked; the first of these previously asserted that gap as if it were
+  // intended behaviour ('non-col zone → skipped by P2').
+  test('single-cell zone c4r3, text references column 5 → P2:col_mismatch:c4r3', () => {
     const zones = [{ spec: 'c4r3', innerText: 'column 5 is mentioned here' }];
-    const failures = checkP2(zones, new Map());
+    const failures = checkP2(zones);
+    assert.ok(
+      failures.includes('P2:col_mismatch:c4r3'),
+      `expected P2:col_mismatch:c4r3 in ${JSON.stringify(failures)}`
+    );
+  });
+
+  test('single-cell zone c4r3, text references its own column 4 → no failures', () => {
+    const zones = [{ spec: 'c4r3', innerText: 'column 4 is where it lands' }];
+    const failures = checkP2(zones);
     assert.deepEqual(failures, []);
+  });
+
+  test('multi-column cells zone satisfies a reference to ANY column it covers', () => {
+    const spanning = { spec: 'cells:c3r1,c4r1,c5r1,c6r1', innerText: 'the threat runs through column 4' };
+    assert.deepEqual(checkP2([spanning]), []);
+
+    const outside = { spec: 'cells:c3r1,c4r1,c5r1,c6r1', innerText: 'the threat runs through column 7' };
+    assert.deepEqual(checkP2([outside]), ['P2:col_mismatch:cells:c3r1,c4r1,c5r1,c6r1']);
+  });
+
+  test('tg zone is skipped — it is client-only and expands to no cells server-side', () => {
+    const zones = [{ spec: 'tg', innerText: 'column 2 and column 6 are both named here' }];
+    assert.deepEqual(checkP2(zones), []);
   });
 });
 

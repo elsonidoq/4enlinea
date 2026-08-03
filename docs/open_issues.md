@@ -4315,8 +4315,8 @@ rules above back to `error` in `eslint.config.js`'s `src/**` block.
 
 ## OI-120 — `expandedCellsMap` is built but no longer consumed by `checkP2`
 
-**Status**: deferred (surfaced by spec 055 / Epic 8's lint triage; not fixed there to avoid a
-behavior-adjacent server change at epic close)
+**Status**: ✅ RESOLVED 2026-08-03 — answered in the "missing coverage" direction: P2 now validates
+every cell-bearing spec, and the orphaned map is gone. See "Resolution" at the end of this entry.
 **Area**: `connect-four/server/annotationGate.js:476-486`
 **Discovered**: spec 055 (Epic 8) code review, 2026-08-02
 
@@ -4343,6 +4343,39 @@ than answer it. The deadness is pre-existing; spec 055 only made it visible.
 **If picked up**: first answer whether P2's check is correct without expanded cells — read
 `checkP2` against what `expandSpec` produces — then either wire the map in (if P2 needs it) or delete
 both the argument and the build block. See memory `project_annotation_gate_and_zones`.
+
+**Resolution (2026-08-03)**: the owner confirmed P2 should validate cells as well as columns, so
+possibility (b) was the answer — the check *was* incomplete. `checkP2` now expands every zone spec and
+compares the prose's column references against **the set of columns the zone actually occupies**:
+
+```js
+const cells = expandSpec(spec);
+if (cells.length === 0) continue;            // 'tg' (client-only) or invalid — P1's job
+const specCols = new Set(cells.map(({ col }) => col + 1));
+... if (!specCols.has(refColNum)) failures.push(`P2:col_mismatch:${spec}`);
+```
+
+This **generalises rather than special-cases**: for a `colN` zone the set is exactly `{N}`, so the old
+behaviour falls out as an instance instead of a separate branch, and a multi-column zone (a horizontal
+threat spanning `cells:c3r1..c6r1`) correctly accepts a reference to any column it covers.
+
+`checkP2` now calls `expandSpec` itself rather than taking the caller's memo map, and the
+`expandedCellsMap` build block in `validateAnnotation` was deleted — nothing else read it. That choice
+is deliberate: the three pre-existing tests all passed `new Map()`, so a map-parameter fix would have
+made every new assertion **silently vacuous** (empty map → no cells known → skip). Resolving cells
+internally makes the check impossible to defeat by passing an empty map.
+
+Proven non-vacuous: the new cell-zone assertions were run against the old `checkP2` and **2 of them
+fail** there (single-cell mismatch, and the multi-column out-of-range case), then pass with the fix.
+The existing fixture `{ spec: 'c4r3', innerText: 'column 5 is mentioned here' }` had been asserting the
+gap as intended behaviour under the name *'non-col zone → skipped by P2'* — it is now inverted, since a
+test that encodes the bug is part of the bug. `tests/annotationGate.test.js` 50/50; `test:fast`
+1685/1690 (5 RED = unchanged OI-82 baseline); lint exit 0.
+
+**Scope note**: `validateAnnotation` has **no production caller** — only `server/scripts/run_eval.mjs`
+and `server/scripts/corpus_annotation_check.mjs` import it. So tightening P2 cannot reject a
+user-facing explanation; it improves offline eval/corpus fidelity. Whether the gate *should* run on the
+live deep-reveal path is a separate, larger question — see [[OI-124]].
 
 ## OI-121 — `ChallengeScreen` passes an `interactionMode` prop nothing consumes
 
@@ -4423,3 +4456,37 @@ was dev tooling, tests, and doc bookkeeping; fixing an admin-screen crash was no
 rather than backfilling, since old rows are legitimately temperature-less; then consider wrapping the
 panel in the existing `ErrorBoundary` component (`src/components/ErrorBoundary.jsx`, already DOM-tested)
 so a future field mismatch degrades instead of blanking the page. Admin-only, so user impact is low.
+
+## OI-124 — the Deep Reveal annotation gate never runs on the live explanation path
+
+**Status**: deferred (design question, not a regression; surfaced while resolving OI-120)
+**Area**: `connect-four/server/annotationGate.js` (`validateAnnotation` and its P1/P2/P3/P5/P5-Strong/P6 checks)
+**Discovered**: 2026-08-03, while fixing P2's cell-zone coverage gap
+
+`annotationGate.js` is a complete, well-tested validator for the `[zone:...]` annotations the LLM
+embeds in Deep Reveal explanations — it checks spec validity and bounds (P1), column-reference
+consistency (P2), forbidden terminology (P3), that each zone has a live 4-window (P5), that zones fall
+within the allowed set (P5 Strong), and that no raw coordinates leak into zone text (P6). It carries 50
+unit tests and is listed in both `test` and `test:fast`.
+
+**Nothing on the production request path imports it.** The only importers are
+`server/scripts/run_eval.mjs` and `server/scripts/corpus_annotation_check.mjs`, both offline. Verified
+by grepping the whole `server/` tree for `annotationGate` / `validateAnnotation` / `normalizeZoneTags` /
+`checkP1` / `checkP5`: `server/index.js`, `llmCoachHelpers.js` and `explainContext.js` contain no
+import (the single mention in `explainContext.js:966` is a comment about `checkP5Strong`).
+
+So an explanation served to a user is **not** gated: a zone that highlights the wrong column, names a
+dead window, or leaks raw coordinates reaches the UI unchecked. Every improvement to these predicates
+(including OI-120's P2 fix) currently buys offline eval fidelity only.
+
+**Why deferred**: wiring a validator into the live path is a product decision with real failure-mode
+choices — on failure, do you strip the annotations, retry the LLM, serve the un-annotated text, or
+fail the request? Each has a different latency and UX cost, and the cache path complicates it further
+(`explanation_cache` can serve rows produced before any gating existed — see memory
+`project_blunder_serving_dual_paths`, where cache-hit responses already bypass producer guards).
+
+**If picked up**: first measure how often the gate would actually fail on real served explanations —
+run `corpus_annotation_check.mjs` over recent `explanation_cache` rows to get a failure rate before
+designing the enforcement. A gate that fires on 30% of live output needs a different answer than one
+that fires on 0.5%. Then decide strip-vs-retry-vs-passthrough, and note that sanitising at the response
+seam (as OI's on the dual-path serving recommend) covers both the fresh and cached paths at once.
