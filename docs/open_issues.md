@@ -1400,10 +1400,16 @@ The final fallback, `'anonymous'`, is a **string literal**, not a per-device ide
 
 `cookieOpts()`/`ACCESS_TOKEN_MAX_AGE`/`REFRESH_TOKEN_MAX_AGE` were extracted from `server/index.js` into `server/cookieConfig.js` so `deviceIdentity.js` could import the exact cookie shape without booting the server (`index.js` calls `app.listen()` at module scope). Tests: `connect-four/server/deviceIdentity.test.mjs`. DB check across local/staging/production found zero existing rows with the literal `device_uuid: 'anonymous'` in `puzzle_attempts` or `games` — no backfill/cleanup needed.
 
-## OI-41 — `/pricing` is a bare static page; needs a real designed pricing page, and its prices are hardcoded
+## OI-41 — `/pricing-legal`'s hardcoded prices can drift from the live Paddle catalog (the designed `/pricing` page has shipped)
 
-**Status**: deferred / open (created 2026-07-16 while unblocking Paddle domain review)
-**Area**: `connect-four/server/pricing.html`, route registered in `connect-four/server/index.js` (symbol: the `app.get('/pricing', ...)` sendFile line beside `/terms` and `/privacy`)
+**Status**: open — **narrowed 2026-08-03 to item 2 only, on `/pricing-legal`**. Item 1 (a real designed
+pricing page) shipped 2026-08-01 and is verified; item 2's drift risk is retained on that one page by
+explicit owner decision. The original title — "`/pricing` is a bare static page" — described the
+2026-07-16 state and is no longer true of `/pricing`; see **UPDATE 2026-08-03** at the end of this entry
+before acting on anything above it.
+**Area**: `connect-four/server/pricing.html`, served at `/pricing-legal` (see
+`docs/architecture/server-conventions.md` §"`/pricing` vs `/pricing-legal`"). **Not** `/pricing`, which is
+now the in-app React `PricingScreen`.
 
 > **Where the code is**: `pricing.html` and its route are **not on this branch**. They ship to `main` separately via the `chore/legal-pages` PR (branched from `origin/main`, 4 files), because Paddle domain review blocks on them and this branch is ~496 commits from merging. This branch deliberately carries only the issue, not a second copy of the pages — one source of truth. If you are reading this and `connect-four/server/pricing.html` does not exist, pull `main`.
 
@@ -1445,6 +1451,37 @@ literals and its own `20`-per-week quota figure are that retained risk, kept by 
 an oversight — they can still silently drift the next time a price or the quota changes, exactly as
 described above, but only on that one legal-compliance page. `/pricing` itself has no such literals left
 anywhere in it (FR-020/FR-026/SC-004 fully satisfied on `/pricing`).
+
+**UPDATE 2026-08-03 (pre-launch backlog triage).** Two corrections to the entry above, plus a narrowing.
+
+1. **Item 1 is done and the "NOT VERIFIED" caveat on it is stale.** The 2026-08-01 update above withheld
+   closure on item 1 partly because the live-browser CSP leg (T044) had not been exercised — the shared
+   Chrome profile was held by another session. **That leg has since been run and passed**, and is recorded
+   under its own entry: **OI-96 is ✅ RESOLVED 2026-08-01** ("the checkout CTA opened the Paddle overlay …
+   and our Content-Security-Policy produced **zero** violations"). Do not re-run it on the strength of the
+   paragraph above; read OI-96 first.
+2. **The top status line and title were stale and actively misleading.** Until this update, a reader
+   scanning entry headings saw "`/pricing` is a bare static page" with `**Status**: deferred / open`, which
+   reads as "the pricing page still needs designing" — the exact opposite of what the body's own 2026-08-01
+   update records. This cost a triage pass real time on 2026-08-03. Verified fresh against the tree today:
+   `src/lib/screenRegistry.jsx:44` reads `pricing: PricingScreen,`, and `src/lib/urlMapping.js:28` states
+   verbatim *"and /pricing itself is now the in-app designed PricingScreen."* Both title and status are
+   corrected above. (Generalised: an entry whose first `**Status**:` line disagrees with a later `UPDATE`
+   block in its own body is a known scan hazard in this file — see the Epic 8 audit blockquote at the top,
+   and memory `reference_open_issues_epics`.)
+3. **What actually remains open** is item 2's literal-drift risk, and only on `/pricing-legal`:
+   `server/pricing.html`'s hand-typed `$2.99`/`$21.99`/`39%`/`$1.83` and its `20`-per-week quota figure are
+   not derived from `GET /api/paddle/config` or `GET /api/limits`, so they can silently disagree with what
+   the customer is actually charged the next time a price or quota changes. This is a **retained,
+   owner-accepted** risk (spec 053 research.md Decision 11): Paddle requires a static, JavaScript-free
+   merchant-of-record/refund page for reviewer spot-checks, and deriving those figures at request time
+   would defeat that. It is therefore not a bug to be fixed but a decision to be re-confirmed — closing
+   this entry as won't-fix (in the shape of OI-11/OI-13) is available to the owner at any time. The
+   cheapest mitigation short of that, if it is ever wanted, is a test that fails when `pricing.html`'s
+   literals disagree with the live config endpoint, rather than a rewrite of the page.
+
+**Launch status**: **not a launch blocker.** Carried in `docs/epics/pre-launch-mvp-epic.md` (Epic 10, US3)
+as a verify-and-close item only — the verification is this update.
 
 ## OI-42 — Lesson audio is not manageable from `/admin/audio`
 

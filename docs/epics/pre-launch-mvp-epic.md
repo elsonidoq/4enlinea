@@ -57,12 +57,15 @@ Do not relitigate these. They were taken during the 2026-08-03 triage.
 4. **No agent session writes to staging or production.** Every data repair (US1) ships as a reviewed,
    idempotent, `--dry-run`-first script plus a `docs/deployment_steps.md` entry; the **owner** runs it
    against live environments. [[feedback_implemented_vs_deployable]]
-5. **OI-41 is presumed stale and must be verified, not implemented.** Spec 053 shipped a designed
-   in-app pricing screen — `src/lib/screenRegistry.jsx:44` reads `pricing: PricingScreen`, and
-   `src/lib/urlMapping.js:28` states verbatim: *"and /pricing itself is now the in-app designed
-   PricingScreen."* The OI entry still describes the old bare `server/pricing.html`. US3's task is a
-   verification + closeout, not a redesign. Open the code before writing any task that assumes
-   otherwise. [[feedback_verify_at_the_source_layer]]
+5. **OI-41 was stale; it has been verified and narrowed — do not implement it.** Spec 053 shipped a
+   designed in-app pricing screen (`src/lib/screenRegistry.jsx:44` reads `pricing: PricingScreen`;
+   `src/lib/urlMapping.js:28` states verbatim *"and /pricing itself is now the in-app designed
+   PricingScreen."*), and OI-96 records the live-browser CSP check as **passed** on 2026-08-01. The OI-41
+   entry was corrected on 2026-08-03 (see its `UPDATE 2026-08-03`): all that remains is the hardcoded
+   price/quota literals on the **`/pricing-legal`** static page, a retained owner-accepted risk that Paddle
+   requires to stay JavaScript-free. US3's only obligation is to re-confirm that decision — or close the
+   entry won't-fix, which is the owner's call. **No pricing-page work in this epic.**
+   [[feedback_verify_at_the_source_layer]]
 6. **The issue-closeout convention from `open-issues-epics.md` applies verbatim** — an `OI-N` is done
    when `docs/open_issues.md` says so, in the same change that ships the work, with the
    fully-fixed / partially-fixed / already-resolved / deliberately-not-fixed formats that file defines.
@@ -245,7 +248,9 @@ Read before writing code — not the memory summaries, the actual files.
 - A subscriber following a Paddle payment-method-update link (`?_ptxn=…`) reaches an **open checkout**,
   verified end-to-end in the sandbox with a real transaction id.
 - CSP verified against a **production build**, in a real browser — not under `npm run dev`.
-- OI-41 is closed out with evidence (or its stale half corrected and the substantive half re-scoped).
+- OI-41 needs no code: its stale half was corrected on 2026-08-03 and its substantive half narrowed to
+  the `/pricing-legal` accepted risk. The story either re-confirms that decision or closes the entry
+  won't-fix; either outcome is recorded in `docs/open_issues.md`.
 
 **US4 — grading is stable**
 - The same move shows the same `quality` on first analysis and on every later view, proven by a test
@@ -310,7 +315,7 @@ Enumerated so scope cannot grow silently. All of these stay open in `docs/open_i
 | OI-129 | US2 | Prose names board regions that carry no annotation (D3 input) |
 | OI-98 | US3 | Payment-method-update email dead-ends → involuntary churn |
 | OI-95 | US3 | Signed-out visitors and free users get the same upgrade prompt (conversion) |
-| OI-41 | US3 | Presumed stale — verify and close, do not implement |
+| OI-41 | US3 | Verified stale 2026-08-03 and narrowed to an accepted risk on `/pricing-legal` — re-confirm the decision only |
 | OI-104 | US4 | A move labelled `blunder` reads `suboptimal` on every later view |
 | OI-125 | US4 | The mistake-count invariant is unnamed and nearly unguarded (guard it while US4 is in there) |
 | OI-82 | US5 | `test:fast` is 5 RED — a green run currently proves nothing |
