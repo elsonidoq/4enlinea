@@ -97,7 +97,7 @@ severity indicator.
   rewrite).
 - [x] T008 [US1] Run `npm run test:fast`; add T003's new test file name to the `test:fast` (and `test`,
   if applicable) script entries in `connect-four/package.json`.
-- [ ] T009 [US1] Manual QA per `quickstart.md` US1 section: open a known suboptimal mistake and a known
+- [x] T009 [US1] Manual QA per `quickstart.md` US1 section: open a known suboptimal mistake and a known
   blunder mistake from the SC-002 fixture game (`40fe793a-aa39-429d-8ef4-4e43192cc4db`) and confirm
   identical layout/actions, differing only by severity indicator. **SC-001.**
 
@@ -185,7 +185,7 @@ confirm it stays on the category list.
   reload. **FR-011.**
 - [x] T021 [US2] Run `npm run test:fast`; add T010/T011's test files (or extended file) to the `test:fast`
   script entry in `connect-four/package.json`.
-- [ ] T022 [US2] Manual QA per `quickstart.md` US2 section using the exact SC-002 fixture ids: open
+- [x] T022 [US2] Manual QA per `quickstart.md` US2 section using the exact SC-002 fixture ids: open
   `/blunder/52a28158-8603-4ccf-89f4-b9a73b2910f3` cold in a private tab, confirm "Move 19 / 41" and "2 of
   4", confirm "Start new game from here" is present and functional; separately reload
   `/mistakeDetail/<category>` and confirm it stays on the category list. **SC-002.**
@@ -255,7 +255,7 @@ click Prev/Next and a chip and confirm the board changes each time, for both gam
   only).
 - [x] T031 [US3] Run `npm run test:fast`; add T023/T024's new test files to the `test:fast` script entry
   in `connect-four/package.json`.
-- [ ] T032 [US3] Manual QA per `quickstart.md` US3 section: reach a mistake via a game's "view mistake"
+- [x] T032 [US3] Manual QA per `quickstart.md` US3 section: reach a mistake via a game's "view mistake"
   link, press Back three times, confirm the linear trail; open the SC-002 fixture game's stepper, click
   Prev/Next and a blunder chip, confirm board changes and permalink navigation for the papergames source.
   **SC-003, SC-004.**
@@ -318,7 +318,7 @@ Games shows a non-zero mistake count and no "no mistakes" text.
   applies to count/aggregate labels only, never the severity chip.
 - [x] T038 [US4] Run `npm run test:fast`; add T033's extended test coverage confirmation (no new file
   needed if extending an existing one already in the script).
-- [ ] T039 [US4] Manual QA per `quickstart.md` US4 section: view the identified 0-blunder/≥1-suboptimal
+- [x] T039 [US4] Manual QA per `quickstart.md` US4 section: view the identified 0-blunder/≥1-suboptimal
   game (or the referenced `papergames_game_id = 'a5d40c9e-14a5-46cb-ade8-cdff4bfa2073'` fixture) in Past
   Games; confirm a non-zero mistake count and no "no mistakes" text. **SC-006.**
   DEFERRED (batch 4, 2026-07-08): no dev server/browser was started per task constraints. Manual
@@ -678,3 +678,25 @@ Task: "Add /mistakeDetail/:category URL_MAP round-trip test in tests/urlMapping.
   layout (both are stale CSS/layout QA items, not spec-042 requirements), `/api/stats`, any
   `blunder_count` → `mistake_count` wire rename, and any change to the reason/evidence engine's
   computation (render-only per reason-INVARIANTS I0).
+
+---
+
+## Manual-QA results — 2026-08-03
+
+Run against locally harvested fixtures (the `quickstart.md` SC-002 ids are staging/prod rows and do
+not exist locally). Full report: `agentic_QA_2026-08-03-1208.md`.
+
+- **T009 / T022 / T032 / T039 — ✅ pass**, marked complete above.
+- **T048 (US5) — ❌ fail**, left unchecked. 3 reveals sampled (undercut, double_threat, forced_win):
+  no `sev:`, `tree:`, `community-`, `cXrY`, or raw movestrings — but `forced_win` prose emitted the
+  raw column range **"c3-c6"**. `reasonRenderGuard.mjs:25`'s `CXRY_RE` only matches the `cXrY` form,
+  so bare/ranged column tokens pass through. Filed as **OI-126**. Fix the guard before checking this off.
+- **T058 (US6) — ⚠️ partial**, left unchecked. Highlighting verified correct (a "column 7" zone draws
+  its capsule exactly on column 7's centre; toggles on click). The **split-pane zoom half is blocked**
+  — and its criterion is **stale**: `SplitReveal.jsx:49-72` documents that FR-022's width freeze was
+  deliberately superseded (the freeze was the root cause of a worse full-bleed bug), so "zoom stays
+  constant" is no longer the intended behavior. Filed as **OI-127** — which also records that the
+  contract doc asserts the *opposite* outcome and that `tests/unit/splitRevealZoom.test.js`'s
+  "invariant" case is vacuous. Update `quickstart.md` + the contract before re-running.
+- **T062 — not run** (deploy task, out of scope for a local QA run). Still open.
+- **T063 — ⚠️ partial**: US1–US6 all driven in order; only the US6 drag portion is unverified.

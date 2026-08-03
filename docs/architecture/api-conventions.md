@@ -726,9 +726,9 @@ Lists past sparring games for the authenticated user.
 - `outcome`: DB values `win`/`loss`/`draw` are mapped to `won`/`lost`/`draw` in the response.
 - `side`: `'first'` (user moves first, plays Green) or `'second'` (user moves second, plays Gray).
 - `accuracy`: from the `games.accuracy` column (written by `POST /api/games/analyze`); `null` if the game has not been analyzed.
-- `blunder_count`: count of `blunders` rows linked to this game via `game_id`.
+- `blunder_count`: count of `blunders` rows linked to this game via `game_id`. **This is a *mistake* count, not a blunder count** — the query applies no `quality` filter, so it sums both `'blunder'`- and `'suboptimal'`-quality rows. The wire name is frozen for compatibility (spec 042 FR-007); see the "Mistake-count vocabulary" note in `data-model.md` before adding any consumer or a `quality` filter.
 - `cols`: 7-element array of per-column move encoding (`g` = current player, `d` = opponent), produced by `movesToCols`.
-- Games with `blunder_count === 0` are excluded when `has_blunder=true`.
+- Games with `blunder_count === 0` are excluded when `has_blunder=true` — i.e. `has_blunder` means "has any mistake", matching its "With mistakes" UI label. `sort=worst_blunders` likewise orders by total mistakes.
 
 **Errors**: 400 (invalid params), 401 (unauthenticated), 503 (Supabase not configured), 500 (DB error).
 

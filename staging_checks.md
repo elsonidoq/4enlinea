@@ -1684,3 +1684,37 @@ One item could not be confirmed locally.
 
 - [ ] Signed off by ______ on ______
 
+
+---
+
+## Epic 2 — Mistake Review Unification (spec 042) — added 2026-08-03 (manual QA run)
+
+Residue of spec 042's manual QA pass (`agentic_QA_2026-08-03-1208.md`). Spec 042's code tasks all
+shipped; these are the acceptance items that a local run could not settle.
+
+- [ ] **`TRUNCATE explanation_cache` at deploy (spec 042 T062).**
+  - **What**: On the staging deploy that carries spec 042, run `TRUNCATE explanation_cache` (per
+    `plan.md`'s Constitution Check VIII and the spec-039 precedent), then open several mistake
+    explanations spanning different `pattern_category` values and confirm the regenerated text
+    contains no `sev:`, `tree:`, `community-`, raw movestring, or raw coordinate token.
+  - **Why staging**: a deploy-time data operation — the local cache is not the deployed one, and the
+    guard's value is precisely that **cache-hit rows written before the guard existed** still get
+    sanitised at the response seam. Only a real deployed cache exercises that path. See memory
+    `project_blunder_serving_dual_paths`.
+  - **Expected**: no stale pre-guard explanation survives; no internal token in any sampled reveal.
+  - **Source**: spec 042 T062 (still unchecked in `tasks.md`).
+
+- [ ] **US6 split-pane divider drag, verified by a human.**
+  - **What**: On a real staging session, open a Deep Reveal and drag the split divider through its full
+    range (including up past the point that previously caused a shrink/re-enlarge). Confirm the board
+    resizes smoothly with the split, is **never** clipped and **never** goes full-bleed to the viewport
+    width.
+  - **Why staging**: not a staging dependency per se but **not automatable** — the divider is a bare
+    `div` (`cursor: row-resize`) with no `role`/`aria-label`, so the CDP `drag` tool has no uid to
+    target, and synthetic `PointerEvent` sequences gave contradictory results across runs (board
+    181.2px → 126.0px in one attempt, unchanged through a 200px drag in the next). No trustworthy
+    automated verdict exists today.
+  - **Expected**: smooth resize, no clipping, no full-bleed. **Note the criterion changed**: the
+    original "zoom stays constant" wording in `quickstart.md` is stale — the freeze was deliberately
+    reverted (see `docs/open_issues.md` OI-127) — so do **not** sign off against zoom invariance.
+  - **Source**: spec 042 T058 / FR-022 / SC-009, as amended by `SplitReveal.jsx:49-72`.

@@ -5,7 +5,7 @@ metadata:
   node_type: memory
   type: feedback
   originSessionId: 09ab1bbf-3752-44fc-9a64-d05aa25d0cce
-  modified: 2026-08-02T19:01:36.619Z
+  modified: 2026-08-03T17:14:47.221Z
 ---
 
 The user separates **implemented** (code complete and verified) from **deployable** (no outstanding
@@ -37,4 +37,17 @@ holds the *standing deploy procedure* (how to push to staging/production, verifi
 spec 053's "Pending Pre-Staging Checks" section. Still **`ls` both paths before writing** rather than
 trusting any single source — that habit is what caught this file's own staleness.
 
-Related: [[feedback_open_issues_destination]], [[project_puzzle_grading_reads_stored_metadata]].
+**Ordering is the part that gets written wrong, and it is written confidently.** A runbook entry's
+"run the migration before/after the code deploy" is a *claim about what is currently deployed*, and
+it is routinely asserted rather than checked. Spec 056's entry said "apply the migration first"
+because "User Story 2 already shipped and is running in production" — nothing had shipped (unmerged
+branch, absent from every remote, 114 commits ahead of `origin/main`), and the code actually live
+`SELECT`ed the column being dropped in 21 places. PostgREST **errors** on selecting a missing column
+(unlike UPDATE, which silently drops unknown ones — see [[project_user_column_propagation]]), so the
+runbook as written was an instruction to take production down. **Before writing any ordering
+sentence, check what is deployed** (`git branch -r --contains <sha>`, `git log origin/main..HEAD`)
+and grep the *pre-change* code for reads of what you are removing. Destructive-migration default:
+deploy the code first, drop afterwards, and say plainly that the drop closes the revert window.
+
+Related: [[feedback_open_issues_destination]], [[project_puzzle_grading_reads_stored_metadata]],
+[[feedback_subagent_reports_are_scoped_claims]].

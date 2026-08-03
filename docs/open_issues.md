@@ -4540,3 +4540,246 @@ run `corpus_annotation_check.mjs` over recent `explanation_cache` rows to get a 
 designing the enforcement. A gate that fires on 30% of live output needs a different answer than one
 that fires on 0.5%. Then decide strip-vs-retry-vs-passthrough, and note that sanitising at the response
 seam (as OI's on the dual-path serving recommend) covers both the fresh and cached paths at once.
+
+---
+
+## OI-125 — "mistake counts include suboptimal" is load-bearing but unnamed: every identifier says `blunder`, and only one of the five sites is test-guarded
+
+**Status**: open (latent regression risk; the behavior is currently CORRECT everywhere)
+**Area**: `connect-four/server/blunderCountsForGames.js`, `server/index.js` (`/api/games`, `/api/coach/category-counts`, `/api/coach/queue`, both `summaryPhraseKey` branches), `src/screens/PastGamesListScreen.jsx`, `src/i18n/*.json`
+**Discovered**: 2026-08-03, while re-verifying `new_TODOs #16` ("'no mistakes' must not mean 'no blunders'") before deleting it from the backlog
+
+`new_TODOs #16` asked to "modify the number of mistakes to be the number of blunders + sub-optimal
+moves". That item was closed correctly — but **not** by changing a count. The premise was already
+false: the `blunders` table stores *both* severities (`quality ∈ {'blunder','suboptimal'}` — the only
+two values present in the local DB), so every count over that table was already a **mistake** count.
+Spec 042's real fix was narrower (copy that asserted flawlessness on a lost game). Verified live on
+2026-08-03: a papergames game with **0 blunder-quality rows and 7 suboptimal rows**
+(`73881223-0001-4e59-a10e-e78553c8261b`) returns `blunder_count: 7` from `GET /api/games` and renders
+"**7 mistakes**" in Past Games; a 3-blunder/9-suboptimal game renders "12 mistakes".
+
+**The defect is that the invariant has no name and almost no guard.** The rule — *never filter
+`blunders` by `quality` when counting mistakes* — is what makes all of this correct, yet every
+identifier in the stack says "blunder" while meaning "mistake":
+
+| Layer | Identifier | Actual meaning |
+|---|---|---|
+| DB | table `blunders` | all mistakes, both severities |
+| Wire | `blunder_count` (`index.js:2153`, `:2170`) | blunders + suboptimal |
+| Sort | `sort=worst_blunders` | worst *mistakes* |
+| Filter | `hasBlunder` / `?has_blunder` | has *any* mistake |
+| i18n | `games.no_blunders` | renders "No mistakes" (`en.json:201`) |
+| i18n | `games.filter_has_blunder` | renders "With mistakes" (`en.json:189`) |
+
+So the **label** already says "mistakes" while the **key** says "blunder" — the naming drift is
+baked into the translation files too.
+
+**Only one of the five quality-agnostic sites is test-guarded.**
+`tests/unit/blunderCountsForGames.test.js:94-112` explicitly asserts
+`supabase.calls[0].filters.quality === undefined` with the comment "the count() query must never
+filter on quality". Good. But grepping `tests/` and `server/tests/` for `category-counts` /
+`categoryCounts` / `summaryPhraseKey` returns **nothing**, so these carry the invariant on a code
+comment alone:
+
+- `/api/coach/category-counts` (`index.js:2758-2764`) — comment: "no `quality` filter added (FR-008)
+  — blunder- and suboptimal-quality rows are both counted."
+- `/api/coach/queue`'s `applyFilters` (`index.js:2840-2855`) — filters on `resolved_at`,
+  `pattern_category`, `game_id`, `papergames_game_id`; the *absence* of a `quality` filter is
+  unremarked and unasserted.
+- `summaryPhraseKey`, **duplicated in two branches** — the cached branch (`index.js:2259-2261`) and
+  the fresh-analysis branch (`index.js:2500-2502`), each independently written as
+  `(blunderCount === 0 && suboptimalCount === 0) ? '…review.clean' : '…review.mistakes'`. Two copies
+  of the same rule, neither covered by a test: fixing one and missing the other silently restores
+  "Clean game. Nothing to revisit." on a game with 9 suboptimal moves.
+
+**Why this is a real trap and not just cosmetics**: the names actively invite the regression. A
+future endpoint that needs "how many *blunders*" will reasonably add `.eq('quality','blunder')`, and
+on a `blunder_count`-named field that reads like a bug fix, not a behavior change. Because `/mistakes`
+category cards, the Past Games chip, the `has_blunder` filter and the review summary are computed by
+four *independent* queries rather than one shared helper, they can silently disagree — one surface
+saying "7 mistakes" while another says "No mistakes" for the same game, which is exactly the
+user-visible symptom `new_TODOs #16` complained about.
+
+**If picked up**: don't mass-rename (`blunder_count` is a wire field with a frontend consumer at
+`PastGamesListScreen.jsx:110-117`, and `spec 042 FR-007` deliberately froze the wire name). Cheaper
+and stronger: (1) add the missing tests — one asserting no `quality` filter reaches the
+category-counts and coach/queue queries, and one table-driven test pinning **both** `summaryPhraseKey`
+branches so `0 blunders + N suboptimal` never yields the `clean` pool; (2) collapse the duplicated
+`summaryPhraseKey` expression into one shared helper so there is a single place to get it wrong;
+(3) record the vocabulary in `docs/architecture/data-model.md` — "`blunders` = all mistakes;
+`quality` is the severity" — so the next reader doesn't have to infer it from five comments.
+
+---
+
+## OI-126 — the response-boundary guard strips `cXrY` but not bare or ranged column tokens, so `c3-c6` reaches the player
+
+**Status**: open (live defect, reproduced on a served explanation)
+**Area**: `connect-four/server/reasonRenderGuard.mjs`
+**Discovered**: 2026-08-03, spec 042 manual QA T048 (`agentic_QA_2026-08-03-1208.md`, finding 1)
+
+Spec 042 US5 (FR-017/FR-018/FR-019, QA:minor F) requires that no raw internal coordinate token reach
+player-facing prose. The guard implements this with exactly one coordinate rule
+(`reasonRenderGuard.mjs:25`):
+
+```js
+const CXRY_RE = /\bc(\d+)r\d+\b/gi;
+```
+
+It only matches the **paired** `c<col>r<row>` form. A **bare** column token (`c3`) or a **range**
+(`c3-c6`) matches neither it nor `LABEL_PREFIX_RE`, so `stripInternalTokens` returns it untouched.
+
+**Reproduced live**, free tier, `POST /api/explain-move-llm` on blunder
+`455c5272-3143-43d4-aa3f-c10f9d061666` (category `forced_win`, Move 8/28, Gray). Served text:
+
+> "You needed to keep the deep parity fight alive on the lower side, where your support for the
+> **c3-c6** line still matters."
+
+**The guard's placement is right; only its coverage is wrong.** `stripInternalTokens` is correctly
+installed at the single response seam (`guardExplainMovePayload` / `guardExplainMoveLlmPayload`), so
+it already covers the cache-hit, not-a-blunder, and fresh-generation branches alike — the fix belongs
+in the regex, not in the wiring.
+
+**Nothing upstream or downstream catches it either:**
+- The prompt *does* instruct against it — `llmCoachHelpers.js:804`: *"The display text inside the tags
+  MUST use natural language — never raw coordinates like c4r3 or col5"* — but that is advisory, and
+  the model emitted a shape (`c3-c6`) that neither of the two cited examples covers.
+- Per **OI-124**, the annotation gate never runs on the live path, so it cannot backstop this.
+
+**If picked up**: widen the coordinate rule to cover a bare column token and a range, rewriting to the
+localized "column N" the `cXrY` branch already produces (`serverT(locale,'column')`). Two cautions:
+(1) rewrite each endpoint of a range separately so `c3-c6` becomes "column 3-column 6" only if that
+reads acceptably — a range may deserve its own "columns 3 through 6" phrasing; (2) keep the match
+word-bounded and digit-anchored so ordinary prose is untouched. Add a guard unit test per shape
+(`c3`, `c3-c6`, `col5`) — the existing suite pins only `cXrY`, which is why this shipped.
+
+---
+
+## OI-127 — SplitReveal's board-zoom freeze was reverted in code, but the contract, the function name and the unit test all still assert the freeze (and that test is vacuous)
+
+**Status**: open (no user-facing defect believed; documentation + test-integrity defect)
+**Area**: `connect-four/src/components/SplitReveal.jsx`, `src/lib/useDragSplit.js`,
+`connect-four/tests/unit/splitRevealZoom.test.js`,
+`specs/042-mistake-review-unification/contracts/split-reveal-zoom-contract.md`,
+`specs/042-mistake-review-unification/quickstart.md`
+**Discovered**: 2026-08-03, spec 042 manual QA T058 (`agentic_QA_2026-08-03-1208.md`, finding 3 + Blocked)
+
+Spec 042 US6 / FR-022 / SC-009 required the board's `maxWidth` to be **frozen** at the split-pane's
+open-time split so dragging the divider never re-zooms the board (`new_TODOs #7`). **That freeze has
+since been deliberately reverted**, but four artifacts still assert it.
+
+**The code says the freeze was the bug.** `SplitReveal.jsx:49-72` derives `boardW` from the **live**
+`splitPct` and states verbatim:
+
+> "Supersedes spec 042 US6 (FR-022, SC-009, contracts/split-reveal-zoom-contract.md §2), which FROZE
+> boardW to the open-time split to stop the board zooming during a drag. That freeze is the root cause
+> of the reported bug: once the pane got short … the frozen height-derived cap either clipped a
+> fixed-size square or was dropped entirely (`constrain === false`), leaving `width: 100%` to blow the
+> board up to full screen width."
+
+It now uses `Math.max(computeFrozenBoardWidth(containerH, splitPct), MIN_BOARD_W)` with
+`MIN_BOARD_W = 120`, so the cap is never dropped to full-bleed.
+
+**Four artifacts contradict that:**
+
+1. **The contract claims the opposite outcome.** `split-reveal-zoom-contract.md`'s spec-055 T026
+   annotation says the freeze *shipped*: "`boardW` is now computed by
+   `computeFrozenBoardWidth(containerH, initialSplitPct, isDragging)` … and **frozen in a ref**,
+   decoupled from live drag state, exactly as this contract's 'Required behavior' section specifies."
+   The component does not freeze it in a ref and is not decoupled from live drag state. Two documents
+   each labelled "SUPERSEDED", pointing in opposite directions — the code wins, the contract is wrong.
+2. **The unit test is vacuous.** `splitRevealZoom.test.js:22-36`'s "invariant across the full simulated
+   drag range" loop calls `computeFrozenBoardWidth(CONTAINER_H, INITIAL_SPLIT_PCT, true)` with
+   **identical arguments on every iteration** (the loop variable is explicitly discarded:
+   `void simulatedSplitPct; // not a valid input to the frozen function — that's the point`) and
+   asserts the results are equal. That is `f(a,b,c) === f(a,b,c)` — true for any pure function, and it
+   cannot fail regardless of implementation. Critically, the drag-zoom behavior now lives in the
+   **caller** (which passes live `splitPct`), so this test could never have detected the reversal.
+3. **The function name and JSDoc lie about usage.** `computeFrozenBoardWidth`'s second parameter is
+   documented as "`initialSplitPct` - top-pane percentage at open time (pre-drag)", but the sole caller
+   passes the live `splitPct`. Its third parameter `isDragging` is dead, carrying an
+   `// eslint-disable-line no-unused-vars`.
+4. **`quickstart.md` US6 step 3 is unrunnable as written** — "confirm the board's zoom level stays
+   constant across the full drag range" now asserts behavior the code deliberately does not have. A
+   future QA pass will log a false failure (this one nearly did).
+
+**What actually guards the current behavior**: `tests/dom/SplitRevealZoom.dom.test.jsx` (spec 055
+T027-T029) asserts the real post-revert invariant — the board stays inside the pane and a numeric
+`maxWidth` cap is always present, because "an empty/absent maxWidth means SplitReveal fell back to
+width: 100% — the bug". That test is correct and should be treated as the contract.
+
+**Also blocking manual verification**: the divider is a bare `div` styled `cursor: row-resize` with no
+`role`/`aria-label`, so the CDP `drag` tool has no uid to target, and synthetic `PointerEvent`
+sequences gave contradictory results across runs (board 181.2px → 126.0px in one attempt, unchanged
+through a 200px drag in the next). No automated drag verdict is currently possible.
+
+**If picked up**: (1) rewrite the contract's "Required behavior" to the shipped rule (width tracks the
+live split; never full-bleed; `MIN_BOARD_W` floor) instead of the freeze; (2) delete or rewrite
+`splitRevealZoom.test.js`'s first case — a tautology is worse than no test, since it reads as coverage;
+(3) rename `computeFrozenBoardWidth` → e.g. `computeBoardWidthForSplit` and drop the dead `isDragging`
+param; (4) fix `quickstart.md` US6 step 3; (5) consider a `role`/`data-testid` on the divider so the
+drag becomes automatable.
+
+---
+
+## OI-128 — the mistake-detail Prev/Next stepper does not update the URL, so a reload silently shows a different mistake
+
+**Status**: open (minor; reload/share correctness)
+**Area**: `connect-four/src/screens/MistakeDetailScreen.jsx` (the `Prev`/`Next` handlers behind the "N of M" stepper)
+**Discovered**: 2026-08-03, spec 042 manual QA T032 (`agentic_QA_2026-08-03-1208.md`, finding 2)
+
+Spec 042 US2 makes a mistake permalink reload-safe on the way *in*: cold-booting
+`/blunder/<id>` reconstructs the correct "Move N / M" header, "X of Y" stepper and all three actions.
+That guarantee is lost as soon as the user steps.
+
+**Reproduced**: open `/blunder/fdb371b7-2e18-4c37-8ac6-4e039efc4480` → `Move 16 / 29`, `6 of 12`,
+BLUNDER. Click **Prev** → the screen correctly advances to `Move 14 / 29`, `5 of 12`, SUBOPTIMAL, **but
+the address bar still reads `/blunder/fdb371b7…`**. Reload → the screen returns to `Move 16 / 29`,
+`6 of 12` — a *different* mistake from the one that was on screen.
+
+So the URL identifies the mistake the user *entered* on, not the one they are looking at. Copying the
+link mid-review shares the wrong position, and the browser Back button skips the intra-screen steps
+entirely.
+
+**Not a spec-042 acceptance failure.** US3's stepper requirement targets the **ReviewScreen** stepper,
+which *does* navigate per mistake (verified: chip and Prev/Next both push `/blunder/<id>`). This is the
+`MistakeDetailScreen`'s own stepper, which the spec never required to be URL-backed — hence "open", not
+"regression".
+
+**If picked up**: mind the interaction with the deliberate Back semantics — `MistakeDetailScreen.jsx:165-176`
+comments that this screen is *pushed* onto history from the screen it should return to, so Back must
+**pop** (`goBack`/`window.history.back`) rather than push a fresh entry. Stepping should therefore
+**replace** the history entry (`history.replaceState`-style), not push one per step; pushing would
+restore the ping-pong Back behavior that `new_TODOs #23` was filed for.
+
+---
+
+## OI-129 — deep-reveal prose names board regions that carry no zone annotation, so they cannot be highlighted
+
+**Status**: open (minor; highlight integrity)
+**Area**: deep-reveal prompt / `[zone:…]` annotation coverage — `server/llmCoachHelpers.js` (offered-zone builder), `src/components/AnnotatedExplanation.jsx`
+**Discovered**: 2026-08-03, spec 042 manual QA T058 (`agentic_QA_2026-08-03-1208.md`, finding 4)
+
+On blunder `a5599ee3-a5f9-404f-b284-014562c6a35e` (`double_threat`, Move 12/31, Gray) the served
+explanation names **four** board regions:
+
+> "You played into the one spot that lets your opponent make a 7-shaped double threat on **the bottom
+> row** … you cannot block **both winning squares**. The tougher defense was to play **column 7**,
+> which takes away that exact bottom-row finish and denies your opponent the fork at **column 6**."
+
+Only **"column 7"** and the term "7-shaped double threat" render as interactive annotated spans.
+"column 6" — the fork column the sentence is actually about — and "the bottom row" are plain prose and
+highlight nothing. The reader is told to look at a column the board never points to.
+
+**Highlighting itself is working** (this is a coverage gap, not a broken mechanism): "column 7" is
+default-active and draws its capsule at `x = 163.146`, exactly column 7's measured centre — no
+off-by-one — and clicking the span toggles it off and on.
+
+**Why nothing catches it**: per **OI-124** the annotation gate never runs on the live path, so an
+explanation that annotates one of four named regions is served unchallenged. The offline gate's P5/P6
+predicates check that *emitted* zones are valid — not that every region *mentioned in prose* got a
+zone, which is the missing predicate here.
+
+**If picked up**: this is plausibly a prompt-side fix (instruct the model that every board region it
+names must carry a `[zone:…]`) rather than a render-side one, but it needs a measured failure rate
+first — sample recent `explanation_cache` rows for named-region-without-zone before designing
+enforcement, the same sequencing OI-124 recommends.
