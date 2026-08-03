@@ -145,7 +145,7 @@ function LessonNode({ lesson, state, onTap }) {
 // `lockAction` ('upgrade' | 'orderLock', session-only param) is passed by
 // useLessonLockGuard when a direct lesson URL was blocked: the saga opens the
 // SAME affordance handleNodeTap would have shown for that lock reason.
-export function SagaScreen({ go, goBack, lockAction }) {
+export function SagaScreen({ go, lockAction }) {
   const { t } = useTranslation();
   const { store } = useStore();
   const handleUpgrade = useUpgradeCheckout();

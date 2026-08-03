@@ -18,7 +18,7 @@ describe('detectClaimeven — subtype B (spec fixture)', () => {
   // Correct col = col2 (the other odd col)
   test('detects subtype B on spec fixture 4344444667', async () => {
     const ms = '3233333556';
-    const scores = await solver.query(ms);
+    await solver.query(ms);
     const result = await detectClaimeven(new Board(ms), solver);
 
     if (result.matched) {
@@ -32,7 +32,7 @@ describe('detectClaimeven — subtype B (spec fixture)', () => {
 
   test('correctCol comes from the non-last-move odd column', async () => {
     const ms = '3233333556';
-    const scores = await solver.query(ms);
+    await solver.query(ms);
     const result = await detectClaimeven(new Board(ms), solver);
 
     if (result.matched) {
@@ -45,7 +45,7 @@ describe('detectClaimeven — subtype B (spec fixture)', () => {
 describe('detectClaimeven — subtype A', () => {
   test('returns matched=false for empty board (no odd columns)', async () => {
     const ms = '';
-    const scores = await solver.query(ms);
+    await solver.query(ms);
     const result = await detectClaimeven(new Board(ms), solver);
     assert.equal(result.matched, false, 'empty board has no odd-height columns → no claimeven');
   }, { timeout: 10_000 });
@@ -59,7 +59,7 @@ describe('detectClaimeven — subtype A', () => {
   test('3 odd columns are each tried independently; still matched=false because no simulation confirms', async () => {
     // '012' → col0,col1,col2 each at height 1 → 3 odd cols, none of which pass simulation.
     const ms = '012';
-    const scores = await solver.query(ms);
+    await solver.query(ms);
     const result = await detectClaimeven(new Board(ms), solver);
     assert.equal(result.matched, false, 'no odd column simulation confirms a Yellow win on this board');
   }, { timeout: 10_000 });
@@ -73,7 +73,7 @@ describe('detectClaimeven — T018 full per-column enumeration (3 odd columns)',
   const ms = '2322332300233464400';
 
   test('all 3 odd columns confirm and are collected into correctCols', async () => {
-    const scores = await solver.query(ms);
+    await solver.query(ms);
     const result = await detectClaimeven(new Board(ms), solver);
     assert.equal(result.matched, true);
     assert.deepEqual([...result.correctCols].sort((a, b) => a - b), [2, 4, 6]);

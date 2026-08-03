@@ -1668,33 +1668,58 @@ Papergames scored-move count are both moot now that the threshold itself was rej
 
 ## Epic 8 — Dev Infrastructure & Test-Quality Baseline
 
-**Intent:** Make the repo's own gates trustworthy: a lint that can fail, a DOM suite that fails instead of
-hanging, a regression test that actually covers the bug it names, and the production CSP carrying the five
-fixes that today exist only on `stagging`.
+**Intent:** Make the repo's own gates trustworthy: a lint that can fail — and actually covers the whole
+tree, not just `.js` — a DOM suite that fails instead of hanging, a regression test that actually covers the
+bug it names, and confirmation that the production CSP already carries the five fixes OI-58 was tracking.
 
-**Issues covered:** OI-70 (`npm run lint` is red repo-wide, 254 errors — gates nothing), OI-71 (removing a
-`Board` guard hangs `test:dom` instead of failing it), OI-16 (dead tested `deepRevealPhase` helper), OI-29
-(stale SplitReveal contract + no render-level regression test), OI-58 (five CSP fixes missing from `main`),
-OI-6 (superseded de-dup contract wording), OI-72 (documented decision, doc-only).
+**Issues covered:** OI-70 (`npm run lint` is red repo-wide, 282 errors + 14 warnings across 71 files —
+gates nothing, and 141 `.mjs` files get zero rules applied regardless), OI-71 (removing a `Board` guard
+hangs `test:dom` instead of failing it), OI-16 (dead tested `deepRevealPhase` helper), OI-29 (stale
+SplitReveal contract + no render-level regression test), OI-58 (five CSP fixes — verified already present
+on `main`; close out with evidence and confirm the deployed build emits them), OI-6 (superseded de-dup
+contract wording), OI-72 (documented decision, doc-only).
 
-**Sizing note:** three stories, each 7–8 tasks. The worktree-port items (OI-51/OI-52) moved to Epic 4 US4.4,
-where they sit with the other environment/ops verifications rather than padding a fourth story here.
+**Sizing note:** three stories. The worktree-port items (OI-51/OI-52) moved to Epic 4 US4.4, where they sit
+with the other environment/ops verifications rather than padding a fourth story here. US8.3 shrank once
+OI-58's port task was replaced by a close-out+verify task; US8.1 grew by one task (widen the eslint `files`
+glob to `.mjs`/`.cjs`) — its final task count is unpredictable until that widening is applied and the newly
+covered files are triaged.
 
 **Settled decisions**
 1. **Split the eslint config by environment first** (browser for `src/`, node for `server/`, `scripts/`,
-   `tests/`) before touching any individual rule — that alone should clear most of the 254.
+   `tests/`) before touching any individual rule — that alone should clear most of the errors.
 2. Only after the baseline is green does `lint` become a gate.
-3. OI-58 ships to `main` via a **fresh worktree off `origin/main`** carrying just the CSP diff, per project
-   convention — not by merging the divergent branch. The owner previously declined this; re-confirm before
-   doing it.
+3. **OI-58's CSP fixes are already on `main`** — verified: the `helmet(...)` block in
+   `connect-four/server/index.js` is byte-identical between `main` and `stagging`, and commit `ae3c006`
+   ("fix(csp): allow Google Fonts stylesheet and font files", 2026-07-18) is reachable from `main`. The
+   owner confirmed: do **not** port anything or touch branch topology. Instead, mark OI-58 ✅ RESOLVED
+   citing `ae3c006` and the byte-identical diff as evidence, and perform one real check that a production
+   build actually emits the directives (a real `npm run build` + server restart — CSP never lands under
+   `npm run dev`; the server reads `dist` at boot). Also disambiguate OI-58's entry: its trailing
+   "**Resolved (2026-07-18)**" paragraph is about an unrelated Paddle static import, not the CSP, and reads
+   ambiguously as-is.
 4. OI-72 is recorded as a decision, not fixed: the `...slide` spread is what makes unknown authored fields
    survive a round trip.
+5. Widen `connect-four/eslint.config.js`'s `files` glob to include `.mjs`/`.cjs` as an explicit US8.1 task —
+   ESLint 9 walks these files but currently applies **zero rules** to them (`npx eslint --print-config` on a
+   `.mjs` test file returns 0 rules vs. 78 for `server/index.js`), so all of `server/tests/*.test.mjs`,
+   `server/scripts/*.mjs`, and `server/*.test.mjs` are effectively unlinted today. Prove the widened gate
+   works by temporarily inserting a real violation in a `.mjs` file and confirming `npm run lint` goes red
+   (per `docs/architecture/testing-conventions.md` §"Grep-as-lint tests must not use bare grep").
 
 **Non-obvious facts**
+- **Re-measure this epic's facts before acting on them.** Two of this epic's three headline facts had
+  already gone stale by the time of review: OI-58's CSP port was already done by the owner out-of-band, and
+  OI-70's error count had drifted from 254 to 282. Re-measure at the start of the `/epics-manager` run
+  rather than trusting the numbers below.
 - Always run `eval "$(./worktree-ports.sh)"` before starting or killing any server — unconditionally, every
   session. Never kill by a bare port number or `pkill node` (`CLAUDE.md`,
   `docs/architecture/worktree-conventions.md`). This applies to running the suites below, even though the
   port *fix* itself lives in Epic 4.
+- `npm run test:fast`'s baseline in a worktree is **5 RED, not 0** — OI-82's ENOENT reason-engine tests fail
+  in the main checkout too (memory `project_repo_worktree_setup` §2d). Judge this epic's work against 5
+  pre-existing failures, not a clean baseline; wiring `lint` into the test scripts must not be confused with
+  making `test:fast` itself green.
 - OI-71's hang is a genuine block (0% CPU, stable RSS across three runs), not a busy loop; root cause
   uninvestigated, suspicion is jsdom/testing-library interaction rather than `Board` itself.
 - OI-29's existing test only exercises the pure `computeFrozenBoardWidth`, which is still frozen by
@@ -1702,7 +1727,12 @@ where they sit with the other environment/ops verifications rather than padding 
 - The jsdom/`global-jsdom` peer mismatch (OI-16's second bullet) is **resolved** — do not reintroduce
   `--legacy-peer-deps`; Railway's `npm ci` is strict and `railpack.json` hides it
   (memory `project_spec031_staging_production_deploy`).
-- `main` is ~496 commits diverged from `stagging` (memory `project_paddle_integration`).
+- Re-measured lint baseline: **282 errors + 14 warnings across 71 files** (164 `no-undef`, 159 of those
+  `process`), point-in-time. 3 of the 282 are `Unused eslint-disable directive` reports
+  (`server/index.js:4260`, `server/tests/renderCoverageUniverse.test.mjs:28`,
+  `tests/classifier/classifier.test.js:221`) that will shift as rules change.
+- `main` is ~496 commits diverged from `stagging` generally, but that is irrelevant to OI-58: the specific
+  `helmet(...)` block diverged not at all (memory `project_paddle_integration`).
 
 **Authoritative sources of truth**
 - `docs/architecture/testing-conventions.md` (`test:fast` vs `test` vs `test:dom`), `CLAUDE.md` §Running tests
@@ -1714,28 +1744,48 @@ where they sit with the other environment/ops verifications rather than padding 
 
 **User stories & tasks**
 
-**US8.1 — A lint that can fail (8 tasks).** Split `eslint.config.js` by environment; re-measure the error
-count; run `--fix`; triage the remainder into fix-now vs rule-off with a stated reason; remove the unused
-`boardToSpec` import; get to zero; add `lint` to the test scripts and document the gate.
+**US8.1 — A lint that can fail (task count TBD, pending the `.mjs`/`.cjs` widening).** Split
+`eslint.config.js` by environment; widen the config's `files` glob to include `.mjs`/`.cjs` so the gate
+actually covers the tree; re-measure the error count against the widened glob; run `--fix`; triage the
+remainder into fix-now vs rule-off with a stated reason; remove the unused `boardToSpec` import
+(`src/components/admin/BoardEditor.jsx`); get to zero; prove the gate by temporarily inserting a real
+violation in a `.mjs` file and confirming `npm run lint` goes red; add `lint` to the test scripts and
+document the gate.
 
 **US8.2 — DOM/test-suite reliability (7 tasks).** Reproduce OI-71's hang by deleting `&& value === 'empty'`;
 bisect the non-returning assertion; make the mutant fail cleanly; annotate the SplitReveal contract doc as
 superseded; add the render-level SplitReveal regression (board width ≤ pane width, `constrain`/maxWidth stays
-applied under a short container); either wire `deepRevealPhase` into the render or delete it plus its test.
+applied under a short container) — add it **by name** to the `test:dom` script string in
+`connect-four/package.json` (a hand-maintained space-separated file list; there is no auto-discovery) and
+confirm it runs; delete the `deepRevealPhase` export and **only** its own test case
+(`'phase transitions: loading -> slow -> timedOut…'`) from `tests/unit/deepRevealTimeout.test.js`, keeping
+the `'hard cap is well beyond the soft hint…'` test intact (it covers the still-live
+`DEEP_REVEAL_SOFT_MS`/`DEEP_REVEAL_HARD_MS` constants used at `src/components/DeepRevealPane.jsx:12,184-190`)
+— update the `test` and `test:fast` script strings only if a whole file's worth of coverage moves, not for
+this single-test deletion.
 
-**US8.3 — Production CSP + doc bookkeeping (7 tasks).** Diff `server/index.js`'s `helmet(...)` block between
-`stagging` and `main`; port the five fixes via a fresh worktree off `origin/main` (owner-confirmed); verify
-the deployed build actually enforces them (never under `npm run dev`); add the SUPERSEDED note to
+**US8.3 — CSP close-out + doc bookkeeping (task count reduced — no port).** Diff `server/index.js`'s
+`helmet(...)` block between `stagging` and `main` to confirm the byte-identical match and cite commit
+`ae3c006`; mark OI-58 ✅ RESOLVED with that evidence (no code change, no worktree, no merge); disambiguate
+OI-58's trailing "Resolved (2026-07-18)" paragraph as being about the unrelated Paddle static import, not
+CSP; verify the deployed build actually emits the directives via a real `npm run build` + server restart
+(`eval "$(./worktree-ports.sh)"` first, never a bare port; never under `npm run dev`); confirm the block
+matches `docs/architecture/server-conventions.md` §"CSP Directive Rationale"; add the SUPERSEDED note to
 `contracts/api-auth-session.md` (OI-6); record OI-72 as intended behaviour; apply the "Already resolved"
 table's verified findings to `docs/open_issues.md` (OI-1, OI-15, OI-12, OI-24, OI-77 and the lesson-text
 half of OI-18/36/64); then **audit the closeout convention across the whole backlog** — walk every `OI-N`
 this backlog covers and flag any whose code shipped in Epics 1–7 but whose entry still reads as open.
-That audit is a backstop, not the primary mechanism: each epic closes its own issues.
+That audit is a backstop, not the primary mechanism: each epic closes its own issues, and this story must
+not re-close issues owned by other epics.
 
 **Acceptance criteria**
-- `npm run lint` exits 0 on a clean tree and is wired into the test scripts.
+- `npm run lint` exits 0 on a clean tree (including `.mjs`/`.cjs` files) and is wired into the test scripts.
+- A deliberately-introduced error in a `.mjs` file makes `npm run lint` fail — proving the widened gate,
+  not just the widened glob.
 - The `windowCounts` guard mutant fails with an assertion, not a hang.
-- Production CSP matches the documented directive rationale.
+- The new SplitReveal DOM regression test is present by name in `test:dom` and observed running.
+- OI-58 is closed as ✅ RESOLVED citing `ae3c006`, and a real production build's response headers were
+  confirmed to carry the CSP directives (not just the source diff).
 - Every `OI-N` under this epic's **Issues covered** is closed out in `docs/open_issues.md` per the
   Issue closeout convention at the top of this file — resolved-with-date, or still open with a dated
   UPDATE naming exactly what remains. A shipped fix with a stale backlog entry is an incomplete story.
@@ -1743,10 +1793,14 @@ That audit is a backstop, not the primary mechanism: each epic closes its own is
 **NOT included**
 - Migrating test runners or adding Playwright.
 - Merging `stagging` into `main`.
+- Porting or touching branch topology for OI-58 — it is already resolved on `main`; this epic only verifies
+  and closes it out.
 - The worktree-port self-derive fixes (Epic 4 US4.4).
 
 **Open questions**
-- Does the owner want the `main` CSP PR done here, or will they continue to port it themselves?
+- None. The prior question ("does the owner want the `main` CSP PR done here, or will they continue to
+  port it themselves?") is resolved — see Settled decision #3: the fixes are already on `main`, and the
+  owner confirmed US8.3 does close-out + build verification, not a port.
 
 ---
 

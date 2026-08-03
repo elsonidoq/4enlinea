@@ -2,7 +2,7 @@
 // Tests the HTTP handler logic with mock supabase stubs — no real DB.
 // Uses node:test + node:assert/strict (same pattern as userHelpers.test.mjs).
 
-import { describe, it, before, after } from 'node:test';
+import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import http from 'node:http';
 import express from 'express';
@@ -70,21 +70,8 @@ function authMiddleware(req) {
   req.user = TEST_USER;
 }
 
-function anonMiddleware(_req) {
+function anonMiddleware() {
   // req.user stays undefined
-}
-
-// ── Stub factories ───────────────────────────────────────────────────────────
-
-/** Create a stub object that records method calls for inspection. */
-function recordCalls(returnValue) {
-  const calls = [];
-  const fn = async (...args) => {
-    calls.push(args);
-    return returnValue !== undefined ? returnValue : undefined;
-  };
-  fn.calls = calls;
-  return fn;
 }
 
 // ── T021a: GET endpoints ─────────────────────────────────────────────────────
@@ -369,7 +356,7 @@ describe('GET /api/user/* endpoints', () => {
 
     it('returns 400 when date invalid', async () => {
       const app = createApp({}, authMiddleware);
-      const { status, body } = await request(app, 'GET', '/api/user/session-stats?date=bad');
+      const { status } = await request(app, 'GET', '/api/user/session-stats?date=bad');
       assert.equal(status, 400);
     });
 
@@ -620,9 +607,6 @@ describe('GET /api/user/* endpoints', () => {
 describe('POST /api/user/* endpoints', () => {
   describe('POST /api/user/session-stats', () => {
     it('calls writeSessionStats with req.body.stats (inner), returns 204', async () => {
-      const writeSessionStatsSpy = recordCalls();
-      const supabase = {}; // not used directly
-      const app = createApp(supabase, authMiddleware);
       // Override the imported writeSessionStats — we can't, so we test via the supabase interaction
       // Actually the route calls writeSessionStats() which we can't mock from here.
       // Let me instead validate via supabase calls that would happen.
@@ -689,7 +673,7 @@ describe('POST /api/user/* endpoints', () => {
 
     it('returns 400 when required fields missing', async () => {
       const app = createApp({}, authMiddleware);
-      const { status, body } = await request(app, 'POST', '/api/user/puzzle-attempts', {
+      const { status } = await request(app, 'POST', '/api/user/puzzle-attempts', {
         body: { puzzle_id: 'p1' },
       });
       assert.equal(status, 400);
@@ -1326,7 +1310,7 @@ describe('POST /api/user/migrate', () => {
         if (table === 'users') {
           return {
             update: (payload) => ({
-              eq: (col1, val1) => ({
+              eq: (col1) => ({
                 eq: (col2, val2) => {
                   // Only the onboarding conditional-write path chains a 2nd .eq(); the
                   // sparring_record/streak/device_uuid writers used elsewhere in this

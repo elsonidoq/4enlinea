@@ -311,16 +311,6 @@ function cellsToZoneSpec(cells) {
   return 'windows:' + cells.join('|');
 }
 
-// Convert a list of windows to the zone alias expansion spec:
-//   "windows:c2r4,c3r4,c4r4,c5r4|c3r5,c4r5,c5r5,c6r5"
-// Each window becomes a pipe-separated group; cells within a window are comma-separated.
-function windowsToZoneSpec(windows) {
-  if (!windows || windows.length === 0) return 'windows:';
-  return 'windows:' + windows
-    .map(w => w.map(([r, c]) => `c${c + 1}r${r + 1}`).join(','))
-    .join('|');
-}
-
 // Replace [zone:alias] / [/zone:alias] tokens in LLM output with their expanded
 // [zone:windows:...] / [/zone:windows:...] equivalents.
 // Expansion must happen before annotation validation so the gate sees valid specs.
@@ -571,6 +561,10 @@ export function buildOpeningReason({ movestring, playedCol, bestCol, bestScore, 
  *                  |{prompt: null, allowedSet: null, allMovesEqual: true}
  *                  |null>}
  */
+// `rounds` is unused in the current flow (see the JSDoc above) but is a non-trailing positional
+// param: all 12 call sites pass it positionally, so removing it would be a call-site refactor,
+// not the non-behavior-changing deletion FR-019(a) prescribes. Kept deliberately (spec 055).
+// eslint-disable-next-line no-unused-vars
 export async function buildExplainContext(movestring, col, rounds = 1, solver, deps = {}) {
   const board = new Board(movestring);
   const perspective = movestring.length % 2 === 0 ? 1 : 2;

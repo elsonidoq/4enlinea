@@ -92,7 +92,7 @@ export function DeepRevealPane({
     try {
       const p = await store.getProfile();
       setProfile(p);
-    } catch (_) {
+    } catch {
       // Ignore — counter just won't render this time.
     }
   }

@@ -9,7 +9,6 @@
 
 import { readFileSync, writeFileSync } from 'fs';
 import { dirname, basename, join } from 'path';
-import { fileURLToPath } from 'url';
 
 const [,, resultsFile, evalSetFile, outputFile] = process.argv;
 

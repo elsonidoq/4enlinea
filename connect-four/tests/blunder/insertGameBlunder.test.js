@@ -15,7 +15,7 @@ function makeStubSupabase(errorToReturn = null) {
   let capturedRow = null;
   return {
     captured: () => capturedRow,
-    from: (table) => ({
+    from: () => ({
       insert: async (row) => {
         capturedRow = row;
         return { error: errorToReturn };

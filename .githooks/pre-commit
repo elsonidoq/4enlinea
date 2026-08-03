@@ -13,6 +13,20 @@
 
 repo_root=$(git rev-parse --show-toplevel)
 
+# Lint runs first, before sync-kb, so a commit that's going to be rejected on
+# lint errors never triggers sync-kb.mjs mutating/staging connect-four/server/kb/
+# (see specs/055-dev-infra-test-quality/research.md R5). Measured full-tree lint
+# wall time: ~6.7s (`time npm run lint`, connect-four/, 2026-08-02).
+#
+# `--quiet` limits output to errors: the gate is error-level only (warnings are the
+# deliberately-demoted react-hooks/react-refresh set tracked in OI-119), and without
+# it every commit dumps ~47 verbose warnings, which trains people to ignore the hook.
+# Run `npm run lint` directly to see the warnings.
+(cd "$repo_root/connect-four" && npx eslint . --quiet) || {
+  echo "pre-commit: lint failed" >&2
+  exit 1
+}
+
 node "$repo_root/connect-four/scripts/sync-kb.mjs" || {
   echo "pre-commit: sync-kb failed" >&2
   exit 1

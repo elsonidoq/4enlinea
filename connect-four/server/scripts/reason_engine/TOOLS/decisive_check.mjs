@@ -71,7 +71,7 @@ try {
     if (bestCol === -1) break;
     ms += String(bestCol);
     moves.push(`p${ms.length}:${mover === 1 ? 'G' : 'g'}col${bestCol}(s${bestScore})`);
-    const { grid, heights: h2 } = buildBoard(ms);
+    const { grid } = buildBoard(ms);
     const wins = winningWindows(grid, mover);
     if (wins.length) {
       const { heights: hPrev } = buildBoard(ms.slice(0, -1));

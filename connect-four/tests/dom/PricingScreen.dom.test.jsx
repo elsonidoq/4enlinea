@@ -79,7 +79,7 @@ test('PricingScreen: live prices, savings badge, and quota render from the real 
 
     // Purchase CTA is offered — pricing fetch succeeded.
     assert.ok(screen.getByText(i18n.t('pricing.checkoutCta')));
-    assert.equal(screen.queryByText(i18n.t('pricing.degraded')), null);
+    assert.equal(screen.queryByText(i18n.t('pricing.degraded')) === null, true);
   } finally {
     globalThis.fetch = originalFetch;
     cleanup();
@@ -102,7 +102,7 @@ test('PricingScreen: a failed pricing fetch shows the degraded message and offer
     });
 
     // No purchase action offered when live pricing is unavailable (FR-022).
-    assert.equal(screen.queryByText(i18n.t('pricing.checkoutCta')), null);
+    assert.equal(screen.queryByText(i18n.t('pricing.checkoutCta')) === null, true);
   } finally {
     globalThis.fetch = originalFetch;
     cleanup();
@@ -124,12 +124,12 @@ test('PricingScreen: a failed quota fetch alone falls back to the generic phrase
     await waitFor(() => {
       assert.ok(screen.getByText(i18n.t('pricing.quotaFallback')));
     });
-    assert.equal(screen.queryByText(/Deep Reveals per week/), null);
+    assert.equal(screen.queryByText(/Deep Reveals per week/) === null, true);
 
     // Pricing itself is fine, so the CTA still renders — the two degraded
     // modes must not be conflated (FR-022).
     assert.ok(screen.getByText(i18n.t('pricing.checkoutCta')));
-    assert.equal(screen.queryByText(i18n.t('pricing.degraded')), null);
+    assert.equal(screen.queryByText(i18n.t('pricing.degraded')) === null, true);
   } finally {
     globalThis.fetch = originalFetch;
     cleanup();

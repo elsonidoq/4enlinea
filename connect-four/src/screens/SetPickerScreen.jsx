@@ -40,7 +40,7 @@ function buildLocalProgress(allCounts, puzzleCategoryMap, attempts) {
   return { progress };
 }
 
-export function SetPickerScreen({ go, goBack }) {
+export function SetPickerScreen({ go }) {
   const { t } = useTranslation();
   const { session, store } = useStore();
   const handleUpgrade = useUpgradeCheckout();

@@ -14,12 +14,72 @@ Each entry: what's wrong, why it's deferred, where it lives, and a concrete repr
 > and most of **OI-19** are done despite still reading as open. Each is being closed out by the epic that
 > covers it, per that file's *Issue closeout convention* (updating this file is a per-epic acceptance
 > criterion, not a final cleanup pass).
+>
+> **Dated correction (2026-08-02, Epic 8 spec 055 closeout audit, T049).** Of the five entries named
+> above, **OI-1, OI-15, OI-12, OI-24, and OI-77 have all since been re-verified and marked ✅ RESOLVED
+> in their own entries below**, each with a fresh file:line citation (spec 055 T042-T046) — including
+> OI-12, whose actual underlying bug (the `DeepRevealPane.jsx` timeout, not to be confused with OI-16's
+> separate dead-helper residue) turned out to have been fixed in commit `51ecab0` back on 2026-07-12,
+> contrary to this epic's own initial working assumption that it remained open. See the new
+> **"Epic 8 whole-backlog audit (2026-08-02)"** section directly below this blockquote for the
+> additive FR-017 whole-backlog walk (a superset check across every `OI-N` in
+> `docs/epics/open-issues-epics.md`, not just these five).
+
+> **Epic 8 whole-backlog audit (2026-08-02).** Per FR-017, every `OI-N` referenced by
+> [`docs/epics/open-issues-epics.md`](epics/open-issues-epics.md) (70 entries) was walked and its
+> `docs/open_issues.md` status line compared against a fresh read of the code it describes. This section
+> lists candidates whose code appears to have shipped while the entry's **top** `**Status**:` line still
+> reads open — **it does not edit any of those entries' bodies**, per FR-017's "additive, not a
+> replacement" rule; each is left for its owning epic to close out formally.
+>
+> - **OI-17** (`chooseSparringMove` returns `col: undefined` on a full board) — appears **shipped**.
+>   `server/classifier.js:545-547`: `if (playable.length === 0) { throw new NoLegalMoveError('no legal
+>   move: board is full'); }` replaces the old silent `Math.max(...[])` → `-Infinity` →
+>   `pick([])` → `undefined` path; `server/index.js:1082` catches `NoLegalMoveError` explicitly. Shipped
+>   in commit `c192454` ("Spec 054 (Epic 4): server/API data integrity & environment correctness",
+>   2026-08-02). OI-17's own entry still reads `**Status**: deferred (latent; unreachable via the normal
+>   client flow, 2026-07-13)`. Owned by Epic 4/1 (this branch, spec 054) — not Epic 8's to close.
+> - **OI-40** (anonymous puzzle-attempt writes fall back to a shared literal `device_uuid: 'anonymous'`)
+>   — **already resolved in its own body**, but its **top** status line is stale. The entry's opening
+>   line still reads `**Status**: deferred / open (surfaced during Task 23 ...)`, but a second,
+>   differently-formatted status marker further down the same entry (`**Status: ✅ RESOLVED
+>   2026-08-02** (spec 054, Epic 4, US1)`) documents the actual fix (`resolveDeviceUuid()` in
+>   `server/deviceIdentity.js`). A reader or tool that only checks the first `**Status**:` line per
+>   entry (as this audit did) will see it as open. Owned by Epic 4 — flagged here as a formatting/scan
+>   trap, not a content gap; the fix itself is real.
+> - **OI-41** (`/pricing` bare static page) — **the file-location half of the note is stale, the
+>   underlying design gap is not**. The entry says "`pricing.html` and its route are **not on this
+>   branch**... pull `main`", but `connect-four/server/pricing.html` exists on this branch (shipped in
+>   commit `d358ea3`, "paddle migration", 2026-07-18). The substantive complaint (unstyled, no i18n, no
+>   real pricing-page design) still holds — this is not a full resolution, only a stale
+>   branch-provenance note inside an otherwise-still-accurate open entry. Owned by Epic 6/9 area — not
+>   Epic 8's to close.
+>
+> Also walked and confirmed still genuinely open (no shipped-but-unmarked evidence found): OI-5, OI-14,
+> OI-30, OI-31, OI-32, OI-33, OI-36, OI-38, OI-53, OI-72, OI-81, OI-82. OI-16's top status line
+> ("deferred...") is likewise stale relative to its own two now-inline-✅-RESOLVED sub-bullets, but
+> OI-16 is *this* epic's (Epic 8's) own entry and its top-line update was outside this batch's
+> permitted edit set — flagged here as a residual TODO for whichever Epic 8 batch closes it out, not a
+> cross-epic finding.
 
 ---
 
 ## OI-1 — Single-answer puzzle categories score by solver-score, not by pattern (score-tie ≠ pattern-tie)
 
-**Status**: 📋 SPEC-READY 2026-07-13 — full speckit artifacts authored at `specs/049-puzzle-scoring-spanish-localization/` (Epic 9, via `/epics-manager`); run `/coordinate-implementation` to build. Was: deferred out of spec 044 per FR-014/FR-015b.
+**Status**: ✅ RESOLVED (verified 2026-08-02, Epic 8 spec 055 closeout audit T042). Spec 049 shipped the
+fix: `src/screens/ChallengeScreen.jsx:342-344` — `const isMultiSolutionCategory =
+MULTI_SOLUTION_CATEGORIES.has(effectiveCategory); const usesAcceptedGate = isMultiSolutionCategory ||
+SINGLE_ANSWER_CATEGORIES.has(effectiveCategory); const isCorrect = usesAcceptedGate ? data.accepted ===
+true : data.quality === 'optimal';` — the six single-answer categories now route through the same
+`accepted` (pattern-membership) gate as the multi-solution categories, not a bare
+`quality === 'optimal'` score check. Server-side: `server/evaluateMoveHandler.js:249` — `if
+(MULTI_SOLUTION_CATEGORIES.has(category) || SINGLE_ANSWER_CATEGORIES.has(category)) {` gates the
+`evaluatePredicate` path the same way. Regression coverage:
+`tests/integration/singleAnswerCategoriesAccepted.test.js` (12/12 passing, mounts the real extracted
+`createEvaluateMoveHandler`, asserts both `accepted:true`-on-taught-column and
+`accepted:false`-on-non-pattern-column for all six categories). `specs/049-puzzle-scoring-spanish-localization/tasks.md`
+is fully checked off except two manual-QA checklist items (T017, T023) that require a running app, not
+code. Was: 📋 SPEC-READY 2026-07-13; deferred out of spec 044 per FR-014/FR-015b.
 **Area**: client-side puzzle scoring — `src/screens/ChallengeScreen.jsx`, `server/moveQualityScorer.js` (`scoreMove`), `server/predicates.js`, `/api/evaluate-move` (+ `/inline`)
 **Discovered**: spec 044 QA (2026-07-11)
 **Spec 049 approach**: extend the `evaluatePredicate`-gated `accepted` path to the six single-answer categories at the Challenge seam; client sends camelCase `correctCol`/`highlightMetadata` (remap from snake_case — see `docs/architecture/server-conventions.md` §Predicate Evaluator); read stored metadata (no detector recompute); converge the plain + `/inline` handlers (extracted to `server/evaluateMoveHandler.js`) and fix the live `VALID_CATEGORIES.includes`-on-a-`Set` 500 in `/inline` as part of that convergence.
@@ -124,14 +184,21 @@ under the Epic 4 section, dated 2026-08-02. This OI remains **open**.
 
 ## OI-6 — Superseded de-dup language in `contracts/api-auth-session.md`
 
-**Status**: deferred (doc staleness, non-functional)
+**Status**: ✅ RESOLVED 2026-08-02 (spec 055, Epic 8, US3, T040) — citation task only, no code/doc change.
 **Area**: `specs/045-account-session-checkout/contracts/api-auth-session.md`
 **Discovered**: spec `045` T041/T042 (2026-07-11)
 
 The auth-session contract still describes a server-side de-dup Map coalescing concurrent same-token refreshes, which the shipped code deliberately does **not** implement (see OI-5 / research.md R1). The authoritative, current behavior is documented in `docs/architecture/api-conventions.md` and `server-conventions.md`; the contract file's original wording is now superseded.
 
-**Why deferred**: cosmetic — the contract is a frozen planning artifact; the architecture docs are the live source of truth.
-**If picked up**: add a one-line "SUPERSEDED — see OI-5 / server-conventions.md" note at the top of the relevant section in `contracts/api-auth-session.md`.
+**Resolution**: the "If picked up" note below already happened before this OI was worked — confirmed by
+direct read that `specs/045-account-session-checkout/contracts/api-auth-session.md:8-13` already carries a
+`> **SUPERSEDED (OI-6, 2026-07-12):**` blockquote (dated 2026-07-12, i.e. predating this OI's own
+2026-07-11 discovery note by a day, meaning it was added essentially immediately) pointing to OI-5,
+`research.md` R1, `server-conventions.md`'s "No de-dup Map — documented absence" section, and
+`connect-four/server/authRefresh.js` as the live source of truth. No second, redundant SUPERSEDED block was
+added — this is a citation of pre-existing evidence, not new authoring.
+
+**Why originally deferred**: cosmetic — the contract is a frozen planning artifact; the architecture docs are the live source of truth.
 
 ---
 
@@ -285,7 +352,28 @@ gate rather than instead of it) and was explicitly out of scope for this feature
 
 ## OI-12 — Deep-reveal first (uncached) load can time out client-side before the LLM returns
 
-**Status**: deferred (pre-existing; surfaced during spec-047 QA, unrelated to this feature's changes)
+**Status**: ✅ RESOLVED (verified 2026-08-02, Epic 8 spec 055 closeout audit T044). The exact fix this
+entry's own "If picked up" section describes shipped the same day it was discovered, in commit
+`51ecab0` ("feat(OI-12): add two-stage deep-reveal timeout helper + test", 2026-07-12 22:10:56 -0300)
+plus its immediate follow-up wiring commit `6cc5c71` (2026-07-12 22:12:15 -0300) — both predate this
+epic by three weeks. `src/lib/deepRevealTimeout.js:4-5` now exports `DEEP_REVEAL_SOFT_MS = 6000` and
+`DEEP_REVEAL_HARD_MS = 30000` (raised from a flat 6s hard-abort to a 30s hard-abort). Live in
+`src/components/DeepRevealPane.jsx:184-190`: `const softId = setTimeout(() => setSlow(true),
+DEEP_REVEAL_SOFT_MS); const hardId = setTimeout(() => { controller.abort(); ... setTimedOut(true); },
+DEEP_REVEAL_HARD_MS);`. The render path (`DeepRevealPane.jsx:320-321`) shows a "still thinking…" state
+at 6s while the fetch is still in flight — `loading && slow && !timedOut ?
+t('deepReveal.stillThinking', 'Still thinking… detailed explanations can take a few seconds on the
+first look.')` — and only shows the `deepReveal.unavailable` failure message (`:327-331`) once the 30s
+hard timeout actually fires. This is precisely the "show a 'still thinking…' state instead of a
+failure message" resolution this entry's own "If picked up" section asked for.
+**Do not confuse with OI-16's now-separately-resolved item**: OI-16 tracked a *different*, later
+residue — a dead `deepRevealPhase(elapsedMs, resolved)` helper function in the same file
+(`src/lib/deepRevealTimeout.js`) that computed `'loading'|'slow'|'timedOut'` from the two constants
+above but had zero callers; that dead code was deleted in Epic 8 spec 055 US2 (T030-T031). OI-16's
+entry already reads ✅ RESOLVED for that helper-deletion; this OI-12 entry is the separate underlying
+timeout-*behavior* bug, and it turns out to have been fixed independently, earlier, and is unrelated
+to Epic 8's own changes.
+**Superseded status text (kept for history):** deferred (pre-existing; surfaced during spec-047 QA, unrelated to this feature's changes)
 **Area**: `connect-four/src/components/DeepRevealPane.jsx` — client-side fetch timeout
 **Discovered**: spec `047` (Epic 7) QA (2026-07-12)
 
@@ -368,7 +456,20 @@ section, dated 2026-08-02.
 
 ## OI-15 — Spanish i18n (`es.json`) ships translations but is never registered; app is English-only
 
-**Status**: 📋 SPEC-READY 2026-07-13 — the remaining translation-content work is now specced at `specs/049-puzzle-scoring-spanish-localization/` (Epic 9, US9.3–US9.4). Switcher machinery already SHIPPED 2026-07-12 (useLanguage hook, es bundle registered, Settings selector). On-disk reality: `es.json` has 3 of 25 top-level sections complete (`setcard`, `onboarding`, `settings`), 22 missing; selecting es renders English via fallback until spec 049 lands. Spec 049 adds a `node:test` en/es key-parity guard (registered in both `test` + `test:fast`).
+**Status**: ✅ RESOLVED (verified 2026-08-02, Epic 8 spec 055 closeout audit T043 — re-measured fresh,
+not copied from the stale "3 of 25 sections" figure below). Switcher machinery: `src/i18n/index.js:4,12,14`
+registers `es: { translation: es }` alongside `en`, with `lng: readStoredLang('en')` reading a persisted
+choice; `SettingsScreen.jsx` has a language `<select>` (`settings.language.label`, options `en`/`es`).
+Content coverage, measured fresh via a top-level-key diff and a full leaf-key diff of
+`src/i18n/en.json` vs `src/i18n/es.json`: **30 of 30 top-level sections present, 697 of 697 leaf keys
+present, 0 empty/null values.** `node --test tests/unit/i18nKeyParity.test.js` passes (4/4) — "en.json
+and es.json have identical nested key sets (key presence only)". The "3 of 25 sections, 22 missing"
+figure below is stale; the content gap it described has since closed (bulk translation work landed
+across specs 049-053, e.g. commits visible in `git log --oneline -- src/i18n/es.json`). Key-*presence*
+parity is what the guard test checks, not per-string translation quality — no evidence of untranslated
+placeholder/English-leaked values was found (0 leaf entries are English-identical-and-suspicious by a
+spot check), but a by-eye Argentinian-voseo quality pass was not re-run as part of this audit.
+**Superseded status text (kept for history):** 📋 SPEC-READY 2026-07-13 — the remaining translation-content work is now specced at `specs/049-puzzle-scoring-spanish-localization/` (Epic 9, US9.3–US9.4). Switcher machinery already SHIPPED 2026-07-12 (useLanguage hook, es bundle registered, Settings selector). On-disk reality: `es.json` has 3 of 25 top-level sections complete (`setcard`, `onboarding`, `settings`), 22 missing; selecting es renders English via fallback until spec 049 lands. Spec 049 adds a `node:test` en/es key-parity guard (registered in both `test` + `test:fast`).
 **Area**: `connect-four/src/i18n/index.js` (`lng: 'en'`, only `en` resource registered), `connect-four/src/i18n/es.json`
 **Discovered**: spec 048 (Epic 8) QA (2026-07-12)
 
@@ -389,13 +490,17 @@ in lockstep with `en.json` if the switcher goes live.
 
 ## OI-16 — Follow-ups from the Open-Issues Remediation branch (low-risk polish)
 
-**Status**: deferred (accepted as backlog by the final whole-branch review, 2026-07-12; not merge-blocking)
+**Status**: ✅ RESOLVED 2026-08-02 (spec 055, Epic 8) — **both** sub-bullets below are now resolved: the
+dead `deepRevealPhase` helper was deleted (US2, T030–T031) and the jsdom peer mismatch was fixed
+2026-07-14. This top line previously still read "deferred" while both of its own bullets read ✅ RESOLVED —
+exactly the stale-top-line scan trap the Epic 8 whole-backlog audit (see the header section) flags on other
+entries, so it is corrected here rather than left for a reader to reconcile.
 **Area**: `connect-four/src/components/DeepRevealPane.jsx` + `src/lib/deepRevealTimeout.js`; `connect-four/package.json` (jsdom peer)
 **Discovered**: final review of plan `docs/superpowers/plans/2026-07-12-open-issues-remediation.md`
 
 Two small residues from remediating OI-12 and OI-7, both judged defer-not-fix:
 
-- **Dead tested helper (from OI-12):** `deepRevealPhase(elapsedMs, resolved)` in `src/lib/deepRevealTimeout.js` is unit-tested but **not consumed** — `DeepRevealPane.jsx` drives the `slow`/`timedOut` states inline via `setTimeout`, reimplementing the same 3-way branch. Both sides import the shared `DEEP_REVEAL_SOFT_MS`/`DEEP_REVEAL_HARD_MS` constants, so the timing can't drift, only the branch shape. If picked up: either wire `deepRevealPhase` into the render, or drop the helper + its test.
+- **Dead tested helper (from OI-12): ✅ RESOLVED (Epic 8, spec 055, US2 T030–T031).** `deepRevealPhase(elapsedMs, resolved)` was deleted from `src/lib/deepRevealTimeout.js` — confirmed no remaining caller anywhere in the repo (`DeepRevealPane.jsx:12` only ever imported `DEEP_REVEAL_SOFT_MS`/`DEEP_REVEAL_HARD_MS`) before deleting (T030). Its dedicated test case (`'phase transitions: loading -> slow -> timedOut...'`) was removed from `tests/unit/deepRevealTimeout.test.js`, leaving the sibling `'hard cap is well beyond the soft hint...'` test — which covers the still-live `DEEP_REVEAL_SOFT_MS`/`DEEP_REVEAL_HARD_MS` constants — fully intact; `node --test tests/unit/deepRevealTimeout.test.js` now runs exactly one passing test (T031). The "either wire it in or drop it" choice below was resolved as: drop it.
 - **jsdom peer mismatch (from OI-7): ✅ RESOLVED 2026-07-14.** This bit the **staging deploy** — Railway's `npm ci` (strict peer resolution) aborted with `ERESOLVE` (`global-jsdom@29` peer-wants `jsdom >=29 <30`, tree has `jsdom@27`), failing the build. Fixed by aligning `global-jsdom` `^29.0.0` → `^27.0.0` (its major tracks jsdom's, so `^27` matches the pinned `jsdom@27`) + regenerated lock — the root cause (version mismatch) is removed, so `npm ci` now passes strictly with **no flag / no `.npmrc`** (verified `npm ci --dry-run` + `npm run test:dom`, both green). Chosen over the originally-suggested "bump jsdom to `^29`" (2 majors, test-breakage risk) and over an `.npmrc legacy-peer-deps=true` (suppresses rather than fixes, and depends on railpack copying `.npmrc`). Also un-staled memory `project_repo_worktree_setup` 2b (no longer needs `--legacy-peer-deps`).
 
 ## OI-17 — `chooseSparringMove` returns `col: undefined` on a terminal/full board
@@ -420,7 +525,22 @@ signal when `playable.length === 0`, instead of `undefined`.
 
 ## OI-18 — Lesson slide content is hardcoded English, no i18n mechanism (Spanish gap)
 
-**Status**: **mechanism RESOLVED, content still open** (updated 2026-07-16) — the "decide on a mechanism" half is done: sibling `text_es`/`audio_es` fields on each `coachMessages[]` entry, resolved server-side by `localizeLesson`/`pickLocalized` in `lessonLoader.js`, with per-language generation via `generateLessonAudio(lesson, {lang})`. **Only lesson 1 (`immediate-threat`) is translated**: measured 2026-07-16, **46 of 50** `coachMessages` across the 13 lessons still have no `text_es`. The remaining work is pure content translation, no longer a design decision.
+**Status**: **mechanism RESOLVED, content RESOLVED, human-review gate still open** (updated 2026-08-02,
+Epic 8 spec 055 closeout audit T047 — re-measured fresh rather than trusting either this entry's stale
+"46 of 50 missing" figure below or OI-36's 2026-08-01 figure at face value, per
+`specs/055-dev-infra-test-quality/research.md` R11's flag that the two entries currently contradict
+each other). Fresh count, walking every `lessons/lesson-*.json`'s `slides[].coachMessages[]`: **66 of
+66 `coachMessages` entries across all 15 lesson files have a non-empty `text_es`** — 0 missing. This
+matches OI-36's 2026-08-01 "all 15 lesson files now carry text_es" update, not this entry's own
+now-stale "only lesson 1 … 46 of 50 missing" figure (that figure predates the bulk-translation commit
+`cfb2fa8` OI-36 cites). **The content-presence half of this entry is done; do not re-open it for
+missing `text_es` fields — none remain.** The mechanism half (`text_es`/`audio_es` sibling fields,
+resolved server-side by `localizeLesson`/`pickLocalized` in `lessonLoader.js`, per-language generation
+via `generateLessonAudio(lesson, {lang})`) was already resolved 2026-07-16 and is unchanged.
+**What remains open is OI-36's own gate, not a new one here**: OI-36 explicitly records that field
+*presence* is not the same as a completed voseo/verde-gris human review pass — "Left open
+deliberately, because presence ≠ review" (`docs/open_issues.md` OI-36). Track that remaining work
+under OI-36; this entry should not duplicate it.
 **Area**: `connect-four/lessons/*.json` (13 files, 50 `coachMessages[].text` strings) consumed by `ConceptScreen.jsx` / `SocraticScreen.jsx`
 **Discovered**: spec 049 QA (browser walkthrough, 2026-07-13)
 **Silent-failure warning**: `pickLocalized` falls back to the English base value when `_es` is missing or empty, so an untranslated lesson renders English **without any error** — the gap is invisible from the UI. `generateLessonAudio` likewise skips a message with no `text_es`, so clicking "Generate audios" on an untranslated lesson is a legitimate no-op, not a bug. Socratic text is a separate gap: OI-43.
@@ -637,8 +757,23 @@ before the fix landed.
 
 ## OI-24 — No persistent / discoverable "upgrade to Pro" CTA; all four paywall entries are reactive
 
-**Status**: deferred (surfaced during Stripe staging bring-up, 2026-07-14)
-**Area**: `connect-four/src/` — `UpgradeModal` call sites (SetPickerScreen, SagaScreen, PostSetSummaryScreen, DeepRevealPane)
+**Status**: ✅ RESOLVED (verified 2026-08-02, Epic 8 spec 055 closeout audit T045). This entry's own
+"If picked up" section asked for exactly what shipped in commit `8bcfc3d` ("feat: tier-aware
+Subscription section in Settings (D3)", 2026-07-16 13:42:43 -0300 — predates this epic by ~2.5 weeks):
+`src/screens/SettingsScreen.jsx:486-533` adds a persistent, always-rendered "Subscription" section
+(`{t('settings.subscriptionHeading')}`) that shows an always-visible **`settings.upgradeCta`** button
+for free-tier users (`tier === 'paid' ? ... : <button ... onClick={() => setUpgradeOpen(true)}>{t('settings.upgradeCta')}</button>`)
+— a 5th `UpgradeModal` call site, but unlike the other four, not gated behind hitting a paywall; it is
+visible on every visit to Settings regardless of whether the user is currently blocked by anything.
+Settings itself is reached via a persistent header icon on the home screen
+(`src/screens/HomeScreen.jsx:79` — `onRight2={() => go('settings')}`), so this is discoverable without
+first hitting a gate. This directly satisfies this entry's own suggested resolution ("add a persistent
+entry point (e.g. an 'Upgrade' row in Settings/account...)"). Note: this contradicts
+`specs/055-dev-infra-test-quality/research.md` R11's "no evidence... only 4 reactive `UpgradeModal`
+call sites" finding — that finding's grep evidently missed the Settings section; the code and its
+commit date (2026-07-16) both confirm it shipped well before this epic started.
+**Superseded status text (kept for history):** deferred (surfaced during Stripe staging bring-up, 2026-07-14)
+**Area**: `connect-four/src/` — `UpgradeModal` call sites (SetPickerScreen, SagaScreen, PostSetSummaryScreen, DeepRevealPane, **SettingsScreen — the persistent one**)
 
 There is **no always-visible upgrade CTA** anywhere (no nav entry, no banner, no settings/account row).
 The only ways a free user reaches checkout are reactive: tapping a locked puzzle set, tapping a
@@ -782,20 +917,25 @@ a separate content project; lessons fall back to English audio meanwhile.
 
 ## OI-29 — SplitReveal live-fit: stale spec-042 contract + missing render-level regression test
 
-**Status**: deferred (2026-07-14) — fix is shipped & user-verified; only follow-up docs/tests remain
-**Area**: `connect-four/src/components/SplitReveal.jsx`, `specs/042-mistake-review-unification/contracts/split-reveal-zoom-contract.md`, `connect-four/tests/unit/splitRevealZoom.test.js`
+**Status**: ✅ RESOLVED (Epic 8, spec 055, US2) — both "If picked up" follow-ups below are now done.
+**Area**: `connect-four/src/components/SplitReveal.jsx`, `specs/042-mistake-review-unification/contracts/split-reveal-zoom-contract.md`, `connect-four/tests/unit/splitRevealZoom.test.js`, `connect-four/tests/dom/SplitRevealZoom.dom.test.jsx`
 
 The board-sizing fix (live-fit `maxWidth` from the current `splitPct`, floored at 120, replacing the
-frozen `boardW`/`>=200`-gate) is in and verified, but two follow-ups were left:
-(1) `contracts/split-reveal-zoom-contract.md §2` still describes the SUPERSEDED frozen behavior (FR-022,
-SC-009) and should be updated/annotated so it doesn't mislead;
-(2) `splitRevealZoom.test.js` only tests the pure `computeFrozenBoardWidth` (still frozen-by-signature),
-so it passes unchanged and gives NO coverage of the actual bug. Add a render-level regression test
-asserting the board never spills to full viewport width and never exceeds the top pane when the
-container's available height is small.
+frozen `boardW`/`>=200`-gate) is in and verified, and this story closed the two remaining follow-ups:
+(1) `contracts/split-reveal-zoom-contract.md`'s "Current mechanism" section is now annotated
+`SUPERSEDED (Epic 8, spec 055, T026)`, pointing forward to the shipped live-fit mechanism instead of
+describing it as current;
+(2) a new render-level DOM regression test,
+`connect-four/tests/dom/SplitRevealZoom.dom.test.jsx` (T027–T029), mounts `SplitReveal` in a short
+container and asserts the rendered board's `maxWidth` stays within the enclosing pane and that the
+`constrain`/`maxWidth` cap is actually applied — registered by name in the `test:dom` script string
+and observed running. Proven non-vacuous (SC-003): temporarily reintroducing the pre-fix mechanism
+(`boardW` computed without the `MIN_BOARD_W` floor, gated by `constrain = boardW >= 200`) made the
+test fail with `AssertionError: SplitReveal must apply a maxWidth cap, not drop it`; reverting made it
+pass again (`git diff connect-four/src/components/SplitReveal.jsx` empty after revert).
+`splitRevealZoom.test.js` (the pure `computeFrozenBoardWidth` test) was left untouched, as intended —
+the new test supplements it rather than replacing it.
 
-**If picked up**: update the contract doc; add a DOM/jsdom test that mounts `SplitReveal` with a short
-container and asserts `board rendered width <= pane width` and `constrain`/maxWidth stays applied.
 Cross-ref: `docs/architecture/frontend-conventions.md` (SplitReveal board fit).
 
 ## OI-30 — `figure_7` (and other multi-tag patterns) never praised on live user moves; would need transition-gating if added
@@ -1736,15 +1876,43 @@ A code-review verification pass ruled out the session-load-race variant of this 
 
 ## OI-58 — `main`/production `server/index.js` CSP is missing 5 fixes shipped to `stagging`
 
-**Status**: deferred / open (created 2026-07-18)
-**Area**: `connect-four/server/index.js`'s `helmet({ contentSecurityPolicy: { directives: {...} } })` block
+**Status**: ✅ RESOLVED 2026-08-02 (spec 055, Epic 8, US3, T036–T039) — the CSP gap this OI described no
+longer exists; `main` and `stagging` are byte-identical on this file.
 
 This session fixed five separate CSP gaps on the `stagging` branch (commits `2794793`, `811be2c`, `fb0ecc1`, `ae3c006`, plus the `frameSrc`/`connectSrc` additions in the earlier Paddle-checkout commit): `script-src`/`connect-src`/`frame-src` for Paddle.js + Google Pay, `style-src` for Paddle's inline styles + external stylesheet + Google Fonts' stylesheet, and a new `font-src` directive for Google Fonts' `.woff2` files. All five block real functionality (Paddle checkout, Google Pay, the app's own webfonts) when the CSP header is actually enforced (i.e., any deployed build, not `npm run dev`).
 
-**Why deferred**: `main` (production, `decodec4.xyz`) is ~496 commits behind/diverged from `stagging` (per memory `project_paddle_integration` §4/§9) and this project's convention is to ship small prod-facing fixes via a fresh worktree off `origin/main`, not by merging the divergent branch. The user was offered this (a worktree-based PR carrying just the CSP diff) and explicitly declined, choosing to port the fix to `main` themselves.
-**If picked up**: diff `server/index.js`'s `helmet(...)` block between `stagging`'s current HEAD and `main`'s current HEAD; the `stagging`-side version (with `PADDLE_CDN`/`PADDLE_ORIGINS`/`GOOGLE_PAY_ORIGINS`/`GOOGLE_FONTS_STYLESHEET`/`GOOGLE_FONTS_FILES` constants and their per-directive rationale comments) is the target state — see `docs/architecture/server-conventions.md`'s "CSP Directive Rationale" section for the current, authoritative description of every directive and why.
+**Why originally deferred**: `main` (production, `decodec4.xyz`) is ~496 commits behind/diverged from `stagging` (per memory `project_paddle_integration` §4/§9) and this project's convention is to ship small prod-facing fixes via a fresh worktree off `origin/main`, not by merging the divergent branch. The user was offered this (a worktree-based PR carrying just the CSP diff) and explicitly declined, choosing to port the fix to `main` themselves.
 
-**Resolved (2026-07-18)**: `server/index.js` now has a static top-level `import { Paddle, Environment } from '@paddle/paddle-node-sdk'`; the `if (process.env.PADDLE_API_KEY)` block only constructs `new Paddle(...)` conditionally, same as before. Boot-tested both ways: (1) with `PADDLE_API_KEY` set (`server/.env`) — server starts, `GET /api/paddle/config` returns real prices (200). (2) without it — verified by temporarily forcing the guard false in a throwaway local edit (reverted before committing) since this sandbox's environment injects a real `PADDLE_API_KEY` into every child process regardless of the `.env` file or shell overrides used, making a true "unset" boot untestable here; with the guard forced false the server still starts cleanly and `/api/paddle/config` correctly 503s ("Payments not configured"). No behavior change versus the dynamic-import version — only the import timing moved earlier.
+**Resolution (2026-08-02, CSP gap — no code change, no worktree, no branch merge)**: `git diff origin/main
+origin/stagging -- connect-four/server/index.js` returns **empty** — the whole file, including the
+`helmet(...)` block, is byte-identical between the two branches today (the user's self-described manual
+port, referenced above, evidently landed at some point after this OI was opened). `git log --oneline -1
+ae3c006` → `ae3c006 fix(csp): allow Google Fonts stylesheet and font files`; `git merge-base --is-ancestor
+ae3c006 main` exits 0 — the fix commit is an ancestor of `main`. Verified beyond the source diff (FR-013/
+SC-004): ran a real `npm run build` (not `npm run dev`, which never serves CSP headers) and restarted the
+server against the built `dist/`, then `curl -sD -` against the running app. The live
+`Content-Security-Policy` response header carries every directive `server-conventions.md`'s "CSP Directive
+Rationale" section describes as current: `font-src 'self' https://fonts.gstatic.com`, `style-src 'self'
+'unsafe-inline' https://*.paddle.com https://fonts.googleapis.com`, `img-src` and `connect-src` both
+carrying `https://papergames.io`, `script-src`/`frame-src` carrying the Paddle + Google Pay origins, and a
+`media-src` carrying the Supabase host. No missing directive was found.
+
+**Live production confirmed (2026-08-02)**: the local production-like build proves the *source* is correct,
+but not that the deployed instance had been rebuilt since `ae3c006` landed. Checked directly —
+`curl -sS -D - https://decodec4.xyz/` returns `HTTP/2 200` with a `content-security-policy` header
+**identical** to the locally-built one, directive for directive, the only difference being `media-src`
+pointing at the real Supabase host (`https://kxtqwsumojtexokrtlfp.supabase.co`) instead of the local
+`https://127.0.0.1:54321`. So the CSP fixes are not merely on `main` — they are live in production. This
+was a read-only GET against the public site; nothing was deployed or mutated.
+
+**If picked up** (historical — kept for anyone reconstructing the target state): the `stagging`-side version
+(with `PADDLE_CDN`/`PADDLE_ORIGINS`/`GOOGLE_PAY_ORIGINS`/`GOOGLE_FONTS_STYLESHEET`/`GOOGLE_FONTS_FILES`
+constants and their per-directive rationale comments) was the target state — see
+`docs/architecture/server-conventions.md`'s "CSP Directive Rationale" section for the current, authoritative
+description of every directive and why.
+
+**Resolved (2026-07-18)** *(unrelated to the CSP resolution above — this paragraph is entirely about the
+`@paddle/paddle-node-sdk` import mechanism, not helmet/CSP; see OI-57)*: `server/index.js` now has a static top-level `import { Paddle, Environment } from '@paddle/paddle-node-sdk'`; the `if (process.env.PADDLE_API_KEY)` block only constructs `new Paddle(...)` conditionally, same as before. Boot-tested both ways: (1) with `PADDLE_API_KEY` set (`server/.env`) — server starts, `GET /api/paddle/config` returns real prices (200). (2) without it — verified by temporarily forcing the guard false in a throwaway local edit (reverted before committing) since this sandbox's environment injects a real `PADDLE_API_KEY` into every child process regardless of the `.env` file or shell overrides used, making a true "unset" boot untestable here; with the guard forced false the server still starts cleanly and `/api/paddle/config` correctly 503s ("Payments not configured"). No behavior change versus the dynamic-import version — only the import timing moved earlier.
 
 ## OI-59 — UpgradeModal didn't auto-dismiss after a real (non-simulated) staging payment
 
@@ -2130,43 +2298,49 @@ Two things noticed while reviewing the rendered capsules, neither worth blocking
 
 ## OI-70 — `npm run lint` is red repo-wide (254 errors), so lint gates nothing
 
-**Status**: open — pre-existing, long-standing (observed 2026-07-28)
-**Area**: `connect-four/eslint.config.js` and the whole tree
-**Discovered**: running `npx eslint` on touched files during the `windowHighlights` work
+**Status**: ✅ RESOLVED in spec `055` (T005-T020, 2026-08-02) — the eslint config was split by
+environment (browser for `src/`; node for `server/`+`scripts/`; node for `tests/`; node+browser
+merged for `tests/dom/`; two explicit catch-all blocks for `vite.config.js`/`eslint.config.js` and
+`public/sw.js`), with all globs widened to include `.mjs`/`.cjs` (T005-T008). A fresh re-measurement
+against the new config (T009) fed a triage pass (T010-T015) that cleared every error, demoting the
+remaining `react-hooks/*`/`react-refresh/*` findings to `warn` (tracked separately as OI-119) rather
+than fixing them as a UI-behavior change. Confirmed by direct command execution: `cd connect-four &&
+npm run lint` now exits 0 — `✖ 47 problems (0 errors, 47 warnings)` (T016). The gate was proven real,
+not just a walked glob: inserting `const unusedProbe = 1;` into a `.mjs` file made lint fail with
+`'unusedProbe' is assigned a value but never used. Allowed unused vars must match /^[A-Z_]/u
+no-unused-vars`, then reverting brought it back to the same 0-errors/47-warnings result (T017). Lint
+is now wired into both `npm run test:fast` (prefixed as `eslint . && `, T018) and `.githooks/pre-commit`
+(a new leading block before `sync-kb.mjs`, T019); T020 proved both gates go red on the same
+`unusedProbe` fixture and revert cleanly.
 
-`npx eslint .` reports **268 problems (254 errors, 14 warnings)**. A large share are environment
-rules misfiring rather than real defects — e.g. `'process' is not defined` (`no-undef`) in Node-side
-scripts that the config lints with browser globals only. Because the baseline is red, `npm run lint`
-cannot be used as a gate, is not in CI, and a genuinely new lint error is invisible in the noise.
-
-Concretely observed: `src/components/admin/BoardEditor.jsx` imports `boardToSpec` and never uses it
-(`no-unused-vars`) — harmless, pre-existing, and exactly the kind of thing a working lint would have
-caught at authoring time.
-
-**If picked up**: split the eslint config by environment (browser for `src/`, node for `server/`,
-`scripts/`, `tests/`) before touching any individual rule — that alone should clear most of the 254.
-Then run `--fix`, triage the remainder, and only then consider adding `lint` to the test scripts.
-Until that happens, run `npx eslint <files-you-touched>` and compare against the same files on
-`main` rather than trusting a clean/dirty verdict.
+**If picked up**: OI-119 tracks burning down the demoted `react-hooks/*`/`react-refresh/*` warnings.
 
 ## OI-71 — Removing the `windowCounts` empty-cell guard hangs `test:dom` instead of failing it
 
-**Status**: open — low priority, cosmetic to the test experience (observed 2026-07-28)
+**Status**: ✅ RESOLVED (Epic 8, spec 055, US2 T022–T025) — bisected and fixed, not just a
+workaround. `git diff connect-four/src/components/Board.jsx` is empty (the diagnostic mutation used
+to reproduce the hang was reverted after the fix landed).
 **Area**: `connect-four/src/components/Board.jsx` (windowCounts render block), `connect-four/tests/dom/BoardWindowCounts.dom.test.jsx`
 
-While mutation-proving the fix for the untested `value === 'empty'` guard, deleting that half of the
-condition did **not** produce a clean assertion failure. `npm run test:dom` instead hung and was
-killed after ~32s (0% CPU, stable low RSS across three separate runs — a genuine block, not a busy
-loop). The unmutated suite passes in under a second.
+Root cause (confirmed by bisection, NOT the unverified jsdom/testing-library suspicion originally
+recorded below): the hang was never in jsdom's query implementation, `Board.jsx`'s render, or an
+infinite loop. It was `assert.equal`/`assert.strictEqual` being called with a **live mounted DOM
+node as the actual operand** (e.g. `assert.equal(screen.queryByText('99'), null)`). When such an
+assertion legitimately fails, Node's `util.inspect` tries to format the failure diff by walking the
+matched DOM node — which holds circular back-references into the React Fiber tree (including `Error`
+objects with full stack traces via `_debugStack`) plus jsdom's getter-heavy prototype chain.
+Formatting that graph is unboundedly expensive: measured at 30s+ and never returning, versus **~18ms**
+for the equivalent boolean comparison (e.g. `assert.equal(screen.queryByText('99') === null, true)`).
+The fix converts every such assertion to compare a derived primitive instead of a raw DOM/React node,
+applied across **all 19 sites** of this pattern in the DOM suite, not only the one that originally
+hung. See `connect-four/tests/dom/BoardWindowCounts.dom.test.jsx`'s
+`'Board never renders a digit on an occupied cell...'` test for the proven repro and the converted
+assertion.
 
-This does not weaken the test — the mutant never goes green, which is what the guard needs — but a
-hang is a poor failure mode: a future regression here will read as flaky infrastructure rather than
-as a broken guard. Root cause was not investigated. Suspicion (unverified) is that rendering a digit
-into every occupied cell interacts badly with jsdom or the testing-library query used, rather than
-anything in `Board` itself.
-
-**If picked up**: reproduce by deleting `&& value === 'empty'` from the windowCounts block in
-`Board.jsx`, then bisect the assertion in `BoardWindowCounts.dom.test.jsx` that stops returning.
+Originally observed while mutation-proving the fix for the untested `value === 'empty'` guard —
+deleting that half of the condition made `npm run test:dom` hang (~32s, no clean assertion failure)
+instead of failing fast. It now fails fast (~18ms) under the same mutation, confirmed by the
+bisection above.
 
 ## OI-72 — Lesson editor re-submits a stale `windowCounts` array on every save
 
@@ -2333,6 +2507,12 @@ which splits on `/\n\s*\n/` into `<p>` elements (the second of the two options b
 side effect — longer prose on screen — was handled at the same time: the panel scrolls internally
 under a pinned board, so Continue never moves. Pinned by `tests/dom/InfoProsePanel.dom.test.jsx`;
 conventions in `frontend-conventions.md` §"Lesson concept slides".
+
+**Re-verified 2026-08-02 (Epic 8 spec 055 closeout audit T046, expected no-op check):** status is not
+stale. `src/screens/ConceptScreen.jsx:7,289` — `import { InfoProsePanel } from
+'../components/InfoProsePanel.jsx';` and `<InfoProsePanel infoProse={slide.infoProse} />` — confirms
+`ConceptScreen` still delegates exactly as described; `tests/dom/InfoProsePanel.dom.test.jsx` still
+exists.
 
 **Surfaced**: 2026-07-28, while shortening `lesson-03-threat-vocabulary`.
 
@@ -4096,3 +4276,267 @@ and against the known-red baseline in OI-82, and update
 its verification technique.
 
 **Closes when shipped**: OI-102 (registration drift), and the `detectClaimodd` phantom entry above.
+
+## OI-119 — `react-hooks/*` and `react-refresh/*` ESLint findings demoted to `warn`, not fixed (Epic 8)
+
+**Status**: open — tracked for a future UI-behavior-change pass
+**Area**: `connect-four/eslint.config.js` `src/**` block; the 14 `src/` production React files listed
+below
+**Discovered**: 2026-08-02, spec 055 (Epic 8: Dev Infrastructure & Test-Quality Baseline) T014/T015
+
+FR-019(c) requires `npm run lint` to exit 0, but forbids fixing `react-hooks/*`/`react-refresh/*`
+violations as part of this epic — actually fixing them means changing effect timing, ref usage, or
+component/memoization boundaries, which is a behavior-affecting UI refactor out of scope for a
+lint/test-infra epic. Instead, `eslint.config.js`'s `src/**` block demotes the six affected rules from
+`error` to `warn` (with a one-line comment pointing at this issue), so `npm run lint` exits 0 while the
+findings stay visible as warnings rather than being silently disabled.
+
+**Fresh measurement** (`npx eslint . -f json`, post-split config, 2026-08-02) — 36 findings total, all
+inside `src/` production React components:
+
+| Rule | Count | Files:lines |
+|---|---|---|
+| `react-hooks/set-state-in-effect` | 21 | `src/App.jsx:65,138`; `src/components/admin/PuzzlePickerModal.jsx:33`; `src/components/CurationWorkspace.jsx:121`; `src/components/DeepRevealPane.jsx:140`; `src/components/RejectModal.jsx:19,23`; `src/lib/useGameBoard.js:118,124`; `src/lib/useLessonLockGuard.js:44`; `src/pages/AdminDeepRevealEvalPage.jsx:265,282,300`; `src/pages/AdminFvSuffPage.jsx:237,488`; `src/screens/AdminLessonEditorScreen.jsx:109`; `src/screens/AdminLessonListScreen.jsx:31`; `src/screens/CategoryListScreen.jsx:54`; `src/screens/MistakesListScreen.jsx:80`; `src/screens/PastGamesListScreen.jsx:185`; `src/screens/ReviewScreen.jsx:105` |
+| `react-hooks/refs` | 5 | `src/lib/useBoardState.js:47,49,59`; `src/lib/useDragSplit.js:66,69` |
+| `react-hooks/static-components` | 4 | `src/App.jsx:195,199,203,207` |
+| `react-refresh/only-export-components` | 4 | `src/components/InfoProsePanel.jsx:24`; `src/context/DebugContext.jsx:32`; `src/screens/AdminLessonEditorScreen.jsx:35`; `src/store/ProfileStore.jsx:121` |
+| `react-hooks/immutability` | 1 | `src/lib/useDragSplit.js:108` |
+| `react-hooks/preserve-manual-memoization` | 1 | `src/pages/AdminFvSuffPage.jsx:531` |
+
+(`react-hooks/exhaustive-deps`, 11 findings, is already `warn` by default in
+`reactHooks.configs.flat.recommended` — not part of this demotion, not in scope for this issue.)
+
+**Next step**: a future pass should burn these down file-by-file as an intentional UI-behavior change
+(re-verify each fix against the app, not just the lint output — `set-state-in-effect` in particular
+often signals a real render-loop or stale-state bug, not just a style nit), then re-promote the six
+rules above back to `error` in `eslint.config.js`'s `src/**` block.
+
+**Closes when shipped**: all 36 findings fixed and the six rules restored to `error`.
+
+## OI-120 — `expandedCellsMap` is built but no longer consumed by `checkP2`
+
+**Status**: ✅ RESOLVED 2026-08-03 — answered in the "missing coverage" direction: P2 now validates
+every cell-bearing spec, and the orphaned map is gone. See "Resolution" at the end of this entry.
+**Area**: `connect-four/server/annotationGate.js:476-486`
+**Discovered**: spec 055 (Epic 8) code review, 2026-08-02
+
+`checkP2(zones, expandedCellsMap)` never read its second parameter, so spec 055's FR-019(a)
+`no-unused-vars` pass removed it from the signature (`annotationGate.js:126`). The call site at
+line 486 still passes the map, and lines 476-480 still build it:
+
+```js
+// Build expandedCellsMap for P2 (and potential reuse by callers)
+const expandedCellsMap = new Map();
+... expandedCellsMap.set(spec, expandSpec(spec));
+```
+
+Two things are now true and neither is resolved: (a) the map is dead work — an `expandSpec()` call
+per unique spec whose result nothing reads; (b) the comment says it exists "for P2", which raises the
+real question of whether `checkP2` was *supposed* to consume it and silently does not — i.e. a latent
+gap in the P2 annotation check, not merely dead code.
+
+**Why deferred**: removing the argument orphans the map, which cascades into deleting the build block
+— a behavior-adjacent change to server annotation-gate code, made at the end of an epic whose scope
+was explicitly non-behavioral. More importantly, deleting it would *cement* possibility (b) rather
+than answer it. The deadness is pre-existing; spec 055 only made it visible.
+
+**If picked up**: first answer whether P2's check is correct without expanded cells — read
+`checkP2` against what `expandSpec` produces — then either wire the map in (if P2 needs it) or delete
+both the argument and the build block. See memory `project_annotation_gate_and_zones`.
+
+**Resolution (2026-08-03)**: the owner confirmed P2 should validate cells as well as columns, so
+possibility (b) was the answer — the check *was* incomplete. `checkP2` now expands every zone spec and
+compares the prose's column references against **the set of columns the zone actually occupies**:
+
+```js
+const cells = expandSpec(spec);
+if (cells.length === 0) continue;            // 'tg' (client-only) or invalid — P1's job
+const specCols = new Set(cells.map(({ col }) => col + 1));
+... if (!specCols.has(refColNum)) failures.push(`P2:col_mismatch:${spec}`);
+```
+
+This **generalises rather than special-cases**: for a `colN` zone the set is exactly `{N}`, so the old
+behaviour falls out as an instance instead of a separate branch, and a multi-column zone (a horizontal
+threat spanning `cells:c3r1..c6r1`) correctly accepts a reference to any column it covers.
+
+`checkP2` now calls `expandSpec` itself rather than taking the caller's memo map, and the
+`expandedCellsMap` build block in `validateAnnotation` was deleted — nothing else read it. That choice
+is deliberate: the three pre-existing tests all passed `new Map()`, so a map-parameter fix would have
+made every new assertion **silently vacuous** (empty map → no cells known → skip). Resolving cells
+internally makes the check impossible to defeat by passing an empty map.
+
+Proven non-vacuous: the new cell-zone assertions were run against the old `checkP2` and **2 of them
+fail** there (single-cell mismatch, and the multi-column out-of-range case), then pass with the fix.
+The existing fixture `{ spec: 'c4r3', innerText: 'column 5 is mentioned here' }` had been asserting the
+gap as intended behaviour under the name *'non-col zone → skipped by P2'* — it is now inverted, since a
+test that encodes the bug is part of the bug. `tests/annotationGate.test.js` 50/50; `test:fast`
+1685/1690 (5 RED = unchanged OI-82 baseline); lint exit 0.
+
+**Scope note**: `validateAnnotation` has **no production caller** — only `server/scripts/run_eval.mjs`
+and `server/scripts/corpus_annotation_check.mjs` import it. So tightening P2 cannot reject a
+user-facing explanation; it improves offline eval/corpus fidelity. Whether the gate *should* run on the
+live deep-reveal path is a separate, larger question — see [[OI-124]].
+
+## OI-121 — `ChallengeScreen` passes an `interactionMode` prop nothing consumes
+
+**Status**: ✅ RESOLVED 2026-08-03 — both call sites deleted; `Board` stays presentational and the
+parent keeps sole ownership of interaction semantics. See "Resolution" at the end of this entry.
+**Area**: `connect-four/src/screens/ChallengeScreen.jsx:872,900`; `src/components/Board.jsx`
+**Discovered**: spec 055 (Epic 8) code review, 2026-08-02
+
+`ChallengeScreen` computes and passes, at two call sites:
+
+```jsx
+interactionMode={puzzles[currentIdx]?.interaction_mode === 'sequence' ? 'sequence' : 'single_move'}
+```
+
+`Board.jsx` destructured `interactionMode` but never read it, so spec 055's `no-unused-vars` pass
+deleted the destructure. `Board.jsx` and `MultiMoveSequencer.jsx` now contain **zero** references to
+the identifier, so both call sites pass a prop that is silently discarded.
+
+This is a question, not just a wart: either sequence-mode interaction was meant to change `Board`'s
+behavior and never got wired (a real feature gap), or it is handled entirely elsewhere and both call
+sites plus the `interaction_mode` read are vestigial. The deadness pre-dates this epic — Board ignored
+the prop before the destructure was removed.
+
+**Why deferred**: answering it requires knowing the intended sequence-mode UX, which is out of scope
+for a dev-infrastructure epic.
+
+**If picked up**: trace how `interaction_mode === 'sequence'` puzzles actually render (start at
+`MultiMoveSequencer.jsx` and the `usesAcceptedGate` path in `ChallengeScreen.jsx`), then either wire
+the prop into `Board` or delete both call sites.
+
+**Resolution (2026-08-03)**: traced, and it resolved to *delete*, on the following evidence.
+
+This looked like a UX question ("should a sequence puzzle look different mid-entry?"), but that
+presumes `Board` could show something different. It cannot, because **there is no mid-entry state**.
+`handleSequenceClick` (`ChallengeScreen.jsx:629-680`) POSTs each click to
+`/api/puzzles/:id/sequence/move` immediately, then rebuilds the whole board from the movestring and
+pushes it down as ordinary props — first the user's disc, then the AI's reply after `COACH_PACING_MS`:
+
+```js
+const { board: bUser, heights: hUser } = buildBoard(userPos);
+setBoard(bUser); setHeights(hUser); setLastDrop({ c: col, r: heights[col] });
+```
+
+No pending or uncommitted discs exist. From `Board`'s perspective a sequence puzzle is identical input
+to a single-move puzzle, so the real question was architectural — *where does interaction semantics
+live* — not visual.
+
+`Board` is a controlled presentational component that owns no state a mode flag could change. The
+parent already owns mode in exactly the two places that matter: click routing
+(`interaction_mode === 'sequence' ? handleSequenceClick : …`, lines 857/887) and hint suppression
+(line 938). `interactionMode` was a third, redundant encoding of that same fact handed to the one
+component with no use for it, so both call sites were removed. The four legitimate `interaction_mode`
+reads remain untouched.
+
+**Why not wire it in instead**: if sequence discs ever need distinct rendering (numbering, say),
+`Board` already serves that through generic composable props — `overlays`, `highlightedCells`, and the
+numbered `moveLabels` map documented at `Board.jsx:97-99`. A mode enum would duplicate capability those
+already provide *and* push a puzzle-category concept into a component that otherwise knows nothing
+about puzzles, making it harder to reuse.
+
+**What would overturn this**: sequence puzzles needing to show a move the server has not accepted yet
+(optimistic entry, or multi-move-then-submit). That introduces genuine pending state — but it would be
+a data-flow change in the parent, and `Board` would still receive it as `overlays`, not as a mode.
+
+Verified: lint exit 0; `test:dom` 64/64; `test:fast` 1685/1690 (5 RED = unchanged OI-82 baseline).
+
+## OI-122 — `server-conventions.md`'s CSP rationale still says Sentry has no `connect-src`
+
+**Status**: deferred (doc staleness, not a defect; found during spec 055's CSP verification)
+**Area**: `docs/architecture/server-conventions.md` §"CSP Directive Rationale"
+**Discovered**: spec 055 (Epic 8) US3 CSP header verification, 2026-08-02
+
+The section still states there is no `connect-src` entry for Sentry because no `Sentry.init(...)`
+call exists. Both halves are now false: `connect-four/server/index.js:119` calls `Sentry.init(...)`,
+and the live CSP header carries `https://*.ingest.sentry.io` — verified directly against both a local
+production build and `https://decodec4.xyz/` on 2026-08-02.
+
+The **header is correct**; only the prose explaining it is stale, which matters because that section
+is the checklist future CSP work verifies against (spec 055 FR-013 used it as exactly that).
+
+**Why deferred**: spec 055's US3 scope fence was the backlog entries and the header check itself; the
+architecture doc was read-only reference for it.
+
+**If picked up**: update the section to describe the Sentry `connect-src` entry and cross-reference
+OI-10, using the verbatim header captured in OI-58's resolution note as the source of truth.
+
+## OI-123 — `DebugTracePanel` crashes the admin curation page on older `debug_trace` rows
+
+**Status**: deferred (pre-existing; found by spec 055 / Epic 8's QA smoke test, out of that epic's scope)
+**Area**: `connect-four/src/components/CurationWorkspace.jsx:450-456` (`DebugTracePanel`)
+**Discovered**: spec 055 (Epic 8) QA pass, 2026-08-02
+
+Clicking **"▼ Debug trace"** on a candidate whose stored `debug_trace` lacks `temperature_p1` /
+`temperature_p2` throws `TypeError: Cannot read properties of undefined (reading 'toFixed')` and
+**blanks the page until reload** — there is no error boundary around the panel (React logs "An error
+occurred in `<DebugTracePanel>`… consider adding an error boundary").
+
+```jsx
+const { temperature_p1, temperature_p2, termination, plies } = trace;
+...
+T₁ = {temperature_p1.toFixed(3)} &nbsp; T₂ = {temperature_p2.toFixed(3)}
+```
+
+Both fields are dereferenced unguarded. Reproduced live on an `immediate_threat` candidate. The cause
+is a **data-shape mismatch, not a rendering bug**: rows written before temperature-based sampling was
+introduced have no temperature fields, and nothing migrated or defaulted them — so this is the
+"stored rows outlive the code that wrote them" class, and any fix should assume both shapes will
+coexist indefinitely rather than assume a backfill.
+
+**Why deferred**: genuinely pre-existing — verified that spec 055's only edits to this file
+(commit `b84ac6e`, lines 1/70/163/273) are nowhere near `DebugTracePanel` at line 450. Epic 8's scope
+was dev tooling, tests, and doc bookkeeping; fixing an admin-screen crash was not in it.
+
+**If picked up**: guard both dereferences (`typeof temperature_p1 === 'number' ? …toFixed(3) : '—'`)
+rather than backfilling, since old rows are legitimately temperature-less; then consider wrapping the
+panel in the existing `ErrorBoundary` component (`src/components/ErrorBoundary.jsx`, already DOM-tested)
+so a future field mismatch degrades instead of blanking the page. Admin-only, so user impact is low.
+
+## OI-124 — the Deep Reveal annotation gate never runs on the live explanation path
+
+**Status**: deferred (design question, not a regression; surfaced while resolving OI-120)
+**Area**: `connect-four/server/annotationGate.js` (`validateAnnotation` and its P1/P2/P3/P5/P5-Strong/P6 checks)
+**Discovered**: 2026-08-03, while fixing P2's cell-zone coverage gap
+
+`annotationGate.js` is a complete, well-tested validator for the `[zone:...]` annotations the LLM
+embeds in Deep Reveal explanations — it checks spec validity and bounds (P1), column-reference
+consistency (P2), forbidden terminology (P3), that each zone has a live 4-window (P5), that zones fall
+within the allowed set (P5 Strong), and that no raw coordinates leak into zone text (P6). It carries 50
+unit tests and is listed in both `test` and `test:fast`.
+
+**Nothing on the production request path imports it.** The only importers are
+`server/scripts/run_eval.mjs` and `server/scripts/corpus_annotation_check.mjs`, both offline. Verified
+by grepping the whole `server/` tree for `annotationGate` / `validateAnnotation` / `normalizeZoneTags` /
+`checkP1` / `checkP5`: `server/index.js`, `llmCoachHelpers.js` and `explainContext.js` contain no
+import (the single mention in `explainContext.js:966` is a comment about `checkP5Strong`).
+
+So an explanation served to a user is **not** gated: a zone that highlights the wrong column, names a
+dead window, or leaks raw coordinates reaches the UI unchecked. Every improvement to these predicates
+(including OI-120's P2 fix) currently buys offline eval fidelity only.
+
+**The live path replaced it rather than dropping it.** `/api/explain-move-llm` now runs
+`computeMechanism(...)` (`server/index.js:1319`), and the code's own comment at :1358-1360 says the
+mechanism text — "coach-voice text carrying inline `[zone:…]` tags (→ board highlights via
+`<AnnotatedExplanation>`)" — "drops straight into the response as `explanation`". So the tags are
+rendered to the board without ever being validated.
+
+**Corollary — a debugging trap**: `deep_reveal_failures` is still written (`index.js:1341`), which makes
+it look like gate failures are being captured. They are not. It fires only on
+`result.callError || result.parseError || !result.mechanism`, storing
+`failure_reason: result.callError ?? result.parseError ?? 'empty mechanism'`. Querying that table for
+`P5strong:*` codes will always return nothing — which reads as "the gate is passing" when the gate
+never ran.
+
+**Why deferred**: wiring a validator into the live path is a product decision with real failure-mode
+choices — on failure, do you strip the annotations, retry the LLM, serve the un-annotated text, or
+fail the request? Each has a different latency and UX cost, and the cache path complicates it further
+(`explanation_cache` can serve rows produced before any gating existed — see memory
+`project_blunder_serving_dual_paths`, where cache-hit responses already bypass producer guards).
+
+**If picked up**: first measure how often the gate would actually fail on real served explanations —
+run `corpus_annotation_check.mjs` over recent `explanation_cache` rows to get a failure rate before
+designing the enforcement. A gate that fires on 30% of live output needs a different answer than one
+that fires on 0.5%. Then decide strip-vs-retry-vs-passthrough, and note that sanitising at the response
+seam (as OI's on the dual-path serving recommend) covers both the fresh and cached paths at once.

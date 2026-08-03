@@ -63,28 +63,28 @@ test('hasNarration override shows controls for a slide whose only clip is the pr
 test('without the override, no message audio still means no controls', () => {
   cleanup();
   renderDialog(<CoachDialog messages={NO_AUDIO} onReplay={() => {}} onStop={() => {}} />);
-  assert.equal(screen.queryByLabelText('Replay narration'), null);
-  assert.equal(screen.queryByLabelText('Stop narration'), null);
+  assert.equal(screen.queryByLabelText('Replay narration') === null, true);
+  assert.equal(screen.queryByLabelText('Stop narration') === null, true);
 });
 
 test('hasNarration={false} suppresses the controls even when messages carry audio', () => {
   cleanup();
   renderDialog(<CoachDialog messages={WITH_AUDIO} onReplay={() => {}} onStop={() => {}} hasNarration={false} />);
-  assert.equal(screen.queryByLabelText('Replay narration'), null);
+  assert.equal(screen.queryByLabelText('Replay narration') === null, true);
 });
 
 test('screens that pass no onStop (SocraticScreen, GameScreen) keep the replay button alone', () => {
   cleanup();
   renderDialog(<CoachDialog messages={WITH_AUDIO} onReplay={() => {}} />);
   assert.ok(screen.getByLabelText('Replay narration'));
-  assert.equal(screen.queryByLabelText('Stop narration'), null);
+  assert.equal(screen.queryByLabelText('Stop narration') === null, true);
 });
 
 test('screens that pass neither handler render no controls', () => {
   cleanup();
   renderDialog(<CoachDialog messages={WITH_AUDIO} />);
-  assert.equal(screen.queryByLabelText('Replay narration'), null);
-  assert.equal(screen.queryByLabelText('Stop narration'), null);
+  assert.equal(screen.queryByLabelText('Replay narration') === null, true);
+  assert.equal(screen.queryByLabelText('Stop narration') === null, true);
 });
 
 test('narration control labels are translated, not hardcoded English (spec 052 FR-024)', () => {
@@ -92,7 +92,7 @@ test('narration control labels are translated, not hardcoded English (spec 052 F
   renderDialog(<CoachDialog messages={WITH_AUDIO} onReplay={() => {}} onStop={() => {}} />, 'es');
   assert.ok(screen.getByLabelText('Repetir narración'));
   assert.ok(screen.getByLabelText('Detener narración'));
-  assert.equal(screen.queryByLabelText('Replay narration'), null);
+  assert.equal(screen.queryByLabelText('Replay narration') === null, true);
   cleanup();
   i18n.changeLanguage('en');
 });

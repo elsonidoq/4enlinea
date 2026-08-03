@@ -48,7 +48,7 @@ async function optimalToTerminal(solver, ms) {
   // guard: passed position may already be won by the last mover
   const pre = lastMoveWon(ms);
   if (pre) {
-    const { grid, heights } = buildBoard(ms);
+    const { heights } = buildBoard(ms);
     const lastCol = Number(ms[ms.length-1]);
     const r = heights[lastCol]-1;
     return { terminal:'win', winner: pre.mover, plies: 0, completing: cellStr(r,lastCol), nWindows: 1 };
@@ -60,7 +60,7 @@ async function optimalToTerminal(solver, ms) {
     for (let c=0;c<COLS;c++){ if(scores[c]===-1000) continue; if(scores[c]>best){best=scores[c];bestCol=c;} }
     if (bestCol===-1) return {terminal:'draw', plies: ms.length-start};
     ms += String(bestCol);
-    const {grid,heights}=buildBoard(ms);
+    const {grid}=buildBoard(ms);
     const w = winsFor(grid, mover);
     if (w) {
       const prev = buildBoard(ms.slice(0,-1));

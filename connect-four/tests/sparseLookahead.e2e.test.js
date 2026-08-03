@@ -4,7 +4,7 @@ import { createSolverProcess } from '../server/c4solver-wrapper.js';
 import { runSparseLookahead } from '../server/sparseLookahead.js';
 import { buildExplainContext } from '../server/explainContext.js';
 
-test('eval-8 sparse look-ahead produces a distinguishing structure or honest null', async (t) => {
+test('eval-8 sparse look-ahead produces a distinguishing structure or honest null', async () => {
   const solver = createSolverProcess();
   try {
     // eval-8: movestring 2031133, played col 4 (0-idx), better col 3 (0-idx), perspective 2 (Gray, odd length).
@@ -29,7 +29,7 @@ test('eval-8 sparse look-ahead produces a distinguishing structure or honest nul
   }
 });
 
-test('buildExplainContext fires the look-ahead section end-to-end on an anchorless blunder (real solver)', async (t) => {
+test('buildExplainContext fires the look-ahead section end-to-end on an anchorless blunder (real solver)', async () => {
   const solver = createSolverProcess();
   try {
     // eval-8 is anchorless (no threat rows shown, no Tier-1/2 pattern). Played col 4, better col 3.

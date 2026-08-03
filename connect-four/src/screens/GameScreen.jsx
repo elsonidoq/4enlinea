@@ -16,9 +16,9 @@ import { useCoachSpeech } from '../lib/useCoachSpeech.js';
 
 const API = import.meta.env.VITE_API_BASE_URL || '';
 
-export function GameScreen({ go, goBack, goReplace, difficulty, side, initialMoves = '', onboarding = false }) {
+export function GameScreen({ go, goReplace, difficulty, side, initialMoves = '', onboarding = false }) {
   const { t } = useTranslation();
-  const { store, session } = useStore();
+  const { store } = useStore();
   const { playSfx, playMusic, pauseMusic, sfxEnabled, musicEnabled, speechEnabled, toggleSfx, toggleMusic, toggleSpeech } = useAudio();
   const { speakCoachMessage } = useCoachSpeech();
 
@@ -62,7 +62,7 @@ export function GameScreen({ go, goBack, goReplace, difficulty, side, initialMov
     try {
       const profile = await store.getProfile();
       device_uuid = profile.device_uuid;
-    } catch (e) {
+    } catch {
       // fallback: empty string
     }
 
@@ -85,13 +85,13 @@ export function GameScreen({ go, goBack, goReplace, difficulty, side, initialMov
         const data = await res.json();
         gameId = data.id;
       }
-    } catch (e) {
+    } catch {
       // proceed with null id on network failure
     }
 
     // 3. Store methods (fire-and-forget)
-    try { await store.saveSparringRecord(result); } catch (e) {}
-    try { await store.recordActivityDay(); } catch (e) {}
+    try { await store.saveSparringRecord(result); } catch { /* fire-and-forget: ignore */ }
+    try { await store.recordActivityDay(); } catch { /* fire-and-forget: ignore */ }
 
     // 4. Analytics
     track('game_ended', { result, moveCount: movesStr.length, difficulty });

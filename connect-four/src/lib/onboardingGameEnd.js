@@ -18,9 +18,8 @@
  * Feature 2: every end-of-game outcome routes to the post-game review screen. For an
  * onboarding session, review then advances to the import offer via its own Continue CTA
  * (ReviewScreen reads the `onboarding` nav param); the destination here is 'review' for both.
- * @param {boolean} _onboarding - retained for call-site symmetry; no longer branches the destination
  * @returns {'review'}
  */
-export function pickGameEndScreen(_onboarding) {
+export function pickGameEndScreen() {
   return 'review';
 }

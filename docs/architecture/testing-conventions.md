@@ -173,6 +173,18 @@ cd connect-four && npm test
 ```
 Tests are **explicitly listed** in the `test` and `test:fast` scripts in `package.json` — there is no automatic discovery.
 
+> **`test:fast` runs lint first and will fail before any test executes.** Since spec 055 (Epic 8) the
+> script string is `eslint . && node --test …`, so a lint **error** anywhere in the tree stops the run
+> at the lint step — you get ESLint output and no test summary at all. That is the gate working, not a
+> broken test suite. The same gate runs on commit: `.githooks/pre-commit` executes
+> `npx eslint . --quiet` (errors only, so a clean commit prints nothing) *before* the KB-sync step, so a
+> lint error also rejects the commit.
+>
+> `npm run lint` exits 0 on a clean tree but still reports **~47 warnings** — the deliberately demoted
+> `react-hooks/*` / `react-refresh/*` findings tracked in `docs/open_issues.md` OI-119. Warnings do not
+> fail either gate. Do not "fix" them as part of unrelated work, and do not read a warning count as a
+> red suite.
+
 > **A stale registration fails nothing.** `node --test` given a *list* of files **silently skips** any path that doesn't exist: exit 0, no warning, and the summary still reads `fail 0`. So a deleted/renamed test whose registration is left behind loses coverage with zero signal, and a newly-added file that was never registered simply never runs.
 >
 > **The exit code and a `Could not find` grep DO NOT catch this** — measured on Node v23.11.0, and this is the whole trap:
@@ -525,3 +537,67 @@ sampler alone leaves the evidence — and the test's coverage claim — stale).
 **Never run `test:fast` concurrently with a solver harvest** (e.g. `select_boards --strategy coverage`)
 or a second solver job — the integration tests deadlock on solver IPC under CPU contention (they pass
 in isolation). Run solver-heavy jobs serially.
+
+### ESLint environment-split (`eslint.config.js`)
+
+Spec 055 (Epic 8) replaced a single flat-config block with an environment-scoped split, so that
+node-only globals (`process`, `require`) and browser-only globals (`window`, `document`) each apply
+only where they are actually valid, and ESLint 9's flat-config MERGE-by-glob semantics can't leak one
+environment's globals into the other:
+
+- **`src/**` (browser)** — `globals.browser`; the only block carrying `eslint-plugin-react-hooks` and
+  `eslint-plugin-react-refresh` (`reactHooks.configs.flat.recommended`,
+  `reactRefresh.configs.vite`). `react-hooks/*` (`set-state-in-effect`, `refs`, `static-components`,
+  `immutability`, `preserve-manual-memoization`) and `react-refresh/only-export-components` are
+  **demoted from the plugin's default `error` to `warn`** — fixing the 36 findings behind them is
+  behavior-affecting UI refactoring (effect timing, ref usage, memo boundaries), out of this epic's
+  scope; tracked in `docs/open_issues.md` OI-119 for a future pass. No other rule is silently disabled
+  or demoted.
+- **`server/**` and `scripts/**` (node)** — `globals.node`.
+- **`tests/**` in general (node)** — `globals.node`. Most of `tests/` reaches browser-ish globals only
+  via `globalThis.X`, which does not trip `no-undef` under a node-only global set.
+- **`tests/dom/**` (node + browser, merged)** — `{ ...globals.node, ...globals.browser }`. This is the
+  jsdom DOM suite (run via `npm run test:dom`); it genuinely needs both node globals (the test runner)
+  and browser globals (`document`/`window` used directly in the test bodies).
+- **Two explicit catch-all blocks**, not a glob-based catch-all: `files: ['vite.config.js',
+  'eslint.config.js']` (node) and `files: ['public/sw.js']` (`{ ...globals.browser,
+  ...globals.serviceworker }`). A broad `**/*.{js,jsx,mjs,cjs}` catch-all block was deliberately
+  avoided — flat-config blocks with overlapping `files` globs both apply and MERGE, so a wide
+  catch-all would re-inject node globals into `src/**` (or vice versa) alongside the scoped block.
+- Every block's `files` glob is `*.{js,jsx,mjs,cjs}` — `.mjs`/`.cjs` are included, not just
+  `.js`/`.jsx`.
+
+### The DOM-assertion trap: never `assert.equal`/`assert.strictEqual` a live DOM/React node
+
+The single most valuable durable finding from this epic. In `tests/dom/*.dom.test.jsx` (the jsdom
+suite), **never pass a live DOM node or React element as an operand to `assert.equal()` /
+`assert.strictEqual()`** — e.g. `assert.equal(screen.queryByText('13'), null)`. On a legitimate
+*failure* (the two operands actually differ), Node's `assert` formats a diff via `util.inspect`, which
+walks the DOM node's object graph — including React's Fiber tree, whose `_debugOwner`/`return`/`child`
+pointers are circular and whose `_debugStack` fields are full `Error` objects — plus jsdom's
+getter-heavy prototype chain. That walk alone takes **30s+ per failing assertion**, instead of the
+~18ms a normal assertion failure costs. A test suite with several such assertions can look "hung" long
+before it ever prints a failure.
+
+**Fix**: compare a derived primitive instead of the node itself:
+
+```js
+// BAD — on failure, util.inspect walks the Fiber tree + jsdom prototypes (30s+)
+assert.equal(screen.queryByText('13'), null);
+
+// GOOD — same assertion, but the failure diff is a boolean (~18ms)
+assert.equal(screen.queryByText('13') === null, true);
+```
+
+All 19 such sites across the DOM suite were converted to this pattern during this epic (see e.g.
+`tests/dom/BoardWindowCounts.dom.test.jsx:50,87`, `tests/dom/CoachDialogNarrationControls.dom.test.jsx:66`,
+`tests/dom/PricingScreen.dom.test.jsx`, `tests/dom/SetCard.dom.test.jsx`,
+`tests/dom/SlideEditorWindowCounts.dom.test.jsx`, `tests/dom/SocraticHintPhase.dom.test.jsx`,
+`tests/dom/ChallengeScreenGoalPrompt.dom.test.jsx`). The same trap applies to any live DOM/React
+value — not just query results — passed directly as an assertion operand.
+
+**Related trap while auditing for this pattern**: a bare `grep window` (or similar) over the test tree
+over-matches heavily on the domain term "window" (Connect Four's own `windowCounts`, "four-cell
+window", threat-window terminology, etc.), which are unrelated to the DOM global `window`. Scope any
+such search to the actual assertion-operand pattern (e.g. `assert\.(equal|strictEqual)\(\s*\w+\s*,`
+followed by a DOM-returning call), not a bare keyword match.

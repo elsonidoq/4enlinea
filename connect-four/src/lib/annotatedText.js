@@ -146,10 +146,9 @@ export function parseAnnotatedText(text) {
  *
  * @param {string} spec  Zone spec string (e.g. "col4", "c3r2", "tg").
  * @param {Array<{c: number, r: number}>} userMajorThreats  For "tg" resolution.
- * @param {Array<{c: number, r: number}>} opponentMajorThreats  Reserved for future "tg-opp".
  * @returns {Array<{c: number, r: number}>}
  */
-export function zoneToOverlays(spec, userMajorThreats = [], opponentMajorThreats = []) {
+export function zoneToOverlays(spec, userMajorThreats = []) {
   // colN → entire column
   const colMatch = spec.match(/^col(\d+)$/);
   if (colMatch) {

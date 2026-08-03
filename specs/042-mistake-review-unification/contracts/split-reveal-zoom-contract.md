@@ -5,6 +5,16 @@ SC-009).
 
 ## Current mechanism (root cause of the bug, not a one-line typo)
 
+> **SUPERSEDED (Epic 8, spec 055, T026).** This section describes the pre-fix mechanism only —
+> historical context for why the bug happened, not the shipped behavior. The fix described in
+> "Required behavior" below has since shipped: `boardW` is now computed by
+> `computeFrozenBoardWidth(containerH, initialSplitPct, isDragging)` in
+> `connect-four/src/lib/useDragSplit.js` and frozen in a ref, decoupled from live drag state, exactly
+> as this contract's "Required behavior" section specifies. Do not use the code below as a description
+> of current behavior; it is kept only to explain the original defect. A render-level regression test
+> at `connect-four/tests/dom/SplitRevealZoom.dom.test.jsx` (spec 055 T027-T029, tracked separately from
+> this annotation) is planned to guard this going forward.
+
 - `useDragSplit.js` tracks `splitPct` (updated live on every `pointermove` during a drag) and derives
   `topPx = containerH * splitPct / 100`.
 - `SplitReveal.jsx` derives the board's rendered `maxWidth` (`boardW`) **directly from `topPx`**:

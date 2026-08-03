@@ -4,7 +4,6 @@
 import { createSolverProcess } from '../c4solver-wrapper.js';
 import { playGame } from '../gameSampling.js';
 import { evaluatePredicate } from '../predicates.js';
-import { scoreMove } from '../moveQualityScorer.js';
 
 const solver = createSolverProcess();
 function mulberry32(a) {

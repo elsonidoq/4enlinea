@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect } from 'react';
 import { Board } from './Board.jsx';
 import { PredicateChecklist } from './PredicateChecklist.jsx';
 import { RejectModal } from './RejectModal.jsx';
@@ -70,7 +70,7 @@ function deriveHighlightCol(category, scores, moveString) {
 
 export function CurationWorkspace({ category, status = 'pending', onBack }) {
   const [candidates, setCandidates] = useState([]);
-  const [idx, setIdx] = useState(0);
+  const [idx] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
@@ -163,7 +163,7 @@ export function CurationWorkspace({ category, status = 'pending', onBack }) {
         setClickedTags(data.classifier_tags ?? []);
         setClickedPass(data.predicate_pass);
       }
-    } catch {}
+    } catch { /* ignore — scores just won't render this time */ }
     setScoresLoading(false);
   }
 
@@ -273,7 +273,7 @@ export function CurationWorkspace({ category, status = 'pending', onBack }) {
     const { simulation_trace, baseinverse_pair } = candidate.category_evidence;
     if (simulation_trace && simulation_trace.length > 0) {
       let stepIdx = 0;
-      for (const { col, row, player } of simulation_trace) {
+      for (const { col, row } of simulation_trace) {
         const step = ++stepIdx;
         const role = step % 2 === 1 ? 'loser' : 'winner';
         highlightedCells.push([row, col, role, step]);

@@ -7,7 +7,7 @@
 // use highlight_metadata. Board-replay categories replay the move_string.
 // forced_win uses highlight_cells with a board-replay fallback.
 
-import { Board, checkWin, getImmediateThreats } from './classifier.js';
+import { Board, getImmediateThreats } from './classifier.js';
 import { computeForcedWinHighlight, checkForbiddenColumnsPredicate } from './candidate-generator.js';
 
 const ROWS = 6;
@@ -108,7 +108,7 @@ function descriptorForPositional(board, correctCol) {
 
 // ─── Board-replay: double_threat ──────────────────────────────────────────────
 
-function descriptorForDoubleThreat(board, correctCol, player) {
+function descriptorForDoubleThreat(board, correctCol) {
   const postBoard = board.withMove(correctCol);
   const opponent = postBoard.opponent;
   const threats = postBoard.reachableThreats(opponent);

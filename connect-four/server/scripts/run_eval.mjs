@@ -54,7 +54,7 @@ const processedIds = new Set();
 if (positional[1] && existsSync(outputFile)) {
   const lines = readFileSync(outputFile, 'utf8').split('\n').filter(Boolean);
   for (const line of lines) {
-    try { const r = JSON.parse(line); if (r.id) processedIds.add(r.id); } catch {}
+    try { const r = JSON.parse(line); if (r.id) processedIds.add(r.id); } catch { /* skip malformed line */ }
   }
   console.log(`Resuming ${outputFile} — ${processedIds.size} entries already done`);
 } else {

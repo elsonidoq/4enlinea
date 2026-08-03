@@ -1,7 +1,7 @@
 import React, { useState, useCallback } from 'react';
 import { Board } from '../Board.jsx';
 import {
-  parseMovestring, boardToSpec, appendMove, undoMove, isColFull,
+  parseMovestring, appendMove, undoMove, isColFull,
 } from '../../lib/movestring.js';
 
 const OVERLAY_TYPES = ['tg', 'td', 'claim', 'win'];

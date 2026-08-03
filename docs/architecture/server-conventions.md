@@ -842,16 +842,20 @@ TRUNCATE).
 
 The `helmet` CSP mounted in `index.js` (see the `app.use(helmet({ contentSecurityPolicy: { directives:
 {...} } }))` block, right after `app.set('trust proxy', 1)`) is deliberately narrow —
-`default-src 'self'` plus explicit, minimal per-directive allowances. Two omissions look like bugs to a
-future contributor scanning for a missing `connect-src`/`form-action` entry; they are not:
+`default-src 'self'` plus explicit, minimal per-directive allowances. One omission looks like a bug to a
+future contributor scanning for a missing `form-action` entry; it is not:
 
-- **No `connect-src` entry for Sentry.** `@sentry/react` is a listed frontend dependency and
-  `ErrorBoundary.jsx` calls `Sentry.captureException(...)`, but **no `Sentry.init(...)` call exists
-  anywhere in `connect-four/src/`** — an uninitialized client's `captureException` is a no-op that
-  issues no network request. There is nothing for the CSP to allow today. Do not add a speculative
-  `connect-src` entry for Sentry's ingest host; that would be dead configuration for traffic that
-  doesn't exist (tracked separately as a real gap: `docs/open_issues.md`, frontend Sentry never wired
-  up).
+- **Sentry now HAS a `connect-src` entry — this bullet previously said the opposite** (corrected
+  2026-08-03, spec 055). Sentry is initialized on **both** sides — `connect-four/src/main.jsx:12`
+  (frontend) and `connect-four/server/index.js:119` (server) — so the traffic the older text called
+  "speculative" is real. `server/index.js:152` defines
+  `const SENTRY_INGEST = process.env.SENTRY_INGEST_HOST || 'https://*.ingest.sentry.io'`, which is
+  included in `connectSrc` at line 191. Verified live on 2026-08-03: both a local production build and
+  `https://decodec4.xyz/` return a `Content-Security-Policy` header carrying
+  `https://*.ingest.sentry.io` in `connect-src`. The earlier text ("no `Sentry.init(...)` call exists
+  anywhere in `connect-four/src/`… do not add a speculative entry") described a state that has since
+  changed; it is preserved here only so a reader who remembers it knows it was superseded rather than
+  contradicted by accident.
 - **No `form-action`/`frame-src` entry for Google OAuth.** `AuthModal.jsx` performs the OAuth handoff via
   `window.location.href = '${oauthBase}/api/auth/oauth/google'` — a full top-level page navigation, not
   a `fetch`/XHR (governed by `connect-src`), not a popup, and not an iframe (governed by `frame-src`).

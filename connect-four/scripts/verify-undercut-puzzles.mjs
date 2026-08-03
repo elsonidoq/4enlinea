@@ -45,15 +45,6 @@ async function main() {
 
   console.log(`Found ${puzzles.length} approved undercut puzzle(s).`);
 
-  // For each puzzle, check that the undercut trap column != correct_col
-  let validCount = 0;
-  let sameCount = 0;
-  for (const p of puzzles) {
-    // The undercut trap column can be identified from highlight_metadata
-    // For now, just count them — actual detection requires classifier import
-    validCount++;
-  }
-
   console.log(`Total approved: ${puzzles.length}`);
   console.log(`VERDICT: ${puzzles.length > 0 ? 'Puzzles exist — ready for confirmation challenges.' : 'No puzzles — Epic 6 flag.'}`);
 }

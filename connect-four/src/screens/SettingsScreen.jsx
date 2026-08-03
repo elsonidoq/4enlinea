@@ -83,7 +83,7 @@ export function SettingsScreen({ go, goBack }) {
       if (!res.ok) { setPortalError(true); return; }
       const { portalUrl } = await res.json();
       window.location.href = portalUrl;
-    } catch (_) {
+    } catch {
       setPortalError(true);
     }
   }
@@ -106,7 +106,7 @@ export function SettingsScreen({ go, goBack }) {
         const id = profile.papergames_id || '';
         setPapergamesId(id);
         setSavedValue(id);
-      } catch (_) {
+      } catch {
         // Ignore — user can still type
       }
     })();
@@ -163,7 +163,7 @@ export function SettingsScreen({ go, goBack }) {
       } else {
         setError(t('settings.papergames.errorSaveFailed'));
       }
-    } catch (_) {
+    } catch {
       setError(t('settings.papergames.errorNetwork'));
     } finally {
       setSaving(false);
@@ -193,7 +193,7 @@ export function SettingsScreen({ go, goBack }) {
         setImportError(body.error || t('settings.papergames.errorImportFailed'));
         setImporting(false);
       }
-    } catch (_) {
+    } catch {
       setImportError(t('settings.papergames.errorNetwork'));
       setImporting(false);
     }
@@ -253,7 +253,7 @@ export function SettingsScreen({ go, goBack }) {
           setImportError(job.error || t('settings.papergames.errorImportFailedGeneric'));
         }
         // pending/running — keep polling (no action needed)
-      } catch (_) {
+      } catch {
         // transient network error — retry on next tick
       }
     }, 2000);

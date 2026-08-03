@@ -5,7 +5,7 @@
 // Example:
 //   node --env-file=connect-four/server/.env connect-four/server/scripts/diagnose_blunders.mjs 333333451225566664442 second
 
-import { scoreMove, computeBlunderSeverity } from '../moveQualityScorer.js';
+import { scoreMove } from '../moveQualityScorer.js';
 import { classify, parseBoardState } from '../classifier.js';
 import { createSolverProcess } from '../c4solver-wrapper.js';
 

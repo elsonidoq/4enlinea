@@ -14,7 +14,7 @@ export class SupabaseStore {
 
   async _fetchPost(path, body) {
     const apiBase = (typeof import.meta !== 'undefined' && import.meta.env?.VITE_API_BASE_URL) || '';
-    const res = await fetch(`${apiBase}${path}`, {
+    await fetch(`${apiBase}${path}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
