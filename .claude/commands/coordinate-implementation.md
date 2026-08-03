@@ -348,6 +348,14 @@ against local. This step exists because that gap is systematically missed.
 **Do not skip this step when you believe there is nothing to do.** Reaching "none required" by
 actually checking is the point; reaching it by not looking is the failure mode.
 
+**Read `docs/deployment_steps.md` before writing to it** — specifically its "Lifecycle" section. That
+file is a work queue consumed by whoever drives the next staging or production deploy, not an archive.
+Your role here is **producer**: you append entries and you never run one against staging or
+production, never mark an entry `DONE`, and never reset or prune the file. (The reset — clearing all
+per-change entries — happens only once every entry is DONE in production, and is a deploy action.)
+If the file already contains PENDING entries from earlier work, leave them alone and say so in your
+report: a non-empty file means the branch is not fully shipped.
+
 ### 1. Collect
 
 Gather the **Deploy prerequisites** section from every batch's `## Handoff context`, plus anything

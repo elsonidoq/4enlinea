@@ -12,14 +12,43 @@ time or, worse, after.
 
 - **Each entry is a runbook**: what it is, when it must run relative to the code deploy, the exact
   command, how to verify, and how to roll back.
-- **Entries are append-only and dated.** When a step is completed in every environment, mark it
-  `DONE` with the date and environments rather than deleting it — the history is what tells the next
-  person whether a given environment ever received it.
+- **Entries are dated, and stay until they are DONE everywhere.** While a step is outstanding in any
+  environment, mark it `DONE <date>` for the environments that received it rather than deleting it —
+  that per-environment history is what tells the next person whether staging or production ever got
+  it. Deleting happens only at the reset below.
 - **Ordering matters.** Each entry states whether it runs *before* the code deploy (expand-then-
   migrate), *after* it, or *either*. When in doubt, prefer a step that is safe to run before and
   idempotent afterwards.
-- Related: `docs/open_issues.md` (deferred defects), `docs/architecture/db-schema.md` (schema of
-  record), `connect-four/server/migrations/` (DDL, applied by `migrate.js`).
+- Related: `docs/open_issues.md` (deferred defects), `docs/deploy-runbook.md` (the standing deploy
+  procedure this file does *not* restate), `docs/architecture/db-schema.md` (schema of record),
+  `connect-four/server/migrations/` (DDL, applied by `migrate.js`).
+
+## Lifecycle — this file is a work queue, not an archive
+
+This file exists to be **consumed by an agent driving a deploy**. It accumulates entries while a
+branch is being built, is worked through at deploy time, and is reset once production has received
+everything in it. Three roles read or write it, and they must not be confused:
+
+1. **Producers** — `/coordinate-implementation` (Step 8) and `/finish-session` **append** entries for
+   prerequisites the work just created. They never run a step against staging or production and never
+   delete an entry.
+2. **The deploy agent** — reads this file top to bottom as the queue for a staging or production
+   deploy: run each PENDING entry whose `Applies to` includes the target environment, in the order its
+   `When` field dictates relative to the code deploy, verify with the entry's own verification command
+   and success condition, and mark it `DONE <date> (<env>)`.
+3. **The reset** — once **every** entry in this file is `DONE` in **production**, replace the whole
+   per-change section (everything below the standing checklist, above "Template for new entries")
+   with nothing. The file returns to: this header, the standing checklist, and the template. The
+   history is not lost — it is in git, and any step whose outcome must stay discoverable should
+   already have a `staging_checks.md` sign-off or an `OI-N`.
+
+**The reset is a production-deploy action, not a cleanup chore.** Never reset because entries look
+old, because they were done in staging, or to tidy the file. An entry that is DONE in staging and
+PENDING in production is still live work. Equally: a non-empty file means *the branch is not fully
+shipped* — read it before claiming a change is deployed.
+
+**Never write to staging or production from a producer role.** Measuring is read-only and fine;
+mutating live data is the owner's call.
 
 ## Standing checklist for any deploy
 

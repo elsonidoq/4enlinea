@@ -542,6 +542,30 @@ Your job is to create the implementation plan for the spec at <spec_dir> using t
 The plan must honor the epic's "Settled decisions" and "Non-obvious facts" (sequencing, regression
 gates, test runner, acceptance steps) and must not violate any "NOT included" item.
 
+## Deploy prerequisites (required section)
+
+Working code is not a shippable change. Decide explicitly whether this epic creates any step that must
+happen *around* a deploy rather than inside it, and record the answer in the plan — including an
+explicit "none" when that is the finding. Walk this checklist against the design you are proposing:
+
+- **Schema migration** — will you add a file under `connect-four/server/migrations/`?
+- **Data migration / backfill** — does anything change the *meaning* of already-stored rows (new enum
+  or tag value, changed detector/predicate output, renamed field, new non-null column)? Rows written
+  under the old behavior do not fix themselves.
+- **Content pools** — does a predicate change that existing `puzzles` / `candidates` rows were
+  generated under?
+- **Secrets / env vars** — will new code read an env var that must first exist in Railway?
+- **Caches** — can `explanation_cache`, TTS/audio artifacts, or anything keyed by text or i18n key
+  serve pre-change content?
+- **Ordering** — must each step run before or after the code deploy? Must two halves (server +
+  frontend) ship in the same release?
+
+If the answer to any of these is yes, the plan's Source Code / file map MUST list
+`docs/deployment_steps.md` as a file this feature updates — `/speckit-tasks` reads that map, not the
+prose, so a prerequisite mentioned only in a paragraph gets no task and is silently lost. Read
+`docs/deployment_steps.md` first (its "Lifecycle" and "Template for new entries" sections) so the
+planned entry matches the file's shape.
+
 ## Handoff context (required)
 [standard handoff instruction]
 ```
@@ -642,6 +666,22 @@ Tasks must cover all of the epic's user stories, keep each story independently t
 lockstep documentation edits the epic requires, and end each story with the epic's acceptance steps. Do
 NOT include anything the epic lists under "NOT included".
 
+## Deploy prerequisites (do not omit)
+
+If the plan identifies any deploy prerequisite — schema migration, data backfill, content-pool repair,
+new env var, cache invalidation, or an ordering constraint between server and frontend — the task list
+MUST contain an explicit task that appends an entry to `docs/deployment_steps.md`, following that
+file's "Template for new entries" (status / when relative to the deploy / what it blocks / applies-to
+environments / exact command / verification command **and its success condition** / rollback or an
+explicit "not reversible — back up first"). This has been missed before and caught only at critique.
+
+That task is **local-only work**: it writes the runbook describing what the owner must run against
+staging and production. No task may write to a staging or production database. If the runbook needs a
+script that does not exist, add a task to write it, following the house conventions — a real `--help`
+that exits 0 before required-arg validation, `--dry-run` as the default posture, a required target-env
+flag with no default, a guard that the env file's project ref matches the named environment, a typed
+confirmation before any write (twice for production), and a distinct exit code for "drift found".
+
 ## Handoff context (required)
 [standard handoff instruction]
 ```
@@ -671,6 +711,14 @@ boundaries). Use /speckit-analyze as your primary tool, then add your own judgme
 - <spec_dir>/plan.md
 - <epic-file> (the "<epic-heading>" epic) — tasks must deliver its traceability and respect "NOT included"
 - docs/best_practices_spec_driven_development.md
+- docs/deployment_steps.md — its "Lifecycle" and "Template for new entries" sections
+
+Check specifically for a **missing deploy-prerequisite task**: if the spec or plan implies a schema
+migration, a data backfill, a content-pool repair, a new env var, a cache invalidation, or a
+server/frontend co-deploy ordering constraint, but no task appends an entry to
+`docs/deployment_steps.md`, that is a blocking issue. This exact gap has shipped through this pipeline
+before. Treat a plan that claims "no deploy prerequisites" as a claim to verify against the design,
+not a fact.
 
 ## Steps
 1. Run /speckit-analyze.
