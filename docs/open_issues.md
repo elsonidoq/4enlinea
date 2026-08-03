@@ -4554,3 +4554,72 @@ run `corpus_annotation_check.mjs` over recent `explanation_cache` rows to get a 
 designing the enforcement. A gate that fires on 30% of live output needs a different answer than one
 that fires on 0.5%. Then decide strip-vs-retry-vs-passthrough, and note that sanitising at the response
 seam (as OI's on the dual-path serving recommend) covers both the fresh and cached paths at once.
+
+## OI-125 — `verify-undercut-puzzles.mjs` filters on a `puzzles.approved` column that has never existed
+
+**Status**: deferred (pre-existing; out of scope for spec 056, which only corrected the script's `correct_col` → `correct_cols` select)
+**Area**: `connect-four/scripts/verify-undercut-puzzles.mjs`
+**Discovered**: spec 056 (Epic 9, correct_col retirement), 2026-08-03
+
+The script's query is:
+
+```js
+.from('puzzles')
+.select('id, move_string, correct_cols, highlight_metadata, category')
+.eq('approved', true)
+```
+
+There is no `approved` column on `puzzles`. The table has carried `is_active boolean NOT NULL DEFAULT
+true` since `003_puzzles.sql:17`, and no migration has ever added `approved` (verified:
+`/usr/bin/grep -rn "approved" server/migrations/*.sql` returns no puzzles-column DDL). PostgREST
+rejects a filter on an unknown column, so this read-only QA tool cannot return rows for any input —
+its "No approved undercut puzzles found." branch is unreachable-by-success, and its FR-047 check
+("if zero approved undercut puzzles exist, flag Epic 6") can only ever report the failing state.
+
+Spec 056 touched this file to migrate the `correct_col` select-column name and deliberately left the
+filter bug alone, so the fix would not be mistaken for retirement fallout.
+
+**Why deferred**: unrelated to the `correct_col` retirement, and fixing it means deciding what the
+script actually meant by "approved" — almost certainly `is_active = true`, but possibly a join
+against `candidates.status = 'approved'`, which is a different query with a different meaning.
+Guessing wrong produces a QA tool that silently reports on the wrong population.
+
+**If picked up**: confirm intent against the script's own header comment ("checks that approved
+undercut puzzles exist") and spec FR-047, then most likely change `.eq('approved', true)` to
+`.eq('is_active', true)` and run it against local to confirm it returns the 25 active undercut
+puzzles that exist there. Note the script has no test coverage — this bug survived precisely because
+nothing exercises it.
+
+## OI-126 — `debug-claimeven.js` passes a raw movestring where `detectClaimeven` expects a Board
+
+**Status**: deferred (pre-existing; out of scope for spec 056, which only smoke-checked this file)
+**Area**: `connect-four/server/debug-claimeven.js`
+**Discovered**: spec 056 (Epic 9, correct_col retirement), 2026-08-03
+
+`server/classifier.js:1665` declares:
+
+```js
+export async function detectClaimeven(board, solver, perspective = board.currentPlayer) {
+```
+
+but `debug-claimeven.js:7` calls it with the raw CLI argument:
+
+```js
+const moves = process.argv[2] ?? '';
+const result = await detectClaimeven(moves, solver);
+```
+
+`moves` is a string, not a Board, so `board.currentPlayer` is `undefined` and every board method the
+detector relies on is absent. The script consequently reports `matched: false` for any input,
+including positions that genuinely are claimevens. The detector itself is fine — verified by calling
+it correctly — so this is purely a broken debug entry point, not a classifier defect.
+
+**Why deferred**: spec 056's task list dispositioned this file "smoke-check only, do not migrate" (it
+produces a `correctCol` value upstream of any DB write), and fixing an unrelated pre-existing bug
+inside a retirement commit would have muddied that commit's scope.
+
+**If picked up**: wrap the argument — `new Board(moves)` — matching how the classifier's own callers
+construct it, then verify against a known claimeven movestring from
+`docs/knowledge-base/claimeven.md`'s worked examples so the fix is checked against a position that
+should match, not just against "it stopped throwing". Cross-ref memory
+`project_correct_cols_engine_traps`.
