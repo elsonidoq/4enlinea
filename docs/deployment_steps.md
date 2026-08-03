@@ -507,6 +507,30 @@ it touches), so dropping the now-unread column first is safe; deploying the code
 not be harmful either, but running the migration first removes any window where a stale, not-yet-
 redeployed server instance could still (in theory) reference the column.
 
+### Pre-flight (REQUIRED — run per environment, immediately before that environment's migration)
+
+**This was NOT measured for staging or production during implementation.** Local was measured
+(2026-08-03: 322 active `puzzles`, of which **1** had `correct_cols IS NULL` — a stray `forced_win`
+row created after the last backfill run; 179 pending `candidates`, 0 NULL). Staging and production
+were **not reachable from the implementing session** and their counts are **unknown** — do not assume
+they match local, and do not assume they are zero.
+
+This matters because `DROP COLUMN` is irreversible: any row where `correct_cols` is NULL but
+`correct_col` is not is a row whose only answer is about to be discarded.
+
+```sql
+-- Run against the TARGET environment before dropping. Both counts must be 0.
+SELECT 'puzzles' AS tbl, count(*) AS at_risk
+  FROM public.puzzles     WHERE correct_cols IS NULL AND correct_col IS NOT NULL
+UNION ALL
+SELECT 'candidates', count(*)
+  FROM public.candidates  WHERE correct_cols IS NULL AND correct_col IS NOT NULL;
+--    success: at_risk = 0 for BOTH rows.
+--    NON-ZERO: STOP. Do not apply the migration. Run spec 051's backfill
+--    (connect-four/server/scripts/backfill-correct-cols.mjs) against that environment
+--    first, re-run this query, and only proceed once it returns 0.
+```
+
 ### Run it
 
 ```bash
