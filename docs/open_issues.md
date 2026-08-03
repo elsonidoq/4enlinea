@@ -4379,7 +4379,8 @@ live deep-reveal path is a separate, larger question — see [[OI-124]].
 
 ## OI-121 — `ChallengeScreen` passes an `interactionMode` prop nothing consumes
 
-**Status**: deferred (pre-existing dead prop, exposed by spec 055 / Epic 8)
+**Status**: ✅ RESOLVED 2026-08-03 — both call sites deleted; `Board` stays presentational and the
+parent keeps sole ownership of interaction semantics. See "Resolution" at the end of this entry.
 **Area**: `connect-four/src/screens/ChallengeScreen.jsx:872,900`; `src/components/Board.jsx`
 **Discovered**: spec 055 (Epic 8) code review, 2026-08-02
 
@@ -4404,6 +4405,42 @@ for a dev-infrastructure epic.
 **If picked up**: trace how `interaction_mode === 'sequence'` puzzles actually render (start at
 `MultiMoveSequencer.jsx` and the `usesAcceptedGate` path in `ChallengeScreen.jsx`), then either wire
 the prop into `Board` or delete both call sites.
+
+**Resolution (2026-08-03)**: traced, and it resolved to *delete*, on the following evidence.
+
+This looked like a UX question ("should a sequence puzzle look different mid-entry?"), but that
+presumes `Board` could show something different. It cannot, because **there is no mid-entry state**.
+`handleSequenceClick` (`ChallengeScreen.jsx:629-680`) POSTs each click to
+`/api/puzzles/:id/sequence/move` immediately, then rebuilds the whole board from the movestring and
+pushes it down as ordinary props — first the user's disc, then the AI's reply after `COACH_PACING_MS`:
+
+```js
+const { board: bUser, heights: hUser } = buildBoard(userPos);
+setBoard(bUser); setHeights(hUser); setLastDrop({ c: col, r: heights[col] });
+```
+
+No pending or uncommitted discs exist. From `Board`'s perspective a sequence puzzle is identical input
+to a single-move puzzle, so the real question was architectural — *where does interaction semantics
+live* — not visual.
+
+`Board` is a controlled presentational component that owns no state a mode flag could change. The
+parent already owns mode in exactly the two places that matter: click routing
+(`interaction_mode === 'sequence' ? handleSequenceClick : …`, lines 857/887) and hint suppression
+(line 938). `interactionMode` was a third, redundant encoding of that same fact handed to the one
+component with no use for it, so both call sites were removed. The four legitimate `interaction_mode`
+reads remain untouched.
+
+**Why not wire it in instead**: if sequence discs ever need distinct rendering (numbering, say),
+`Board` already serves that through generic composable props — `overlays`, `highlightedCells`, and the
+numbered `moveLabels` map documented at `Board.jsx:97-99`. A mode enum would duplicate capability those
+already provide *and* push a puzzle-category concept into a component that otherwise knows nothing
+about puzzles, making it harder to reuse.
+
+**What would overturn this**: sequence puzzles needing to show a move the server has not accepted yet
+(optimistic entry, or multi-move-then-submit). That introduces genuine pending state — but it would be
+a data-flow change in the parent, and `Board` would still receive it as `overlays`, not as a mode.
+
+Verified: lint exit 0; `test:dom` 64/64; `test:fast` 1685/1690 (5 RED = unchanged OI-82 baseline).
 
 ## OI-122 — `server-conventions.md`'s CSP rationale still says Sentry has no `connect-src`
 

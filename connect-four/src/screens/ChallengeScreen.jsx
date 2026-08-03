@@ -869,7 +869,6 @@ export function ChallengeScreen({
                   // Pass null to prevent drop animations on a static reference view.
                   lastDrop={null}
                   fullCols={fullCols}
-                  interactionMode={puzzles[currentIdx]?.interaction_mode === 'sequence' ? 'sequence' : 'single_move'}
                   zhCells={zhCells}
                 />
               </div>
@@ -897,7 +896,6 @@ export function ChallengeScreen({
                 badge={badge}
                 lastDrop={lastDrop}
                 fullCols={fullCols}
-                interactionMode={puzzles[currentIdx]?.interaction_mode === 'sequence' ? 'sequence' : 'single_move'}
                 zhCells={zhCells}
               />
             </div>
