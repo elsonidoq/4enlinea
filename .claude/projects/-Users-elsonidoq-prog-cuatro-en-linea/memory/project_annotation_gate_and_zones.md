@@ -5,9 +5,34 @@ metadata:
   node_type: memory
   type: project
   originSessionId: 61abbe1a-cb8c-4db3-a79d-d3e4d4378c9a
+  modified: 2026-08-03T12:29:39.152Z
 ---
 
-Everything about the production coach's **annotation gate** (`server/annotationGate.js` + `server/explainContext.js` + `llmCoachHelpers.js`) and its zone-tag validation. Part of the live `/api/explain*` path (see [[project_explain_system]]).
+Everything about the coach's **annotation gate** (`server/annotationGate.js` + `server/explainContext.js` + `llmCoachHelpers.js`) and its zone-tag validation.
+
+> ## ⚠️ CORRECTED 2026-08-03 — the gate is NO LONGER on the live path
+>
+> This memory used to open "Part of the live `/api/explain*` path." **That is now false**, verified at source:
+> `server/index.js` imports **neither** `validateAnnotation` nor `normalizeZoneTags` (both defined in
+> `annotationGate.js`, at :486 and :415), and nothing imports `buildExplainContext` outside tests and
+> `server/scripts/`. The only importers of `annotationGate.js` anywhere are
+> `server/scripts/run_eval.mjs` and `server/scripts/corpus_annotation_check.mjs` — both offline.
+>
+> The live `/api/explain-move-llm` now runs `computeMechanism(...)` (`index.js:1319`), and its own comment
+> says the result "drops straight into the response as `explanation`" — **the `[zone:…]` tags it carries
+> are never validated**. A zone that highlights the wrong column, names a dead window, or leaks raw
+> coordinates reaches the UI unchecked. Tracked as **OI-124**.
+>
+> **So the `deep_reveal_failures` bullet below is stale**: that table is still written (`index.js:1341`),
+> but only on `result.callError || result.parseError || !result.mechanism`, with
+> `failure_reason: result.callError ?? result.parseError ?? 'empty mechanism'`. It can no longer contain
+> P5strong codes, so querying it for `P5strong:*` will always come up empty — don't read that as "the gate
+> is passing."
+>
+> Everything below still accurately describes **how the gate behaves when it runs** (the eval/corpus
+> scripts), and is the spec to restore if it is ever re-wired. One change since: **P2 now validates every
+> cell-bearing spec**, not just `colN` — it compares prose column references against the set of columns
+> the zone actually occupies (spec 055, OI-120), so `cells:`/`cNrM` zones are covered too.
 
 ## Internal contracts
 - `buildExplainContext` returns `{ prompt, allowedSet, allMovesEqual }`; `allowedSet` is NEVER in any HTTP response.

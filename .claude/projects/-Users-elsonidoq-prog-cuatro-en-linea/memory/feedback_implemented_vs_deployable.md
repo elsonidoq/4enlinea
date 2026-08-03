@@ -5,7 +5,7 @@ metadata:
   node_type: memory
   type: feedback
   originSessionId: 09ab1bbf-3752-44fc-9a64-d05aa25d0cce
-  modified: 2026-08-02T01:25:18.369Z
+  modified: 2026-08-02T19:01:36.619Z
 ---
 
 The user separates **implemented** (code complete and verified) from **deployable** (no outstanding
@@ -26,15 +26,15 @@ runbook plus an `OI-N` so they survive the conversation; this is now a required 
 `/coordinate-implementation` (Step 8). Measuring against live environments is fine
 and expected; **writing** to staging or production is the user's call, never the agent's.
 
-**The runbook is `docs/deploy-runbook.md`. `docs/deployment_steps.md` DOES NOT EXIST and never has**
-— `git log --oneline --diff-filter=A -- docs/deployment_steps.md` returns empty on every branch
-(verified 2026-08-01). That phantom path is nonetheless named as a real destination by this memory's
-own earlier wording, by `/coordinate-implementation`'s Step 8, and by spec 053's FR-014c + quickstart
-+ tasks — so an agent that trusts any of them either writes to a file nobody reads or silently drops
-the requirement. It bit spec 053 US2: the pending real-browser audio check was routed to
-`docs/deployment_steps.md` by the spec text, and the implementing agent had to notice the file was
-absent and redirect it into `docs/deploy-runbook.md` (new "Pending Pre-Staging Checks" section at the
-top). **`ls` the runbook path before writing a deploy prerequisite to it, and prefer
-`docs/deploy-runbook.md` over whatever path a spec names.**
+**CORRECTED 2026-08-02: `docs/deployment_steps.md` now EXISTS and is the right destination.** It was
+created by commit `e0b0e39` ("Spec 052 working-tree carryover + OI-94/OI-95") *after* this memory's
+2026-08-01 "never existed" verification, which was accurate when written and is now stale. As of
+2026-08-02 it is ~23KB, carries per-spec entries for specs 052/053/054/055 plus a "Template for new
+entries", and `docs/index.md:33` points to it. **Two runbooks now coexist and they are not
+interchangeable**: `docs/deployment_steps.md` holds *per-change prerequisites* (migrations, backfills,
+content-pool repairs, cache invalidations) — this is where a new epic's entry goes; `docs/deploy-runbook.md`
+holds the *standing deploy procedure* (how to push to staging/production, verification steps) plus
+spec 053's "Pending Pre-Staging Checks" section. Still **`ls` both paths before writing** rather than
+trusting any single source — that habit is what caught this file's own staleness.
 
 Related: [[feedback_open_issues_destination]], [[project_puzzle_grading_reads_stored_metadata]].

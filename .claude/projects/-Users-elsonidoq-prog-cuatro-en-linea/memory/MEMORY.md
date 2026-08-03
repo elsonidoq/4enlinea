@@ -17,7 +17,7 @@
 - [New-category wiring](project_new_category_wiring_checklist.md) — before adding a category read server-conventions §Category Registry; missing candidate-generator.js = SILENT failure
 - [Grading reads STORED metadata](project_puzzle_grading_reads_stored_metadata.md) — changing a detector silently invalidates live rows; they mark correct answers wrong. 18/42 in spec 052
 - [puzzle_attempts write traps](project_puzzle_attempt_outcome_traps.md) — ALL 4 writers fire-and-forget ⇒ CHECK/type errors vanish; moves_tried is integer[]; a green store-mock test proves nothing
-- [correct_cols engine traps](project_correct_cols_engine_traps.md) — checkPredicate ≠ checkPredicateRaw (sort/sync only in the wrapper); a load-bearing circular import; mass backfill rejections are usually stale data
+- [correct_cols engine traps](project_correct_cols_engine_traps.md) — undercut/overcut "show nothing" is EMERGENT from a NULL, not implemented (`correct_cols[0]` renders col 0); checkPredicate ≠ checkPredicateRaw (sort/sync only in the wrapper); a load-bearing circular import; mass backfill rejections are usually stale data
 - [Generate puzzles for local QA](feedback_generate_puzzles_for_local_qa.md) — local `puzzles` is EMPTY for most categories; YOU can generate+promote (all localhost-gated, `--port` defaults to a WRONG 3001 in worktrees) — never report "unreachable" or lower a threshold
 - [Opening theory scoping](project_opening_theory_scoping.md) — NO opening challenge category (won boards have losing side to move); openings → Lessons
 - [Lesson interactivity](project_lesson_interactivity_evaluation.md) — Socratic = client-side col===correctCol; inline challenges DO work (/api/evaluate-move, no DB row)
@@ -64,7 +64,7 @@
 - [Prod LLM call graph](project_prod_llm_call_graph.md) — deep-reveal = defaultCallLLM; callLLM offline-only; composeExplanation//api/explain-move is DEAD (no frontend caller)
 - [Feature vector design](feedback_feature_vector_design.md) — toFeatureVector: keep grounded cells, drop plumbing/derivations; keep instance counts
 - [Feature vector content traps](project_feature_vector_content_traps.md) — null outcomes on losing_either_way; patternsOpponent snapshot ambiguity; pliesToEnd = |score|
-- [Annotation gate debugging](project_annotation_gate_and_zones.md) — classifyPattern Map order non-deterministic (PRIORITY.find); blunders-not-populated ladder; `inverted`=OPTIMAL
+- [Annotation gate debugging](project_annotation_gate_and_zones.md) — gate is now OFFLINE-ONLY (live path = computeMechanism, zone tags unvalidated, OI-124); deep_reveal_failures no longer holds P5strong codes
 - [Creation tags aren't score-gated](project_creation_tags_not_score_gated.md) — double_threat/forced_win/figure_7/j_shape fire on a LOSING move too; never key their phrase pool off raw `quality`
 - [Explain system](project_explain_system.md) — LLM prompt invariants; explanation_cache schema; NO KB term injects without its pattern firing
 - [LLM perspective bug](feedback_llm_perspective_bug.md) — the post-move board's "Next:" label hijacks LLM perspective; name the mover explicitly
@@ -95,20 +95,22 @@
 
 ## QA, worktrees & Papergames
 
-- [app-qa traps](project_app_qa_setup_gotchas.md) — automation Chrome fakes autoplay (audio ships silent); discs are background-image; resize_page dead → emulate
+- [DOM test hang diagnosis](project_dom_test_hang_diagnosis.md) — a hanging jsdom test = assert.equal() on a live DOM node (util.inspect walks Fiber, 33.9s vs 18ms); `ps` 0% CPU is a lie (node --test forks per file)
+- [app-qa traps](project_app_qa_setup_gotchas.md) — autoplay faked (audio ships silent); board fills in ~2s so a fast read looks EMPTY; quickstart fixture ids are staging-only; resize_page dead → emulate
+- [new_TODOs is empty — traceability moved](reference_new_todos_shipped_traceability.md) — all 26 shipped; issue→epic table in polish_epic.md; specs 042/043 have no feat() commit
 - [Worktree setup traps](project_repo_worktree_setup.md) — baseRef is a Claude-Code setting NOT git config; copy server/.env or tests ENOENT; res.sendFile needs dotfiles:'allow' under .claude/
-- [ESLint flat-config traps](project_eslint_config_traps.md) — unmatched files get ZERO rules (141 .mjs); blocks MERGE; `_unused` probe stays green
+- [ESLint flat-config traps](project_eslint_config_traps.md) — lint is a REAL gate now: `test:fast` runs it first (error ⇒ zero tests run) + pre-commit; 47 warnings = healthy; `_unused` probe stays green
 - [test:fast baseline is 5 RED, not green](project_repo_worktree_setup.md) — OI-82's 5 ENOENT reason-engine tests fail in the MAIN checkout too; judge yourself against 5, not 0 (§2d)
 - [Papergames integration](project_papergames_integration.md) — skipped ≠ duplicates (don't "fix"); reCAPTCHA blocks server login; 100%-accuracy losses are ALL time-up, not resigns
 
 ## Workflow, agents & process
 
 - [File mtime is never evidence](project_file_mtime_is_never_evidence.md) — mtime = the checkout, not the write; all 565 mp3s share one stamp. Date from `generated_at` or `git log --diff-filter=A`
-- [Bare grep silently finds nothing](project_grep_silent_zero_matches.md) — non-UTF-8 locale ⇒ multibyte files read as binary; ZERO matches + exit 1, no error. Always `grep -a` before trusting a negative
+- [Bare grep silently finds nothing](project_grep_silent_zero_matches.md) — multibyte ⇒ binary, ZERO matches, no error; grep is ugrep (use /usr/bin/grep); `node --test` counts start with `ℹ` not `#`
 - [Verify at the source layer](feedback_verify_at_the_source_layer.md) — every false belief hides in a layer: signature NOT doc comment, diff NOT agent report, real output NOT your fixture, all-N NOT a sample
 - [Measurements expire](feedback_measurement_expires.md) — re-measure against FINAL code; an UNCHANGED line ≠ an unfixed bug (the fix may have landed in another file) — git log --grep first
-- [Implemented ≠ deployable](feedback_implemented_vs_deployable.md) — answer both; deploy prereqs → `docs/deploy-runbook.md` (deployment_steps.md NEVER existed) + an OI; never write to staging/prod
-- [A wrong test is part of the bug](feedback_wrong_test_is_part_of_the_bug.md) — never shape a fix to keep an existing test green; read the fixture, not its name; a defect in a fixture is usually in the data too
+- [Implemented ≠ deployable](feedback_implemented_vs_deployable.md) — answer both; per-change prereqs → `docs/deployment_steps.md` (EXISTS since e0b0e39; the "never existed" note is STALE), standing procedure → `deploy-runbook.md`; + an OI; never write to staging/prod
+- [A wrong test is part of the bug](feedback_wrong_test_is_part_of_the_bug.md) — never keep a test green over a fix; read the fixture not its name; a test can be VACUOUS: f(a)===f(a) reads as coverage
 - [Concurrent agents clobber](feedback_concurrent_agents_clobber.md) — the user runs agents in parallel; two in one tree overwrite SILENTLY; line numbers stale within the hour
 - [External auto-backup commits](project_external_auto_backup_commits.md) — a background process auto-commits STAGED work unpredictably (once broke HEAD); stage explicit paths only, never git add -A, git status --short before commit
 - [Isolated review misses seams](feedback_isolated_review_misses_seams.md) — the JOIN of two correct halves; 1-instance tests miss N-instance clashes

@@ -1,11 +1,11 @@
 ---
 name: feedback_wrong_test_is_part_of_the_bug
-description: "Never shape a fix to keep an existing test green — if the test asserts wrong behaviour, the test is part of the bug and must be replaced along with the code"
+description: "Never shape a fix to keep an existing test green — if the test asserts wrong behaviour it is part of the bug; and a test can be vacuous (f(a)===f(a)), reading as coverage while pinning nothing"
 metadata: 
   node_type: memory
   type: feedback
   originSessionId: d7194ddb-70f6-4602-a846-18bfc9014c46
-  modified: 2026-07-28T21:05:02.873Z
+  modified: 2026-08-03T15:49:12.967Z
 ---
 
 **When designing a fix, correctness is the constraint. A green suite is not.**
@@ -44,6 +44,30 @@ correctness rule to pass is usually evidence the rule is right. Read the fixture
 values before concluding the guard is too strict — but equally, check the guard itself: the same
 session's guard *was* over-strict for lost positions and for callers passing `scores = []`, and
 those two exemptions were legitimate. The discriminator is the data, never the red/green.
+
+**A second failure mode: the test that cannot fail at all.** The case above is a test asserting
+something *false*. Worse — and harder to see — is a test asserting something **vacuous**, because it
+reads as coverage while pinning nothing. Found 2026-08-03 in
+`connect-four/tests/unit/splitRevealZoom.test.js`: a case titled *"is invariant across the full
+simulated drag range"* loops `simulatedSplitPct` from 30 to 80 and, on every iteration, calls
+`computeFrozenBoardWidth(CONTAINER_H, INITIAL_SPLIT_PCT, true)` — **identical arguments each time**,
+with the loop variable explicitly thrown away (`void simulatedSplitPct; // not a valid input to the
+frozen function — that's the point`). It asserts `f(a,b,c) === f(a,b,c)`: true for any pure function,
+un-failable by any implementation.
+
+The compounding trap: **the behaviour it claimed to guard had moved into the caller.** `SplitReveal.jsx`
+now passes the *live* split where the helper's JSDoc still says "at open time (pre-drag)", so the
+freeze the test advertises was reverted in production while the test stayed green — it could never
+have detected the change, because the changed code isn't the code it calls. See `docs/open_issues.md`
+OI-127.
+
+Tells that a test is vacuous: a loop variable that never reaches the call; both sides of the assert
+built from the same expression; a "must not change" assertion on a **pure** function whose inputs are
+held constant (purity already guarantees it); a unit test whose subject is a helper while the
+behaviour under test lives at the call site. When a test's name describes an *integration* property
+("across a drag", "after a reload"), a unit test of a pure helper usually cannot express it — that
+property needs a render/DOM-level test. (Here one exists and is correct:
+`tests/dom/SplitRevealZoom.dom.test.jsx`.)
 
 **How to apply:**
 1. When a fix breaks a test, first ask whether the assertion is *true* — read the fixture's
