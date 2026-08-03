@@ -238,7 +238,9 @@ copy-paste of that sweep).
 evaluator either (a) reads an already-computed answer set off the puzzle object (*threaded*), or (b)
 calls the `classifier.js` detector itself, from the evaluator, at grading time (*recomputed*).
 `evalFigure7`/`evalJShape`/`evalZThreat`/`evalOvercut`/`evalClaimeven` all chose (a): they read
-`puzzle.correctCols ?? (puzzle.correctCol != null ? [puzzle.correctCol] : [])`. `evalOddEvenThreat`
+`puzzle.correctCols ?? []`. (Until spec 056 retired the legacy scalar, this expression carried a
+`puzzle.correctCol` fallback; that fallback is gone — `correctCols` is now the only source.)
+`evalOddEvenThreat`
 chose (b): it calls `detectOddEvenThreat` live from `moveString` + `scores` (mirroring
 `evalDoubleThreat`'s *contract shape*, not its sweep — see above). Both choices are legitimate; which
 one is correct is a property of the specific detector being widened, decided per evaluator, not a
@@ -252,10 +254,10 @@ global rule:
   teaches a board where the figure-7 kernel is already fully formed and the correct move exploits the
   resulting threat column from outside the kernel — not a move that completes it. Recomputing live
   conflated "the kernel exists" with "this move built the kernel" and produced `NO-CONCEPT` for a
-  legitimate lesson. The fix was to thread the stored/threaded `correctCols` instead (with the
-  scalar-`correctCol` fallback above, so pre-spec-051 callers that never populated `correctCols` —
-  `buildPredicatePuzzle` was deliberately **not** extended to synthesize it — keep working
-  byte-identically).
+  legitimate lesson. The fix was to thread the stored/threaded `correctCols` instead. (This
+  originally kept a scalar-`correctCol` fallback so pre-spec-051 callers that never populated
+  `correctCols` kept working byte-identically; spec 056 retired that fallback once every caller
+  had migrated.)
 - **`evalClaimeven` inherits the same threaded choice, for a stronger reason.** `detectClaimeven` is
   `async` and solver-simulating — one `runClaimevenSimulation` rollout (~20 solver queries) per
   odd-height column tested (see below). Recomputing it live inside the evaluator would re-run that
@@ -440,9 +442,9 @@ boolean expression (`result === 'correct' || result === 'tied'`) applied uniform
 categories, not a second category-conditional branch.
 
 For the seven categories in `SINGLE_ANSWER_CATEGORIES`, the predicate-object the handler evaluates
-against is built from the request's `correctCol`/`highlightMetadata` fields (client-sent, remapped
+against is built from the request's `correctCols`/`highlightMetadata` fields (client-sent, remapped
 from the puzzle's stored snake_case columns — see api-conventions.md) rather than recomputed
-server-side metadata, via `buildPredicatePuzzle(category, movestring, { correctCol, highlightMetadata })` in
+server-side metadata, via `buildPredicatePuzzle(category, movestring, { correctCols, highlightMetadata })` in
 `server/predicates.js`. This same helper is shared with `POST /api/evaluate-move/inline`'s
 `evaluatePredicate` call site (previously a second, divergent construction of the predicate
 object) — the two endpoints now converge on one code path for building that object, closing a

@@ -29,7 +29,7 @@ process.stdin.write(solverInput + '\n');
 | Column | Table(s) | Convention |
 |---|---|---|
 | `move_string` | `puzzles`, `candidates` | **0-indexed** columns (digits `0–6`) |
-| `correct_col` | `puzzles`, `candidates` | **0-indexed** |
+| `correct_cols` (integer[]) | `puzzles`, `candidates` | **0-indexed** columns; sole storage contract since spec 056 dropped the `correct_col` scalar |
 | `highlight_metadata` (jsonb) | `puzzles`, `candidates` | all sub-fields 0-indexed (see below) |
 | `solver_scores` (jsonb) | `candidates` | array index 0–6, 0-indexed column |
 
@@ -70,8 +70,8 @@ The jsonb field can have two shapes. All coordinate fields inside are **0-indexe
 | Field | Direction | Convention |
 |---|---|---|
 | `candidateCol` (request body) | client → server | **0-indexed** |
-| `correct_col` (query param) | client → server | **0-indexed** |
-| `correctCol` (response JSON) | server → client | **0-indexed** |
+| `correct_cols` (query param) | client → server | comma-separated **0-indexed** list, e.g. `?correct_cols=1,3` |
+| `correctCols` (request + response JSON) | client ↔ server | **0-indexed** array; the singular `correctCol` was retired by spec 056 with no alias |
 | `highlightMetadata` (response JSON) | server → client | all sub-fields 0-indexed |
 
 The API response is the DB value passed through with snake_case → camelCase renaming;

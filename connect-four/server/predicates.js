@@ -66,7 +66,7 @@ function currentPlayer(moveCount) {
 // `puzzle.goalPredicateType || category` / `puzzle.goalPredicateParams ?? null` logic — this is
 // what keeps /inline's forced_win/forbidden_columns categories working once T007 routes it
 // through this same helper (those two categories read goalPredicateType/goalPredicateParams, not
-// correctCol/highlightMetadata).
+// correctCols/highlightMetadata).
 //
 // @param {string} category - the puzzle category slug
 // @param {string} movestring - 0-indexed move string for the position being evaluated
