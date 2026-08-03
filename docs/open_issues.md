@@ -4555,7 +4555,7 @@ designing the enforcement. A gate that fires on 30% of live output needs a diffe
 that fires on 0.5%. Then decide strip-vs-retry-vs-passthrough, and note that sanitising at the response
 seam (as OI's on the dual-path serving recommend) covers both the fresh and cached paths at once.
 
-## OI-125 — `verify-undercut-puzzles.mjs` filters on a `puzzles.approved` column that has never existed
+## OI-130 — `verify-undercut-puzzles.mjs` filters on a `puzzles.approved` column that has never existed
 
 **Status**: deferred (pre-existing; out of scope for spec 056, which only corrected the script's `correct_col` → `correct_cols` select)
 **Area**: `connect-four/scripts/verify-undercut-puzzles.mjs`
@@ -4590,7 +4590,7 @@ undercut puzzles exist") and spec FR-047, then most likely change `.eq('approved
 puzzles that exist there. Note the script has no test coverage — this bug survived precisely because
 nothing exercises it.
 
-## OI-126 — `debug-claimeven.js` passes a raw movestring where `detectClaimeven` expects a Board
+## OI-131 — `debug-claimeven.js` passes a raw movestring where `detectClaimeven` expects a Board
 
 **Status**: deferred (pre-existing; out of scope for spec 056, which only smoke-checked this file)
 **Area**: `connect-four/server/debug-claimeven.js`
