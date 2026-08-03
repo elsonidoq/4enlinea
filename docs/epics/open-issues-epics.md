@@ -1829,11 +1829,13 @@ truth for a puzzle's/candidate's correct column, without touching the unrelated 
 same camelCase name.
 
 **Issues covered**
-- **OI-81** — Retire the legacy `correct_col` scalar once `correct_cols` is the source of truth. Carries the
-  full 105-reference / 22-file consumer inventory and the rationale for the 2026-07-29 split; this epic is
-  its spec-ready home.
+- **OI-81** — Retire the legacy `correct_col` scalar once `correct_cols` is the source of truth. Carries a
+  consumer inventory (known-as-of-2026-07-29: 105 references across 22 files) and the rationale for the
+  2026-07-29 split; this epic is its spec-ready home. **The inventory is a snapshot, not a task list** —
+  re-derive it fresh at pickup time per US9.1; a later re-count already found a materially different total,
+  and any count will keep drifting in this concurrently-edited repo (Settled decision 7).
 
-**Settled decisions** (owner, 2026-07-29)
+**Settled decisions** (owner, 2026-07-29 unless noted)
 1. This epic is **split out of spec 051** by owner decision on 2026-07-29, after the consumer inventory —
    once actually re-derived against the worktree rather than estimated — came back at **105 references
    across 22 files**, not the 62/11 figure the original "migrate and drop in the same feature" decision had
@@ -1855,40 +1857,104 @@ same camelCase name.
    does not need Epics 2–4 to finish, only spec 051 to merge.
 6. **Epic 9 is Lane C, not Lane A**, despite depending on Epic 1's output. Lane C is this file's isolated
    lane: Epic 8 runs alone because its repo-wide lint sweep would conflict with every open branch, and Epic
-   9's 22-file mechanical sweep across server and frontend has the same conflict profile — it touches
+   9's mechanical sweep across server and frontend has the same conflict profile — it touches
    `server/predicates.js`, `server/answerSetInvariant.js`, and `server/evaluateMoveHandler.js` while Epic 2
    (Lane A) is still working in `server/classifier.js`/`llmCoachHelpers.js` and Epic 4 (Lane A) in
    `server/index.js` handlers/`classifier.js` — running Epic 9 concurrently with the rest of Lane A would
    mean repeatedly hand-merging the same files. Epic 9 runs alone, only after spec 051 merges; it does not
    wait for all of Lane A to finish.
+7. (owner, 2026-08-03) **The epic's enumerated file lists and reference counts (105/22, and the per-file
+   lists in US9.2–9.4) are known-as-of-2026-07-29 snapshots, not an authoritative work breakdown.** US9.1
+   must re-derive the inventory fresh against the worktree at pickup time and produce a per-file triage
+   table; that triage table — not the lists elsewhere in this epic — is the contract US9.2–9.4 consume. Do
+   not treat any count or file list in this epic as current; re-verify before planning tasks against it.
+8. (owner, 2026-08-03) **The wire contract for `correctCol` is retired, not preserved as a deprecated
+   alias.** Every HTTP-crossing field — the `/api/puzzles/:id` and evaluate-move response fields, the
+   evaluate-move request body field, and the `CurationWorkspace.jsx` query-string parameter — becomes the
+   array form `correctCols`. The legacy singular `correctCol` wire field is dropped outright in the same
+   change, not kept alongside it: keeping it would preserve exactly the duplicate source of truth this epic
+   exists to eliminate. This is safe because the frontend and server ship in the same deploy, so there is no
+   independently-versioned stale client that would break.
+9. (owner, 2026-08-03) **The `undercut`/`overcut` NULL carve-out from spec 051's FR-019 must survive this
+   migration unchanged.** Those two categories deliberately have no meaningful single "correct column"
+   (`correct_cols[0]` would typically be column 0, a meaningless value), so spec 051 keeps `correct_col =
+   NULL` for them. Every single-column display consumer migrated by this epic — the curation board hint
+   marker (`CurationWorkspace.jsx`), the puzzle picker's `col {puzzle.correct_col}` label
+   (`PuzzlePickerModal.jsx`), and the API response sites in `server/index.js` — must keep rendering "nothing
+   to show" for `undercut`/`overcut` after the swap to `correct_cols`, not fall back to displaying
+   `correct_cols[0]`.
+10. (owner, 2026-08-03) **`correctCol` has a third sense, and it is out of scope.** Beyond (i) the DB scalar
+    this epic retires and (ii) the authored lesson-JSON field (Settled decision 3), a computed *result-shape*
+    field of the same name is returned by every `server/predicates.js` evaluator and used the same way in
+    `classifier.js`/`shapeDescriptor.js` — never read from or written to the database. This sense keeps its
+    current name; only camelCase call sites that read/write the DB column or cross the HTTP wire (Settled
+    decision 8) are migrated. Renaming the result-shape field is out of scope — it would be a materially
+    larger sweep on files Epic 2 is concurrently touching, for naming clarity rather than correctness, and is
+    inconsistent with this epic's framing as pure plumbing retirement.
+11. (owner, 2026-08-03) **The puzzle↔lesson boundary gets thin adapters on both sides, not a shared type.**
+    Lesson JSON keeps its single-column scalar completely unchanged (Settled decision 3 stands).
+    `AdminLessonEditorScreen.jsx` takes `correct_cols[0]` when copying a puzzle's answer into a lesson node;
+    `ChallengeScreen.jsx` wraps the lesson node's scalar as a one-element set (`correctCols: [ch.correctCol]`)
+    when sending it out in a puzzle-shaped grading request. Neither seam touches authored lesson content.
 
 **Non-obvious facts**
-- The full 105-reference / 22-file inventory table (re-derived 2026-07-29 via `grep -rn "correct_col\b"`,
-  server + frontend, excluding `node_modules`) lives in `docs/open_issues.md` **OI-81** — read it there
-  rather than duplicating it here; re-derive it fresh at pickup time since this repo is concurrently edited
-  and the table will have drifted.
-- **Three call sites consume the API-level `correctCol` mirror with no `correct_col` substring to grep for**
+- The consumer inventory (known-as-of-2026-07-29: 105 references / 22 files) lives in
+  `docs/open_issues.md` **OI-81** — read it there rather than duplicating it here, but treat it as a stale
+  snapshot: re-derive it fresh via `grep -rn "correct_col\b" connect-four/server connect-four/src
+  connect-four/scripts connect-four/tests` (excluding `node_modules`) at pickup time, and let US9.1's
+  resulting triage table be the contract, not this number (Settled decision 7).
+- **Three specific files are known "sync writers"** that keep `correct_col` in sync with `correct_cols`
+  under spec 051's FR-017, and must be explicitly triaged (not just swept) when this epic lands:
+  `server/scripts/backfill-correct-cols.mjs` (writes `correct_col` alongside `correct_cols` on every
+  backfilled row — **disposition: remove the `correct_col` write**), `server/promotePuzzleRow.js` (copies
+  the scalar candidate→puzzle on promotion — **disposition: remove the copy**), and
+  `server/candidate-generator.js`'s central sync point that decides the scalar's value per category
+  (**disposition: remove the scalar computation**, keeping only the `correct_cols` computation).
+  `tests/unit/checkPredicateSortAndScalarSync.test.js` exists only to assert the scalar stays in sync with
+  the set — **disposition: delete it, do not migrate it** — once the scalar is gone there is nothing left
+  for it to assert.
+- **`correctCol` has three senses, not two — triage every call site against all three before touching it:**
+  1. **The DB scalar** (`puzzles.correct_col` / `candidates.correct_col`) — in scope, this epic retires it.
+  2. **The authored lesson-JSON field** (Socratic/confirmation-challenge nodes: `server/lessonLoader.js`,
+     `server/scripts/verify_lesson_content.mjs`, `SocraticScreen.jsx`'s `col === socratic.correctCol` —
+     memory `project_lesson_interactivity_evaluation`) — explicitly out of scope (Settled decision 3); a
+     naive find-and-replace across every `correctCol` occurrence would silently corrupt lesson content that
+     has nothing to do with the `puzzles`/`candidates` table.
+  3. **The computed result-shape field** returned by `server/predicates.js` evaluators and used the same way
+     in `classifier.js`/`shapeDescriptor.js` — the answer a function just computed, never a value read from
+     the database — also out of scope (Settled decision 10).
+  Two call sites sit exactly on the boundary between sense 1 and sense 2 and need the thin adapters from
+  Settled decision 11: `AdminLessonEditorScreen.jsx` (`correctCol: puzzleData.correct_col`) and
+  `ChallengeScreen.jsx` (`correct_col: ch.correctCol`).
+- Three call sites consume the API-level `correctCol` mirror with no `correct_col` substring to grep for
   and must be found by name, not by grep: `server/evaluateMoveHandler.js` (destructures the legacy
   client-supplied `correctCol` from `req.body`), `server/predicates.js` (`buildPredicatePuzzle`'s
-  `correctCol` parameter), and `server/answerSetInvariant.js` (`acceptedCols`'s `correctCol` destructure).
-- **The `correctCol` camelCase overload trap**: the same identifier names both the puzzle/candidate scalar
-  this epic retires *and* an unrelated authored lesson-content field
-  (`server/lessonLoader.js`, `server/scripts/verify_lesson_content.mjs`, `SocraticScreen.jsx`'s
-  `col === socratic.correctCol` — memory `project_lesson_interactivity_evaluation`). A naive
-  find-and-replace across every `correctCol` occurrence would silently corrupt lesson content that has
-  nothing to do with the `puzzles`/`candidates` table. Every camelCase call site must be triaged by hand
-  against OI-81's inventory before being touched.
+  `correctCol` parameter — this parameter IS in scope, unlike the sense-3 result-shape field it feeds, because
+  it flows from the DB scalar), and `server/answerSetInvariant.js` (`acceptedCols`'s `correctCol`
+  destructure).
 - **Upstream-only files, migration-time check only, not must-migrate**: `server/gameSampling.js` and
   `server/debug-claimeven.js` read/produce a `correctCol` value upstream of the DB write; they never
   themselves read or write the stored column, so they need a migration-time smoke check that they still
   work once `correct_col` is gone, not inclusion in the must-migrate call-site list.
 - `connect-four/server/migrations/016_correct_col.sql` is the column's origin (`correct_col integer DEFAULT
-  NULL` on both `puzzles` and `candidates`) — this epic's drop migration is its removal.
+  NULL` on both `puzzles` and `candidates`) — this epic's drop migration is its removal. Note
+  `061_correct_cols.sql` also mentions the scalar (in comments, not code) — the acceptance-criteria grep
+  exclusion must name both `016` and `061`, not just `016`. Re-verify the actual latest migration number on
+  disk immediately before numbering the drop migration (Settled decision 4) — do not trust any number
+  written in this epic, since this is a concurrently-edited repo and migration filenames have already
+  collided once (`061_correct_cols.sql` vs. `061_security_lints.sql`).
 
 **Authoritative sources of truth**
-- `docs/open_issues.md` OI-81 — the full inventory table and issue record this epic is built from.
-- `specs/051-pattern-acceptance/spec.md` FR-017 (kept-in-sync requirement this epic supersedes) and FR-019
-  (the compatibility mechanism this epic removes once retirement completes).
+- `docs/open_issues.md` OI-81 — the inventory table and issue record this epic is built from; treat its
+  counts as a stale snapshot (Settled decision 7).
+- `specs/051-pattern-acceptance/spec.md` FR-016a (single-column UI displays *an* accepted answer — already
+  settles how such displays render once only the set exists), FR-017 (kept-in-sync requirement this epic
+  supersedes), and FR-019 (the `undercut`/`overcut` NULL carve-out this epic must preserve — Settled
+  decision 9).
+- `docs/architecture/api-conventions.md` — documents the `correctCol` wire contract in three places (the
+  `/api/puzzles/:id` camelCase rename, the `/api/puzzles/draw` snake_case-vs-camelCase mismatch, and the
+  evaluate-move select list); read before touching any response/request field and update per Settled
+  decision 8.
 - `connect-four/server/migrations/016_correct_col.sql` — the column's origin.
 - `docs/architecture/data-model.md`, `docs/architecture/db-schema.md` — read before writing the drop
   migration; both will need updating to remove the "kept in sync" language spec 051 introduces.
@@ -1897,69 +1963,113 @@ same camelCase name.
 **User stories & tasks**
 
 **US9.1 — Fresh inventory + migration plan (5 tasks).** Re-derive the consumer inventory fresh against the
-worktree at pickup time (OI-81's table will have drifted); triage every camelCase `correctCol` call site
-into "puzzle/candidate scalar" vs. "lesson-JSON field, out of scope" (Settled decision 3); order the
-migration plan by dependency (server core → server scripts → frontend → tests, given `evaluateMoveHandler.js`
-and `predicates.js` are read by nearly everything else); confirm spec 051's backfill has actually completed
-against the target DB before starting (Settled decision 5).
+worktree at pickup time via `grep -rn "correct_col\b" connect-four/server connect-four/src
+connect-four/scripts connect-four/tests` (excluding `node_modules`) — do not rely on OI-81's or this epic's
+counts, both are known-as-of-2026-07-29 snapshots (Settled decision 7); produce a per-file triage table
+classifying every hit as migrate/delete/smoke-check-only, and explicitly resolve the three no-substring
+camelCase call sites and the three sync-writer files + sync-assertion test named in Non-obvious facts. **This
+triage table, not the file lists in US9.2–9.4, is the contract those stories consume.** Triage every camelCase
+`correctCol` call site into "DB scalar" / "lesson-JSON field, out of scope" / "computed result-shape field,
+out of scope" (Settled decisions 3 and 10); order the migration plan by dependency (server core → server
+scripts → frontend → tests, given `evaluateMoveHandler.js` and `predicates.js` are read by nearly everything
+else); confirm spec 051's backfill has actually completed against the target DB before starting (Settled
+decision 5).
 
-**US9.2 — Migrate server-side consumers (9 tasks).** Migrate `server/index.js` (22 refs), `candidate-
-generator.js` (13 refs), `server/scripts/audit_answer_ambiguity.mjs` (7 refs), `server/shapeDescriptor.js`
-(5 refs), `server/classifier.js` (2 refs), and the three no-substring call sites
-(`evaluateMoveHandler.js`, `predicates.js`, `answerSetInvariant.js`) to read/write `correct_cols` instead of
-`correct_col`; re-run `npm run test:fast` after each file group; smoke-check `gameSampling.js` and
-`debug-claimeven.js` per Non-obvious facts (they are not migrated, only verified).
+**US9.2 — Migrate server-side consumers (9 tasks).** Using US9.1's triage table (known-as-of-2026-07-29
+starting point: `server/index.js`, `candidate-generator.js`, `server/scripts/audit_answer_ambiguity.mjs`,
+`server/shapeDescriptor.js`, `server/classifier.js`, and the three no-substring call sites —
+`evaluateMoveHandler.js`, `predicates.js`, `answerSetInvariant.js`), migrate every DB-scalar-reading and
+wire-crossing site to `correct_cols`/`correctCols` per Settled decision 8 (response/request/query-string
+fields become the array form; the legacy singular wire field is dropped, not aliased). Explicitly resolve
+the three sync-writer files from Non-obvious facts: remove the `correct_col` write in
+`server/scripts/backfill-correct-cols.mjs`, remove the scalar copy in `server/promotePuzzleRow.js`, and
+remove the scalar computation in `server/candidate-generator.js`'s central sync point. Re-run
+`npm run test:fast` after each file group; smoke-check `gameSampling.js` and `debug-claimeven.js` per
+Non-obvious facts (they are not migrated, only verified).
 
-**US9.3 — Migrate frontend + non-test scripts (7 tasks).** Migrate `src/screens/ChallengeScreen.jsx`,
-`src/components/CurationWorkspace.jsx`, `src/components/admin/PuzzlePickerModal.jsx`, `src/lib/devFixtures.js`,
-`src/screens/AdminLessonEditorScreen.jsx`, `scripts/backfill-confirmation-challenges.mjs`, and
-`scripts/verify-undercut-puzzles.mjs` off the scalar; manual QA pass on the admin curation/picker screens
-since they have no test coverage of their own.
+**US9.3 — Migrate frontend + non-test scripts (7 tasks).** Using US9.1's triage table (known-as-of-2026-07-29
+starting point: `src/screens/ChallengeScreen.jsx`, `src/components/CurationWorkspace.jsx`,
+`src/components/admin/PuzzlePickerModal.jsx`, `src/lib/devFixtures.js`, `src/screens/AdminLessonEditorScreen.jsx`,
+`scripts/backfill-confirmation-challenges.mjs`, `scripts/verify-undercut-puzzles.mjs`), migrate frontend
+consumers off the scalar, applying the thin adapters at the puzzle↔lesson boundary (Settled decision 11) in
+`ChallengeScreen.jsx`/`AdminLessonEditorScreen.jsx`. Preserve the `undercut`/`overcut` "nothing to show"
+behavior (Settled decision 9) in `CurationWorkspace.jsx`'s hint marker and `PuzzlePickerModal.jsx`'s
+`col {puzzle.correct_col}` label — do not fall back to `correct_cols[0]`. Manual QA pass on the admin
+curation/picker screens naming `undercut` and `overcut` specifically, since these screens have no automated
+test coverage of their own.
 
-**US9.4 — Migrate the test suite (7 tasks).** Update the 8 test files carrying `correct_col`/`correctCol`
-assertions (`tests/integration/claimeven.test.js`, `evaluateMoveMultiSolution.test.js`,
-`figure7_jshape.test.js`, `undercut_overcut.test.js`, `tests/unit/devFixtures.test.js`,
-`tests/classifier/classifier.test.js`, `tests/unit/multiSolutionAcceptance.test.js`,
-`tests/unit/shapeDescriptor.test.js` — the last alone carries 25 references) to assert against
-`correct_cols`; confirm `npm run test:fast` is green with zero remaining `correct_col`/`correctCol`
-references outside the lesson-JSON carve-out.
+**US9.4 — Migrate the test suite (7 tasks).** Update the test files carrying `correct_col`/`correctCol`
+assertions per US9.1's triage table (known-as-of-2026-07-29 starting point: `tests/integration/claimeven.test.js`,
+`evaluateMoveMultiSolution.test.js`, `figure7_jshape.test.js`, `undercut_overcut.test.js`,
+`tests/unit/devFixtures.test.js`, `tests/classifier/classifier.test.js`,
+`tests/unit/multiSolutionAcceptance.test.js`, `tests/unit/shapeDescriptor.test.js`) to assert against
+`correct_cols`. **Delete, do not migrate, `tests/unit/checkPredicateSortAndScalarSync.test.js`** — it exists
+only to assert the scalar stays in sync with the set, which is meaningless once the scalar is gone. Confirm
+`npm run test:fast` is green with zero remaining `correct_col`/`correctCol` references outside the
+lesson-JSON carve-out and the computed-result-shape carve-out (Settled decision 10).
 
 **US9.5 — Drop the column (6 tasks).** Verify every consumer from US9.2–9.4 is migrated (a repo-wide grep
-for `correct_col\b` outside `migrations/016_correct_col.sql`, lesson-JSON files, and this epic's own
-inventory references should return nothing); write and land the drop migration, numbered sequentially after
-whatever is latest at that point (Settled decision 4); update `docs/architecture/data-model.md`/
-`db-schema.md` to remove the "kept in sync" language; close out OI-81 in `docs/open_issues.md` per the
-closeout convention.
+for `correct_col\b` outside `migrations/016_correct_col.sql`, the comment mentions in
+`migrations/061_correct_cols.sql`, lesson-JSON files, and the computed-result-shape sites should return
+nothing); write and land the drop migration, re-verifying the actual latest migration number on disk
+immediately before writing it — do not trust a cached or epic-stated number (Settled decision 4; note `061`
+already collides between `061_correct_cols.sql` and `061_security_lints.sql`, so "max prefix + 1" is
+ambiguous even today). Update `docs/architecture/data-model.md`/`db-schema.md` and
+`docs/architecture/api-conventions.md` to remove the "kept in sync" language and document the `correctCols`
+wire contract (Settled decision 8). Close out OI-81 in `docs/open_issues.md` per the closeout convention.
 
 **Acceptance criteria**
-- Zero remaining references to `correct_col` (DB column) or the puzzle/candidate-scalar sense of `correctCol`
-  anywhere in `connect-four/server/`, `connect-four/src/`, `connect-four/scripts/`, or
-  `connect-four/tests/` — verified by a repo-wide grep, excluding the lesson-JSON carve-out and the
-  now-historical `016_correct_col.sql` migration file.
+- Zero remaining references to `correct_col` (DB column) or the DB-scalar/wire-crossing sense of
+  `correctCol` in `connect-four/server/`, `connect-four/src/`, `connect-four/scripts/`, or
+  `connect-four/tests/` — verified by a repo-wide grep excluding: the lesson-JSON carve-out (sense 2), the
+  computed result-shape carve-out (sense 3, Settled decision 10), and the historical migration files
+  `016_correct_col.sql` and `061_correct_cols.sql` (both mention the scalar; `061`'s mentions are comments,
+  not code). This criterion is intentionally scoped to named exclusions, not a global "zero occurrences of
+  the string" grep, because senses 2 and 3 legitimately keep the name.
+- Every HTTP wire field (`/api/puzzles/:id` and evaluate-move responses, the evaluate-move request body, the
+  curation query string) sends/accepts `correctCols` (array); the legacy singular `correctCol` wire field is
+  gone, not present as a deprecated alias (Settled decision 8). `docs/architecture/api-conventions.md`
+  reflects the new contract.
+- The `undercut`/`overcut` categories still render "nothing to show" (not column 0) on the curation board
+  hint marker, the puzzle picker label, and the relevant `server/index.js` response sites, after the
+  migration (Settled decision 9) — verified by manual QA naming those two categories specifically.
+- `tests/unit/checkPredicateSortAndScalarSync.test.js` is deleted, not migrated.
 - The lesson-JSON `correctCol` field (`server/lessonLoader.js`, `verify_lesson_content.mjs`,
   `SocraticScreen.jsx`) is untouched and its tests still pass.
 - The column-drop migration lands strictly after every consumer migration and `npm run test:fast` is green
   at every intermediate step, not only at the end.
-- `docs/architecture/data-model.md`/`db-schema.md` document `correct_col` as removed, not kept-in-sync.
+- `docs/architecture/data-model.md`/`db-schema.md`/`api-conventions.md` document `correct_col` as removed,
+  not kept-in-sync.
 - **OI-81** is closed out in `docs/open_issues.md` in the same change that ships the drop migration, per the
   Issue closeout convention at the top of this file — resolved-with-date and evidence (the migration file
-  and the zero-reference grep), or a dated `UPDATE` naming exactly what remains open. A shipped fix with a
-  stale backlog entry is an incomplete story.
+  and the scoped zero-reference grep), or a dated `UPDATE` naming exactly what remains open. A shipped fix
+  with a stale backlog entry is an incomplete story.
 
 **NOT included**
 - The authored lesson-JSON `correctCol` field and its consumers (`lessonLoader.js`,
   `verify_lesson_content.mjs`, `SocraticScreen.jsx`) — a structurally unrelated field that happens to share
   a name; never in scope for this epic.
+- The computed result-shape `correctCol` field returned by `server/predicates.js` evaluators and used the
+  same way in `classifier.js`/`shapeDescriptor.js` — out of scope by Settled decision 10; it is never read
+  from or written to the database.
 - Anything spec 051 already delivers: the `correct_cols` column itself, its generation-time/backfill
   population, the stored-set/computed-live grading branches, and the FR-017 sync mechanism this epic
   supersedes once retirement completes.
 - Re-litigating the relative solver-safety floor, the set-valued acceptance model, or any other Epic 1
   decision — this epic is pure plumbing retirement, not a second pass at Epic 1's grading semantics.
+- A deprecated/aliased legacy wire field — Settled decision 8 retires the wire contract outright rather than
+  keeping `correctCol` available alongside `correctCols`.
+- Widening the lesson-JSON field to a set, or otherwise re-authoring lesson content — Settled decision 11
+  keeps lesson JSON untouched via thin boundary adapters instead.
 
 **Open questions**
-- None at spec time — this epic's scope (migrate every enumerated consumer, then drop the column) is fully
-  determined by OI-81's inventory and spec 051's Settled decisions. The only re-verification needed at
-  pickup time is re-deriving the inventory fresh (US9.1) and confirming spec 051 has actually shipped.
+- **Resolved by owner, 2026-08-03** (previously open — see Settled decisions 10 and 11):
+  - Does "zero references" cover the computed result-shape `correctCol`? No — out of scope (Settled
+    decision 10).
+  - Which side converts at the puzzle↔lesson boundary? Both — thin adapters on each side, lesson JSON stays
+    a scalar (Settled decision 11).
+- No other open questions at spec time. The only re-verification needed at pickup time is re-deriving the
+  inventory fresh (US9.1) and confirming spec 051 has actually shipped.
 
 ---
 
