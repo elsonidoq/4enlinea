@@ -140,6 +140,14 @@ Include:
 - Every file you created or modified, with a one-line description of what it contains
 - Key decisions or patterns you established that the next batch must follow (naming, structure, APIs)
 - Anything incomplete, deferred, or left as a stub for the next batch to finish
+- **Out-of-scope discoveries** — anything you found that is a real bug, latent defect, or
+  quality gap but was NOT yours to fix: pre-existing breakage you worked around, something
+  broken in a file you touched for another reason, a defect whose fix exceeds this epic's
+  scope. Report each as an open-issue candidate with the evidence you actually saw (the
+  failing command, the wrong value, the missing column) — not a suspicion. Do NOT fix it;
+  scope creep inside a batch is worse than a filed issue. Do NOT stay silent because "it
+  wasn't my task" — an unreported finding is a finding lost, and you are the only agent who
+  will ever be in this code with this context. Say "None" if genuinely nothing.
 - Non-obvious constraints the next agent will hit if it doesn't know about them
 - **Deploy prerequisites** — anything that must happen *around* a deploy rather than inside it, or
   "None" if genuinely nothing. Working code is not the same as a shippable change. Ask specifically:
@@ -164,7 +172,7 @@ After all batches have run, output a summary with:
 
 1. **What was built** — for each batch: files created/modified and which user stories they satisfy
 2. **Tasks completed** — list of task IDs marked done
-3. **Open items** — anything a sub-agent flagged as incomplete, skipped, deferred, or stubbed (drawn from each batch's `## Handoff context`)
+3. **Open items** — anything a sub-agent flagged as incomplete, skipped, deferred, or stubbed, **plus every out-of-scope discovery** any sub-agent reported (both drawn from each batch's `## Handoff context`). An out-of-scope discovery is nobody's next batch, so it reaches the user only if you carry it here — it is the item most likely to be silently dropped.
 4. **Verification steps** — the acceptance scenarios the user should spot-check manually
 5. **Deploy prerequisites** — every step that must happen around the deploy (collected from each
    batch's `## Handoff context`), or an explicit "none — this ships with the code alone". Do not
@@ -314,9 +322,17 @@ For each bug:
 
 ---
 
-## Step 7 — Persist QA-surfaced open issues
+## Step 7 — Persist QA- and review-surfaced open issues
 
-After the QA sub-agent returns, take any entry from its `### Remaining issues` section that is a **genuine deferred/latent issue** (same qualifies / does-not-qualify test as Step 4's "Persist open issues") and append it to `docs/open_issues.md` using the same `OI-N` entry format. Read the file first and skip anything already tracked. Pre-existing issues the QA agent flags as "out of scope / not a regression" still belong here if they're real latent bugs — that is exactly what this backlog is for.
+After the QA sub-agent returns, collect from **three** sources and append every **genuine deferred/latent issue** (same qualifies / does-not-qualify test as Step 4's "Persist open issues") to `docs/open_issues.md` using the same `OI-N` entry format:
+
+1. The QA sub-agent's `### Remaining issues` section.
+2. **Step 5's declined code-review findings** — the ones you consciously chose not to fix. Step 5 says these "become open-issue candidates in Step 7"; this is where they land. If you skip them here, that instruction points nowhere.
+3. Any **out-of-scope discovery** from Step 4's Open items that you have not already filed.
+
+Read the file first and skip anything already tracked. Pre-existing issues the QA agent flags as "out of scope / not a regression" still belong here if they're real latent bugs — that is exactly what this backlog is for.
+
+Verify each finding at source before filing it — a sub-agent's report is a claim, not a fact, and a wrong `OI-N` wastes the next person's time more than a missing one does.
 
 Report to the user which `OI-N` entries were added (or "no new open issues" if none qualified).
 
