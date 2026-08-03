@@ -419,45 +419,45 @@ column anywhere.
 
 **Depends on**: Phase 4 (US2) complete in full — all four commits landed and T047's story gate passed.
 
-- [ ] T048 [US3] **Mechanical zero-reference check** (FR-020.1, SC-001): run `/usr/bin/grep -rn
+- [x] T048 [US3] **Mechanical zero-reference check** (FR-020.1, SC-001): run `/usr/bin/grep -rn
   "correct_col\b" server src scripts tests` (from `connect-four/`) and confirm it returns matches in
   EXACTLY three files: `016_correct_col.sql`, `061_correct_cols.sql`, and (once it exists) the new drop
   migration from T050. Any other file matching is a real, unmigrated reference — if found, it must be
   fixed in a Phase 4 commit before proceeding, not patched around here. (T042's Decision-A edits should
   already have removed the two non-code mentions that would otherwise inflate this count to five.)
-- [ ] T049 [US3] **Human-adjudicated zero-reference check** (FR-020.2, SC-002): confirm every remaining
+- [x] T049 [US3] **Human-adjudicated zero-reference check** (FR-020.2, SC-002): confirm every remaining
   camelCase `correctCol` occurrence in the repository maps to a triage-table (T005) row dispositioned
   lesson-JSON or computed-result-shape — there is no mechanical way to separate senses by filename alone
   (`server/predicates.js` legitimately still contains sense-3 usage). This explicitly includes confirming
   `server/predicates.js`'s legacy fallback expression identified in T006(d) is now actually gone (removed
   in T009), not merely assumed gone.
-- [ ] T050 [US3] Re-verify the actual highest-numbered migration file present on disk **immediately before**
+- [x] T050 [US3] Re-verify the actual highest-numbered migration file present on disk **immediately before**
   authoring the drop migration (D1, FR-021) — run `ls connect-four/server/migrations | sort -V | tail -5`
   fresh; do not trust the number `064` or any other number written in this spec, plan, or the epic (`061`
   is already ambiguous on disk between `061_correct_cols.sql` and `061_security_lints.sql`; the latest
   confirmed file as of plan-writing was `063_puzzle_attempts_outcome_narrow.sql`, but this will have moved
   on by task time in a concurrently-edited repo).
-- [ ] T051 [US3] Write and apply the column-drop migration (FR-022) using the number from T050, dropping
+- [x] T051 [US3] Write and apply the column-drop migration (FR-022) using the number from T050, dropping
   `correct_col` from **both** `puzzles` and `candidates` in a single migration file. **Apply it against the
   LOCAL database only** (Decision B) — this feature stops at "merged and green locally"; do not run this
   migration against staging or production. T056 below writes the deploy runbook entry for the owner to run
   it there.
-- [ ] T052 [US3] [P] Update `docs/architecture/data-model.md` — remove the "kept in sync" language
+- [x] T052 [US3] [P] Update `docs/architecture/data-model.md` — remove the "kept in sync" language
   describing `correct_col` (currently in the "Correct Column Storage" section) and document `correct_cols`
   as the sole storage contract for a puzzle's/candidate's accepted answer (FR-023).
-- [ ] T053 [US3] [P] Update `docs/architecture/db-schema.md` — remove the `correct_col` column rows from
+- [x] T053 [US3] [P] Update `docs/architecture/db-schema.md` — remove the `correct_col` column rows from
   both the `puzzles` and `candidates` column tables (FR-023).
-- [ ] T054 [US3] [P] Update `docs/architecture/api-conventions.md` — remove the `correctCol` wire-field
+- [x] T054 [US3] [P] Update `docs/architecture/api-conventions.md` — remove the `correctCol` wire-field
   documentation (the `/api/puzzles/:id` camelCase-rename note, the `/api/puzzles/draw` snake_case-vs-
   camelCase mismatch note, and the evaluate-move select-list mention) and document `correctCols` as the
   sole wire contract for every site named in FR-008 (FR-023).
-- [ ] T055 [US3] Close out **OI-81** in `docs/open_issues.md` in the SAME change that ships T051's
+- [x] T055 [US3] Close out **OI-81** in `docs/open_issues.md` in the SAME change that ships T051's
   migration (FR-024, SC-007), using the exact **Issue closeout convention** format from the top of
   `docs/epics/open-issues-epics.md` (not an invented format): since this is a full fix, prepend `**Status**:
   ✅ RESOLVED <YYYY-MM-DD>` and replace the "why deferred"/"if picked up" body text with what actually
   shipped and where (the migration file from T051, and T048's zero-reference grep result as evidence) —
   matching the style of the file's own worked examples (OI-74, OI-59).
-- [ ] T056 [US3] **Deployment prerequisite** (a tasks_critique finding — this feature ships an irreversible
+- [x] T056 [US3] **Deployment prerequisite** (a tasks_critique finding — this feature ships an irreversible
   column drop plus a breaking HTTP field rename, and no task previously recorded that): add a `## Spec 056`
   section to `docs/deployment_steps.md`, following the file's own "Template for new entries" and the
   Spec 054/055 precedents. Cover: what to run (the drop migration from T051, against staging then
@@ -467,10 +467,10 @@ column anywhere.
   server-only or frontend-only deploy breaks lesson-sourced inline-challenge grading (the same hazard
   T019/T027 guard against locally). Do not run the migration against a remote database yourself (Decision
   B) — this task only writes the runbook entry for the owner to execute.
-- [ ] T057 [US3] **Spec registry** (a tasks_critique finding): add a row for `056-correct-col-retirement` to
+- [x] T057 [US3] **Spec registry** (a tasks_critique finding): add a row for `056-correct-col-retirement` to
   `specs/index.md`'s table, following its existing column convention (Spec folder / Feature name / Status /
   Key decision-summary), matching the style of the 053/055 rows already present.
-- [ ] T058 [US3] **Story gate / final SC verification**: walk spec.md's Success Criteria SC-001 through
+- [x] T058 [US3] **Story gate / final SC verification**: walk spec.md's Success Criteria SC-001 through
   SC-008 one by one and confirm each holds: SC-001 (T048), SC-002 (T049), SC-003 (Commit 1's wire retirement,
   Phase 4), SC-004 (T025's manual pass + T026's DOM test), SC-005 (T031/T038/T044/T046's per-commit
   `test:fast` runs plus a final run here), SC-006 (T051), SC-007 (T055), SC-008 (confirm no task in this

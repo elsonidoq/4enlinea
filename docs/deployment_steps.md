@@ -474,6 +474,85 @@ OI-58. Nothing was written to staging or production.
   `npm install` and also installs eslint. No dependency was added or changed, so the strict `npm ci`
   in the Railway build is unaffected.
 
+## Spec 056 — Legacy `correct_col` scalar retirement (Epic 9)
+
+**Status**: PENDING (applied to local only)
+**When**: BEFORE the code deploy — this is a hard ordering constraint (see below), not a preference
+**Blocks**: nothing new is written to `correct_col` once this deploys — see the "not reversible" note
+**Applies to**: staging and production (local is already fully applied)
+
+### What's wrong (or: what this sets up)
+
+Migration `connect-four/server/migrations/064_drop_correct_col.sql` drops the legacy scalar column
+`correct_col` from both `public.puzzles` and `public.candidates`. `correct_cols integer[]` (migration
+061) has been the sole storage contract read by server code since User Story 2 of this spec landed —
+every sync-writer stopped writing `correct_col` and every reader was migrated to read `correct_cols`
+exclusively (verified locally: zero remaining references outside the two historical migration files
+and this drop migration — see "Verify" below). This closes `docs/open_issues.md` OI-81.
+
+**This is also a breaking HTTP wire rename, not just a schema change.** The singular `correctCol`
+request/response field is retired with **no deprecated alias** on `GET /api/puzzles/:id`, `GET
+/api/puzzles/draw`, and `POST /api/evaluate-move` (request body and response) — only `correctCols:
+number[]` is sent/accepted. **Server and frontend MUST deploy together.** A server-only deploy makes
+`POST /api/evaluate-move` stop understanding a still-old frontend's `correctCol` singular field,
+silently breaking lesson-sourced inline-challenge grading (the learner's answer always grades
+`wrong`, with no error — the same hazard class `ChallengeScreen.jsx`'s T019 change and
+`evaluateMoveMultiSolution.test.js`'s T027 update guard against locally). A frontend-only deploy has
+the same failure in reverse. Do not split this deploy across two releases.
+
+**Ordering relative to the migration**: apply the migration **before** the code deploy. The
+pre-migration server code no longer reads `correct_col` at all (User Story 2 already shipped and is
+running in production under the OLD migration state, where `correct_cols` is already the only column
+it touches), so dropping the now-unread column first is safe; deploying the code change first would
+not be harmful either, but running the migration first removes any window where a stale, not-yet-
+redeployed server instance could still (in theory) reference the column.
+
+### Run it
+
+```bash
+cd connect-four
+
+# Staging first.
+node --env-file=server/.env.staging server/migrate.js
+
+# Then production.
+node --env-file=server/.env.production server/migrate.js
+```
+
+### Verify
+
+```bash
+# 1. Migration recorded in the ledger for the target environment:
+#    (psql "$DATABASE_URL" or the Supabase SQL editor)
+SELECT filename FROM schema_migrations WHERE filename = '064_drop_correct_col.sql';
+--    success: one row
+
+# 2. The column is actually gone (query the live schema, not just the ledger):
+SELECT table_name, column_name FROM information_schema.columns
+ WHERE table_name IN ('puzzles','candidates') AND column_name = 'correct_col';
+--    success: zero rows, for BOTH puzzles and candidates
+
+# 3. Re-run the same zero-reference grep this spec used locally, against the code actually
+#    checked out in the target environment's deploy:
+/usr/bin/grep -rn "correct_col\b" server src scripts tests
+--    success: matches in exactly three files — server/migrations/016_correct_col.sql,
+--    server/migrations/061_correct_cols.sql (both historical), and
+--    server/migrations/064_drop_correct_col.sql (this drop migration). Any other match means a
+--    consumer was missed and this migration must NOT be applied to that environment yet.
+```
+
+### Roll back
+
+**Not reversible — back up first.** `DROP COLUMN` discards the column's data outright; there is no
+`ADD COLUMN IF NOT EXISTS correct_col` that restores the original values, only one that recreates an
+empty/NULL column. Before running against staging or production, take a snapshot/backup of the
+`puzzles` and `candidates` tables (e.g. `pg_dump` scoped to those two tables, or a Supabase point-in-
+time-recovery checkpoint) if you want the ability to restore the pre-drop `correct_col` values. Given
+`correct_col` had already been fully superseded by `correct_cols` for the duration of this spec (User
+Story 2), the dropped values are redundant with `correct_cols[0]` at drop time for every row that had
+been backfilled — but any row's exact pre-drop `correct_col` value (e.g. for an unbackfilled row) is
+only recoverable from a backup, not from `correct_cols`.
+
 ## Template for new entries
 
 ```markdown

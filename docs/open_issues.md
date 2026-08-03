@@ -2771,8 +2771,10 @@ have caught this before it forked anything. Related: OI-78; the filename prefix 
 
 ## OI-81 — Retire the legacy `correct_col` scalar once `correct_cols` is the source of truth (105 refs / 22 files)
 
-**Status**: open — deferred, split out of spec 051 by owner decision (2026-07-29)
-**Area**: `connect-four/server/` (22 files below), `connect-four/src/`, `connect-four/tests/`, `connect-four/scripts/`
+**Status**: ✅ RESOLVED 2026-08-03
+**Area**: `connect-four/server/`, `connect-four/src/`, `connect-four/tests/`, `connect-four/scripts/`,
+`connect-four/server/migrations/`, `docs/architecture/data-model.md`, `docs/architecture/db-schema.md`,
+`docs/architecture/api-conventions.md`
 
 Spec 051 (`specs/051-pattern-acceptance/`, Epic 1) introduces `correct_cols integer[]` on `puzzles` and
 `candidates` as the solver-gated, set-valued answer computed once at generation time. The original plan for
@@ -2796,25 +2798,37 @@ the issue record it cites.
 its camelCase API/object mirror `correctCol`, where it refers to this same puzzle/candidate scalar), then
 drop the column via a migration sequenced strictly after every consumer has migrated.
 
-**Why it was deferred**: split out of spec 051 by owner decision on 2026-07-29, after the inventory came
-back at 105 references across 22 files — substantially larger than the ~62/11 estimate the original
-"migrate and drop in the same feature" decision was made on.
+**Critical carve-out that stayed true throughout the fix — do not naively rewrite by substring**:
+camelCase `correctCol` is overloaded. It also names an authored **lesson-JSON** field
+(`server/lessonLoader.js`, `server/scripts/verify_lesson_content.mjs`) used by Socratic/confirmation-challenge
+nodes (e.g. `SocraticScreen.jsx`'s `col === socratic.correctCol` client-side check — memory
+`project_lesson_interactivity_evaluation`) and a computed, in-memory result-shape field returned by
+`server/predicates.js`'s evaluators and `server/classifier.js`'s detectors — neither has anything to do
+with the `puzzles`/`candidates` DB column. The fix below triaged every occurrence individually rather than
+rewriting by substring, and left both of these senses untouched.
 
-**Critical carve-out — do not naively rewrite by substring**: camelCase `correctCol` is overloaded. It also
-names an authored **lesson-JSON** field (`server/lessonLoader.js`, `server/scripts/verify_lesson_content.mjs`)
-used by Socratic/confirmation-challenge nodes (e.g. `SocraticScreen.jsx`'s `col === socratic.correctCol`
-client-side check — memory `project_lesson_interactivity_evaluation`) that has **nothing to do** with the
-`puzzles`/`candidates` table. A naive migration that rewrites every `correctCol` occurrence would wrongly
-touch lesson content that was never the scalar this issue is about. The snake_case `correct_col` (DB column)
-is the unambiguous form; camelCase call sites must be triaged individually (see Epic 9's inventory).
+**Resolution**: spec `056-correct-col-retirement` (`specs/056-correct-col-retirement/`) re-derived the
+consumer inventory fresh (triage table: `specs/056-correct-col-retirement/triage-table.md`), migrated every
+DB-scalar consumer off `correct_col` in four atomic commits (User Story 2 — server core + wire contract +
+frontend in one commit, sync-writers, non-test scripts, the FR-018 test-deletion commit), then dropped the
+column (User Story 3):
 
-**Sequencing constraint**: the column-drop migration MUST land strictly after every consumer has migrated to
-`correct_cols` — dropping the column while a consumer still reads it produces a silent runtime failure, not
-a migration error. The drop migration's number cannot be reserved in advance.
-
-**If picked up**: work this via Epic 9 (`docs/epics/open-issues-epics.md`), not standalone — its inventory
-will need re-deriving fresh against the worktree at pickup time (it will have drifted). Related: spec 051
-(`specs/051-pattern-acceptance/`, FR-017/FR-019).
+- **Migration**: `connect-four/server/migrations/064_drop_correct_col.sql` drops `correct_col` from both
+  `public.puzzles` and `public.candidates` in one file. Applied to the **local** database only; staging and
+  production are the owner's call, per the runbook entry in `docs/deployment_steps.md` ("## Spec 056").
+  Verified against the local DB directly (not just the migration file): `select table_name, column_name
+  from information_schema.columns where table_name in ('puzzles','candidates') and column_name =
+  'correct_col'` returns zero rows.
+- **Zero-reference evidence**: `cd connect-four && /usr/bin/grep -rn "correct_col\b" server src scripts
+  tests` returns matches in exactly three files — `server/migrations/016_correct_col.sql`,
+  `server/migrations/061_correct_cols.sql` (both historical), and `server/migrations/064_drop_correct_col.sql`
+  (this drop migration).
+- **Docs**: `docs/architecture/data-model.md`'s "Correct Column Storage" section and
+  `docs/architecture/db-schema.md`'s `puzzles`/`candidates` column tables no longer list `correct_col` or
+  describe it as "kept in sync"; `correct_cols integer[]` is documented as the sole storage contract.
+  `docs/architecture/api-conventions.md` documents `correctCols: number[]` as the sole wire contract for
+  `GET /api/puzzles/:id`, `GET /api/puzzles/draw`, and `POST /api/evaluate-move` (request and response) —
+  the singular `correctCol` wire field has no deprecated alias.
 
 ---
 

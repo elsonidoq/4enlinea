@@ -547,7 +547,7 @@ Three invariants: (1) the DB helpers return `{ error }` rather than throwing —
 - `aiMove`: absent or `false`.
 - `puzzleId` (spec 051, Epic 1, FR-024/FR-027): optional puzzle row UUID. When present, selects the
   **stored-set grading branch** — see "Grading branches (`puzzleId` vs. row-less)" below. Sent by
-  `ChallengeScreen.jsx` (`current.id`) alongside `correctCol`/`highlightMetadata`, which remain in
+  `ChallengeScreen.jsx` (`current.id`) alongside `correctCols`/`highlightMetadata`, which remain in
   the body unconditionally (FR-017 — not removed by this feature).
 
 ### Grading branches (`puzzleId` vs. row-less) — spec 051, Epic 1, FR-024/FR-024a/FR-025/FR-026/FR-028
@@ -557,24 +557,23 @@ Exactly two branches, selected once, in this order — there is no third "malfor
 ```
 if (req.body.puzzleId) {
   // Stored-set branch.
-  // 1. Look up the row (is_active = true), same query shape as POST /api/puzzles/:id/check,
-  //    extended with correct_cols:
-  //      .select('id, category, move_string, highlight_metadata, correct_col, correct_cols')
+  // 1. Look up the row (is_active = true), same query shape as POST /api/puzzles/:id/check:
+  //      .select('id, category, move_string, highlight_metadata, correct_cols')
   //      .eq('id', puzzleId).eq('is_active', true).single()
   // 2. If no row resolves: log a warning and fall through to the Row-less branch below, using
   //    req.body's own fields as inputs. It does NOT 404 (see Errors, below).
   // 3. If puzzle.correct_cols is NULL (not yet backfilled — FR-024a): fall through to the
-  //    Row-less branch below, using the ROW's own category/move_string/correct_col/
+  //    Row-less branch below, using the ROW's own category/move_string/
   //    highlight_metadata as inputs (fail-open, not an error — a live drill must never grade
   //    every column wrong just because a row hasn't been backfilled yet).
   //    Else: accepted = puzzle.correct_cols.includes(colInt) — computed DIRECTLY.
   //    evaluatePredicate/buildPredicatePuzzle and the seven pattern evaluators (evalZThreat,
   //    evalClaimeven, evalUndercut, evalOvercut, evalFigure7, evalJShape, evalOddEvenThreat) are
-  //    NOT called on this path at all. req.body's category/correctCol/highlightMetadata are
+  //    NOT called on this path at all. req.body's category/correctCols/highlightMetadata are
   //    ignored once puzzleId resolves to a row with a non-null correct_cols.
 } else {
   // Row-less branch (unchanged, pre-existing behavior) — builds the predicate object from
-  // req.body's movestring/category/correctCol/highlightMetadata and grades via evaluatePredicate
+  // req.body's movestring/category/correctCols/highlightMetadata and grades via evaluatePredicate
   // (whose evaluators are set-membership per FR-003). Serves lesson inline challenges and any
   // request that omits puzzleId (Decision D2/FR-028 — absence of puzzleId always routes here;
   // there is no separate malformed-request rejection for "neither shape").
@@ -607,21 +606,23 @@ a row the server cannot find. Two things keep this from hiding real bugs — the
 on every miss, and `src/lib/syntheticPuzzleId.js`, which stops the client sending ids that could
 never resolve (`dev-…`, `inline-…`) in the first place.
 
-**`correctCol` / `highlightMetadata` (spec 049, Epic 9)**: optional request fields, sent by the
-client when `category` is one of `SINGLE_ANSWER_CATEGORIES` (`z_threat`, `overcut`, `claimeven`,
-`undercut`, `figure_7`, `j_shape`) — `{ correctCol: number | null, highlightMetadata: object |
-null }`. These are camelCase wire names matching what `evaluatePredicate`/`buildPredicatePuzzle`
-read (`puzzle.correctCol`, `puzzle.highlightMetadata`). **The client is responsible for remapping
-from its locally-held snake_case puzzle object** before sending: `correctCol:
-current.correct_col`, `highlightMetadata: current.highlight_metadata` — this is a top-level rename
-only, the inner `highlight_metadata` JSON shape (`.column`, `.cells[].role`) is unchanged. Ignored
-(harmless if sent) for every other category. Absence of these fields for a single-answer category
-is **not** a 400 — it flows through to `evaluatePredicate`'s existing fail-closed `{ result:
-'wrong' }` path, so a missed client-side remap silently yields `accepted: false` rather than an
-error; this is why `tests/integration/singleAnswerCategoriesAccepted.test.js` asserts a positive
-`accepted: true` case per category, not only negatives. See
-`specs/049-puzzle-scoring-spanish-localization/contracts/api-evaluate-move.md` for the full
-contract delta.
+**`correctCols` / `highlightMetadata` (spec 049 Epic 9, retired to the sole array shape by spec 056)**:
+optional request fields, sent by the client when `category` is one of `SINGLE_ANSWER_CATEGORIES`
+(`z_threat`, `overcut`, `claimeven`, `undercut`, `figure_7`, `j_shape`) — `{ correctCols: number[],
+highlightMetadata: object | null }`. These are camelCase wire names matching what
+`evaluatePredicate`/`buildPredicatePuzzle` read (`puzzle.correctCols`, `puzzle.highlightMetadata`).
+**The client is responsible for remapping from its locally-held snake_case puzzle object** before
+sending: `correctCols: current.correct_cols`, `highlightMetadata: current.highlight_metadata` —
+this is a top-level rename only, the inner `highlight_metadata` JSON shape (`.column`,
+`.cells[].role`) is unchanged. The singular `correctCol` scalar wire field is retired entirely —
+there is no deprecated alias, on this endpoint or anywhere else in the API. Ignored (harmless if
+sent) for every other category. Absence of these fields for a single-answer category is **not** a
+400 — it flows through to `evaluatePredicate`'s existing fail-closed `{ result: 'wrong' }` path, so
+a missed client-side remap silently yields `accepted: false` rather than an error; this is why
+`tests/integration/singleAnswerCategoriesAccepted.test.js` asserts a positive `accepted: true` case
+per category, not only negatives. See
+`specs/049-puzzle-scoring-spanish-localization/contracts/api-evaluate-move.md` for the historical
+contract delta (superseded on the scalar-vs-array shape by spec 056).
 
 ### AI-Move Path (`aiMove: true`)
 
@@ -653,7 +654,7 @@ The `coachPhraseKey` in the AI-move response is ignored by the client. The clien
 - `badge` and `quality` are derived from the solver score for `col` relative to the best available score.
 - `coachPhraseKey` and `summaryLineKey` are randomly selected from the matching i18n pool; `null` if no pool exists for the pattern.
 - `patternTag` is the classifier's category slug for the position; `null` if the position doesn't match any known pattern.
-- `accepted` (spec 044 US3 FR-015a, widened by spec 049 Epic 9 FR-001–FR-012, membership updated by spec 051 Epic 1 T005/T006/T007): additive field, computed via `evaluatePredicate` on the row-less branch (see above for the stored-set branch's direct `correct_cols.includes(...)` computation), present (non-null) for **ten categories total**: the three multi-solution categories (`immediate_threat`, `forced_block`, `double_threat` — correctness allows more than one valid answer column) plus the seven single-answer categories via `SINGLE_ANSWER_CATEGORIES` (`z_threat`, `overcut`, `claimeven`, `undercut`, `figure_7`, `j_shape`, `odd_even_threat` — spec 051 closed OI-75 by adding `odd_even_threat` to this set; despite the "single-answer" name, this set now gates only which categories expose `accepted`, not answer-set cardinality — `claimeven` in particular has no upper bound on qualifying columns). `true` when the played column independently satisfies the category's condition (`evaluatePredicate` result `'correct'` or `'tied'`), `false` otherwise, `null` for every other category (`forced_win`, `forbidden_columns`). One shared gate expression covers both sets (`server/categories.js`'s `SINGLE_ANSWER_CATEGORIES` is a separate, explicit list — never derived as "not multi-solution"). Recomputed at solve time on the row-less branch; not persisted. For the seven single-answer categories on that branch, computed from the request's `correctCol`/`highlightMetadata` fields (see above) via the shared `buildPredicatePuzzle` helper. See server-conventions.md's "Multi-solution acceptance" note.
+- `accepted` (spec 044 US3 FR-015a, widened by spec 049 Epic 9 FR-001–FR-012, membership updated by spec 051 Epic 1 T005/T006/T007): additive field, computed via `evaluatePredicate` on the row-less branch (see above for the stored-set branch's direct `correct_cols.includes(...)` computation), present (non-null) for **ten categories total**: the three multi-solution categories (`immediate_threat`, `forced_block`, `double_threat` — correctness allows more than one valid answer column) plus the seven single-answer categories via `SINGLE_ANSWER_CATEGORIES` (`z_threat`, `overcut`, `claimeven`, `undercut`, `figure_7`, `j_shape`, `odd_even_threat` — spec 051 closed OI-75 by adding `odd_even_threat` to this set; despite the "single-answer" name, this set now gates only which categories expose `accepted`, not answer-set cardinality — `claimeven` in particular has no upper bound on qualifying columns). `true` when the played column independently satisfies the category's condition (`evaluatePredicate` result `'correct'` or `'tied'`), `false` otherwise, `null` for every other category (`forced_win`, `forbidden_columns`). One shared gate expression covers both sets (`server/categories.js`'s `SINGLE_ANSWER_CATEGORIES` is a separate, explicit list — never derived as "not multi-solution"). Recomputed at solve time on the row-less branch; not persisted. For the seven single-answer categories on that branch, computed from the request's `correctCols`/`highlightMetadata` fields (see above) via the shared `buildPredicatePuzzle` helper. See server-conventions.md's "Multi-solution acceptance" note.
 - `correct_cols` is never included in this response, on either grading branch (spec 051 Epic 1 Decision D2b) — client-side grading was considered and explicitly rejected.
 - No auth required; anonymous calls are accepted.
 
@@ -763,7 +764,7 @@ Saves a completed sparring game record.
 `GET /api/puzzles/:id` returns puzzle data including `userPlayer` (1 = Red, 2 = Yellow).
 Frontend uses `userPlayer` to determine which color disc to place on click and to display the "Playing as Red/Yellow" context chip.
 
-**Casing mismatch with `/draw`**: `GET /api/puzzles/draw` returns **raw DB rows in snake_case** (`move_string`, `correct_col`, `interaction_mode`, `highlight_metadata`, `user_player`, …) — it does NOT camelCase-transform, while `GET /api/puzzles/:id` returns camelCase (`moveString`, `goalPrompt`, …). Any component that passes a `/draw` row to a sub-component expecting camelCase needs a callsite adapter; read the consumer's field accesses first to catch every field.
+**Casing mismatch with `/draw`**: `GET /api/puzzles/draw` returns **raw DB rows in snake_case** (`move_string`, `correct_cols`, `interaction_mode`, `highlight_metadata`, `user_player`, …) — it does NOT camelCase-transform, while `GET /api/puzzles/:id` returns camelCase (`moveString`, `goalPrompt`, `correctCols`, …). `correct_cols`/`correctCols` (`integer[]`) is the sole wire shape for a puzzle's accepted-answer field on both endpoints — there is no scalar `correct_col`/`correctCol` variant anywhere in this response. Any component that passes a `/draw` row to a sub-component expecting camelCase needs a callsite adapter; read the consumer's field accesses first to catch every field.
 
 ## Sequence-Mode Puzzle Endpoint
 
