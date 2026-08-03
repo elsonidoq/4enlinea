@@ -1649,3 +1649,38 @@ These could not be confirmed locally because they depend on deployed state or pr
     missing header degrades silently to English rather than erroring.
   - **Expected**: Spanish titles everywhere; zero blank or English titles.
   - **Source**: Spec 052 US2 / SC-002, SC-009.
+
+---
+
+## Epic 8 — Dev Infrastructure & Test-Quality Baseline (spec 055) — added 2026-08-03
+
+Epic 8 was deliberately non-behavioral (lint gate, test-suite reliability, doc/backlog bookkeeping), so
+it produced almost nothing staging-only: the CSP close-out was verified against a real production build
+**and** against live production directly (`curl -sS -D - https://decodec4.xyz/` on 2026-08-02 returned a
+`Content-Security-Policy` identical to the local build's, differing only in `media-src` pointing at the
+real Supabase host), and the lint/pre-commit gates are developer-machine and CI concerns that never
+reach a deployed environment.
+
+One item could not be confirmed locally.
+
+### 1. Play a sequence-mode (multi-move) challenge puzzle end to end
+
+- **What** — on staging, open a challenge category whose puzzles have
+  `interaction_mode = 'sequence'` (the `forced_win` multi-move type), and play one through to
+  completion: several user moves, each followed by the AI's reply, to the puzzle's terminal state.
+- **Why staging** — spec 055 removed the `interactionMode` prop that `ChallengeScreen` passed to
+  `Board` (OI-121: `Board` destructured and never read it, and the frontend-conventions table
+  documented behaviour — `'sequence'` = "Board never self-locks" — that `Board` has no code for; its
+  only state is `hoverCol`/`boardWidth`, with interactivity governed entirely by the parent's
+  `canPlay`). The removal is behaviour-neutral *by reading*, and the QA pass exercised the challenge
+  flow — but only on `immediate_threat`, a **single-move** category, because the local `puzzles` table
+  has no sequence-mode rows (see memory `feedback_generate_puzzles_for_local_qa`). So the one
+  interaction mode whose name was on the deleted prop is the one never actually run.
+- **Expected** — identical behaviour to before: each tap commits a move, the user's disc animates, the
+  AI's reply follows after the coach-pacing delay, the board never accepts input while `isSubmitting`,
+  and the puzzle terminates normally. No board freeze, no double-accept, no missing AI reply.
+- **Source** — spec 055 (Epic 8), OI-121; `ChallengeScreen.handleSequenceClick`
+  (`src/screens/ChallengeScreen.jsx:629-680`), `Board.jsx` prop list.
+
+- [ ] Signed off by ______ on ______
+

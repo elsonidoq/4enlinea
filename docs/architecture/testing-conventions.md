@@ -173,6 +173,18 @@ cd connect-four && npm test
 ```
 Tests are **explicitly listed** in the `test` and `test:fast` scripts in `package.json` — there is no automatic discovery.
 
+> **`test:fast` runs lint first and will fail before any test executes.** Since spec 055 (Epic 8) the
+> script string is `eslint . && node --test …`, so a lint **error** anywhere in the tree stops the run
+> at the lint step — you get ESLint output and no test summary at all. That is the gate working, not a
+> broken test suite. The same gate runs on commit: `.githooks/pre-commit` executes
+> `npx eslint . --quiet` (errors only, so a clean commit prints nothing) *before* the KB-sync step, so a
+> lint error also rejects the commit.
+>
+> `npm run lint` exits 0 on a clean tree but still reports **~47 warnings** — the deliberately demoted
+> `react-hooks/*` / `react-refresh/*` findings tracked in `docs/open_issues.md` OI-119. Warnings do not
+> fail either gate. Do not "fix" them as part of unrelated work, and do not read a warning count as a
+> red suite.
+
 > **A stale registration fails nothing.** `node --test` given a *list* of files **silently skips** any path that doesn't exist: exit 0, no warning, and the summary still reads `fail 0`. So a deleted/renamed test whose registration is left behind loses coverage with zero signal, and a newly-added file that was never registered simply never runs.
 >
 > **The exit code and a `Could not find` grep DO NOT catch this** — measured on Node v23.11.0, and this is the whole trap:

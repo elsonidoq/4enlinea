@@ -234,9 +234,31 @@ Move strings are 0-indexed (columns `0–6`) throughout — in the DB, on the wi
 | `fullCols` | `Array<number>` | `[]` | Columns treated as full regardless of board state |
 | `selectedCols` | `Array<number>` | `[]` | Multi-select mode: columns show red tint + ✕ badge |
 | `onColToggle` | `(col: number) => void` | — | When provided, activates multi-select mode; all taps call `onColToggle` instead of `onColumnClick` |
-| `interactionMode` | `'single_move' \| 'sequence'` | `'single_move'` | `'sequence'` = Board never self-locks; required for `forced_win` multi-move type |
 | `stepLabels` | `{ "row,col": number }` | `{}` | Renders a numbered label centered ON the green/gray disc (teal ring + white digit) WITHOUT recoloring it — unlike the deprecated red/yellow `highlightedCells` shim. Used by `/admin/fv-suff` to number lookahead moves; safe for game surfaces. |
 | `windowCounts` | `(number\|null)[6][7] \| null` | `null` | Per-cell live-window counts for lesson overlays; `[row][col]`, row 0 = bottom, `null` where a disc sits. Renders a red tint (`--red`, rgb 232,57,46) + digit on EMPTY cells only; the tint is suppressed where a per-cell `overlays` entry already colours the cell — which is also what keeps it off any cell carrying the adjacent-but-opposite `tr` danger red. Must be memoized by the caller. See `lesson-editor.md` § Window counts. |
+
+### `Board` is presentational — interaction *semantics* belong to the parent
+
+`Board` renders the board state it is handed and reports taps. It holds no state beyond `hoverCol` and
+`boardWidth`, and it never self-locks: interactivity is governed entirely by the parent-controlled
+`canPlay` prop. **Do not give `Board` a mode/category flag describing what kind of exercise it is
+showing.**
+
+Removed 2026-08-03 (spec 055, OI-121): an `interactionMode: 'single_move' | 'sequence'` prop that
+`ChallengeScreen` computed and passed at two call sites while `Board` destructured and ignored it. This
+table previously documented it as `'sequence' = Board never self-locks`, describing behaviour `Board`
+never had — there is no self-locking code to disable.
+
+The reason the flag was never needed: `ChallengeScreen.handleSequenceClick` commits each click to the
+server and **rebuilds the whole board from the movestring**, pushing it down as ordinary
+`board`/`heights`/`lastDrop` props. There is no pending or uncommitted state, so a sequence puzzle is
+identical input to a single-move one. Mode already lives, correctly, in the two parent-side places that
+act on it: which handler is wired to `onColumnClick`, and which affordances the parent renders.
+
+If a future exercise type genuinely needs distinct board rendering, express it through the existing
+generic props — `overlays`, `stepLabels`, `windowCounts`, `selectedCols` — rather than a mode enum. A
+mode enum duplicates what those already provide and pushes puzzle-category knowledge into a component
+that is otherwise reusable anywhere a board is drawn.
 
 ### Specing an existing component — preserve its API
 

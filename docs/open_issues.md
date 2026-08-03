@@ -4516,6 +4516,19 @@ So an explanation served to a user is **not** gated: a zone that highlights the 
 dead window, or leaks raw coordinates reaches the UI unchecked. Every improvement to these predicates
 (including OI-120's P2 fix) currently buys offline eval fidelity only.
 
+**The live path replaced it rather than dropping it.** `/api/explain-move-llm` now runs
+`computeMechanism(...)` (`server/index.js:1319`), and the code's own comment at :1358-1360 says the
+mechanism text — "coach-voice text carrying inline `[zone:…]` tags (→ board highlights via
+`<AnnotatedExplanation>`)" — "drops straight into the response as `explanation`". So the tags are
+rendered to the board without ever being validated.
+
+**Corollary — a debugging trap**: `deep_reveal_failures` is still written (`index.js:1341`), which makes
+it look like gate failures are being captured. They are not. It fires only on
+`result.callError || result.parseError || !result.mechanism`, storing
+`failure_reason: result.callError ?? result.parseError ?? 'empty mechanism'`. Querying that table for
+`P5strong:*` codes will always return nothing — which reads as "the gate is passing" when the gate
+never ran.
+
 **Why deferred**: wiring a validator into the live path is a product decision with real failure-mode
 choices — on failure, do you strip the annotations, retry the LLM, serve the un-annotated text, or
 fail the request? Each has a different latency and UX cost, and the cache path complicates it further
