@@ -335,25 +335,25 @@ one exemption; `test:fast` green against baseline.
 
 ### Commit 2 of 4 — sync-writers (may land separately)
 
-- [ ] T033 [P] [US2] Remove the `correct_col` scalar computation from `server/candidate-generator.js`'s
+- [x] T033 [P] [US2] Remove the `correct_col` scalar computation from `server/candidate-generator.js`'s
   `checkPredicate` central sync point (verified today: every `check*Predicate` returns both `correctCols`
   and a `correct_col` scalar at lines 214, 243-244, 317, 338, 361, 384 — `undercut`/`overcut` hard-code
   `correct_col: null` there, the exact NULL Commit 1's suppression check replaces). Keep `correctCols` only.
-- [ ] T034 [P] [US2] Remove the `correct_col` write from `server/scripts/backfill-correct-cols.mjs`
+- [x] T034 [P] [US2] Remove the `correct_col` write from `server/scripts/backfill-correct-cols.mjs`
   (verified today: writes `correct_col: result.correct_col ?? null` alongside `correct_cols` around lines
   146-147, 173). Keep only the `correct_cols` write.
-- [ ] T035 [P] [US2] Remove the `correct_col` copy from `server/promotePuzzleRow.js` (verified today: copies
+- [x] T035 [P] [US2] Remove the `correct_col` copy from `server/promotePuzzleRow.js` (verified today: copies
   `correct_col: candidate.correct_col ?? null` alongside `correct_cols` around lines 43-44).
-- [ ] T036 [P] [US2] **Migrate `server/scripts/t018_single_answer_search.mjs`** (a tasks_critique finding —
+- [x] T036 [P] [US2] **Migrate `server/scripts/t018_single_answer_search.mjs`** (a tasks_critique finding —
   no task previously named this file): line 33 reads `result.correct_col` off the candidate-generator
   result object that T033 stops producing. This script is a live consumer, not a smoke-check — it must
   land in this SAME commit as T033, or it breaks silently the moment Commit 2 ships, with no crash and no
   failing test (the same cross-commit hazard class as blocking issue 1 / T018). Update it to read
   `result.correctCols` (or the equivalent array shape T033 leaves in place).
-- [ ] T037 [US2] Migrate/verify any triage-flagged test files covering T033–T036 (e.g. `tests/unit/
+- [x] T037 [US2] Migrate/verify any triage-flagged test files covering T033–T036 (e.g. `tests/unit/
   backfillCorrectColsIdempotency.test.js`, `tests/unit/backfillCorrectColsDeactivation.test.js`) in the
   SAME commit as their production file, per FR-017.
-- [ ] T038 [US2] Run `cd connect-four && npm run test:fast`, confirm no new failures beyond T003's
+- [x] T038 [US2] Run `cd connect-four && npm run test:fast`, confirm no new failures beyond T003's
   baseline, then commit Commit 2 (`candidate-generator.js`, `backfill-correct-cols.mjs`,
   `promotePuzzleRow.js`, `t018_single_answer_search.mjs`, plus T037's tests).
 
@@ -362,25 +362,25 @@ the scalar unnecessary as an input; T036 confirms the one live script consumer w
 
 ### Commit 3 of 4 — non-test scripts (may land separately)
 
-- [ ] T039 [US2] Per the triage table (T005), triage and (if needed) migrate `scripts/
+- [x] T039 [US2] Per the triage table (T005), triage and (if needed) migrate `scripts/
   backfill-confirmation-challenges.mjs` — re-verify its current content fresh; it was epic-listed as a
   consumer but not independently re-read by the plan.
-- [ ] T040 [US2] Per the triage table (T005), triage and (if needed) migrate `scripts/
+- [x] T040 [US2] Per the triage table (T005), triage and (if needed) migrate `scripts/
   verify-undercut-puzzles.mjs` — same caution as T039.
-- [ ] T041 [US2] Per the triage table (T005), triage and (if needed) migrate `server/scripts/
+- [x] T041 [US2] Per the triage table (T005), triage and (if needed) migrate `server/scripts/
   audit_answer_ambiguity.mjs` — spec 051 already widened this to select/cross-check `correct_cols`;
   re-verify whether any `correct_col` read remains now that Commit 1 has landed.
-- [ ] T042 [US2] **Edit the two non-code `correct_col` mentions (Decision A)** — a tasks_critique finding:
+- [x] T042 [US2] **Edit the two non-code `correct_col` mentions (Decision A)** — a tasks_critique finding:
   `server/kb/README.md:7`'s prose sentence and `server/scripts/repair-overcut-highlight-metadata.js:13`'s
   code comment both mention `correct_col` but are neither of them consumers. Per the owner's Decision A,
   edit both rather than widening SC-001's exclusion list: reword the README sentence to "playing the
   correct column," and the code comment to "overcut rows carry no single correct column." This keeps
   SC-001's zero-reference grep mechanically strict at exactly three excluded files (the two historical
   migrations plus the eventual drop migration) with no growing exception list to remember.
-- [ ] T043 [US2] Smoke-check `server/gameSampling.js` and `server/debug-claimeven.js` still work correctly
+- [x] T043 [US2] Smoke-check `server/gameSampling.js` and `server/debug-claimeven.js` still work correctly
   post-Commit-1/2 (they produce a `correctCol` value upstream of any DB write and are never migrated,
   per Non-obvious facts) — do not migrate, only verify.
-- [ ] T044 [US2] Run `cd connect-four && npm run test:fast`, confirm no new failures beyond T003's
+- [x] T044 [US2] Run `cd connect-four && npm run test:fast`, confirm no new failures beyond T003's
   baseline, then commit Commit 3 (whichever of T039–T042 required an actual code change, plus any tests
   they cover per FR-017).
 
@@ -389,17 +389,17 @@ upstream-only; the two non-code prose/comment mentions reworded so SC-001's grep
 
 ### Commit 4 of 4 — the FR-018 test deletion (dedicated test-only commit)
 
-- [ ] T045 [US2] Delete `tests/unit/checkPredicateSortAndScalarSync.test.js` outright (FR-018,
+- [x] T045 [US2] Delete `tests/unit/checkPredicateSortAndScalarSync.test.js` outright (FR-018,
   Acceptance Scenario 12) — do not convert it to assert some other property; nothing is left for it to
   guard once the scalar is gone. Remove it from **both** the `test` and `test:fast` arrays in
   `connect-four/package.json` in this same task.
-- [ ] T046 [US2] Run `cd connect-four && npm run test:fast`, confirm no new failures beyond T003's
+- [x] T046 [US2] Run `cd connect-four && npm run test:fast`, confirm no new failures beyond T003's
   baseline, then commit Commit 4 (the deletion plus the `package.json` array edits).
 
 **Checkpoint**: All four commits landed. User Story 2 acceptance scenarios 1–13 (spec.md) should now all
 hold.
 
-- [ ] T047 [US2] **Story gate**: walk spec.md's User Story 2 Acceptance Scenarios 1–13 one by one and
+- [x] T047 [US2] **Story gate**: walk spec.md's User Story 2 Acceptance Scenarios 1–13 one by one and
   confirm each is satisfied by Commits 1–4 (wire contract retired with no alias; all five suppression
   sites plus the one exemption behave correctly; sync-writers stopped; every migrated test changed in the
   same commit as its production file; the sync-assertion test is deleted, not converted; the suite was
