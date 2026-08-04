@@ -1,13 +1,5 @@
 [
   {
-    "key": "coach.spoken.home.welcome.0",
-    "slug": "coach--spoken--home--welcome--0",
-    "status": "awaiting_approval",
-    "reason": null,
-    "generated_at": "2026-07-30T13:40:18.431Z",
-    "approved_at": "2026-07-17T02:03:25.867Z"
-  },
-  {
     "key": "coach.spoken.onboardingMission.greeting",
     "slug": "coach--spoken--onboardingMission--greeting",
     "status": "approved",

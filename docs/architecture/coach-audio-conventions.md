@@ -79,10 +79,17 @@ audio that said only *"miss rate"*.
 
 The namespace declares **intent**, and the generator generates for intent. A key under
 `coach.spoken.*` that no code path plays is therefore **a bug in the player, to be fixed at the play
-site** — never a reason to weaken the generator's predicate. (Two such latent bugs —
-`coach.spoken.home.welcome.0` and `coach.spoken.summary.perfect.{0,1}`, rendered via `t()` but never
-spoken — were fixed by adding the missing `speakCoachMessage` calls in `HomeScreen` and
-`PostSetSummaryScreen`, not by excluding the keys.)
+site** — never a reason to weaken the generator's predicate. (One such latent bug —
+`coach.spoken.summary.perfect.{0,1}`, rendered via `t()` but never spoken — was fixed by adding the
+missing `speakCoachMessage` call in `PostSetSummaryScreen`, not by excluding the key.
+
+**`coach.spoken.home.welcome.0` was the other, and on 2026-08-04 it was resolved the other way,
+deliberately: the owner did not want Home to speak on arrival.** The rule above still holds — the
+resolution was to move the string to `coach.ui.homeWelcome` and delete its registry entries,
+manifest slugs and mp3s, *not* to leave an unvoiced key sitting in `coach.spoken.*`. That is the
+shape of a legitimate "stop voicing this" change: **change the namespace, don't orphan the key.**
+Leaving it under `coach.spoken.*` with no play site is what made someone add a play site in the
+first place.)
 
 Reachability is enforced by `tests/unit/coachSpokenNamespace.test.js`, because a namespace cannot
 enforce itself. That test is the layer that catches a chrome string added under `coach.spoken.*`, a

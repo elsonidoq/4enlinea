@@ -218,11 +218,6 @@
   },
   "coach": {
     "spoken": {
-      "home": {
-        "welcome": {
-          "0": "Vamos a afilar tus tácticas de Cuatro en línea."
-        }
-      },
       "onboardingMission": {
         "greeting": "Hola, soy tu entrenador. Así es como te volveremos peligroso en el Cuatro en línea."
       },
@@ -669,7 +664,8 @@
       "queueCount_other": "{{count}} posiciones para repasar",
       "startReview": "Iniciar repaso",
       "emptyQueue": "No hay posiciones en la cola — seguí entrenando para construir tu plan de estudio personal.",
-      "missRate": "tasa de error"
+      "missRate": "tasa de error",
+      "homeWelcome": "Vamos a afilar tus tácticas de Cuatro en línea."
     }
   },
   "stats": {

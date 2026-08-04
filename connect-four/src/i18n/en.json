@@ -218,11 +218,6 @@
   },
   "coach": {
     "spoken": {
-      "home": {
-        "welcome": {
-          "0": "Let's sharpen your Connect Four tactics."
-        }
-      },
       "onboardingMission": {
         "greeting": "Hi, I'm your coach. Here's how we'll make you dangerous at Connect Four."
       },
@@ -669,7 +664,8 @@
       "queueCount_other": "{{count}} positions to review",
       "startReview": "Start review",
       "emptyQueue": "No positions in queue — keep training to build your personal curriculum.",
-      "missRate": "miss rate"
+      "missRate": "miss rate",
+      "homeWelcome": "Let's sharpen your Connect Four tactics."
     }
   },
   "stats": {
