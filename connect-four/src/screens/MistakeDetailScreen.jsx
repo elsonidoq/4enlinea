@@ -11,6 +11,7 @@ import { useStore } from '../store/ProfileStore.jsx';
 import { buildBoard } from '../lib/board.js';
 import { track } from '../lib/track.js';
 import { canRevealAnon } from '../lib/anonDeepReveal.js';
+import { stashReturnTo } from '../lib/postLoginReturn.js';
 
 const API = import.meta.env.VITE_API_BASE_URL || '';
 
@@ -405,6 +406,7 @@ export function MistakeDetailScreen({ go, goBack, blunderNavList: navListProp, i
             }}
             onZhCellsChange={setZhCells}
             userMajorThreats={userMajorThreats}
+            returnTo={{ screenKey: 'blunderDetail', params: { id: blunder.id } }}
             boardContent={
               <div style={{ width: '100%' }}>
                 <Board board={boardObj.board} compact canPlay={false} overlays={overlays} zhCells={zhCells} />
@@ -527,7 +529,13 @@ export function MistakeDetailScreen({ go, goBack, blunderNavList: navListProp, i
           </button>
         ) : (
           <button
-            onClick={() => setAuthOpen(true)}
+            onClick={() => {
+              // Fix 3: this screen is registered under the `blunderDetail` key
+              // (src/lib/screenRegistry.jsx) → '/blunder/:id'. NOT 'mistakeDetail', which
+              // renders MistakesListScreen. Its cold-boot effect rehydrates from `id` alone.
+              stashReturnTo('blunderDetail', { id: blunder.id });
+              setAuthOpen(true);
+            }}
             style={{
               display: 'flex',
               alignItems: 'center',
