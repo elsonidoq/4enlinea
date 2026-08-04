@@ -49,6 +49,7 @@
 - [explanation_cache bypasses producers](project_blunder_serving_dual_paths.md) — cache-hit path skips the producer guards; sanitize at the response seam + TRUNCATE on deploy
 - [Stats accuracy is PUZZLE accuracy](project_stats_architecture.md) — no game-accuracy aggregate exists; avg_accuracy is a LABEL key; byPattern always empty (open bug)
 - [Deploy: invisible strict npm ci](project_spec031_staging_production_deploy.md) — railpack.json hides the auto-injected npm ci; peer conflicts fail the build; npm ci --dry-run
+- [Deploy EXECUTION traps](project_deploy_execution_traps.md) — auto-runner defeats "after the code deploy"; ADD COLUMN never populates; prompts exit 0 writing NOTHING
 - [Secret-scan = placeholders](project_secret_scan_placeholders.md) — git-history secret hits are ALL placeholders; NO rotation; docs/security_audit_fable.md
 - [OPENAI_API_KEY is present](feedback_openai_key_present.md) — real key in server/.env; never defer TTS/LLM as "needs a key"; verify on localhost
 
