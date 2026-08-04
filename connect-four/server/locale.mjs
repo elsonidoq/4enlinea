@@ -56,10 +56,14 @@ const STRINGS = {
   en: {
     notABlunder: 'This move keeps the game on its best track — there is no better alternative to highlight here.',
     column: (n) => `column ${n}`,
+    // Ranged internal-coordinate connector (e.g. raw "c3-c6" -> "columns 3 through 6") — added for
+    // T026 (OI-126), which widens stripInternalTokens to cover bare/ranged cXrY forms, not just paired.
+    columnRange: (a, b) => `columns ${a} through ${b}`,
   },
   es: {
     notABlunder: 'Esta jugada mantiene la partida en su mejor camino — no hay una alternativa mejor para destacar acá.',
     column: (n) => `columna ${n}`,
+    columnRange: (a, b) => `columnas ${a} a ${b}`,
   },
 };
 

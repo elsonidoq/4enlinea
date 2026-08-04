@@ -21,10 +21,13 @@
 // but a solver-lost player almost always still has live windows, so his
 // mistakes keep being stored. Only truly dead positions are exempt.
 //
-// Stored mistakes are graded on the solver score drop, mirroring the
-// threshold precedent in scoreMove's losing branch:
-//   bestScore - playedScore > 4  → 'blunder'
-//   otherwise                    → 'suboptimal'
+// Grading (the 'blunder'/'suboptimal' label itself) is NOT this module's job.
+// Spec 057 FR-019a (owner directive, 2026-08-03): `scoreMove` (moveQualityScorer.js)
+// is the SOLE grader of the game-move quality label, in the repository. This module
+// used to also grade stored mistakes by score-drop magnitude (`bestScore - playedScore
+// > 4 ? 'blunder' : 'suboptimal'`) — that second criterion is deleted. Callers now take
+// `quality` from `scoreMove` and pass it through; this module decides only whether a
+// non-optimal move is ELIGIBLE for storage at all (cases 1 and 3 above).
 
 import { parseBoardState } from './classifier.js';
 
@@ -68,36 +71,36 @@ function sign(v) {
 }
 
 /**
- * Decide whether a non-optimal played move is stored as a mistake, and with
- * which quality. Single source of truth for all three write paths
- * (POST /api/games/analyze, papergamesImporter.extractBlunders,
- * POST /api/blunders).
+ * Decide whether a non-optimal played move is ELIGIBLE for storage as a mistake.
+ * Single source of truth for storage eligibility across all write paths
+ * (POST /api/games/analyze, papergamesImporter.extractBlunders). Grading (the
+ * 'blunder'/'suboptimal' label) is NOT decided here — callers take `quality`
+ * from `scoreMove` (FR-019a; `moveQualityScorer.js` is the sole grader).
  *
  * @param {number} bestScore    solver score of the best column (mover's POV)
  * @param {number} playedScore  solver score of the column actually played
  * @param {string} movestring   PRE-move movestring (the position the move was made in)
- * @returns {null | { quality: 'suboptimal'|'blunder' }}  null = do not store
+ * @returns {boolean}  true = store this move as a mistake; false = do not store
  */
 export function classifyStoredMistake(bestScore, playedScore, movestring) {
-  if (typeof bestScore !== 'number' || typeof playedScore !== 'number') return null;
-  if (playedScore >= bestScore) return null; // optimal (best is the max)
+  if (typeof bestScore !== 'number' || typeof playedScore !== 'number') return false;
+  if (playedScore >= bestScore) return false; // optimal (best is the max)
 
   // Case 1: slower win — still winning, nothing outcome-changing to punish.
-  if (bestScore > 0 && playedScore > 0) return null;
+  if (bestScore > 0 && playedScore > 0) return false;
 
   // Case 3: faster loss — store only while the mover is still alive.
   if (bestScore < 0) {
-    if (typeof movestring !== 'string') return null;
+    if (typeof movestring !== 'string') return false;
     const mover = movestring.length % 2 === 0 ? 1 : 2;
     const { board } = parseBoardState(movestring);
-    if (!playerHasPotentialWin(board, mover)) return null;
+    if (!playerHasPotentialWin(board, mover)) return false;
   } else if (sign(playedScore) >= sign(bestScore)) {
     // Defensive: unreachable given the guards above (bestScore >= 0 and
     // playedScore < bestScore always drops a class unless both > 0).
-    return null;
+    return false;
   }
 
-  // Case 2/3 stored: grade by score drop (same >4 threshold as scoreMove's
-  // losing branch).
-  return { quality: bestScore - playedScore > 4 ? 'blunder' : 'suboptimal' };
+  // Case 2/3: eligible for storage.
+  return true;
 }

@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { TopBar } from '../components/TopBar.jsx';
 import { UpgradeModal } from '../components/UpgradeModal.jsx';
+import { AuthModal } from '../components/AuthModal.jsx';
 import { useStore } from '../store/ProfileStore.jsx';
 import { track } from '../lib/track.js';
 import { useUpgradeCheckout } from '../lib/useUpgradeCheckout.js';
@@ -142,9 +143,11 @@ function LessonNode({ lesson, state, onTap }) {
   );
 }
 
-// `lockAction` ('upgrade' | 'orderLock', session-only param) is passed by
+// `lockAction` ('upgrade' | 'orderLock' | 'signin', session-only param) is passed by
 // useLessonLockGuard when a direct lesson URL was blocked: the saga opens the
 // SAME affordance handleNodeTap would have shown for that lock reason.
+// 'signin' (FR-017 / OI-95) opens AuthModal instead of UpgradeModal — the
+// signed-out-visitor case.
 export function SagaScreen({ go, lockAction }) {
   const { t } = useTranslation();
   const { store } = useStore();
@@ -152,9 +155,14 @@ export function SagaScreen({ go, lockAction }) {
   const [lessons, setLessons] = useState([]);
   const [progress, setProgress] = useState([]);
   const [tier, setTier] = useState('free');
+  // Signed-in-by-default optimistic initial value, matching `tier`'s prior
+  // 'free' default before the real getEntitlement() answer resolves — never
+  // flashes a sign-in prompt for an ordinary signed-in user while loading.
+  const [authenticated, setAuthenticated] = useState(true);
   const [upgradeOpen, setUpgradeOpen] = useState(lockAction === 'upgrade');
   const [upgradeUiState, setUpgradeUiState] = useState('idle');
   const [orderLockOpen, setOrderLockOpen] = useState(lockAction === 'orderLock');
+  const [signinOpen, setSigninOpen] = useState(lockAction === 'signin');
 
   // See SettingsScreen.jsx's identical subscription for the full rationale:
   // UpgradeModal's controlled uiState/onUiStateChange props had no caller, so
@@ -197,7 +205,12 @@ export function SagaScreen({ go, lockAction }) {
     // client-side entitlement helper, not a cached profile.tier read — see
     // docs/architecture/frontend-conventions.md "Reading the user's tier".
     // getEntitlement() never rejects (fail-open, FR-013), so no catch needed.
-    getEntitlement().then(({ entitled }) => setTier(entitled ? 'paid' : 'free'));
+    // FR-017 (OI-95): also keep `authenticated` — see useLessonLockGuard.js's
+    // identical comment for why this is a separate state, not folded into `tier`.
+    getEntitlement().then(({ entitled, authenticated: isAuthed }) => {
+      setTier(entitled ? 'paid' : 'free');
+      setAuthenticated(isAuthed);
+    });
   }, [store]);
 
   useEffect(() => {
@@ -210,7 +223,7 @@ export function SagaScreen({ go, lockAction }) {
     const isDone = progress.some(p => p.lessonId === lesson.id && p.status === 'complete');
     if (isDone) return 'done';
 
-    const reason = deriveLockReason(lesson, lessons, progress, tier);
+    const reason = deriveLockReason(lesson, lessons, progress, tier, authenticated);
     if (reason !== 'none') return 'locked';
 
     // 'current' = first lesson (by order) that is not done and accessible
@@ -219,7 +232,7 @@ export function SagaScreen({ go, lockAction }) {
       .sort((a, b) => a.order - b.order)
       .find(l => {
         const done = progress.some(p => p.lessonId === l.id && p.status === 'complete');
-        const locked = deriveLockReason(l, lessons, progress, tier) !== 'none';
+        const locked = deriveLockReason(l, lessons, progress, tier, authenticated) !== 'none';
         return !done && !locked;
       });
 
@@ -235,9 +248,11 @@ export function SagaScreen({ go, lockAction }) {
       return;
     }
 
-    const reason = deriveLockReason(lesson, lessons, progress, tier);
+    const reason = deriveLockReason(lesson, lessons, progress, tier, authenticated);
     const action = dispatchLockAction(reason);
-    if (action === 'upgrade') {
+    if (action === 'signin') {
+      setSigninOpen(true);
+    } else if (action === 'upgrade') {
       setUpgradeOpen(true);
     } else if (action === 'orderLock') {
       setOrderLockOpen(true);
@@ -307,6 +322,13 @@ export function SagaScreen({ go, lockAction }) {
           onUpgrade={handleUpgrade}
           uiState={upgradeUiState}
           onUiStateChange={setUpgradeUiState}
+        />
+      )}
+
+      {signinOpen && (
+        <AuthModal
+          onClose={() => setSigninOpen(false)}
+          reason={t('saga.lock.signInReason')}
         />
       )}
     </div>

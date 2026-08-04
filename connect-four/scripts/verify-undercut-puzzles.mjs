@@ -25,11 +25,14 @@ async function main() {
   const { createClient } = await import('@supabase/supabase-js');
   const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 
+  // T007 (spec 057, FR-002/OI-130): `puzzles` has no `approved` column — the real serving gate is
+  // `is_active boolean` (docs/architecture/db-schema.md). The old `.eq('approved', true)` filter
+  // silently matched zero rows on every environment, making this script always report empty.
   const { data: puzzles, error } = await supabase
     .from('puzzles')
     .select('id, move_string, correct_cols, highlight_metadata, category')
     .eq('category', 'undercut')
-    .eq('approved', true)
+    .eq('is_active', true)
     .limit(50);
 
   if (error) {
@@ -38,14 +41,14 @@ async function main() {
   }
 
   if (!puzzles || puzzles.length === 0) {
-    console.log('No approved undercut puzzles found.');
+    console.log('No active undercut puzzles found.');
     console.log('EPIC 6 FLAG: Puzzle pool for undercut is empty. Generate undercut puzzles before shipping.');
     process.exit(0);
   }
 
-  console.log(`Found ${puzzles.length} approved undercut puzzle(s).`);
+  console.log(`Found ${puzzles.length} active undercut puzzle(s).`);
 
-  console.log(`Total approved: ${puzzles.length}`);
+  console.log(`Total active: ${puzzles.length}`);
   console.log(`VERDICT: ${puzzles.length > 0 ? 'Puzzles exist — ready for confirmation challenges.' : 'No puzzles — Epic 6 flag.'}`);
 }
 

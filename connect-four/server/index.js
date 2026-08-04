@@ -18,6 +18,8 @@ import { computeStatsAggregate } from './statsAggregate.js';
 import { computeBlunderCountsForGames } from './blunderCountsForGames.js';
 import { computeWeaknessMapFallback } from './weaknessMapFallback.js';
 import { insertGameBlunder } from './insertGameBlunder.js';
+import { pickFromPool } from './pickFromPool.js';
+import { reconstructAnalysisFromBlunders } from './reconstructAnalysisFromBlunders.js';
 import { cookieOpts, ACCESS_TOKEN_MAX_AGE, REFRESH_TOKEN_MAX_AGE } from './cookieConfig.js';
 import { resolveDeviceUuid } from './deviceIdentity.js';
 import { resolveGameBlunderOwner, resolveQueueOwner, resolveExplainQuota } from './anonBlunderAccess.js';
@@ -1258,9 +1260,11 @@ app.post('/api/explain-move', async (req, res) => {
   }
 
   // Response-boundary guard (spec 042 US5, FR-019): strip internal community-/allen- label
-  // prefixes and raw cXrY coordinate tokens from every player-facing text field, regardless of
-  // whether it came from the cache or was just generated (research.md §5).
-  res.json(guardExplainMovePayload({ oneLiner, patternTag, deepReveal }));
+  // prefixes and raw cXrY/bare/ranged coordinate tokens from every player-facing text field,
+  // regardless of whether it came from the cache or was just generated (research.md §5). `locale`
+  // is threaded through (spec 057 T026, OI-126 correction (b)) — this endpoint used to default to
+  // English regardless of `req.locale`.
+  res.json(guardExplainMovePayload({ oneLiner, patternTag, deepReveal, locale }));
 });
 
 // ── LLM coaching endpoints ─────────────────────────────────────────────────────
@@ -1303,15 +1307,19 @@ app.post('/api/explain-move-llm', async (req, res) => {
       .match(buildCacheFilter(positionHash, locale))
       .single();
     if (cached?.deep_reveal_json) {
-      // Response-boundary guard (spec 042 US5, FR-019): a cache hit bypasses every producer
-      // module (computeMechanism/explainContext/llmCoachHelpers), so this is the ONLY seam that
-      // can catch a leak in a previously-cached row (research.md §5).
+      // Response-boundary guard (spec 042 US5, FR-019; spec 057 T028 for the annotation gate): a
+      // cache hit bypasses every producer module (computeMechanism/explainContext/
+      // llmCoachHelpers), so this is the ONLY seam that can catch a leak in a previously-cached
+      // row (research.md §5) — including a row cached before the gate was wired in. `board` is
+      // the pre-move board constructed above (`new Board(movestring)`, :1287) — same convention
+      // the offline callers use (col is passed separately, not baked into the board).
       return res.json(guardExplainMoveLlmPayload({
         explanation: cached.deep_reveal_json.explanation,
         prompt: cached.deep_reveal_json.prompt ?? '',
         terms: cached.deep_reveal_json.terms ?? {},
         cached: true,
         locale,
+        board,
       }));
     }
   }
@@ -1343,6 +1351,7 @@ app.post('/api/explain-move-llm', async (req, res) => {
         prompt: '',
         terms: {},
         locale,
+        board,
       }));
     }
 
@@ -1406,12 +1415,13 @@ app.post('/api/explain-move-llm', async (req, res) => {
       }).then(() => {}).catch(err => console.error('[cache write]', err.message));
     }
 
-    // Response-boundary guard (spec 042 US5, FR-019): applied here too (not just the cache-hit
-    // branch above) so a freshly-generated leak — e.g. an LLM non-compliance emitting
-    // `[term:community-z-threat]` instead of the instructed `[term:z_threat]` — is caught before
+    // Response-boundary guard (spec 042 US5, FR-019; spec 057 T028 for the annotation gate):
+    // applied here too (not just the cache-hit branch above) so a freshly-generated leak — e.g. an
+    // LLM non-compliance emitting `[term:community-z-threat]` instead of the instructed
+    // `[term:z_threat]`, or a `[zone:...]` annotation that fails P1/P2/P3/P5/P6 — is caught before
     // it ever reaches a client, in addition to what gets written into `explanation_cache` for a
     // future cache hit.
-    res.json(guardExplainMoveLlmPayload({ explanation, prompt, terms: termsMap, locale }));
+    res.json(guardExplainMoveLlmPayload({ explanation, prompt, terms: termsMap, locale, board }));
 
   } catch (err) {
     console.error('[explain-move-llm] error:', err.message);
@@ -1486,88 +1496,11 @@ function computeSeverity(bestScore, score) {
   return Math.round((bestScore - score) / 36 * 10);
 }
 
-// POST /api/blunders — record a sparring blunder for the authenticated user
-// Auth required: returns 401 silently if no user (client fire-and-forgets this call).
-app.post('/api/blunders', async (req, res) => {
-  if (!supabase) return res.status(503).json({ error: 'Database not configured' });
-
-  const { board_state, move_played, correct_move, pattern_category, score, best_score } = req.body;
-
-  // Validate required fields are present
-  if (board_state === undefined || move_played === undefined || correct_move === undefined || pattern_category === undefined) {
-    return res.status(400).json({ error: 'board_state, move_played, correct_move, and pattern_category are required' });
-  }
-
-  // board_state must match /^[0-6]{0,42}$/
-  if (typeof board_state !== 'string' || !/^[0-6]{0,42}$/.test(board_state)) {
-    return res.status(400).json({ error: 'board_state must be 0–42 characters of digits 0–6' });
-  }
-
-  // move_played and correct_move must be integers 0–6
-  if (!Number.isInteger(move_played) || move_played < 0 || move_played > 6) {
-    return res.status(400).json({ error: 'move_played must be an integer 0–6' });
-  }
-  if (!Number.isInteger(correct_move) || correct_move < 0 || correct_move > 6) {
-    return res.status(400).json({ error: 'correct_move must be an integer 0–6' });
-  }
-
-  // pattern_category must be a non-empty string
-  if (typeof pattern_category !== 'string' || pattern_category.trim() === '') {
-    return res.status(400).json({ error: 'pattern_category must be a non-empty string' });
-  }
-
-  // Auth required
-  if (!req.user) return res.status(401).json({ error: 'Unauthorized' });
-
-  // Storage rule (mistakeStorageRule.js, 2026-07): slower wins and faster losses
-  // from DEAD positions (no potential four-in-a-row left for the mover) are not
-  // stored; theoretically-lost-but-alive positions still are — this is NOT the
-  // old `bestScore < 0` skip (see data-model.md migration 029 note). Requires
-  // numeric score/best_score to classify; without them the move is not stored.
-  const storedMistake = classifyStoredMistake(best_score, score, board_state);
-  if (!storedMistake) {
-    return res.status(200).json({ stored: false, reason: 'not_a_stored_mistake' });
-  }
-
-  try {
-    // Guard against stale clients sending unrecognized tags (e.g., 'unknown')
-    const safeCategory = VALID_BLUNDER_TAGS.has(pattern_category)
-      ? pattern_category
-      : 'suboptimal_move';
-    if (!VALID_BLUNDER_TAGS.has(pattern_category)) {
-      console.warn(`POST /api/blunders: unrecognized pattern_category '${pattern_category}' substituted with 'suboptimal_move'`);
-    }
-
-    // Plain insert — the partial unique index (migration 030) guards against
-    // duplicates on (user_id, board_state, move_played) WHERE puzzle_id IS NULL.
-    // Supabase upsert can't resolve conflicts against partial indexes, so we
-    // insert and treat unique-violation (23505) as success.
-    const { data, error } = await supabase
-      .from('blunders')
-      .insert({
-        user_id: req.user.id,
-        puzzle_id: null,
-        board_state,
-        move_played,
-        correct_move,
-        pattern_category: safeCategory,
-        quality: storedMistake.quality,
-        severity: computeSeverity(best_score, score),
-        blunder_severity: req.body.blunder_severity ?? null,
-      })
-      .select('id');
-
-    if (error) {
-      if (error.code === '23505') return res.status(200).json({ deduplicated: true });
-      logError('[blunders]', error);
-      return res.status(500).json({ error: 'internal error' });
-    }
-    res.status(201).json({ id: data[0].id });
-  } catch (err) {
-    logError('[blunders]', err);
-    res.status(500).json({ error: 'internal error' });
-  }
-});
+// POST /api/blunders — RETIRED (spec 057 T035 item 2 option (b)). This endpoint had no
+// client caller (`insertGameBlunder.js:6`: "the client no longer writes them via POST
+// /api/blunders"; `/usr/bin/grep -rn "api/blunders" src` finds only GET /api/blunders/:id
+// fetches) and required a score-pair grading path that `classifyStoredMistake` no longer
+// provides now that grading is `scoreMove`-only (FR-019a). Retired rather than rewired.
 
 // ── Puzzle endpoints (T035-T037) ───────────────────────────────────────────────
 
@@ -1857,20 +1790,6 @@ function movesToCols(moves) {
     cols[parseInt(moves[i], 10)] += (i % 2 === 0) ? 'g' : 'd';
   }
   return cols;
-}
-
-function pickFromPool(translations, prefix) {
-  const parts = prefix.split('.');
-  let node = translations;
-  for (const part of parts) {
-    if (!node || typeof node !== 'object') return null;
-    node = node[part];
-  }
-  if (!node || typeof node !== 'object') return null;
-  const keys = Object.keys(node);
-  if (keys.length === 0) return null;
-  const idx = Math.floor(Math.random() * keys.length);
-  return `${prefix}.${keys[idx]}`;
 }
 
 // POST /api/evaluate-move — score a played move and return coach phrase keys
@@ -2215,80 +2134,9 @@ app.get('/api/games', async (req, res) => {
 });
 
 // Spec 054 (Epic 4) User Story 3 / FR-013 / T031. Shared by both the authenticated and
-// anonymous branches of POST /api/games/analyze's cache-check below (Constitution Principle
-// II / research.md D6 — one reconstruction path, not a copy-paste per branch). Reconstructs
-// the same move-by-move analysis shape the solver-driven path below produces, but from
-// already-stored `blunders` rows instead of re-running the solver. Returns the exact response
-// body (not res.json itself) so both call sites can add branch-specific fields identically.
-function reconstructAnalysisFromBlunders({ existingBlunders, moves, side, difficulty, created_at, isPapergames }) {
-  const blunderMap = new Map(existingBlunders.map(b => [b.move_index, b]));
-  const cachedMoves = [];
-  let cScored = 0, cOptimal = 0, cSuboptimal = 0, cBlunder = 0;
-  let cOrdinal = 0;
-
-  for (let i = 0; i < moves.length; i++) {
-    const isUserPly = side === 'first' ? (i % 2 === 0) : (i % 2 === 1);
-    if (!isUserPly) continue;
-    cOrdinal++;
-    cScored++;
-
-    const blunder = blunderMap.get(i);
-    if (blunder) {
-      cachedMoves.push({
-        moveIndex: cOrdinal,
-        col: blunder.move_played,
-        quality: blunder.quality,
-        score: null,
-        bestScore: null,
-        bestCol: null,
-        patternTag: blunder.pattern_category,
-        reason: blunder.reason,
-        direction: blunder.direction,
-        blunderSeverity: blunder.blunder_severity,
-      });
-      if (blunder.quality === 'suboptimal') cSuboptimal++;
-      else cBlunder++;
-    } else {
-      cachedMoves.push({
-        moveIndex: cOrdinal,
-        col: parseInt(moves[i], 10),
-        quality: 'optimal',
-        score: null,
-        bestScore: null,
-        bestCol: null,
-        patternTag: null,
-        reason: null,
-        direction: null,
-        blunderSeverity: null,
-      });
-      cOptimal++;
-    }
-  }
-
-  const cAccuracy = cScored > 0 ? Math.round(cOptimal / cScored * 100) : 0;
-  // FR-006: "no mistakes"/"clean game" phrasing must not fire when suboptimal
-  // mistakes exist even if there are zero blunders — a game with 0 blunders and
-  // >=1 suboptimal move is still a game with mistakes.
-  const phrasePool = (cBlunder === 0 && cSuboptimal === 0)
-    ? 'coach.spoken.sparring.review.clean'
-    : 'coach.spoken.sparring.review.mistakes';
-  const cSummaryKey = pickFromPool(i18nTranslations, phrasePool) ?? `${phrasePool}.0`;
-
-  return {
-    moves: cachedMoves,
-    accuracy: cAccuracy,
-    optimalCount: cOptimal,
-    suboptimalCount: cSuboptimal,
-    blunderCount: cBlunder,
-    scored: cScored,
-    summaryPhraseKey: cSummaryKey,
-    fullMovestring: moves,
-    difficulty,
-    side,
-    gameDate: created_at,
-    source: isPapergames ? 'papergames' : 'ai',
-  };
-}
+// anonymous branches of POST /api/games/analyze's cache-check below. Extracted to
+// server/reconstructAnalysisFromBlunders.js (spec 057 T034) so tests can exercise it
+// directly without importing this file (heavy import-time side effects).
 
 // POST /api/games/analyze — analyze all user plies in a completed game
 // Returns move-by-move quality breakdown, accuracy, and a summary phrase key.
@@ -2412,10 +2260,9 @@ app.post('/api/games/analyze', async (req, res) => {
       const bestScore = scores[bestCol];
 
       // Storage rule (mistakeStorageRule.js): slower wins and dead-position
-      // faster losses are not stored; `quality` from scoreMove is kept as-is
-      // for the per-move badges/counters in the response.
-      const storedMistake = classifyStoredMistake(bestScore, score, movesBeforeThisPly);
-      const isMistake = storedMistake !== null;
+      // faster losses are not stored (eligibility only — `quality` from
+      // scoreMove is the sole grader, FR-019a).
+      const isMistake = classifyStoredMistake(bestScore, score, movesBeforeThisPly);
 
       // Classify the position — tagBlunder may issue 60+ solver queries per ply;
       // acceptable here because this endpoint is called post-game, not during play.
@@ -2482,7 +2329,7 @@ app.post('/api/games/analyze', async (req, res) => {
           move_played: col,
           correct_move: bestCol,
           pattern_category: patternTag,
-          quality: storedMistake.quality,
+          quality,
           reason,
           direction,
           severity: computeSeverity(bestScore, score),
@@ -2778,8 +2625,9 @@ app.get('/api/coach/weakness-map', requirePaid, async (req, res) => {
 // True per-category blunder counts via a DB-side grouped count() — independent of any single
 // page of /api/coach/queue, and scale-correct beyond 1000 rows since it never materializes
 // individual rows into Node (see contracts/coach-category-counts.md). Same `.eq('user_id', ...)`
-// filter as /api/coach/queue; no `quality` filter added (FR-008) — blunder- and
-// suboptimal-quality rows are both counted.
+// filter as /api/coach/queue. NO_QUALITY_FILTER_ON_BLUNDER_COUNTS (server/blunderCountInvariant.js,
+// OI-125/FR-021): no `quality` filter added — blunder- and suboptimal-quality rows are both
+// counted.
 app.get('/api/coach/category-counts', async (req, res) => {
   if (!supabase) return res.status(503).json({ error: 'database unavailable' });
   if (!req.user) return res.status(401).json({ error: 'unauthorized' });
@@ -2848,9 +2696,9 @@ app.get('/api/coach/queue', async (req, res) => {
 
   // Shared filter chain — applied identically to the page query and the count query below
   // (count query omits .order()/.range() per contracts/coach-queue-pagination.md).
-  // spec 042 T034/FR-005/FR-007: no `.eq('quality', 'blunder')` filter here — both
-  // blunder- and suboptimal-severity rows are returned/counted (`total`, wire name
-  // unchanged) to the coach queue.
+  // NO_QUALITY_FILTER_ON_BLUNDER_COUNTS (server/blunderCountInvariant.js, OI-125/FR-021):
+  // no `.eq('quality', ...)` filter here — both blunder- and suboptimal-severity rows are
+  // returned/counted (`total`, wire name unchanged) to the coach queue.
   const applyFilters = (q) => {
     let filtered = queueOwner.scope === 'device'
       ? q.eq('device_uuid', queueOwner.deviceUuid).is('user_id', null)
@@ -2914,7 +2762,11 @@ app.get('/api/coach/queue', async (req, res) => {
     move_played: b.move_played,
     correct_move: b.correct_move,
     pattern_category: b.pattern_category,
-    quality: b.quality ?? 'blunder',
+    // FR-019a: no fallback here — migration 051 declares `quality` NOT NULL DEFAULT
+    // 'blunder' with a CHECK, and the query above explicitly selects it, so the key
+    // is always present. A `?? 'blunder'` here would be a second place inventing the
+    // label; removed as dead code.
+    quality: b.quality,
     created_at: b.created_at,
     resolved_at: b.resolved_at,
     severity: b.severity,

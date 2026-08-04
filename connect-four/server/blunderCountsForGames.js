@@ -38,6 +38,8 @@
 export async function computeBlunderCountsForGames(supabase, userId, gameIds, column = 'game_id') {
   if (!gameIds || gameIds.length === 0) return {};
 
+  // NO_QUALITY_FILTER_ON_BLUNDER_COUNTS (server/blunderCountInvariant.js, OI-125/FR-021):
+  // no `.eq('quality', ...)` here — both blunder- and suboptimal-severity rows count.
   const { data, error } = await supabase
     .from('blunders')
     .select(`${column}, count()`)

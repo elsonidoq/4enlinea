@@ -65,6 +65,19 @@ PK: `id`
 
 **`correct_cols`** (migration `061_correct_cols.sql`, spec 051 Epic 1): the **sole** stored, solver-gated **answer set** for a row — an ascending-sorted `integer[]` of every 0-indexed column that grades `correct`/`tied` for that puzzle's category. `NULL` means "not yet backfilled" (fail-open at grading time — see `data-model.md`'s "Correct Column Storage" section for the full `NULL` vs `{}` distinction). The legacy scalar `correct_col` column was dropped by migration `064_drop_correct_col.sql` (spec 056, closing `docs/open_issues.md` OI-81) and no longer exists on this table.
 
+**Stale-content disposition policy (D1, spec 057, resolved 2026-08-03): retire, never repair in
+place.** When a detector change makes a live `overcut`/`undercut`/`z_threat` row's stored
+`highlight_metadata` disagree with the current detector (or the row no longer matches the
+predicate at all — see `docs/open_issues.md` OI-92), the row is **retired**
+(`puzzles.is_active = false` / `candidates.status = 'rejected'`) and its category is refilled back
+to the N=20 serving floor with fresh content — never patched in place with a rewritten
+`highlight_metadata`. `server/scripts/fill-candidate-pools.mjs --apply` is this policy's one
+mechanism (owner-run against staging/production; see `docs/deployment_steps.md` § "Spec 057 —
+content pools"). This supersedes the narrower, in-place-repair approach
+`repair-overcut-highlight-metadata.js` used for `overcut` only (spec 052/OI-92's original repair) —
+that script is not extended to `undercut`/`z_threat`; any future detector change to these three
+categories should retire-and-refill via `fill-candidate-pools.mjs`, not grow a second repair script.
+
 **`shape_key`** / **`position`** / **`highlight_cells`** were added in migration 044. `shape_key` is the canonical shape fingerprint computed by `shapeKeyForPuzzle` (`server/shapeDescriptor.js`); `position` is the draw-order index that interleaves shapes for variety; both are assigned in bulk by the localhost-only `POST /api/admin/puzzles/reindex` endpoint (`server/index.js`), which groups a category's active puzzles by `shape_key` and round-robins `position` across the groups. `GET /api/puzzles/draw` returns puzzles `ORDER BY position`, so consecutive puzzles tend to differ in shape. Migration 044 grants `SELECT` on these three columns to `anon`/`authenticated`. `highlight_cells` mirrors the same column on `candidates`. The `shapeDescriptor.js` serializer MUST stay deterministic (sorted keys, `key=value|` fields, `(...)` nesting) — two different serializations of the same shape split identical shapes into separate `shape_key` groups and silently break the round-robin.
 
 ---
@@ -258,7 +271,21 @@ Indexes:
 
 `severity` = `round((best_score − score) / 36 * 10)` — instant score-spread measure, [0, 10]. Computed at insert time; never recomputed on read.
 `blunder_severity` = fraction of 3-ply post-blunder continuations ending in opponent win — graduated loss-of-control measure, [0, 1]. Computed by `computeBlunderSeverity()`.
-`quality` = `'blunder'` (score drop > 4) or `'suboptimal'` (smaller drop). Added by migration 051. Graded at write time by the **storage rule** (`server/mistakeStorageRule.js` `classifyStoredMistake`, 2026-07), the single gate for all three write paths (`POST /api/games/analyze`, papergames import, `POST /api/blunders`). Not every non-optimal ply is stored: slower wins (both scores > 0) and dead-position faster losses are skipped — see the storage-rule paragraph in `data-model.md`. Legacy rows default to `'blunder'`. (Note: `scoreMove`'s per-move `quality`, which drives the analyze response's badges/counters, uses a different sign-based definition and can label a ply `suboptimal` even when no row is stored.)
+`quality` = `'blunder'` or `'suboptimal'`. Added by migration 051, `NOT NULL DEFAULT 'blunder'` with a `CHECK (quality IN ('suboptimal', 'blunder'))`.
+
+**Post spec-057 T035 (FR-019a, owner directive 2026-08-03 — "there must be exactly ONE criterion"): `scoreMove` (`server/moveQualityScorer.js`) is the SOLE grader of the game-move `quality` label in the repository.** It grades by outcome-class change: any win→draw or win→loss is `'blunder'` regardless of magnitude; a same-class-but-worse move is `'suboptimal'`; only in the all-columns-losing branch does it fall back to a `>4` score-drop threshold. This superseded a second, independently-computed grade that `classifyStoredMistake` used to produce for stored rows (`bestScore - playedScore > 4 ? 'blunder' : 'suboptimal'`) — the two disagreed on any move where a win/draw/loss class changed by ≤4 points (worked case: `bestScore=2, playedScore=0` — a won game thrown away — `scoreMove` says `'blunder'`, the deleted rule said `'suboptimal'`; this is OI-104's boundary case, now a regression test at `connect-four/tests/unit/qualitySingleCriterion.test.js`).
+
+`classifyStoredMistake` (`server/mistakeStorageRule.js`) now decides storage **eligibility only** — whether a non-optimal move is stored at all — not its grade. Eligibility rules unchanged: slower wins (both scores > 0) and dead-position faster losses (the mover has no remaining four-in-a-row window) are skipped; see the storage-rule paragraph in `data-model.md`. All write paths (`POST /api/games/analyze`, papergames import) now take `quality` from `scoreMove` and pass it through verbatim to `insertGameBlunder`. (`POST /api/blunders` — the third write path this paragraph used to name — was retired in the same change: it had no client caller and no in-scope solver-scores array to grade with; see `server/index.js`'s comment where the route used to be.)
+
+Two producers that used to be able to *invent* this label were removed as part of making `scoreMove` the sole grader, so no second place in the tree can produce a `quality` value: `server/insertGameBlunder.js`'s write-seam coercion (`row.quality === 'suboptimal' ? 'suboptimal' : 'blunder'`, which silently turned `undefined`/a typo into a `'blunder'` row) now validates against the two legal values and fails loudly (`console.error` + no insert) instead of defaulting; and `server/index.js`'s `GET /api/coach/queue` serve-seam fallback (`quality: b.quality ?? 'blunder'`) was deleted as dead code — the column's `NOT NULL DEFAULT` and the query's explicit `SELECT quality` already guarantee the key is always present.
+
+Legacy rows written before this change may carry a `quality` graded by the deleted magnitude rule and are **not** repaired in place — see "Deploy: `blunders.quality` regenerate (post spec-057 T035)" in `docs/deployment_steps.md`.
+
+**Domain boundary (owner scope ruling, 2026-08-03 — "game moves only, but NAME the boundary"): the `'optimal'|'suboptimal'|'blunder'` vocabulary is used by two unrelated domains sharing the same three words. This is deliberate, not a defect.**
+1. **Game-move label** (this section): graded solely by `scoreMove`, stored in `blunders.quality` for AI-sparring/papergames plies.
+2. **Puzzle-answer label**: graded **client-side**, by set-selection accuracy, in `src/screens/ChallengeScreen.jsx:586` (`const quality = allCorrect ? 'optimal' : noFalsePositives ? 'suboptimal' : 'blunder';`) — a different question ("did the player pick the right answer set?"), using **no solver scores**, and explicitly OUT of the FR-019a single-criterion unification. Two related puzzle-domain sites reuse the same vocabulary: `ChallengeScreen.jsx:492` (`quality: evaluation?.quality ?? 'blunder'`, a session-results fallback feeding `PostSetSummaryScreen.jsx:76`), and the puzzle-attempt `blunders` INSERT at `server/index.js:2647-2654`, which sets **no `quality` column at all** and therefore takes the migration-051 `NOT NULL DEFAULT 'blunder'` — a puzzle-attempt row's `quality` is a DB default, not a grading verdict.
+
+A third, separate spec-049/Epic-9 **display override** exists in the puzzle domain's "accepted gate" (`ChallengeScreen.jsx:386,407`) — it overrides the *server's* label for display only and never writes a `blunders` row. It is recorded, not fixed, as `docs/open_issues.md` OI-134 (T057).
 
 **CHECK constraint on `pattern_category`**: Must be one of 15 valid values:
 `immediate_threat`, `forced_block`, `double_threat`, `forced_win`, `forbidden_columns` (legacy),

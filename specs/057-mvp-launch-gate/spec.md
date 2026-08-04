@@ -412,6 +412,101 @@ diffing the failure list against the enumerated, justified baseline.
 - **FR-019**: The `quality` label a move receives MUST be identical whether read from the live scoring
   path (`scoreMove`) or the cached-reconstruction path (`reconstructAnalysisFromBlunders`), per the
   authoritative-source decision D4. *(OI-104)*
+- **FR-019a** *(owner directive, 2026-08-03 — binding, supersedes any weaker reading of FR-019)*: at this
+  feature's close there MUST be exactly **one** piece of code in the repository that decides whether a
+  move is a `'blunder'` or a `'suboptimal'`. "Both paths agree" is NOT sufficient — two rules that happen
+  to produce the same answer are still two criteria, and they will drift again. Concretely, per D4's
+  resolution:
+  **Scope boundary (owner ruling, 2026-08-03): "game moves only — but name the boundary."** The
+  single-criterion property applies to the **game-move** `quality` label (the `blunders.quality` value
+  and the per-move badge served for a played game move). `ChallengeScreen`'s **puzzle-answer** grading
+  is a *different question* (did the player pick the right answer set?) and is deliberately NOT unified —
+  it is instead **documented** as a separate domain. See item 6.
+
+  **Verified at source, 2026-08-03** (`/usr/bin/grep -rn "'blunder'" server src scripts` from
+  `connect-four/`, excluding tests): six code locations, not two, decide or default this label.
+  Enumerated with remedies:
+
+  1. `scoreMove` (`server/moveQualityScorer.js:9`) is the **sole** grader. Verbatim producers inside it:
+     `:35` `      quality = 'blunder';`, `:37` `      quality = 'suboptimal';`, `:49`
+     `    quality = 'suboptimal';`, `:52` `    quality = 'blunder';`. **Keep, unchanged.**
+  2. `classifyStoredMistake` (`server/mistakeStorageRule.js`) MUST STOP GRADING. **Line correction:**
+     the function *declaration* is at `:81` (`export function classifyStoredMistake(bestScore,
+     playedScore, movestring) {`); the grading expression is at **`:102`**, verbatim:
+     `  return { quality: bestScore - playedScore > 4 ? 'blunder' : 'suboptimal' };`. That expression is
+     **deleted**, not kept in agreement. The function retains only its storage-**eligibility** job (the
+     slower-win exclusion at `:86` and the dead-position faster-loss exclusion at `:89-93`). Its return
+     type narrows accordingly (`:79` `@returns {null | { quality: 'suboptimal'|'blunder' }}` and the
+     header comment at `:24-27` documenting the `>4` threshold both update), and every call site
+     (`server/index.js:1527`, `server/index.js:2417`, `server/papergamesImporter.js:125`) takes `quality`
+     from `scoreMove` instead. **Note the seam asymmetry, verified at source:** at `:2417` and at
+     `papergamesImporter.js:125` a `scoreMove` result is already in scope (`server/index.js:2410`
+     `      const { quality, bestCol } = scoreMove(scores, col);`; `papergamesImporter.js:115`
+     `    const { quality, bestCol } = scoreMove(scores, col);`) — those are one-line diffs. At
+     `server/index.js:1527` (`POST /api/blunders`) there is **no solver `scores` array in scope at all**:
+     the handler destructures `score` and `best_score` from `req.body` (`server/index.js:1494`
+     `  const { board_state, move_played, correct_move, pattern_category, score, best_score } =
+     req.body;`), and `scoreMove(scores, playedCol)` requires a full 7-element array. That call site MUST
+     therefore either (a) receive the label from a score-pair entry point exported by
+     `moveQualityScorer.js` that `scoreMove` itself delegates to — one rule, two entry points, still one
+     criterion — or (b) be retired if the endpoint has no caller. The implementer picks (a) or (b) and
+     records which; inlining a second threshold there is forbidden.
+  3. `server/insertGameBlunder.js:28` — verbatim
+     `  const quality = row.quality === 'suboptimal' ? 'suboptimal' : 'blunder';` — a **write-seam
+     coercion** that silently turns `undefined`, `'optimal'`, or any typo into a `'blunder'` row. It is a
+     third criterion and it fires exactly when the real grader produced nothing. **Remedy (concrete, not
+     the implementer's judgment):** take `row.quality` verbatim, validate it against the two legal values,
+     and **fail loudly** — `console.error` naming the offending value and `return false` without inserting
+     — when it is missing or invalid. Do not default. All three callers already pass an explicit
+     `quality` (`server/index.js:2484` `          quality: storedMistake.quality,`, and both
+     `papergamesImporter.js:231`/`:363` spread a `blunder` object built by `extractBlunders`), so the
+     coercion has no legitimate consumer.
+  4. `server/index.js:2917` — verbatim `    quality: b.quality ?? 'blunder',` — a **serve-seam fallback**
+     in the `GET /api/coach/queue` `enriched` mapping. **Verified unreachable today**, on two independent
+     grounds: (a) `server/migrations/051_blunders_quality.sql:7-8` declares
+     `  ADD COLUMN IF NOT EXISTS quality text NOT NULL DEFAULT 'blunder'` /
+     `  CHECK (quality IN ('suboptimal', 'blunder'));` — the column cannot be NULL; and (b) the query at
+     `server/index.js:2877-2878` explicitly selects `quality`, so the key is always present.
+     **Remedy:** delete the `?? 'blunder'` (plain `quality: b.quality,`). An unreachable fallback is
+     removed as dead code, not as a live bug — the requirement is that no second place in the tree can
+     *invent* this label, whether or not it currently does.
+  5. `src/lib/reviewChipQuality.js` — which exists ONLY to reconcile the two rules' disagreement ("red
+     chip opens a SUBOPTIMAL detail"; its own header says so at `:1-15`) — MUST be removed along with its
+     call sites (`src/screens/ReviewScreen.jsx:12` import, `:229` and `:430` calls), not left as a
+     now-no-op reconciliation layer. Per Constitution II the divergence is removed, not papered over.
+     **Deleting it also requires removing `tests/unit/reviewChipQuality.test.js` from BOTH the `test` and
+     `test:fast` script strings in `connect-four/package.json:16,17`** — `node --test` errors on a missing
+     file, and because `test:fast` is one long file list, that error means **zero tests run**.
+  6. **Documented boundary, not unified** (owner ruling): `src/screens/ChallengeScreen.jsx:586` —
+     verbatim `    const quality = allCorrect ? 'optimal' : noFalsePositives ? 'suboptimal' : 'blunder';`
+     — grades a `forbidden_columns` **puzzle answer** by set-selection accuracy, client-side, with no
+     solver scores. It reuses the same three-value vocabulary for a different question. It MUST be
+     documented as a separate domain (in `docs/architecture/db-schema.md` alongside the `blunders`
+     section, per FR-019's documentation task) so the next reader does not rediscover it as a defect.
+     Two related puzzle-domain sites are covered by the same note: `ChallengeScreen.jsx:492`
+     (`      quality: evaluation?.quality ?? 'blunder',` — a session-results fallback) and
+     `server/index.js:2647-2654`, the puzzle-attempt `blunders` insert, which sets **no `quality` at all**
+     and so takes the migration-051 column default `'blunder'`.
+  7. **Recorded as an open issue, not fixed** (owner ruling): the spec-049/Epic-9 accepted-gate
+     **display override** at `src/screens/ChallengeScreen.jsx:386` (verbatim
+     `          ? { ...data, quality: 'blunder', badge: 'bad', summaryLineKey:
+     pickSummaryKeyOrNull('blunder') ?? data.summaryLineKey }`) and `:407` (verbatim
+     `        const coachQuality = acceptedPromoted ? 'optimal' : acceptedDemoted ? 'blunder' :
+     (data.quality ?? 'blunder');`) overrides the server's label for display. It gets a new `OI-N` in
+     `docs/open_issues.md` recording that a client-side override of the server's label exists and why it
+     was left in place — not a fix, and not in this feature's change scope.
+  8. A test MUST assert the single-criterion property **structurally**, and the assertion MUST key on
+     **emitting the label**, not on taking scores. The previously-worded bar ("no module maps a
+     `(bestScore, playedScore)` pair to `'blunder'`/`'suboptimal'`") is **too narrow and is retracted**:
+     none of items 3, 4, 6, or 7 take scores at all, so a test worded that way would pass while five
+     other criteria remained in the tree. The required shape is a **source scan of production code**
+     (`connect-four/server/**` and `connect-four/src/**`, excluding `*.test.*`, `tests/`, `migrations/`,
+     and `server/scripts/`) for a string literal `'blunder'` or `'suboptimal'` **appearing in a
+     value-producing position**, checked against an **explicit allowlist keyed by `file` (plus the
+     matched line's content), where every allowlist entry carries an inline comment stating why it is
+     permitted**, so the exemptions are self-documenting and a new emitter fails the test by default. The
+     allowlist deliberately includes the `ChallengeScreen` puzzle-answer domain (item 6) and the
+     accepted-gate override (item 7) — the test must NOT fail on them.
 - **FR-020**: FR-019 MUST be proven by a test that exercises one boundary-case move through both paths
   and asserts identical output.
 - **FR-021**: The "never filter the `blunders` table by `quality` when counting mistakes" invariant MUST
@@ -532,8 +627,8 @@ the implementation. They must be resolved before `/speckit-plan`, not guessed at
 |---|---|---|---|
 | ~~**D1**~~ | US1 | **RESOLVED (2026-08-03) — retire and refill.** For the 6 live `overcut` rows that no longer pass the widened predicate and the 12 whose `highlight_metadata` differs: repair the stored metadata in place, or retire the rows and promote fresh candidates? | **Answer: retire and refill.** Stale rows are marked inactive and the category is refilled to the N=20 floor by `fill-candidate-pools.mjs`, which FR-003/FR-004 already require. No second repair script; `repair-overcut-highlight-metadata.js` is not extended to `undercut`/`z_threat`. The 2026-08-03 owner directive removed the "preserves attempt history" weight that used to favor in-place repair. This does not remove the separate requirement that the grader itself (`evalOvercut`/`evalUndercut`/`evalZThreat`) cross-check `correct_cols` — see FR-006 — which protects correct answers regardless of whether the retire-and-refill has run. |
 | ~~**D2**~~ | US1 | **RESOLVED** — `forced_win` cannot reach the N=20 floor by promotion alone (2 queued candidates, and OI-83 is the bug that retired its last puzzle), and neither can several of the other seven categories once their queued counts are recognized as local-only. Generate fresh candidates, or hide below-floor categories from serving? | **Answer: there is no serving-policy decision.** Generate candidates and approve/promote them through the admin tooling until the floor is met, per environment. Nothing is hidden; nothing is deferred post-launch. No longer changes the plan — it is a fixed input to it. |
-| **D3** | US2 | Widen the regex only, or wire `validateAnnotation` into the live response path (OI-124)? And on a violation: strip the offending span, retry the LLM, or serve anyway and log? | Regex-only is a one-line fix that leaves the systemic hole open — OI-126 *and* OI-129 both escaped because nothing gates the live path. Wiring the gate in is a latency + failure-policy change on the paid feature's hot path. |
-| **D4** | US4 | Which `quality` label is authoritative — the live solver judgment (`scoreMove`) or the stored storage-rule one (`classifyStoredMistake`)? | Picking live means backfilling or re-deriving on read; picking stored means the first analysis must stop showing a different answer. The two thresholds are allowed to diverge by design today, so this is a product call, not a bug fix. |
+| ~~**D3**~~ | US2 | **RESOLVED (2026-08-03, owner) — wire the gate in and ENFORCE by stripping.** Widen the regex only, or wire `validateAnnotation` into the live response path (OI-124)? And on a violation: strip the offending span, retry the LLM, or serve anyway and log? | **Answer: wire `validateAnnotation` (`server/annotationGate.js:486`) into the response seam (`guardExplainMovePayload`/`guardExplainMoveLlmPayload`), failure policy = STRIP the offending span and log.** Verified at source before the call: `annotationGate.js` is pure ("No side effects, no DB, no I/O" — file header), so enforcement costs a synchronous board scan, **not** an extra LLM call — only the *retry* policy would have, and retry was rejected for that reason. The widened regex (T026) still ships as the floor. Two obligations attach: (a) the unconditional `console.log('[DEBUG validateAnnotation]…')` calls at **`annotationGate.js:488-489`** (line corrected 2026-08-04 — `:486` is the function declaration, `:487` is `const zones = parseZoneSpecs(explanation);`) MUST be removed before this runs in production; (b) the added latency MUST be measured against the Explanation Engine's <2s budget (Constitution V) as part of this story's own acceptance, not assumed free. **Re-verified 2026-08-04: the live seam carries NO `allowedSet`** — `grep -n "allowedSet" server/index.js` returns zero matches — so `checkP5Strong` will not run and only P1/P2/P3/P5/P6 apply; state which actually ran. Two further gaps, resolved in T028: the guard functions receive no `Board` (one is in scope at `server/index.js:1286-1288` and must be threaded), and `validateAnnotation` returns opaque failure *strings*, of which the `P3:*` codes carry **no span at all** — so "strip the offending span" has no defined behavior for P3 and T028 must state the policy. |
+| ~~**D4**~~ | US4 | **RESOLVED (2026-08-03, owner) — `scoreMove` is authoritative.** Which `quality` label is authoritative — the live solver judgment (`scoreMove`) or the stored storage-rule one (`classifyStoredMistake`)? | **Answer: the live outcome-class rule (`scoreMove`) wins and becomes the single criterion.** Evidence gathered before the call: the two rules are *not* "mathematically identical" outside the all-losing branch — `scoreMove` grades by outcome-class change (any win→draw/draw→loss is a `blunder` regardless of magnitude), `classifyStoredMistake` grades by score-drop magnitude (`bestScore - playedScore > 4`). They run on the **same move seven lines apart** at `server/index.js:2410` (→ response badge) and `:2417` (→ stored row), and `src/lib/reviewChipQuality.js` exists solely to paper over the resulting "red chip opens a SUBOPTIMAL detail" mismatch. Scope note: `classifyStoredMistake` does two jobs — (a) storage *eligibility* (excludes slower wins and dead-position faster losses) and (b) *grading*. Only (b) changes; the eligibility gate stays exactly as is. `index.js:2417` takes `quality` from the `scoreMove` call two lines above. Per Constitution II this REMOVES the divergence — `reviewChipQuality.js`'s reconciliation becomes unnecessary and should go, not stay alongside. Existing `blunders` rows carry the old magnitude grading; per the owner's disposable-database directive that is a documented regenerate in `docs/deployment_steps.md`, **not** repair tooling. |
 
 ## Traceability — the 16 in-scope issues
 

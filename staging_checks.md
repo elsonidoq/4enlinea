@@ -1771,3 +1771,104 @@ on a missing selected column).
     reach a grading input); the curation hint marker and picker column label render **nothing** for
     these two categories, while a non-suppressed category still shows its column.
   - **Source**: spec 056 FR-010 / FR-011 / SC-004; local QA out-of-scope note on `PAID_CATEGORIES`.
+
+## Epic 10 — MVP Launch Gate: content-pool fill (spec 057) — added 2026-08-04
+
+**Decision D-b**: pool fill is a named launch gate. `fill-candidate-pools.mjs` (T009) is owner-run
+only — no agent session writes to staging or production (per `CLAUDE.md` and this feature's binding
+constraints). This item exists so the epic cannot close as "launch-ready" while a category is still
+below the N=20 floor on a live environment; SC-001 requires the count measured **directly against**
+staging/production, not inferred from the mechanism shipping.
+
+- [ ] **Owner runs `fill-candidate-pools.mjs --apply` against STAGING and PRODUCTION, and records the
+  post-fill per-category active counts.**
+  - **What**: after the spec 057 code deploy AND the `061_correct_cols.sql` migration (see
+    `docs/deployment_steps.md` § "Spec 057 — retire-and-refill" and § "Spec 057 — content pools" for
+    the exact commands and ordering — `correct_cols` must exist on the target's `puzzles` table before
+    `--apply` can insert refilled rows), run:
+    ```bash
+    cd connect-four
+    node server/scripts/fill-candidate-pools.mjs --env staging --apply
+    node server/scripts/fill-candidate-pools.mjs --env production --apply --i-understand-this-is-production
+    ```
+    Then re-query active counts per category on each environment (the script's own post-apply dry-run,
+    `node server/scripts/fill-candidate-pools.mjs --env <env>`, reports exactly this) and paste the
+    12-row table for both environments here, replacing the placeholder below.
+  - **Why staging/production, not local**: this is the one step this feature's agent sessions are
+    explicitly forbidden from running (binding constraint: "No agent session writes to staging or
+    production"). T009–T011 shipped the mechanism and a pre-fill dry-run report; only the owner has
+    write access to live data.
+  - **Expected**: every one of the 12 categories reports `active ≥ 20` on BOTH staging and production.
+  - **Pre-fill baseline** (T011, 2026-08-04, dry-run, for comparison after the owner's run — see
+    `docs/deployment_steps.md` § "Spec 057 — content pools" for the full per-category table): staging
+    12/12 below floor (total active 122); production 4/12 below floor (`odd_even_threat` 0,
+    `overcut` 6 after retire-and-refill, `claimeven` 18, `figure_7` 17; total active 279 pre-refill).
+  - **Post-fill counts (fill in after the owner's run)**:
+    ```
+    staging:    <paste the 12-category table here>
+    production: <paste the 12-category table here>
+    ```
+  - **Source**: spec 057 FR-003, FR-004, Decision D-b; T009–T011, T015.
+
+- [ ] **Owner runs the OI-5 refresh-token-rotation probe against a real account and records the
+  outcome — this is a re-ask of the spec 054 item above (line ~1451), still unresolved, now carrying
+  spec 057's explicit both-outcomes disposition.**
+  - **What**: `cd connect-four && node --env-file=server/.env scripts/probe-refresh-rotation.mjs
+    <email> <password>` against a real Supabase account's credentials (not the anonymous-session probe
+    already run, which was inconclusive for OI-5's actual claim). This agent session cannot run it — it
+    needs real account credentials that are not available headlessly.
+  - **Why owner-gated**: same reason as the spec 054 item — no real test account credentials are
+    reachable from an agent session.
+  - **Expected — BOTH outcomes and their consequence, stated explicitly (FR-024)**:
+    - **"rotation detected"** (the probe's output shows the refresh token changed across concurrent
+      calls) → the server-side de-dup Map the auth-session contract originally described was correctly
+      omitted only if rotation does NOT happen; if it DOES happen, concurrent same-token refreshes can
+      race and one loses, so the de-dup Map becomes required. Action: open a new follow-on `OI-N` to
+      build it in `server/authRefresh.js`, and update `docs/architecture/server-conventions.md`'s
+      auth-session contract section (currently documents the Map's absence as deliberate) to match.
+    - **"no rotation"** → the current no-de-dup-Map behavior is confirmed correct as shipped. Action:
+      close OI-5 outright in `docs/open_issues.md` (status → fixed/confirmed, no code change needed).
+  - **Source**: spec 057 FR-024, Epic 10 US5 T022; `docs/open_issues.md` OI-5; the unresolved spec 054
+    sign-off item above.
+  - [ ] Signed off (tester + date): _pending owner run_.
+
+### Spec 057 (Epic 10) US3 — `/pricing?_ptxn=` mount-time Paddle.js init (T049)
+
+Two owner-only verifications the FR-013/FR-014/FR-016 fix cannot be closed without. Neither is
+agent-run — CSP is invisible under `npm run dev` and requires a real production build in a real
+browser; a live Paddle sandbox transaction requires `VITE_PADDLE_CLIENT_TOKEN`, which is unset
+locally (owner-confirmed: Paddle does not work locally). See `docs/open_issues.md` OI-98 (now
+partially-fixed — client half ships, this is the owner half) and OI-41.
+
+- [ ] **FR-014 — CSP verified against a real production build in a real browser, specifically for the
+  new `?_ptxn=` mount-time path.**
+  - **What**: from the repo root, `eval "$(./worktree-ports.sh)"`, then `cd connect-four && npm run
+    build && node server/index.js` (serves the built `dist/` on `$API_PORT` — restart after any
+    rebuild, the server resolves `dist/index.html` at boot). In a real browser with DevTools open,
+    navigate to `/pricing?_ptxn=<a real or synthetic transaction id>` and confirm Paddle.js
+    initializes on mount (before any click) with **zero** `Refused to ...` console lines, for both the
+    bare page load and the auto-open attempt. Also confirm the expired/invalid-`_ptxn` edge case: the
+    page must still finish initializing Paddle.js and simply fail the auto-open silently, never
+    breaking the page.
+  - **Why owner-gated**: needs a real browser DevTools session; OI-96's prior CSP pass covered the
+    click-triggered `handleUpgrade` path only, not this story's new unconditional-mount path, so it
+    does not substitute for this check.
+  - **Expected**: same zero-violation result OI-96 recorded for the click path, now also confirmed for
+    the mount-time auto-open path.
+  - **Source**: spec 057 FR-013, FR-014, T041, T049; `docs/open_issues.md` OI-98, OI-96.
+  - [ ] Signed off (tester + date): _pending owner run_.
+
+- [ ] **FR-016 — a real Paddle sandbox transaction confirms the payment-method-update email reaches an
+  open checkout.**
+  - **What**: from the Paddle sandbox dashboard, trigger (or simulate) a payment-method-update email
+    for a real sandbox subscription, follow its link (which appends `?_ptxn=<transaction id>` to the
+    Default payment link setting — see `docs/deployment_steps.md` § "Spec 053 (Epic 3)" for the
+    setting itself, amended 2026-08-04 to reference this fix), and confirm the checkout overlay opens
+    automatically for that transaction, pre-filled, with no manual click required.
+  - **Why owner-gated**: requires `VITE_PADDLE_CLIENT_TOKEN`, unset in this environment, and a real
+    Paddle sandbox account action nobody can trigger headlessly.
+  - **Expected**: the checkout overlay opens automatically on page load, with the correct transaction
+    context — this is the end-to-end confirmation that OI-98's fix (T041) actually closes the
+    subscriber-facing gap, not just the code-level `getPaddle()`/`_ptxn` plumbing.
+  - **Source**: spec 057 FR-016, T049; `docs/open_issues.md` OI-98.
+  - [ ] Signed off (tester + date): _pending owner run_.

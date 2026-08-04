@@ -61,15 +61,25 @@ export function useLessonLockGuard(lessonId, goReplace) {
       // getEntitlement() never rejects (fail-open, FR-013), so no catch
       // needed; it resolves {entitled:false} for both anonymous callers and
       // failures, matching this hook's prior 'free' default.
-      getEntitlement().then(({ entitled }) => (entitled ? 'paid' : 'free')),
+      // FR-017 (OI-95): also keep `authenticated` — it distinguishes a
+      // signed-out visitor from a signed-in free-tier user, which `tier`
+      // alone collapses. Kept as a SEPARATE value passed to deriveLessonAccess,
+      // not folded into `tier` (sagaLock.js's tierLocked check treats `tier`
+      // as a 2-valued 'paid'|'free' string; overloading it would silently
+      // change tierLocked for every existing caller).
+      getEntitlement().then(({ entitled, authenticated }) => ({
+        tier: entitled ? 'paid' : 'free',
+        authenticated,
+      })),
     ])
-      .then(([lessons, progress, tier]) => {
+      .then(([lessons, progress, { tier, authenticated }]) => {
         if (cancelled) return;
         const access = deriveLessonAccess(
           lessonId,
           Array.isArray(lessons) ? lessons : [],
           progress,
           tier,
+          authenticated,
         );
         if (access === 'allowed') {
           setStatus('allowed');

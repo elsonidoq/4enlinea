@@ -7,7 +7,7 @@ import { toNarratorVector } from '../scripts/reasonNarratorVector.mjs';
 import { buildReasonRenderModel } from '../scripts/renderReasonModel.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const CORPUS = join(__dirname, '../scripts/reason_evidence_boards_coverage_2026-07-02T11-37-56Z.jsonl');
+const CORPUS = join(__dirname, '../scripts/fv_suff/reason_evidence_boards_coverage_2026-07-02T11-37-56Z.jsonl');
 
 test('every corpus record renders with zero uncovered fields and a classified link', () => {
   const rows = readFileSync(CORPUS, 'utf8').trim().split('\n').map((l) => JSON.parse(l));

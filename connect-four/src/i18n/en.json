@@ -1088,6 +1088,9 @@
     "empty": "No lessons available yet.",
     "orderLock": {
       "message": "Finish the previous lesson to unlock this one"
+    },
+    "lock": {
+      "signInReason": "Sign in to continue this lesson."
     }
   },
   "onboarding": {

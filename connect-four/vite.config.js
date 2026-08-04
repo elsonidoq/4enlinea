@@ -53,13 +53,25 @@ export default defineConfig({
     strictPort: true,
     proxy: {
       '/api': `http://localhost:${apiPort}`,
-      // Legal/pricing pages are server-served static HTML (server/index.js's
-      // "Legal pages" routes — LegalFooter.jsx uses plain <a href>, not SPA
-      // routes) — found in QA: without these, a full navigation to /pricing
-      // etc. under `npm run dev` hits Vite's own SPA fallback (index.html)
-      // instead of the API server, and the client router then redirects to
-      // Home since these paths aren't registered SPA routes.
-      '/pricing': `http://localhost:${apiPort}`,
+      // Legal pages are server-served static HTML (server/index.js's "Legal
+      // pages" routes — LegalFooter.jsx uses plain <a href>, not SPA routes)
+      // — found in QA: without these, a full navigation to /terms etc. under
+      // `npm run dev` hits Vite's own SPA fallback (index.html) instead of
+      // the API server, and the client router then redirects to Home since
+      // these paths aren't registered SPA routes.
+      //
+      // `/pricing` itself is EXCLUDED from this list (spec 057 QA finding,
+      // 2026-08-04): since spec 053 it is an in-app SPA route (PricingScreen,
+      // urlMapping.js), served by server/index.js's catch-all — which sends
+      // the *built* dist/index.html referencing production hashed asset
+      // filenames that don't exist under `npm run dev`. Proxying `/pricing`
+      // here made a full navigation (or a hard refresh, or the real
+      // `/pricing?_ptxn=...` email-link flow FR-013 exists for) white-screen
+      // locally with six 404s. `/pricing-legal` is the one still-static page
+      // and is proxied explicitly below — Vite's string-prefix proxy
+      // matching means a bare `/pricing` entry silently also swallowed
+      // `/pricing-legal`, so this is a rename, not just a deletion.
+      '/pricing-legal': `http://localhost:${apiPort}`,
       '/terms': `http://localhost:${apiPort}`,
       '/privacy': `http://localhost:${apiPort}`,
       '/refunds': `http://localhost:${apiPort}`,

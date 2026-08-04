@@ -16,13 +16,51 @@
 // tokens are always prefixed this way in `llmCoachHelpers.js`'s `PATTERN_KB`; a bare
 // `community-`/`allen-` substring never legitimately appears in player-facing prose otherwise).
 import { serverT } from './locale.mjs';
+import { validateAnnotation } from './annotationGate.js';
 
 const LABEL_PREFIX_RE = /\b(?:community|allen)-/gi;
 
 // Matches a raw internal grid-coordinate token, e.g. "c1r4" — the classifier's own
 // `c${col+1}r${row+1}` cell-string format (1-indexed). Word-bounded so it doesn't match inside
-// unrelated alphanumeric strings.
+// unrelated alphanumeric strings. PAIRED form only — must run before RANGE_RE/BARE_COL_RE below
+// (each .replace() feeds the next, so a paired "c4r3" is consumed here and never reaches the
+// bare-column pass).
 const CXRY_RE = /\bc(\d+)r\d+\b/gi;
+
+// Matches a RANGED internal-coordinate token, e.g. "c3-c6" (OI-126: this shape reached the
+// player because the original guard only had CXRY_RE). Must run before BARE_COL_RE, or the bare
+// pass would consume each endpoint separately and this rule would never see the pair.
+const RANGE_RE = /\bc(\d+)-c(\d+)\b/gi;
+
+// Matches a BARE internal column token, e.g. "c3" (OI-126, same report). Word-bounded on both
+// sides so it never matches inside an unrelated alphanumeric string, and requires the digit to
+// sit directly against the "c" — "c. 3" (an abbreviation followed by a number in unrelated
+// prose) does NOT match, since there is no `\bc(\d+)\b` adjacency once a period/space intervenes.
+//
+// DELIBERATELY CASE-SENSITIVE (no `i` flag), unlike CXRY_RE/RANGE_RE above. The internal token
+// this strips is always emitted lowercase — it is the classifier's own `c${col+1}` format — so
+// matching uppercase buys nothing, while "C4" is a common human abbreviation for Connect Four
+// that a served explanation can legitimately contain. With the `i` flag, "This is a C4 position"
+// rendered as "This is a column 4 position", corrupting prose FR-008 explicitly protects.
+// Verified before/after: "C4 position" now passes through untouched; "c3", "c3-c6" and "c4r3"
+// are still stripped. See the case-sensitivity assertions in tests/reasonRenderGuard.test.mjs.
+const BARE_COL_RE = /\bc(\d+)\b/g;
+
+// Matches a zone-tag DELIMITER — `[zone:SPEC]` or `[/zone:SPEC]` — capturing it so `String.split`
+// preserves it in the output array.
+//
+// Load-bearing: a zone spec is a MACHINE-READABLE selector, not prose. The specs the reason engine
+// emits (`server/scripts/reason_engine/zoneAnnotations.mjs`) include `cNrM` and `windows:c1r1,c2r2,…`
+// forms, which CXRY_RE would happily rewrite — turning `[zone:cells:c4r1,c4r2]` into
+// `[zone:cells:column 4,column 4]`. `src/lib/annotatedText.js`'s `isValidSpec` then rejects the
+// mangled spec and the client silently drops the highlight: no error at any layer, the prose still
+// renders, and the board annotation is simply gone. Only the `colN` form survived, which is why a
+// test asserting "a valid zone annotation is left untouched" can pass while every cell- and
+// window-level highlight is destroyed.
+//
+// Rewriting must therefore skip these delimiters. The prose BETWEEN them is still rewritten — a raw
+// coordinate in a zone's inner text is exactly what FR-008 is for.
+const ZONE_TAG_RE = /(\[\/?zone:[^\]]*\])/g;
 
 /**
  * Strips internal-only tokens out of player-facing prose:
@@ -30,7 +68,13 @@ const CXRY_RE = /\bc(\d+)r\d+\b/gi;
  *       (e.g. "community-z-threat" -> "z-threat"),
  *   (b) rewrites a raw `cXrY` grid-coordinate token to plain "column N" (1-based; the row is
  *       deliberately dropped — Decision A, research.md §5/§9: highlights never come from parsing
- *       this string).
+ *       this string),
+ *   (c) rewrites a raw ranged `cX-cY` token to a localized "columns X through Y" / "columnas X a Y"
+ *       phrase (OI-126),
+ *   (d) rewrites any remaining raw bare `cX` token to plain "column N" (OI-126).
+ *
+ * Order matters: paired -> ranged -> bare, so a wider match is never partially consumed by a
+ * narrower one run first (see each regex's comment above).
  *
  * Clean text (no matches) passes through unchanged.
  *
@@ -41,9 +85,18 @@ const CXRY_RE = /\bc(\d+)r\d+\b/gi;
 export function stripInternalTokens(text, locale = 'en') {
   if (typeof text !== 'string' || text.length === 0) return text;
   const columnWord = serverT(locale, 'column'); // (n) => "column n" | "columna n"
-  return text
+  const columnRangeWord = serverT(locale, 'columnRange'); // (a, b) => "columns a through b" | "columnas a a b"
+
+  const rewrite = (segment) => segment
     .replace(LABEL_PREFIX_RE, '')
-    .replace(CXRY_RE, (_match, col) => columnWord(col));
+    .replace(CXRY_RE, (_match, col) => columnWord(col))
+    .replace(RANGE_RE, (_match, a, b) => columnRangeWord(a, b))
+    .replace(BARE_COL_RE, (_match, col) => columnWord(col));
+
+  // Split on zone-tag DELIMITERS and rewrite only the prose between them. `String.split` with a
+  // capturing regex interleaves the captured delimiters at odd indices, so `i % 2 === 1` is
+  // exactly the set of `[zone:…]` / `[/zone:…]` tags — those pass through byte-for-byte.
+  return text.split(ZONE_TAG_RE).map((seg, i) => (i % 2 === 1 ? seg : rewrite(seg))).join('');
 }
 
 /**
@@ -75,16 +128,52 @@ export function sanitizeTermsMap(terms) {
  * unifying its cache-hit and fresh-generation branches into a single `oneLiner`/`deepReveal` pair,
  * so a single guarded builder covers both paths.
  *
- * @param {{oneLiner: string, patternTag: string, deepReveal: {fullText?: string} | null}} payload
+ * `locale` defaults to 'en' for backward compatibility, but the live call site
+ * (`server/index.js`, `/api/explain-move`) threads its resolved `req.locale` (spec 057 T026,
+ * OI-126 correction (b) — this used to always render English regardless of locale).
+ *
+ * @param {{oneLiner: string, patternTag: string, deepReveal: {fullText?: string} | null, locale?: string}} payload
  */
-export function guardExplainMovePayload({ oneLiner, patternTag, deepReveal }) {
+export function guardExplainMovePayload({ oneLiner, patternTag, deepReveal, locale = 'en' }) {
   return {
-    oneLiner: stripInternalTokens(oneLiner),
+    oneLiner: stripInternalTokens(oneLiner, locale),
     patternTag,
     deepReveal: deepReveal
-      ? { ...deepReveal, fullText: stripInternalTokens(deepReveal.fullText) }
+      ? { ...deepReveal, fullText: stripInternalTokens(deepReveal.fullText, locale) }
       : deepReveal,
   };
+}
+
+// Failure codes whose payload embeds the offending zone spec after the second colon (a `spec`
+// may itself contain colons — e.g. `cells:c1r1,c2r1` — so this joins everything past the first
+// two segments rather than splitting on the last colon). Verified against `annotationGate.js`'s
+// actual `failures.push(...)` call sites (P1 :102/:109, P2 :157, P5 :260/:277, P6 :302).
+const SPAN_CARRYING_CODES = new Set(['P1', 'P2', 'P5', 'P6']);
+
+function escapeRegExp(str) {
+  return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+// D3 enforcement (spec 057 T028): for every span-carrying failure, DROP the offending
+// `[zone:spec]...[/zone:spec]` wrapper but KEEP its inner text — the annotation (and therefore
+// the interactive highlight) disappears, the sentence stays readable. `P3:*` failures carry no
+// span (`annotationGate.js:181,186,195,212` push a bare string) — see the P3 policy note on
+// `guardExplainMoveLlmPayload` below; nothing is stripped for them here.
+function stripFailingZoneSpans(text, failures) {
+  const specs = new Set();
+  for (const failure of failures) {
+    const [code, , ...specParts] = failure.split(':');
+    if (!SPAN_CARRYING_CODES.has(code)) continue; // P3:* — no span, nothing to strip
+    const spec = specParts.join(':');
+    if (spec) specs.add(spec);
+  }
+  let result = text;
+  for (const spec of specs) {
+    const escaped = escapeRegExp(spec);
+    const re = new RegExp(`\\[zone:${escaped}\\]([\\s\\S]*?)\\[/zone:${escaped}\\]`, 'gi');
+    result = result.replace(re, '$1');
+  }
+  return result;
 }
 
 /**
@@ -94,12 +183,42 @@ export function guardExplainMovePayload({ oneLiner, patternTag, deepReveal }) {
  * branches of that endpoint are provably guarded through one shared function. Any extra fields
  * (e.g. `cached: true`) pass through untouched.
  *
- * @param {{explanation: string, prompt?: string, terms?: Record<string, unknown>, locale?: string}} payload
+ * D3 (spec 057 T028, resolved 2026-08-03 by the owner — WIRE IN, ENFORCE BY STRIPPING, no retry
+ * — a retry would cost a second LLM call): when `board` is supplied, runs `validateAnnotation`
+ * (`annotationGate.js`) against `explanation` and, on failure, drops the offending
+ * `[zone:...]` annotation(s) (see `stripFailingZoneSpans`) and logs the failure codes. `board`
+ * is optional (defaults to `null`, which skips the gate entirely) so existing/offline callers
+ * that don't have a `Board` in scope keep working unguarded, matching the pre-T028 behavior.
+ *
+ * `allowedSet` is intentionally NOT threaded here — the live call site
+ * (`server/index.js`) never builds one (`/usr/bin/grep -n "allowedSet" server/index.js` = zero
+ * matches), so `checkP5Strong` never runs on the live path; only P1/P2/P3/P5/P6 apply. This is a
+ * real, currently-accepted coverage gap versus the offline eval path (`run_eval.mjs`), not an
+ * oversight — see `docs/architecture/server-conventions.md`'s Annotation Gate section.
+ *
+ * P3 policy (disc notation / player name / engine jargon — `annotationGate.js:181,186,195,212`):
+ * these failures carry NO span, so there is nothing to strip. They are LOGGED and the text is
+ * SERVED AS-IS; `stripInternalTokens`'s widened regex (T026) is the text-level floor that already
+ * catches the raw-coordinate leak shape of P3-adjacent content, and `llmCoachHelpers.js:804`'s
+ * prompt instruction is the first line of defense against the wording P3 flags.
+ *
+ * @param {{explanation: string, prompt?: string, terms?: Record<string, unknown>, locale?: string, board?: object|null}} payload
  */
-export function guardExplainMoveLlmPayload({ explanation, prompt, terms, locale = 'en', ...rest }) {
+export function guardExplainMoveLlmPayload({ explanation, prompt, terms, locale = 'en', board = null, ...rest }) {
+  let sanitizedExplanation = explanation;
+  if (board && typeof explanation === 'string' && explanation.length > 0) {
+    const { valid, failures } = validateAnnotation(explanation, board, null);
+    if (!valid) {
+      sanitizedExplanation = stripFailingZoneSpans(explanation, failures);
+      // Intentional console.warn (not console.log) — distinct from, and NOT a reintroduction of,
+      // annotationGate.js's deleted unconditional debug logs (T028 correction (a)). Fires only on
+      // an actual failure, not on every request.
+      console.warn('[annotation gate] stripped failing zone annotation(s) from a served explanation:', failures);
+    }
+  }
   return {
     ...rest,
-    explanation: stripInternalTokens(explanation, locale),
+    explanation: stripInternalTokens(sanitizedExplanation, locale),
     prompt,
     terms: sanitizeTermsMap(terms),
   };

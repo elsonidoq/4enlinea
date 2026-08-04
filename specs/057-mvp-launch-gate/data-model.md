@@ -72,7 +72,7 @@ before any of them mount. `useLessonLockGuard.js`'s `authenticated` signal (from
 into `sagaLock.js`'s `tier` parameter. `sagaLock.js` carries three chained functions —
 `deriveLockReason` (`'none'|'tier'|'order'|'both'`), `dispatchLockAction`
 (`'upgrade'|'orderLock'|'navigate'`), `deriveLessonAccess` (`'allowed'|'upgrade'|'orderLock'`) — and a
-new `'signin'` value threads through all three. `SagaScreen.jsx` (`:305`, currently renders
+new `'signin'` value threads through all three. `SagaScreen.jsx` (`:304`, currently renders
 `UpgradeModal.jsx` on `lockAction:'upgrade'`) gets a `lockAction:'signin'` branch that renders the
 **already-existing** `AuthModal.jsx` (precedent: `HomeScreen.jsx:156`) instead — no new component, and
 `UpgradeModal.jsx` does not need a second copy/CTA personality once that routing exists.

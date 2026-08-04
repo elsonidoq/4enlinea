@@ -7,9 +7,15 @@
  * Computes WHY a lesson is locked, independent of node visual state.
  * `predecessor` = the lesson with the next-lower `order` in the full sorted list; null for the
  * lowest-order lesson (never order-locked).
- * @returns {'none' | 'tier' | 'order' | 'both'}
+ * `authenticated` (FR-017 / OI-95) — defaults to `true` so every pre-existing caller that only
+ * passes 4 args keeps its exact prior behavior. When `false` (a signed-out visitor), a lesson
+ * that would otherwise be 'tier', 'order', or 'both' collapses to 'signin' instead — the caller
+ * needs a Sign-in CTA, not an Upgrade/order-lock one, regardless of WHICH lock(s) apply. An
+ * unlocked lesson ('none') is unaffected: a signed-out visitor can still take a free, unlocked
+ * lesson without signing in.
+ * @returns {'none' | 'tier' | 'order' | 'both' | 'signin'}
  */
-export function deriveLockReason(lesson, lessons, progress, tier) {
+export function deriveLockReason(lesson, lessons, progress, tier, authenticated = true) {
   const tierLocked = lesson.free === false && tier !== 'paid';
 
   const sorted = lessons.slice().sort((a, b) => a.order - b.order);
@@ -18,6 +24,7 @@ export function deriveLockReason(lesson, lessons, progress, tier) {
   const orderLocked = predecessor !== null &&
     !progress.some(p => p.lessonId === predecessor.id && p.status === 'complete');
 
+  if (!authenticated && (tierLocked || orderLocked)) return 'signin';
   if (tierLocked && orderLocked) return 'both';
   if (tierLocked) return 'tier';
   if (orderLocked) return 'order';
@@ -26,9 +33,10 @@ export function deriveLockReason(lesson, lessons, progress, tier) {
 
 /**
  * Maps a LockReason to the tap action handleNodeTap should take.
- * @returns {'upgrade' | 'orderLock' | 'navigate'}
+ * @returns {'upgrade' | 'orderLock' | 'navigate' | 'signin'}
  */
 export function dispatchLockAction(reason) {
+  if (reason === 'signin') return 'signin';
   if (reason === 'tier' || reason === 'both') return 'upgrade';
   if (reason === 'order') return 'orderLock';
   return 'navigate';
@@ -42,15 +50,19 @@ export function dispatchLockAction(reason) {
  *   2. otherwise deriveLockReason → dispatchLockAction.
  * An unknown lessonId returns 'allowed' — the screen's own /api/lessons/:id fetch
  * surfaces the not-found error; the guard only enforces locks.
- * @returns {'allowed' | 'upgrade' | 'orderLock'}
+ * `authenticated` (FR-017 / OI-95, defaults to `true` — see deriveLockReason) is threaded straight
+ * through to deriveLockReason. Note the done-short-circuit runs BEFORE the auth check: a
+ * signed-out visitor with local progress marking a lesson complete still gets 'allowed', same as
+ * a signed-in user — completion, not sign-in state, is what the short-circuit is protecting.
+ * @returns {'allowed' | 'upgrade' | 'orderLock' | 'signin'}
  */
-export function deriveLessonAccess(lessonId, lessons, progress, tier) {
+export function deriveLessonAccess(lessonId, lessons, progress, tier, authenticated = true) {
   const lesson = lessons.find(l => l.id === lessonId);
   if (!lesson) return 'allowed';
 
   const isDone = progress.some(p => p.lessonId === lessonId && p.status === 'complete');
   if (isDone) return 'allowed';
 
-  const action = dispatchLockAction(deriveLockReason(lesson, lessons, progress, tier));
+  const action = dispatchLockAction(deriveLockReason(lesson, lessons, progress, tier, authenticated));
   return action === 'navigate' ? 'allowed' : action;
 }

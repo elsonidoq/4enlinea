@@ -53,8 +53,14 @@ mutating live data is the owner's call.
 ## Standing checklist for any deploy
 
 1. **Schema migrations** — anything new in `connect-four/server/migrations/`? Applied to staging and
-   production? Note the staging pooler trap: `.env.staging` uses the **transaction pooler (6543)**,
-   which cannot run DDL. Swap to port 5432 for `migrate.js`.
+   production? Note the staging pooler drift: `.env.staging` (and the live Railway-injected value,
+   re-confirmed 2026-08-04) uses the **transaction pooler (6543)** while production uses **5432**.
+   This is **not** a DDL blocker — `migrate.js` wraps each migration in an explicit `BEGIN…COMMIT`,
+   which pins a backend connection under pgBouncer's transaction mode, and staging has empirically
+   applied migrations through 6543 (`schema_migrations` ledger, most recently `061_security_lints.sql`).
+   Treat 6543 as configuration drift to converge on 5432 on its own schedule, not as a broken deploy —
+   see `docs/architecture/server-conventions.md`'s Migration Runner section and OI-31 (closed
+   documentation-sync 2026-08-04).
 2. **Data migrations / backfills** — did any code change alter the meaning of already-stored rows?
    (New enum value, changed detector output, renamed tag, new required column.)
 3. **Secrets / env vars** — any new key read by server code? It must exist in Railway for both
@@ -227,10 +233,28 @@ two backwards would break checkout, so they are listed explicitly:
 Note this does **not** require a domain re-submission (T047 — Paddle documents no content-change
 trigger for re-review). It is a settings check, not a re-approval.
 
-**Known gap, not fixed by this epic (OI-98)**: even pointed at `/pricing`, the `?_ptxn=` auto-open
-does not work — `useUpgradeCheckout` never initializes Paddle.js on mount, and nothing reads `_ptxn`.
-This is **pre-existing**: the old static `/pricing` contained no Paddle.js at all, so the flow was
-already broken before this change. Spec 053 does not make it worse. Track under OI-98.
+**AMENDED 2026-08-04 (spec 057, Epic 10, US3, T041/T048) — the OI-98 gap below is now half-closed.**
+`PricingScreen.jsx` now calls `getPaddle()` unconditionally on mount and, when `?_ptxn=` is present,
+opens the checkout for that transaction id (`paddle.Checkout.open({ transactionId })`), including the
+expired/invalid-id edge case (Paddle.js still initializes; the auto-open just fails gracefully). This
+is the **client-code half** of the fix and is agent-shipped, verified locally, and covered by
+`tests/dom/PricingScreenPaddleInit.dom.test.jsx`. The **owner-gated half is unchanged and still
+pending**: a real Paddle sandbox transaction must confirm the payment-method-update email actually
+lands an open checkout end-to-end (no `VITE_PADDLE_CLIENT_TOKEN` locally, so this cannot be exercised
+in this environment) — see `staging_checks.md`'s new sign-off item under this heading. **The Default
+payment link table row below is unchanged in substance** (`/pricing`, never `/pricing-legal`) but its
+rationale is now stronger: `/pricing` actually honors `?_ptxn=` today, so pointing the dashboard
+setting there is both the current recommendation and, as of this change, a page that can complete the
+flow once the setting is confirmed. Do not read this as a second, separate deploy prerequisite — it
+amends the single "Paddle dashboard config" action already queued above; there is nothing new to run.
+
+**Known gap, partially fixed (OI-98)**: pointed at `/pricing`, the `?_ptxn=` auto-open now works on
+the client side (see AMENDED note above) — `useUpgradeCheckout`'s `getPaddle` initializes on mount and
+the page reads `_ptxn`. What remains open is the owner-only verification that a real Paddle-sent
+payment-method-update link, clicked end-to-end, actually opens the checkout in production. This was
+**pre-existing** before spec 057: the old static `/pricing` contained no Paddle.js at all, so the flow
+was already broken before spec 053. Spec 057 US3 fixes the code gap; the owner verification is the
+last mile. Track under OI-98 (now partially-fixed, not open).
 
 ### Run it
 
@@ -312,13 +336,17 @@ Paddle.js at all — see OI-98).
 All counts below were measured on **2026-08-02** against the real environments (read-only), not
 reasoned about. Re-measure before running — a count taken mid-epic is stale by deploy time.
 
-### 0. CAUTION (not a blocker) — staging's `DATABASE_URL` is on the transaction pooler (port 6543)
+### 0. NOTE (not a blocker, not forbidden) — staging's `DATABASE_URL` is on the transaction pooler (port 6543)
 
-Measured 2026-08-02: staging's `DATABASE_URL` (both the Railway-injected value and local
+Measured 2026-08-02, re-confirmed read-only 2026-08-04 (`railway variables --service 4enlinea-staging
+--environment staging --kv`): staging's `DATABASE_URL` (both the Railway-injected value and local
 `server/.env.staging`) is on port **6543**, the transaction-mode pooler. Production is on **5432**.
-`docs/architecture/server-conventions.md:1440` declares 6543 **forbidden** for `migrate.js`.
+`docs/architecture/server-conventions.md:1501-1504` (updated 2026-08-02, per OI-31's documentation-sync
+closeout) no longer declares 6543 forbidden — it explicitly names 6543 as "configuration drift to fix
+on its own schedule, not a broken deploy." Do not re-derive the old "6543 forbidden" rationale from an
+earlier version of that doc or from memory.
 
-**But the evidence says it works.** Staging's `schema_migrations` ledger shows migrations applying
+**The evidence says it works.** Staging's `schema_migrations` ledger shows migrations applying
 successfully through that 6543 connection five times, most recently `061_security_lints.sql` on
 **2026-07-30**:
 
@@ -674,6 +702,401 @@ time-recovery checkpoint) if you want the ability to restore the pre-drop `corre
 Story 2), the dropped values are redundant with `correct_cols[0]` at drop time for every row that had
 been backfilled — but any row's exact pre-drop `correct_col` value (e.g. for an unbackfilled row) is
 only recoverable from a backup, not from `correct_cols`.
+
+## Spec 057 — retire-and-refill for stale overcut/undercut/z_threat rows (D1)
+
+**Status**: PENDING — not yet run in any environment (added 2026-08-04)
+**When**: **After** the spec 057 code deploy (T005's `evalOvercut`/`evalUndercut`/`evalZThreat`
+`correctCols` cross-check must be live first — re-deriving against the current detector requires the
+current detector to be deployed). Also depends on `061_correct_cols.sql` — see the ordering note
+below.
+**Blocks**: nothing new ships broken without it (T005 already makes a correct answer un-blockable by
+stale metadata once `correct_cols` is populated on live rows — see the Spec 057 content-pools entry
+below for that dependency); it closes out the data half of OI-92 and the new undercut-drift issue
+(see `docs/open_issues.md`).
+**Applies to**: staging, production.
+
+### What's wrong
+
+Same root cause as the existing "Spec 052 — overcut pool repair" entry above (a widened detector
+makes old rows' stored `highlight_metadata` disagree with what the detector would produce today, or
+makes some rows stop matching the predicate entirely), now measured for all three metadata-graded
+categories (`overcut`, `undercut`, `z_threat`) via T008's read-only audit, re-confirmed by
+`fill-candidate-pools.mjs`'s own dry-run (T011, 2026-08-04):
+
+| Env | category | identical | stale | ambiguous | no_longer_matches |
+|---|---|---|---|---|---|
+| staging | overcut | 12 | 4 | 4 | 0 |
+| staging | undercut | 20 | 0 | 0 | 0 |
+| staging | z_threat | 20 | 0 | 0 | 0 |
+| production | overcut | 12 | 8 | 2 | 0 |
+| production | undercut | 56 | 0 | 0 | 4 |
+| production | z_threat | 60 | 0 | 0 | 0 |
+
+(Counts are per row across both `puzzles` and `candidates` tables combined, matching the existing
+Spec 052 entry's convention.) `undercut`/`z_threat` are clean on staging; production `undercut` has 4
+rows (2 `puzzles` + 2 `candidates`, movestrings `13365353214264620046` and `35054462343613031`) that
+no longer match `detectUndercutVictim` at all — this is new drift `OI-92` never covered; see
+`docs/open_issues.md` OI-92's closeout note for the disposition.
+
+Per D1 (resolved 2026-08-03), the remedy is **retire, not repair in place**: every drifted row is
+retired (`is_active=false` / `status='rejected'`) and its category refilled to the N=20 floor with
+fresh content. No second repair script was written — `fill-candidate-pools.mjs` is D1's one
+mechanism, covering all three categories (see `docs/architecture/db-schema.md`'s `puzzles` section
+for the policy statement).
+
+### Run it
+
+```bash
+cd connect-four
+
+# 1. Dry run first — always. Reports the retire-and-refill plan, writes nothing.
+node server/scripts/fill-candidate-pools.mjs --env staging
+
+# 2. Apply — retires drifted overcut/undercut/z_threat rows AND refills every below-floor category
+#    to N=20 in the same run (this entry and the "content pools" entry below are the SAME command;
+#    they are two entries here only because they trace to different FRs, not because they are two
+#    separate runs).
+node server/scripts/fill-candidate-pools.mjs --env staging --apply
+
+# 3. Production requires the explicit acknowledgement flag in addition to --apply.
+node server/scripts/fill-candidate-pools.mjs \
+  --env production --apply --i-understand-this-is-production
+```
+
+The script prompts for a typed `Yes` before any write, and twice for production. `--env` is
+required and has no default.
+
+### Verify
+
+Re-run the dry run for the same environment. **Exit code 0** ("Every category is at/above the
+N=20 floor and overcut/undercut/z_threat show no drift") is the success condition:
+
+```bash
+node server/scripts/fill-candidate-pools.mjs --env staging; echo "exit: $?"
+```
+
+Exit codes: `0` = clean/at floor, `1` = error, `2` = remedy still needed (below floor, or drift
+found) — usable as a CI/deploy gate.
+
+### Roll back
+
+Retirement is reversible by hand (`is_active=true` / `status='approved'`) but the row will fail the
+predicate again against current code — retiring is the correct end state, not a mistake to undo.
+Refilled/generated rows have no prior state to roll back to; if a refill run inserted rows you want
+to remove, delete by the `generation_run_id`/timestamp the script logs, or by `is_active=false` if
+you'd rather retire than delete outright (data on staging/production is disposable pre-launch — see
+`CLAUDE.md` § "Staging and production databases are disposable").
+
+---
+
+## Spec 057 — content pools: below-floor categories, all environments (FR-003, FR-004)
+
+**Status**: PENDING — mechanism shipped, not yet run against staging or production (added 2026-08-04)
+**Amendment (2026-08-04, same day)**: `checkForcedWinPredicate` was widened from
+`passes: correctCols.length === 1` to `>= 1`, so multi-initiator boards are no longer discarded at
+generation time. **This does NOT add a prerequisite and does NOT invalidate any existing row** —
+verified: existing `forced_win` rows were generated under the *stricter* rule, so they all still
+satisfy the wider one; the `correctCols` array-building logic is unchanged; and the grader
+(`evalForcedWin`) was not touched. The only effect on this entry is that the `forced_win` generation
+it calls for should now succeed at a **higher match rate** than the brute-force cost seen when local
+was filled. No re-run of anything already applied is required.
+**When**: **After** the spec 057 code deploy, and **after** `061_correct_cols.sql` is applied (see
+the Standing Checklist's migration entry / the `061`–`064` backlog entry above). `correct_cols` is
+not just cosmetic here: `buildPromotedPuzzleRow` (`server/promotePuzzleRow.js`) unconditionally
+writes `correct_cols` on every inserted `puzzles` row, and `puzzles.correct_cols` does not exist on
+staging or production until that migration runs. The script now **probes `puzzles.correct_cols` on
+the target and hard-stops (exit 1) naming `061_correct_cols.sql`** before attempting any promote or
+generate, so running it too early is a clean refusal rather than a partial run — but it still means
+no pool work happens until the migration lands, so the ordering below is real, not advisory. (Before
+the 2026-08-04 code-review fix the script only probed `candidates`, and an early `--apply` would
+have skipped promotion, fallen through to generate, and failed every insert *after* burning solver
+time.) Local was refilled without this constraint (`061` is already applied locally).
+**Blocks**: SC-001 ("every category ≥20 active puzzles on staging and production, measured
+directly"). Tracked as OI-86 (general below-floor) and OI-83 (`forced_win` specifically).
+**Applies to**: staging, production. (Local was already brought to floor this session — see below.)
+
+### What's wrong
+
+Measured 2026-08-04 (T006/T011 — see `specs/057-mvp-launch-gate/research.md`'s dated subsections for
+the full numbers; `fill-candidate-pools.mjs`'s own dry-run output independently reproduces the same
+per-category counts):
+
+**Staging — 12/12 categories below floor, zero promotable candidates for any category (generate for
+all 12)**:
+
+| category | active | shortfall | remedy |
+|---|---|---|---|
+| immediate_threat | 15 | 5 | generate |
+| forced_block | 10 | 10 | generate |
+| double_threat | 10 | 10 | generate |
+| forced_win | 7 | 13 | generate |
+| forbidden_columns | 10 | 10 | generate |
+| odd_even_threat | 10 | 10 | generate |
+| z_threat | 10 (10 more after retire-and-refill leaves it clean) | 10 | generate |
+| claimeven | 10 | 10 | generate |
+| undercut | 10 | 10 | generate |
+| overcut | 6 (after retiring 8 drifted rows) | 14 | generate |
+| figure_7 | 10 | 10 | generate |
+| j_shape | 10 | 10 | generate |
+
+**Production — 3/12 categories below floor after retire-and-refill (`odd_even_threat`, `claimeven`,
+`overcut`, `figure_7` — see below), zero promotable candidates for any of them**:
+
+| category | active | shortfall | remedy |
+|---|---|---|---|
+| odd_even_threat | 0 | 20 | generate |
+| claimeven | 18 | 2 | generate |
+| overcut | 6 (after retiring 8 drifted rows) | 14 | generate |
+| figure_7 | 17 | 3 | generate |
+| (all other 8 categories) | ≥20 | 0 | none |
+
+Every category on both environments resolves to **generate**, not promote — staging and production
+`candidates` tables have zero pending rows for any category (`correct_cols` is also absent there
+today, so promotion is doubly unavailable — see the ordering note above). This is the same "generate,
+not promote" finding `research.md`'s dated pool-count subsections already recorded; this entry exists
+to give the owner one runnable command rather than a spreadsheet.
+
+`forced_win` needs generation specifically (not promotion) per OI-83 — its only prior row was retired
+as AMBIGUOUS, and the category has no salvageable promotable content on any environment.
+
+### Run it
+
+Same command as the retire-and-refill entry above — **it is the same script invocation**, not a
+second run:
+
+```bash
+cd connect-four
+node server/scripts/fill-candidate-pools.mjs --env staging --apply
+node server/scripts/fill-candidate-pools.mjs \
+  --env production --apply --i-understand-this-is-production
+```
+
+Generation calls the real c4solver once per accepted candidate and runs **locally** (against the
+solver binary on the owner's machine) even though the target is a remote environment — expect
+staging's full run (~132 candidates across 12 categories) to take significantly longer than
+production's (~39 candidates across 4 categories). The script inserts each generated row directly
+into the target environment's `puzzles` table via the service-role client; it does not use the
+target environment's own `candidates` table for freshly generated content.
+
+### Verify
+
+```bash
+# Re-run the dry run for the same environment — every category should report
+# "active=NN — at/above floor (20)". Exit code 0 is full success.
+node server/scripts/fill-candidate-pools.mjs --env staging; echo "exit: $?"
+```
+
+Then re-query active counts directly per `staging_checks.md`'s Spec 057 sign-off item (below) — the
+dry-run's own count IS the direct measurement SC-001 requires, so no separate query is needed beyond
+recording the numbers there.
+
+### Roll back
+
+Not meaningfully reversible and not needed — inserted rows are net-new content with no prior state.
+If a run over-generates or a category should be pulled back, retire the surplus rows
+(`is_active=false`) rather than deleting; data on staging/production is disposable pre-launch.
+
+## Spec 057 (Epic 10) — Schema migration backlog closeout (061_correct_cols / 062 / 063 / 064)
+
+**Status**: PENDING (staging and production; local already fully applied)
+**When**: per the existing ordering constraints already documented in the entries this cross-references
+— `063_puzzle_attempts_outcome_narrow.sql` must run **before** its code deploy (Spec 054 entry, item 1,
+FR-023a); `064_drop_correct_col.sql` must run **after** its code deploy (Spec 056 entry, "Ordering
+relative to the migration"). `061_correct_cols.sql` and `062` carry no ordering constraint of their own.
+**Blocks**: SC-002 (verifying Batch 1's grader fix — `evalOvercut`/`evalUndercut`/`evalZThreat` accepting
+a solver-gated `correctCols`) is inert on live data until `061_correct_cols.sql` is applied. Batch 2's
+`fill-candidate-pools.mjs --apply` would fail its inserts on staging/production today —
+`buildPromotedPuzzleRow` unconditionally writes `correct_cols`, a column neither live environment has.
+**Applies to**: staging and production (local already fully applied — confirmed by this feature's T019
+read-only measurement, 2026-08-04)
+
+### What's wrong (or: what this sets up)
+
+This feature (spec 057) authors **no new migration file**. The 4-migration backlog below was already
+authored by specs 054 and 056 and remains unapplied on staging/production, re-confirmed read-only by
+T019 (`psql "$DATABASE_URL" -c "SELECT filename FROM schema_migrations WHERE filename LIKE '06%'..."`,
+2026-08-04, both environments queried directly):
+
+| filename | staging | production |
+|---|---|---|
+| `061_correct_cols.sql` | NOT applied | NOT applied |
+| `062_candidates_generation_run_unique.sql` | NOT applied | NOT applied |
+| `063_puzzle_attempts_outcome_narrow.sql` | NOT applied | NOT applied |
+| `064_drop_correct_col.sql` | NOT applied | NOT applied |
+
+**Do not re-derive the ordering, backfill, or rollback mechanics for these four migrations here** —
+they are fully specified already, and restating them risks drift between two copies:
+- `061_correct_cols.sql`, `062`, `063`: see "Spec 054 (Epic 4) — Server/API data integrity &
+  environment correctness", §"1. Migrations 062 and 063 (plus the unapplied 061)" for the measured
+  row-level impact, the 063-before-code-deploy hard ordering constraint (FR-023a), and that entry's own
+  Run it / Verify / Roll back.
+- `064_drop_correct_col.sql`: see "Spec 056 — Legacy `correct_col` scalar retirement (Epic 9)" for the
+  064-after-code-deploy hard ordering constraint, the required pre-flight NULL-row check, and that
+  entry's own Run it / Verify / Roll back.
+
+This entry exists only to record that spec 057's close (this feature) depends on the backlog above and
+to keep the whole 4-migration set visible as a single work-queue item — not to re-author either
+runbook. OI-105 (closed 2026-08-04) covers the `061` filename collision itself: `migrate.js` matches by
+filename not number, so `061_security_lints.sql` (already applied) and `061_correct_cols.sql` (still
+pending) coexist without conflict.
+
+### Run it
+
+No new commands. Run the Spec 054 entry's "Run it" (applies `061_correct_cols.sql`, `062`, `063`
+together via `node --env-file=server/.env.<env> server/migrate.js` — staging then production) **before**
+that entry's code deploy, then the Spec 056 entry's "Run it" (`064`) **after** its code deploy, following
+each entry's own pre-flight and ordering constraint.
+
+### Verify
+
+Same verification queries as the two source entries (see each for the specific success conditions on
+the CHECK constraint, unique index, and dropped column). The single query that confirms this whole
+backlog is cleared for a given environment:
+```sql
+SELECT filename FROM schema_migrations WHERE filename IN
+ ('061_correct_cols.sql','062_candidates_generation_run_unique.sql',
+  '063_puzzle_attempts_outcome_narrow.sql','064_drop_correct_col.sql');
+```
+Success: 4 rows.
+
+### Roll back
+
+Not this entry's to restate — see the Spec 054 entry's "Roll back" (`062`/`063`: index drop is
+reversible, the `063` outcome remap is not but affects 0 staging rows / 2 production rows with no
+information loss) and the Spec 056 entry's "Roll back" (`064`: irreversible once its pre-flight passes
+and the column drop runs — the pre-flight check itself is the safety gate).
+
+## Spec 057 (Epic 10) US2 — `explanation_cache` truncate after the response-seam text-integrity fix (OI-126/OI-124)
+
+**Status**: PENDING — not yet run in any environment (added 2026-08-04)
+**When**: **After** this story's code deploy (T024-T026/T028), per environment — same ordering logic
+as the "Spec 052 — overcut pool repair" entry above (re-derive/repair only makes sense once the code
+that changes the output is already live; running it before would truncate a cache the old code is
+about to repopulate with the same stale shape).
+**Blocks**: shipping the OI-126 (`stripInternalTokens` bare/ranged coordinate fix) and OI-124
+(annotation-gate strip-and-log wiring) fixes cleanly to staging or production — without this step, a
+row cached under the OLD code (pre-widened regex, pre-gate) keeps serving its stale text on every
+future cache hit, because a cache hit bypasses the producer entirely and is guarded ONLY at the
+response seam this deploy just fixed.
+**Applies to**: staging, production. Local does not need it — restart picks up the new code, and any
+stale local rows are low-stakes dev data.
+
+### What's wrong
+
+`explanation_cache` rows written before this deploy can carry two now-superseded shapes:
+1. A raw bare/ranged internal-coordinate token (`c3`, `c3-c6`) inside `deep_reveal_json.explanation`
+   that the pre-T026 `stripInternalTokens` did not rewrite (OI-126) — `guardExplainMoveLlmPayload`
+   re-runs `stripInternalTokens` on every read including cache hits, so this half is **actually
+   already self-healing on read** (the NEW code re-sanitizes OLD cached text every time it's served).
+2. A `[zone:...]` annotation that would fail `validateAnnotation` under the newly-wired gate (OI-124)
+   — this half is likewise re-validated on every cache-hit read post-T028, since `guardExplainMoveLlmPayload`
+   now runs the gate against the row's `explanation` field on each serve, not just at write time.
+
+Both halves are technically self-healing on read given this deploy's code — the response-boundary
+guard re-processes cached text every time, it does not just apply once at write time. **The truncate
+is still required** because it is the simple, deploy-safe way to guarantee no environment is left
+depending on that read-time reprocessing catching every shape correctly for content the fix was never
+tested against, and because `explanation_cache` is disposable pre-launch content
+(`CLAUDE.md` §"Staging and production databases are disposable") — regenerating on next request is
+strictly cheaper than auditing every existing row for which of the two failure modes it carries.
+
+### Run it
+
+```bash
+# staging
+psql "$STAGING_DATABASE_URL" -c "TRUNCATE TABLE explanation_cache;"
+
+# production (after staging is verified clean)
+psql "$PRODUCTION_DATABASE_URL" -c "TRUNCATE TABLE explanation_cache;"
+```
+
+A full `TRUNCATE`, not selective repair — per the owner directive (`CLAUDE.md` §"Staging and
+production databases are disposable"), regenerate-from-scratch is preferred over surgically
+identifying which rows carry which of the two stale shapes.
+
+### Verify
+
+```sql
+SELECT count(*) FROM explanation_cache;
+```
+Success: `0`. Then exercise one real `/api/explain-move-llm` request against a known blunder in that
+environment and confirm a fresh row is written with `template_version: 'v3'` and no raw `c\d+`
+token in `deep_reveal_json.explanation`.
+
+### Roll back
+
+**Not reversible — `explanation_cache` regenerates on next request.** There is no restore path for
+the truncated rows (and none is needed — they are re-derived content, not user data); every future
+`/api/explain-move-llm` cache-miss simply repopulates the table under the new code.
+
+## Spec 057 (Epic 10) US4 — `blunders.quality` regenerate after making `scoreMove` the sole grader (T035/FR-019a)
+
+**Status**: PENDING — not yet run in any environment (added 2026-08-04)
+**When**: **After** this story's code deploy (T035), per environment — the regenerate only makes
+sense once the code that grades correctly (the single-criterion `scoreMove` write path) is already
+live; running it before would repopulate rows using the code about to be replaced.
+**Blocks**: nothing ships broken without this — stale rows just keep displaying a wrong severity
+label until re-derived. It DOES block the FR-019a "exactly one criterion" property from being true of
+**data**, not just of code: until this runs, existing `blunders.quality` values on staging/production
+were written by the now-deleted magnitude-threshold rule, not by `scoreMove`.
+**Applies to**: staging, production. Local does not need it — local `blunders` rows are low-stakes dev
+data and will be re-derived by ordinary local testing.
+
+### What's wrong
+
+Before T035 (spec 057, this batch), stored `blunders.quality` values were graded by
+`classifyStoredMistake`'s `bestScore - playedScore > 4 ? 'blunder' : 'suboptimal'` threshold — a
+second, independent grader from `scoreMove`'s outcome-class-change rule. The owner's binding FR-019a
+directive ("there must be exactly ONE criterion") retired that second grader entirely; it is deleted
+from the codebase (`server/mistakeStorageRule.js`), not merely superseded. Any existing row whose
+grade differs under the two rules (any outcome-class change of magnitude ≤4 — the boundary case
+`bestScore=2, playedScore=0` worked out in `docs/architecture/db-schema.md`'s `blunders` section and
+regression-tested at `connect-four/tests/unit/qualitySingleCriterion.test.js`) is now labelled
+inconsistently with what a fresh analysis of the same game would produce today, reproducing exactly
+the OI-104 symptom ("a move's `quality` label can change between the live analysis and every later
+cached view") this same batch closed in code.
+
+Per `CLAUDE.md` §"Staging and production databases are disposable (pre-launch)" and the owner's
+2026-08-03 directive ("Focus on developing these fixes as simple as possible... we can drop the entire
+database and regenerate it if needed"), the remedy is a **documented regenerate**, not a repair
+script: no live user depends on any existing `blunders` row today (pre-launch, disposable), so
+writing idempotent in-place repair tooling to re-grade rows under the new rule would be over-
+engineering for a database nobody is using.
+
+### Run it
+
+```bash
+# staging
+psql "$STAGING_DATABASE_URL" -c "TRUNCATE TABLE blunders;"
+
+# production (after staging is verified clean)
+psql "$PRODUCTION_DATABASE_URL" -c "TRUNCATE TABLE blunders;"
+```
+
+A full `TRUNCATE`, not selective repair — identifying exactly which existing rows disagree between
+the two rules would require re-running the solver against every stored `board_state`, which is far
+more expensive than letting ordinary play repopulate the table under the single current grader.
+`blunders` has no downstream table that would be orphaned by a truncate (FKs point INTO it from
+nothing; `puzzle_id`/`game_id`/`papergames_game_id` are nullable references OUT).
+
+### Verify
+
+```sql
+SELECT count(*) FROM blunders;
+```
+Success: `0`. Then play one AI-sparring game to a loss with at least one deliberate mistake, run
+`POST /api/games/analyze`, and confirm the response's per-move `quality` badges and the newly-inserted
+`blunders` row(s) agree (spot-check via `GET /api/blunders/:id` on the returned id) — this exercises
+the exact live-vs-stored agreement FR-019/FR-020 require.
+
+### Roll back
+
+**Not reversible — `blunders` regenerates from ordinary play going forward.** There is no restore path
+for the truncated rows, and none is needed pre-launch: they are re-derived from solver analysis of
+games already stored in `games`/`papergames_games`, not primary user data. A user's move history and
+game outcomes are unaffected — only the mistake-review annotations are cleared and will repopulate as
+that user's games are next reviewed or new games are analyzed.
 
 ## Template for new entries
 

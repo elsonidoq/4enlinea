@@ -1,18 +1,61 @@
 ---
 name: project_annotation_gate_and_zones
-description: "Coach annotation gate (annotationGate.js/explainContext.js) — allowedSet shapes, P5strong/P3 zone-validation traps, the deep_reveal_failures debug table, and the blunder-pipeline debugging guide"
+description: "Coach annotation gate — LIVE again since 2026-08-04 (strip-and-log at the response seam) but P5Strong does NOT run, so ungrounded highlights pass; text transforms must skip [zone:] delimiters or highlights die silently; P3 codes carry no span"
 metadata: 
   node_type: memory
   type: project
   originSessionId: 61abbe1a-cb8c-4db3-a79d-d3e4d4378c9a
-  modified: 2026-08-03T12:29:39.152Z
+  modified: 2026-08-04T15:00:46.528Z
 ---
 
 Everything about the coach's **annotation gate** (`server/annotationGate.js` + `server/explainContext.js` + `llmCoachHelpers.js`) and its zone-tag validation.
 
-> ## ⚠️ CORRECTED 2026-08-03 — the gate is NO LONGER on the live path
+> ## ⚠️ RE-CORRECTED 2026-08-04 (spec 057, D3/T028) — the gate IS BACK on the live path, but only 5 of its 6 predicates run
 >
-> This memory used to open "Part of the live `/api/explain*` path." **That is now false**, verified at source:
+> The 2026-08-03 correction below ("no longer on the live path") was true when written and is **now false again**.
+> `validateAnnotation` is wired into `guardExplainMoveLlmPayload` (`server/reasonRenderGuard.mjs`), which every
+> served explanation passes through — **including cache hits**. Failure policy: **strip the offending zone span,
+> log, serve**. Enforcement costs no LLM call (the module is pure — its own header says "No side effects, no DB,
+> no I/O"); only a *retry* policy would have, and retry was rejected for exactly that reason. Measured added
+> latency ≈ **0.014 ms/call** against the <2 s budget.
+>
+> **Four live traps this creates:**
+> 1. **`checkP5Strong` does NOT run.** The seam passes a hardcoded `null` `allowedSet`
+>    (`/usr/bin/grep -n allowedSet server/index.js` → **zero matches**). P1/P2/P3/P5/P6 run. P5Strong is the ONLY
+>    predicate that asks whether the engine actually produced evidence for a highlighted cell — the other five only
+>    check well-formedness. **So a plausible-but-ungrounded highlight passes every active check.** The allowed set
+>    already exists as `zoneAliasMap` from `buildAnnotationOffer`
+>    (`server/scripts/reason_engine/zoneAnnotations.mjs:106`) and is dropped at `renderReasonModel.mjs:235`, which
+>    keeps only `aliases` + `terms`. See **OI-143** — it carries the full trace and a ~half-day estimate.
+> 2. **A text transform at this seam MUST skip zone-tag delimiters.** `stripInternalTokens`' `CXRY_RE` rewrote
+>    coordinates *inside the spec*, turning `[zone:cells:c4r1,c4r2]` into `[zone:cells:column 4,column 4]`;
+>    `src/lib/annotatedText.js`'s `isValidSpec` then rejects it and the client **silently drops the highlight** —
+>    no error at any layer, prose still renders. Every `cNrM` and `windows:` highlight was dead on arrival; only
+>    `colN` survived, which is why a test asserting "a valid zone annotation is left untouched" passed over it.
+>    Fixed by splitting on `ZONE_TAG_RE` and rewriting only the prose *between* delimiters. Any future transform
+>    added here must do the same.
+> 3. **`P3:disc_notation` / `P3:player_name` / `P3:engine_jargon` carry NO span**, so "strip the offending span" is
+>    unimplementable for them — they are **log-and-serve by design**. Only `P1:*`, `P2:col_mismatch`, `P5:*` and
+>    `P6:*` carry the `:${spec}` suffix the stripper targets.
+> 4. **`stripFailingZoneSpans` does not match the `!` (default-active) variant** — a failing `[zone:col9!]` is
+>    detected, logged, then **served unchanged**: silent no-op enforcement with a log line claiming it acted.
+>    Latent (no current emitter). See **OI-139**.
+>
+> **`tg` failing P5Strong is CORRECT — do not "fix" it by relaxing the check.** `tg` is a client-only wildcard:
+> `expandSpec` returns `[]` server-side (`zoneParser.js:64-66`) and the client resolves it from its own
+> `userMajorThreats` (`src/lib/annotatedText.js:228`), so the server cannot bound the claim. The LLM is explicitly
+> instructed not to emit it (`llmCoachHelpers.js:823`: *"never use `[zone:tg]` or any other invented tag"*), and the
+> live offer never includes it. A `P5strong:tg` failure means the model invented a forbidden tag.
+>
+> **Still true from the 2026-08-03 correction**: `buildExplainContext` remains **dead** (zero callers) — the live
+> path is `computeMechanism`. Do not reuse its `buildAllowedSetFromPatternMaps`; it costs `classifyPattern` solver
+> queries the live path never makes.
+>
+> ---
+>
+> ## (superseded 2026-08-04, kept for the record) CORRECTED 2026-08-03 — the gate was NOT on the live path
+>
+> This memory used to open "Part of the live `/api/explain*` path." **That was true as of 2026-08-03**, verified at source:
 > `server/index.js` imports **neither** `validateAnnotation` nor `normalizeZoneTags` (both defined in
 > `annotationGate.js`, at :486 and :415), and nothing imports `buildExplainContext` outside tests and
 > `server/scripts/`. The only importers of `annotationGate.js` anywhere are

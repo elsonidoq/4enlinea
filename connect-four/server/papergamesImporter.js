@@ -121,9 +121,10 @@ async function extractBlunders(solver, moveString, side, userId) {
     // Storage rule (mistakeStorageRule.js): slower wins and dead-position
     // faster losses are not mistakes — skip before the expensive tagBlunder/
     // computeBlunderSeverity calls. Accuracy still counts this ply as
-    // non-optimal (scored++/no optimalCount++ above).
-    const storedMistake = classifyStoredMistake(bestScore, score, movesBefore);
-    if (!storedMistake) continue;
+    // non-optimal (scored++/no optimalCount++ above). Eligibility only —
+    // `quality` from scoreMove above is the sole grader (FR-019a).
+    const isMistake = classifyStoredMistake(bestScore, score, movesBefore);
+    if (!isMistake) continue;
 
     let patternTag = 'suboptimal_move';
     let reason = 'solver error: tagBlunder failed';
@@ -156,7 +157,7 @@ async function extractBlunders(solver, moveString, side, userId) {
       move_played: col,
       correct_move: bestCol,
       pattern_category: patternTag,
-      quality: storedMistake.quality,
+      quality,
       reason,
       direction,
       severity: computeSeverity(bestScore, score),

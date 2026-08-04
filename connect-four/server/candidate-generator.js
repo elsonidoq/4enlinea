@@ -211,7 +211,29 @@ export function checkForcedWinPredicate(ms) {
     if (new Board(msEnd).hasWon(initiator)) correctCols.push(c);
   }
 
-  return { passes: correctCols.length === 1, correctCols };
+  // OI-83 / spec 057 follow-up (2026-08-04): accept a board where 2+ columns each independently
+  // initiate a forced win, rather than rejecting it as ambiguous.
+  //
+  // This was `correctCols.length === 1`. That is the SAME defect the generic `checkPredicate`
+  // below already fixed and documented (`:547-553`): "evaluatePredicate returns 'correct' only
+  // when a column is the SOLE satisfying column, and 'tied' when 2+ columns satisfy it — so both
+  // outcomes must be accepted here, or a multi-solution board collects zero correctCols ... and is
+  // wrongly rejected." `checkForcedWinPredicate` is the one path that never got that treatment.
+  //
+  // Nothing downstream required uniqueness — verified at source before relaxing it:
+  //   - `evalForcedWin` (`server/predicates.js`) already scans every column and returns
+  //     `{ result: 'tied', tiedWith }` for a multi-initiator board — it never grades a legitimate
+  //     initiator wrong.
+  //   - `'tied'` is an ACCEPTANCE at every consumer: `answerSetInvariant.js:46`,
+  //     `evaluateMoveHandler.js:252`, `index.js:2471`, `index.js:3215`, `outcomeVocabulary.js:18`.
+  //   - The only live caller of this function (`index.js:3197`) reads `correctCols` and tests
+  //     `correctCols.includes(candidateCol)`; it never reads `passes`.
+  // `correctCols` already accumulated EVERY qualifying initiator above — only this flag restricted
+  // it — so the answer set served for such a board is complete, not truncated to one column.
+  //
+  // Consequence: forced_win positions with multiple valid initiators are no longer discarded at
+  // generation time, which is the low match rate observed while refilling the category (OI-83).
+  return { passes: correctCols.length >= 1, correctCols };
 }
 
 // Forbidden columns predicate: a column is forbidden if Red plays there (without winning),

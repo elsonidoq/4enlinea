@@ -844,9 +844,25 @@ Returns a truncated movestring for spawning a new game from a specific position 
 
 ## Blunders Endpoint
 
-### `POST /api/blunders`
+### `POST /api/blunders` — **RETIRED** (spec 057 T035 item 2 option (b))
 
-Records a blunder detected during post-game review. Fire-and-forget from the client — the response is not awaited before navigation.
+This endpoint no longer exists. It is documented here (rather than deleted outright) so a reader
+following an old link or a stale mental model learns what happened, not just a 404.
+
+Retirement rationale (`server/index.js`, comment at the former route location): the endpoint had
+no client caller — `insertGameBlunder.js` notes the client no longer writes blunders via this
+route, and `grep -rn "api/blunders" src` finds only `GET /api/blunders/:id` fetches — and it
+required a score-pair grading path that `classifyStoredMistake` no longer provides now that
+grading is `scoreMove`-only (FR-019a; see `server-conventions.md` "Storage gate"). Retired rather
+than rewired.
+
+The two live write paths, `POST /api/games/analyze` and `papergamesImporter.extractBlunders`,
+cover blunder recording; `classifyStoredMistake` now returns only a storage-eligibility boolean,
+not a `{ quality }` grade, so this endpoint's old "quality derived server-side by the storage
+rule" contract (below, for historical reference) is no longer something any live code path does.
+
+<details>
+<summary>Historical request/response contract (pre-retirement, for archival reference only)</summary>
 
 **Request body**:
 ```json
@@ -862,17 +878,15 @@ Records a blunder detected during post-game review. Fire-and-forget from the cli
 - `pattern_category`: must be one of the valid slugs (see Data Model — `blunders` constraint). Use `"unknown"` when the classifier returns no pattern.
 - `score`: c4solver score of the column actually played (current-player perspective, range ±18). Optional; defaults to 0.
 - `best_score`: c4solver score of the optimal column. Optional; defaults to 0.
-- The server computes `severity = best_score − score` and stores it. Do not send `severity` directly.
-- `quality` is derived server-side by the storage rule, not sent by the client.
-- Auth: **Required** (401 if `req.user` is null).
-
-**Storage rule**: the same `classifyStoredMistake` gate as `/api/games/analyze` (`server/mistakeStorageRule.js`) runs here. A move that is not a stored mistake (slower win, or a dead-position faster loss) is **not** inserted — the endpoint returns `200 { "stored": false, "reason": "not_a_stored_mistake" }` instead of `201`.
+- The server computed `severity = best_score − score` and stored it.
+- `quality` was derived server-side by the storage rule, not sent by the client — this is the part `classifyStoredMistake` no longer does; grading now belongs solely to `scoreMove`.
+- Auth: Required (401 if `req.user` is null).
 
 **Response** (`201 Created`): `{ "id": "<uuid>" }` — the inserted blunder's primary key. **Or** (`200 OK`) `{ "stored": false, ... }` when the storage rule declined the move, or `{ "deduplicated": true }` on a unique-index conflict.
 
-**Notable behavior**: `puzzle_id` is always stored as `null` for blunders created from post-game review (as opposed to blunders created from puzzle attempts, which carry a `puzzle_id`).
-
 **Errors**: 400 (missing or invalid fields), 401 (not authenticated), 500 (DB error), 503 (Supabase not configured).
+
+</details>
 
 ### `GET /api/blunders/:id`
 

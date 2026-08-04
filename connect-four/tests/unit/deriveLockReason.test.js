@@ -127,3 +127,118 @@ test('deriveLessonAccess — unknown lessonId is allowed (screen surfaces its ow
   const lessons = makeLessons();
   assert.equal(deriveLessonAccess('nope', lessons, [], 'free'), 'allowed');
 });
+
+// --- 'signin' outcome (FR-017 / OI-95): signed-out visitor vs signed-in free-tier ---
+
+test('deriveLockReason — signed-out visitor hitting a tier-locked lesson gets signin, not tier', () => {
+  const lessons = makeLessons();
+  const progress = [
+    { lessonId: 'l1', status: 'complete' },
+    { lessonId: 'l2', status: 'complete' },
+  ];
+  const reason = deriveLockReason(lessons[2], lessons, progress, 'free', false);
+  assert.equal(reason, 'signin');
+});
+
+test('deriveLockReason — signed-out visitor hitting an order-locked lesson gets signin, not order', () => {
+  const lessons = makeLessons();
+  const reason = deriveLockReason(lessons[1], lessons, [], 'free', false);
+  assert.equal(reason, 'signin');
+});
+
+test('deriveLockReason — signed-out visitor hitting a tier-AND-order-locked lesson gets signin, not both (interaction with "both")', () => {
+  const lessons = makeLessons();
+  const reason = deriveLockReason(lessons[2], lessons, [], 'free', false);
+  assert.equal(reason, 'signin');
+});
+
+test('deriveLockReason — signed-out visitor is unaffected when the lesson is not locked at all', () => {
+  const lessons = makeLessons();
+  const reason = deriveLockReason(lessons[0], lessons, [], 'free', false);
+  assert.equal(reason, 'none');
+});
+
+test('deriveLockReason — omitting authenticated defaults to signed-in (existing tier/order/both callers unchanged)', () => {
+  const lessons = makeLessons();
+  // Same fixtures as the pre-existing 'tier' and 'both' tests above, called without the
+  // 5th arg — must still resolve to 'tier'/'both', proving the default keeps old callers intact.
+  const progressTierOnly = [{ lessonId: 'l2', status: 'complete' }];
+  assert.equal(deriveLockReason(lessons[2], lessons, progressTierOnly, 'free'), 'tier');
+  assert.equal(deriveLockReason(lessons[2], lessons, [], 'free'), 'both');
+});
+
+test('deriveLockReason — signed-in free-tier user keeps existing tier/order/both behavior unchanged', () => {
+  const lessons = makeLessons();
+  const progressTierOnly = [{ lessonId: 'l2', status: 'complete' }];
+  assert.equal(deriveLockReason(lessons[2], lessons, progressTierOnly, 'free', true), 'tier');
+  assert.equal(deriveLockReason(lessons[1], lessons, [], 'free', true), 'order');
+  assert.equal(deriveLockReason(lessons[2], lessons, [], 'free', true), 'both');
+});
+
+test('dispatchLockAction — signin maps to signin action, tier/order/both/none unchanged', () => {
+  assert.equal(dispatchLockAction('signin'), 'signin');
+  assert.equal(dispatchLockAction('tier'), 'upgrade');
+  assert.equal(dispatchLockAction('both'), 'upgrade');
+  assert.equal(dispatchLockAction('order'), 'orderLock');
+  assert.equal(dispatchLockAction('none'), 'navigate');
+});
+
+test('deriveLessonAccess — signed-out visitor on a tier-AND-order-locked lesson returns signin', () => {
+  const lessons = makeLessons();
+  assert.equal(deriveLessonAccess('l3', lessons, [], 'free', false), 'signin');
+});
+
+test('deriveLessonAccess — signed-out visitor on an order-only-locked lesson returns signin', () => {
+  const lessons = makeLessons();
+  assert.equal(deriveLessonAccess('l2', lessons, [], 'free', false), 'signin');
+});
+
+test('deriveLessonAccess — signed-in free-tier user still gets upgrade/orderLock, not signin', () => {
+  const lessons = makeLessons();
+  assert.equal(deriveLessonAccess('l3', lessons, [], 'free', true), 'upgrade');
+  assert.equal(deriveLessonAccess('l2', lessons, [], 'free', true), 'orderLock');
+});
+
+test('deriveLessonAccess — signed-out visitor with a completed lesson still gets allowed (done short-circuit precedes the auth check)', () => {
+  const lessons = makeLessons();
+  const progress = [{ lessonId: 'l2', status: 'complete' }];
+  assert.equal(deriveLessonAccess('l2', lessons, progress, 'free', false), 'allowed');
+});
+
+// ---------------------------------------------------------------------------
+// Cross-module regression (code review, 2026-08-04): the entitlement fail-open
+// and the lock chain must agree on what "unknown auth state" means.
+//
+// `getEntitlement()` fails open to `authenticated:true` when a fetch fails with no cached
+// answer, precisely so a transient offline/5xx blip cannot route a signed-in user to a
+// "Sign in" prompt. This test pins the CONSEQUENCE at the lock layer, so flipping that
+// default back to `false` in entitlement.js fails here with a user-facing symptom rather
+// than only in a shape assertion that reads like a harmless deepEqual update.
+// ---------------------------------------------------------------------------
+test('deriveLockReason — a transient entitlement failure (authenticated defaults true) yields an UPGRADE prompt, never signin', () => {
+  const lessons = [
+    { id: 'l1', order: 1, free: true },
+    { id: 'l2', order: 2, free: false },
+  ];
+  // What getEntitlement() returns when the network is down and nothing is cached:
+  // entitled:false (fail closed) + authenticated:true (fail to "assume signed in").
+  const { entitled, authenticated } = { entitled: false, authenticated: true };
+  const tier = entitled ? 'paid' : 'free';
+
+  const reason = deriveLockReason(lessons[1], lessons, [{ lessonId: 'l1', status: 'complete' }], tier, authenticated);
+  assert.equal(reason, 'tier', 'a tier-locked lesson under unknown auth must read as tier, not signin');
+  assert.equal(
+    dispatchLockAction(reason), 'upgrade',
+    'the user must be offered Upgrade, not asked to sign in while already signed in',
+  );
+});
+
+test('deriveLockReason — a genuinely signed-out visitor still gets signin', () => {
+  const lessons = [
+    { id: 'l1', order: 1, free: true },
+    { id: 'l2', order: 2, free: false },
+  ];
+  const reason = deriveLockReason(lessons[1], lessons, [{ lessonId: 'l1', status: 'complete' }], 'free', false);
+  assert.equal(reason, 'signin');
+  assert.equal(dispatchLockAction(reason), 'signin');
+});

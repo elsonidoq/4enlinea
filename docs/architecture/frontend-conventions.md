@@ -757,15 +757,23 @@ api-conventions.md) is the actual security boundary and must not be treated as r
 `src/screens/sagaLock.js` is a plain `.js` module (not `.jsx`, so `node --test` can import it directly)
 holding `SagaScreen`'s lock-derivation logic:
 
-- **`deriveLockReason(lesson, lessons, progress, tier)` → `'none' | 'tier' | 'order' | 'both'`** —
-  computes WHY a lesson is locked. `tierLocked` is the pre-existing spec-018 FR-003 rule
+- **`deriveLockReason(lesson, lessons, progress, tier, authenticated = true)` → `'none' | 'tier' | 'order' | 'both' | 'signin'`** —
+  computes WHY a lesson is locked. **`authenticated` (5th param, spec 057 FR-017/OI-95) defaults to
+  `true`** so every pre-existing 4-arg caller keeps its exact prior behavior. When `false` (a signed-out
+  visitor), a lesson that would otherwise be `'tier'`, `'order'` or `'both'` **collapses to `'signin'`**
+  — the check runs FIRST, before the `tierLocked && orderLocked` test, so a signed-out visitor on a
+  doubly-locked lesson gets `'signin'`, never `'both'`. `'none'` is unaffected: a signed-out visitor can
+  still take a free, unlocked lesson. **Do NOT overload the `tier` param for this** — `tier` is
+  effectively two-valued (`tier !== 'paid'`), so a third state breaks existing callers; that is why
+  `authenticated` is separate. `tierLocked` is the pre-existing spec-018 FR-003 rule
   (`lesson.free === false && tier !== 'paid'`). `orderLocked` is new: true when the lesson's
   predecessor (next-lower `order` in the full sorted lesson list; `null`/never-locked for the
   lowest-order lesson) has no `'complete'` entry in `progress` (from `getLessonProgress()`). The order
   gate is layered **on top of**, not a replacement for, the tier gate — deliberately overriding spec
   018 FR-003 rule 4's tier-only lock semantics.
-- **`dispatchLockAction(reason)` → `'upgrade' | 'orderLock' | 'navigate'`** — `'tier'`/`'both'` →
-  `'upgrade'` (tier always wins when both apply); `'order'` → `'orderLock'`; `'none'` → `'navigate'`.
+- **`dispatchLockAction(reason)` → `'upgrade' | 'orderLock' | 'navigate' | 'signin'`** — `'signin'` →
+  `'signin'`; `'tier'`/`'both'` → `'upgrade'` (tier always wins when both apply); `'order'` →
+  `'orderLock'`; `'none'` → `'navigate'`.
 
 `SagaScreen.jsx`'s `deriveNodeState` returns `'locked'` whenever `deriveLockReason(...) !== 'none'`.
 `handleNodeTap` short-circuits already-`done` lessons, then dispatches on `dispatchLockAction`'s result:
@@ -777,7 +785,7 @@ order-lock is not a paywall; `'navigate'` proceeds normally.
 
 `sagaLock.js` exports a third function built on the two above:
 
-- **`deriveLessonAccess(lessonId, lessons, progress, tier)` → `'allowed' | 'upgrade' | 'orderLock'`** —
+- **`deriveLessonAccess(lessonId, lessons, progress, tier, authenticated = true)` → `'allowed' | 'upgrade' | 'orderLock' | 'signin'`** —
   the direct-URL guard decision for the three lesson screens (`ConceptScreen`, `SocraticScreen`,
   `CLChallengeScreen`). It short-circuits an already-`done` lesson to `'allowed'` (matching
   `handleNodeTap`), otherwise composes `dispatchLockAction(deriveLockReason(...))` and collapses
@@ -788,6 +796,23 @@ Because a new lock outcome has to be threaded through all three functions — a 
 return value needs a matching `dispatchLockAction` branch, which in turn needs a matching
 `deriveLessonAccess`/`SagaScreen.handleNodeTap` branch — changing the lock taxonomy is not a one-function
 edit.
+
+**And `TWO` files must supply the input, not one.** When spec 057 added `'signin'`, the obvious call
+site (`useLessonLockGuard.js`, which feeds `deriveLessonAccess`) was only half the work: `SagaScreen.jsx`
+calls `deriveLockReason` **directly** at three of its own sites using its own `tier`/`authenticated`
+state. Threading a new input into only one of the two leaves the lock copy correct on the direct-URL
+path and wrong on the saga path (or vice versa). Grep for **both** `deriveLessonAccess(` and
+`deriveLockReason(` before assuming a new parameter is fully wired.
+
+**Where `authenticated` comes from.** `GET /api/user/entitlement` returns it (`server/userRoutes.js` —
+the endpoint is deliberately NOT `requireUser`-gated, so an anonymous caller gets a normal 200 with
+`{ entitled: false, authenticated: false }` rather than a 401; do not "fix" that into a guard), and
+`src/lib/entitlement.js`'s `getEntitlement()` carries it through. **Its fail-open defaults are
+deliberately asymmetric**: on a fetch failure with no cached answer, `entitled` falls to `false` (never
+hand out paid content on a failed probe) while `authenticated` falls to **`true`** (never tell a user
+to sign in when we do not know whether they already are). A `false` there turns every transient
+offline/5xx blip into a "Sign in" prompt for an already-signed-in user, silently overriding both
+consumers' own `true` defaults.
 
 `src/lib/useLessonLockGuard.js` is the hook that calls `deriveLessonAccess` for `/concept/:id`,
 `/socratic/:id` and `/clchallenge/:id`. It fetches the same inputs `SagaScreen` fetches (lessons list,

@@ -9,7 +9,6 @@ import { buildBoard } from '../lib/board.js';
 import { PAID_CATEGORIES } from '../lib/categories.js';
 import { useCoachSpeech } from '../lib/useCoachSpeech.js';
 import { shouldContinuePaging } from '../lib/coachQueuePagination.js';
-import { resolveChipQuality } from '../lib/reviewChipQuality.js';
 
 const API = import.meta.env.VITE_API_BASE_URL || '';
 
@@ -219,14 +218,10 @@ export function ReviewScreen({ go, goBack, id, onboarding, result, outcome }) {
   function selectStep(moveIndex) {
     const move = analysis.moves.find(m => m.moveIndex === moveIndex);
     if (!move) return;
-    // T17 remediation: gate on the SAME quality source the chip is colored
-    // with (resolveChipQuality — stored quality when a row exists, else the
-    // live badge), not the raw live badge alone. Display and dispatch must
-    // agree: badge quality != stored quality is a known divergence (memory
-    // project_mistake_storage_rule), and previously a chip could render as a
-    // colored mistake (stored quality) yet clicking it only previewed the
-    // board (live badge said 'optimal') instead of opening the detail.
-    const displayQuality = resolveChipQuality(move, analysis.side, gameBlunderList);
+    // FR-019a (spec 057): `scoreMove` is the sole grader now, so the stored row's
+    // quality and the live badge quality are always identical — no reconciliation
+    // needed (the old resolveChipQuality helper that did this was deleted).
+    const displayQuality = move.quality;
     // Navigate only when a stored mistake row exists for this ply. Non-optimal
     // moves the storage rule excludes (slower wins, dead-position faster
     // losses — see server/mistakeStorageRule.js) have no row, so they fall
@@ -422,12 +417,10 @@ export function ReviewScreen({ go, goBack, id, onboarding, result, outcome }) {
                 minWidth: 'min-content',
               }}>
                 {analysis.moves.map((move) => {
-                  // Task 17 (finding 14): color from the STORED row's quality when one
-                  // exists for this ply (the durable truth MistakeDetailScreen's title
-                  // reads) — a chip must never disagree with the detail it opens. Falls
-                  // back to the live scoreMove badge quality (move.quality) only for
-                  // plies the storage rule left unstored.
-                  const displayQuality = resolveChipQuality(move, analysis.side, gameBlunderList);
+                  // FR-019a (spec 057): `scoreMove` is the sole grader now, so
+                  // move.quality (the live badge) always matches the stored row's
+                  // quality for this ply — no reconciliation needed.
+                  const displayQuality = move.quality;
                   const isOptimal = displayQuality === 'optimal';
                   const color = getQualityColor(displayQuality);
                   return (

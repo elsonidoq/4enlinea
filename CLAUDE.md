@@ -159,6 +159,10 @@ Two that bite hardest here:
 - **A green test is not evidence.** If you authored the fixture, it tests your belief, not the code. It must exercise the production path with a real value and RED for the right reason.
 - **"Already satisfied / no task needed" is the highest-risk claim in any plan.** It asserts something about existing code while doing the least checking. Read the code that allegedly satisfies it.
 
+**This applies to your OWN estimates, not just to artifacts you're inspecting.** The rule above reads as being about *other people's* claims — doc comments, agent reports, fixtures — and that scoping is how it gets missed. A cost estimate, an options table, or "that would require X" is a claim about this codebase and needs a citation exactly like a finding does.
+
+**Before `AskUserQuestion` on a technical choice: open the primary artifact behind each option, then put a `file:line` next to every factual claim in the table. If you can't cite it, write `UNVERIFIED` next to it.** `AskUserQuestion` is the highest-risk moment in the loop — whatever framing you present gets decided on and then treated as settled, and nobody re-checks a closed decision. Inherited framings from `plan.md`/`spec.md`/epic research are the worst input: they read as settled but are routinely written by a session that never opened the file. Inflating a cost feels safe and is not — in spec 057 it nearly closed the correct option on a false premise (a "hot-path latency risk" for a module whose own header says "No side effects, no DB, no I/O"), and a "2 day" estimate collapsed to half a day once someone asked whether the thing it needed already existed. It did. See memory `feedback_verify_at_the_source_layer.md` (rule 10).
+
 ## Writing implementation plans
 
 A plan is a set of **claims about this codebase**. Every claim needs a citation. Claims that were cited hold up; claims that were recalled do not. `writing-plans` demands complete code and no placeholders — that rule is right, but it pressures you to *author* specifics instead of *harvesting* them. Authored specifics that touch existing code are wrong by default.

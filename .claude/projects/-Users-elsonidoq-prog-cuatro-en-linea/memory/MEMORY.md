@@ -14,7 +14,7 @@
 
 ## Puzzle categories, challenge & lessons
 
-- [New-category wiring](project_new_category_wiring_checklist.md) — before adding a category read server-conventions §Category Registry; missing candidate-generator.js = SILENT failure
+- [New-category wiring](project_new_category_wiring_checklist.md) — missing candidate-generator.js = SILENT failure; per-category predicates DRIFT from the shared accept rule (symptom = low match rate, not an error)
 - [Grading reads STORED metadata](project_puzzle_grading_reads_stored_metadata.md) — detector change silently invalidates live rows; graders NOT uniform (only evalFigure7 cross-checks correct_cols) ⇒ no repair makes the test pass
 - [puzzle_attempts write traps](project_puzzle_attempt_outcome_traps.md) — ALL 4 writers fire-and-forget ⇒ CHECK/type errors vanish; moves_tried is integer[]; a green store-mock test proves nothing
 - [correct_cols engine traps](project_correct_cols_engine_traps.md) — undercut/overcut "show nothing" is EMERGENT from a NULL, not implemented (`correct_cols[0]` renders col 0); checkPredicate ≠ checkPredicateRaw (sort/sync only in the wrapper); a load-bearing circular import; mass backfill rejections are usually stale data
@@ -65,7 +65,7 @@
 - [Prod LLM call graph](project_prod_llm_call_graph.md) — deep-reveal = defaultCallLLM; callLLM offline-only; composeExplanation//api/explain-move is DEAD (no frontend caller)
 - [Feature vector design](feedback_feature_vector_design.md) — toFeatureVector: keep grounded cells, drop plumbing/derivations; keep instance counts
 - [Feature vector content traps](project_feature_vector_content_traps.md) — null outcomes on losing_either_way; patternsOpponent snapshot ambiguity; pliesToEnd = |score|
-- [Annotation gate debugging](project_annotation_gate_and_zones.md) — gate is now OFFLINE-ONLY (live path = computeMechanism, zone tags unvalidated, OI-124); deep_reveal_failures no longer holds P5strong codes
+- [Annotation gate debugging](project_annotation_gate_and_zones.md) — LIVE again (strip-and-log) but P5Strong does NOT run ⇒ ungrounded highlights pass (OI-143); text transforms MUST skip [zone:] specs
 - [Creation tags aren't score-gated](project_creation_tags_not_score_gated.md) — double_threat/forced_win/figure_7/j_shape fire on a LOSING move too; never key their phrase pool off raw `quality`
 - [Explain system](project_explain_system.md) — LLM prompt invariants; explanation_cache schema; NO KB term injects without its pattern firing
 - [LLM perspective bug](feedback_llm_perspective_bug.md) — the post-move board's "Next:" label hijacks LLM perspective; name the mover explicitly
@@ -101,14 +101,14 @@
 - [new_TODOs is empty — traceability moved](reference_new_todos_shipped_traceability.md) — all 26 shipped; issue→epic table in polish_epic.md; specs 042/043 have no feat() commit
 - [Worktree setup traps](project_repo_worktree_setup.md) — baseRef is a Claude-Code setting NOT git config; copy server/.env or tests ENOENT; res.sendFile needs dotfiles:'allow' under .claude/
 - [ESLint flat-config traps](project_eslint_config_traps.md) — lint is a REAL gate now: `test:fast` runs it first (error ⇒ zero tests run) + pre-commit; 47 warnings = healthy; `_unused` probe stays green
-- [test:fast baseline is 5 RED, not green](project_repo_worktree_setup.md) — OI-82's 5 ENOENT reason-engine tests fail in the MAIN checkout too; judge yourself against 5, not 0 (§2d)
+- [test:fast baseline is GREEN since 2026-08-04](project_repo_worktree_setup.md) — OI-82's 5 ENOENT fixture-path failures are FIXED (spec 057 T017); judge yourself against 0 now, not 5 (§2d)
 - [Papergames integration](project_papergames_integration.md) — skipped ≠ duplicates (don't "fix"); reCAPTCHA blocks server login; 100%-accuracy losses are ALL time-up, not resigns
 
 ## Workflow, agents & process
 
 - [File mtime is never evidence](project_file_mtime_is_never_evidence.md) — mtime = the checkout, not the write; all 565 mp3s share one stamp. Date from `generated_at` or `git log --diff-filter=A`
 - [Bare grep silently finds nothing](project_grep_silent_zero_matches.md) — multibyte ⇒ binary, ZERO matches, no error; grep is ugrep (use /usr/bin/grep); `node --test` counts start with `ℹ` not `#`
-- [Verify at the source layer](feedback_verify_at_the_source_layer.md) — every false belief hides in a layer: signature NOT doc comment, diff NOT agent report, real output NOT your fixture, all-N NOT a sample
+- [Verify at the source layer](feedback_verify_at_the_source_layer.md) — signature NOT doc comment, diff NOT agent report, real output NOT your fixture; ALSO your own estimates — cite file:line in options tables or mark UNVERIFIED
 - [Measurements expire](feedback_measurement_expires.md) — re-measure against FINAL code; an UNCHANGED line ≠ an unfixed bug (the fix may have landed in another file) — git log --grep first
 - [Live envs have NO real users (pre-launch)](project_live_envs_have_no_real_users.md) — staging/prod DBs are DISPOSABLE until the owner says released; regenerate > surgically repair; prod work = docs not tooling. Now in CLAUDE.md
 - [Implemented ≠ deployable](feedback_implemented_vs_deployable.md) — answer both; per-change prereqs → `docs/deployment_steps.md` = a WORK QUEUE (producers append only; reset only after all-DONE-in-prod; non-empty = not shipped); standing procedure → `deploy-runbook.md`; `staging_checks.md` is at the REPO ROOT, not `docs/`

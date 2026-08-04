@@ -36,11 +36,11 @@ describe('getEntitlement (spec 053 T019/T020)', () => {
 
     const t0 = 1_000_000;
     const first = await getEntitlement({ fetchFn, now: t0 });
-    assert.deepEqual(first, { entitled: true });
+    assert.deepEqual(first, { entitled: true, authenticated: true });
     assert.equal(calls, 1);
 
     const second = await getEntitlement({ fetchFn, now: t0 + 1000 });
-    assert.deepEqual(second, { entitled: true });
+    assert.deepEqual(second, { entitled: true, authenticated: true });
     assert.equal(calls, 1, 'second call within TTL must not fetch again');
   });
 
@@ -76,13 +76,20 @@ describe('getEntitlement (spec 053 T019/T020)', () => {
 
     mode = 'fail';
     const result = await getEntitlement({ fetchFn, now: t0 + ENTITLEMENT_CACHE_TTL_MS + 1 });
-    assert.deepEqual(result, { entitled: true }, 'must fail open to the last known good answer');
+    assert.deepEqual(result, { entitled: true, authenticated: true }, 'must fail open to the last known good answer');
   });
 
-  it('a failed fetch with no prior known-good answer resolves to {entitled:false}', async () => {
+  // The two fields fail in OPPOSITE directions on purpose (see the comment on the catch block in
+  // src/lib/entitlement.js): `entitled` fails closed so a failed probe never grants paid content,
+  // while `authenticated` fails to `true` so a transient failure never tells an already-signed-in
+  // user to sign in. `sagaLock.js`'s `'signin'` outcome (FR-017/OI-95) reads this field, and both
+  // of its consumers independently default to `true` (SagaScreen's `useState(true)`, sagaLock's
+  // defaulted param) — an `authenticated:false` here silently overrides both and turns every
+  // offline/5xx blip into a "Sign in" prompt on a locked lesson for a signed-in user.
+  it('a failed fetch with no prior known-good answer resolves to {entitled:false, authenticated:true}', async () => {
     const fetchFn = async () => { throw new Error('network down'); };
     const result = await getEntitlement({ fetchFn, now: 1_000_000 });
-    assert.deepEqual(result, { entitled: false });
+    assert.deepEqual(result, { entitled: false, authenticated: true });
   });
 
   it('FR-033: an ambiguous {entitled:false,authenticated:false} answer after a prior entitled:true triggers exactly one session-refresh-and-retry cycle', async () => {
@@ -109,7 +116,7 @@ describe('getEntitlement (spec 053 T019/T020)', () => {
     const t1 = t0 + ENTITLEMENT_CACHE_TTL_MS + 1;
     const result = await getEntitlement({ fetchFn, now: t1 });
 
-    assert.deepEqual(result, { entitled: true });
+    assert.deepEqual(result, { entitled: true, authenticated: true });
     const refreshCalls = calls.filter((c) => c.url.endsWith('/api/auth/refresh'));
     assert.equal(refreshCalls.length, 1, 'exactly one session-refresh call');
     const entitlementFetches = calls.filter((c) => c.url.endsWith('/api/user/entitlement'));
@@ -127,7 +134,7 @@ describe('getEntitlement (spec 053 T019/T020)', () => {
 
     const result = await getEntitlement({ fetchFn, now: t0 });
 
-    assert.deepEqual(result, { entitled: false });
+    assert.deepEqual(result, { entitled: false, authenticated: false });
     assert.equal(calls.some((u) => u.endsWith('/api/auth/refresh')), false, 'no prior entitled:true answer -> no refresh attempt');
   });
 
@@ -153,7 +160,7 @@ describe('getEntitlement (spec 053 T019/T020)', () => {
     const result = await getEntitlement({ fetchFn, now: t1 });
 
     // Decision 2: downgrade NOT accepted — still entitled:true.
-    assert.deepEqual(result, { entitled: true });
+    assert.deepEqual(result, { entitled: true, authenticated: true });
     const refreshCalls = calls.filter((c) => c.endsWith('/api/auth/refresh'));
     assert.equal(refreshCalls.length, 1, 'exactly one bounded refresh attempt, not a retry loop');
 
@@ -164,7 +171,7 @@ describe('getEntitlement (spec 053 T019/T020)', () => {
     // server every call during an ongoing outage).
     const callsBeforeThirdCall = calls.length;
     const stillStale = await getEntitlement({ fetchFn, now: t1 + 1 });
-    assert.deepEqual(stillStale, { entitled: true });
+    assert.deepEqual(stillStale, { entitled: true, authenticated: true });
     assert.equal(calls.length, callsBeforeThirdCall, 'no new fetch within the re-pinned TTL window');
 
     // Only once a full TTL window has elapsed past t1 does a normal re-fetch
@@ -172,7 +179,7 @@ describe('getEntitlement (spec 053 T019/T020)', () => {
     const t2 = t1 + ENTITLEMENT_CACHE_TTL_MS + 1;
     entitlementCallCount = 0; // reset so this next fetch reports entitled:true cleanly
     const fresh = await getEntitlement({ fetchFn, now: t2 });
-    assert.deepEqual(fresh, { entitled: true });
+    assert.deepEqual(fresh, { entitled: true, authenticated: true });
   });
 
   it('invalidateEntitlement() forces the next call to fetch even within an unexpired TTL window', async () => {
@@ -208,14 +215,14 @@ describe('getEntitlement (spec 053 T019/T020)', () => {
     const signedOutFetch = async () => jsonResponse({ entitled: false, authenticated: false });
 
     const t0 = 1_000_000;
-    assert.deepEqual(await getEntitlement({ fetchFn: paidFetch, now: t0 }), { entitled: true });
+    assert.deepEqual(await getEntitlement({ fetchFn: paidFetch, now: t0 }), { entitled: true, authenticated: true });
 
     // Without the reset, this is the bug: past the TTL, the ambiguous answer
     // gets treated as a lapse and the stale `entitled: true` survives.
     const tLater = t0 + ENTITLEMENT_CACHE_TTL_MS + 1;
     assert.deepEqual(
       await getEntitlement({ fetchFn: signedOutFetch, now: tLater }),
-      { entitled: true },
+      { entitled: true, authenticated: true },
       'documents the pre-fix behavior the reset exists to prevent',
     );
 
@@ -223,7 +230,7 @@ describe('getEntitlement (spec 053 T019/T020)', () => {
 
     assert.deepEqual(
       await getEntitlement({ fetchFn: signedOutFetch, now: tLater + 1 }),
-      { entitled: false },
+      { entitled: false, authenticated: false },
       'after clearEntitlement there is no lastKnownGood to fail open to, so the signed-out answer stands',
     );
   });

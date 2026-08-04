@@ -180,6 +180,16 @@ If it prints "rotation detected", build the de-dup Map per this entry's original
 `server-conventions.md`; if "no rotation", mark this OI ✅ RESOLVED. Recorded in `staging_checks.md`
 under the Epic 4 section, dated 2026-08-02. This OI remains **open**.
 
+**UPDATE 2026-08-04 (spec 057, Epic 10, US5, T022/T023) — deliberately deferred, owner-gated; stays
+open.** This batch cannot run the probe itself (needs real account credentials, unavailable to an agent
+session per FR-024) so it added a second, explicit sign-off item in `staging_checks.md` (Epic 10 — MVP
+Launch Gate section) stating **both** outcomes' consequence up front rather than just re-pointing at the
+unresolved spec 054 item: "rotation detected" → open a new follow-on `OI-N` and build the de-dup Map;
+"no rotation" → close this OI outright, no code change needed. No new measurement was taken — the probe
+still requires the owner to run it against a real account. This OI is **not** being closed by this
+batch; it is recorded here as intentionally deferred pending that owner action, per this feature's
+binding constraint that T022 only prepares the sign-off item.
+
 ---
 
 ## OI-6 — Superseded de-dup language in `contracts/api-auth-session.md`
@@ -1015,7 +1025,8 @@ redesign of the overcut/undercut role-split (for the other two), neither underta
 
 ## OI-31 — Staging `.env.staging` DATABASE_URL uses the transaction pooler (6543); `migrate.js` needs the session pooler (5432)
 
-**Status**: latent risk (surfaced 2026-07-14 while building `reset-staging-db.js`; not yet observed to break because no multi-statement DDL was run against staging via this file)
+**Status**: ✅ FIXED (documentation-sync) 2026-08-04 (spec 057, Epic 10, US5, T020) — see "UPDATE 2026-08-04" below.
+**Original status**: latent risk (surfaced 2026-07-14 while building `reset-staging-db.js`; not yet observed to break because no multi-statement DDL was run against staging via this file)
 **Area**: `connect-four/server/.env.staging` (`DATABASE_URL=...@aws-1-us-east-1.pooler.supabase.com:6543/...`) vs `connect-four/server/migrate.js` (wraps each migration in `BEGIN ... COMMIT`)
 
 The staging connection string points at the **transaction pooler (port 6543)**. Per the project's own session-vs-transaction-pooler rule (memory [[reference_supabase_connection]]), 6543 is FORBIDDEN for DDL and multi-statement transactions. `migrate.js` runs each migration inside an explicit `BEGIN...COMMIT` with arbitrary DDL, so applying migrations against staging using the `.env.staging` URL as-is can fail or misbehave. Single-statement ops (the `TRUNCATE ... CASCADE` in `reset-staging-db.js`) are unaffected.
@@ -1067,6 +1078,25 @@ which is a real inconsistency worth converging — but the "if picked up" framin
 silently corrupts a migration) overstates the risk. What remains is a **doc-sync / consistency task**
 (align staging's pooler port with production's for its own sake), not an active migration-breaking
 bug being freshly discovered. Cross-ref `server-conventions.md`'s Migration Runner section.
+
+**UPDATE 2026-08-04 (spec 057, Epic 10, US5, T020) — closed as a documentation-sync task.** Re-measured
+which URL the live Railway deploy actually names for `migrate.js` on staging (read-only:
+`railway variables --service 4enlinea-staging --environment staging --kv`, no writes): still port
+**6543** (`aws-1-us-east-1.pooler.supabase.com:6543`) — unchanged from the 2026-08-02 finding, confirming
+this is a real, persisting port inconsistency (staging 6543 vs. production 5432), not a stale
+measurement. Per the 2026-08-03 update above, `docs/architecture/server-conventions.md:1501-1504`
+already carries the corrected framing ("configuration drift to fix on its own schedule, not a broken
+deploy"), so this entry now matches the doc rather than repeating the retired "6543 forbidden for DDL"
+rationale — closing per that update's own framing (a doc-sync task, not an active bug).
+
+**Extended scope**: two passages in `docs/deployment_steps.md` still asserted the retired "6543 cannot
+run DDL" framing and were corrected in this same change (T020/T021) to match
+`server-conventions.md:1501-1504`: the Standing Checklist item 1 pooler-port note, and the Spec 054
+entry's "§0 CAUTION" callout. Both now read as "6543 is configuration drift, not a blocker; DDL works
+through it empirically" instead of instructing a future deploy agent to swap ports on the strength of a
+rule this feature disproves. No remaining owner action for this OI — the variable itself
+(`DATABASE_URL` on the `4enlinea-staging` Railway service) is left at 6543 deliberately; converging it to
+5432 is optional cleanup, not a fix this entry is blocking on. Closed.
 
 ## OI-32 — Existing English coach + lesson clips are stale-model (tts-1), not regenerated onto gpt-4o-mini-tts
 
@@ -1501,6 +1531,28 @@ anywhere in it (FR-020/FR-026/SC-004 fully satisfied on `/pricing`).
 
 **Launch status**: **not a launch blocker.** Carried in `docs/epics/pre-launch-mvp-epic.md` (Epic 10, US3)
 as a verify-and-close item only — the verification is this update.
+
+**UPDATE 2026-08-04 (spec 057, T047) — recommended disposition, owner sign-off pending.** Per the
+epic's Settled decision 5 ("OI-41 was stale; it has been verified and narrowed — do not implement
+it... US3's only obligation is to re-confirm that decision — or close the entry won't-fix, which is
+the owner's call"), this batch re-confirms the narrowing above rather than doing any pricing-page
+redesign work, and proposes the framing for the owner's explicit sign-off:
+
+- **Recommended: keep OPEN as an accepted risk, scoped to `/pricing-legal`'s hardcoded
+  `$2.99`/`$21.99`/`39%`/`$1.83`/`20`-per-week literals only.** This is a real, live drift risk (the
+  next Paddle price or quota change silently desyncs the static page from what customers are actually
+  charged), but it is retained by a deliberate constraint — Paddle requires a static,
+  JavaScript-free merchant-of-record/refund page for reviewer spot-checks (spec 053 `research.md`
+  Decision 11) — not an oversight. It is **not a launch blocker**: `/pricing` itself (the page a
+  customer actually transacts on) has zero hardcoded literals and sources every figure live.
+- **Alternative available at any time**: close won't-fix, in the OI-11/OI-13 shape, if the owner
+  judges the retained risk acceptable indefinitely rather than merely for now. The cheapest
+  intermediate mitigation, if ever wanted without a full page rewrite, is a test asserting
+  `pricing.html`'s literals still agree with `GET /api/paddle/config`/`GET /api/limits` — flagged as a
+  future option, not built in this batch (no pricing-page work is in scope for spec 057 either).
+- **This entry stays technically OPEN pending the owner's explicit choice between the two options
+  above** — an agent cannot make this call on the owner's behalf (Settled decision 5's own text:
+  "the owner's call"). Recorded here so the disposition is not silent, per FR-018.
 
 ## OI-42 — Lesson audio is not manageable from `/admin/audio`
 
@@ -2890,7 +2942,8 @@ column (User Story 3):
 
 ## OI-82 — `npm run test:fast` baseline is RED on `main`: 5 pre-existing failures, 2 of them a stale fixture path
 
-**Status**: open — measured 2026-07-29 on `feature/finish-lessons` and reproduced identically in the
+**Status**: ✅ FIXED 2026-08-04 (spec 057, Epic 10, US5, T017/T018) — see "UPDATE 2026-08-04" below.
+**Original status**: open — measured 2026-07-29 on `feature/finish-lessons` and reproduced identically in the
 main checkout, so it is not branch-local
 **Area**: `connect-four/server/tests/` — `renderCoverageCorpus.test.mjs`, `renderCoverageUniverse.test.mjs`,
 `branchInvariance.test.mjs`, `causalLinksComposers.test.mjs`, `reasonRenderFixes.test.mjs`
@@ -2982,9 +3035,31 @@ mechanical fix (add `fv_suff/` to each literal path), not just the "2 of 5" the 
 per the original entry's own caution, each test still needs to be confirmed to actually exercise its
 assertions (not just stop throwing) once the path is fixed.
 
+**UPDATE 2026-08-04 (spec 057, Epic 10, US5, T017/T018) — FIXED, closing.** Inserted the missing
+`fv_suff/` path segment into all 5 literals (`server/tests/branchInvariance.test.mjs:12`,
+`causalLinksComposers.test.mjs:11`, `reasonRenderFixes.test.mjs:10`, `renderCoverageCorpus.test.mjs:10`,
+and `renderCoverageUniverse.test.mjs:14`'s `EVIDENCE_FILE`) — one line each, `reason_evidence_` prefix
+kept unchanged, repointed at the confirmed-on-disk `server/scripts/fv_suff/reason_evidence_boards_coverage_2026-07-02T11-37-56Z.jsonl`
+and `…2026-07-03T17-14-51Z.jsonl`. Re-ran `npm run test:fast` from the current checkout: **1696 tests,
+257 suites, 1696 pass, 0 fail** (up from the 1680/1675/5 baseline measured at the start of this batch —
+the count rose because the two `renderCoverage*` files now execute their real per-record assertion loops
+instead of dying at import). Confirmed both previously-ENOENT tests genuinely execute against the real
+corpus and pass, not just stop dying before their first assertion: `renderCoverageCorpus.test.mjs`'s
+`every corpus record renders with zero uncovered fields and a classified link` passed in 28.9ms (vs the
+prior instant `0.46ms` ENOENT) and `renderCoverageUniverse.test.mjs`'s `the committed P4 coverage set
+exercises every REQUIRED render predicate` passed in 31.0ms (vs `0.45ms`) — both times consistent with
+walking a real multi-row corpus, not a no-op. No `test.skip`/`it.skip` markers appear anywhere in the
+`test:fast` output. Closed.
+
 ## OI-83 — Backfilling `correct_cols` with real solver scores retires the only `forced_win` puzzle (AMBIGUOUS, tied win column not detected)
 
-**Status**: open — surfaced by the spec 051 (Epic 1, US3) real backfill run, 2026-07-29
+**Status**: ⚠️ STILL PARTIALLY FIXED 2026-08-04 (spec 057, T009/T010, plus a follow-up predicate
+change the same day) — local's floor is cleared by fresh generation; staging/production remain
+owner-gated. A related-but-distinct `checkForcedWinPredicate` defect WAS fixed (see "Cardinality
+fix" below), **but this issue's own reported board is NOT resolved by it** — the tie-detection gap
+described below is a *detection completeness* problem, not the cardinality problem, and it remains
+open. Do not close this entry on the strength of the cardinality fix. See both sections below.
+**Original status**: open — surfaced by the spec 051 (Epic 1, US3) real backfill run, 2026-07-29
 **Area**: `connect-four/server/candidate-generator.js` (`checkForcedWinPredicate`), `puzzles` table (`forced_win` category)
 
 Running `server/scripts/backfill-correct-cols.mjs --env local` (T048) against the local DB
@@ -3020,6 +3095,75 @@ ties the maximum (mirroring how `evaluatePredicate` already treats ties for
 (`repairPuzzles` can use the retired row as its template — its own `.select(...)` has no
 `is_active` filter). Either way, re-run `audit_answer_ambiguity.mjs --puzzles forced_win --env
 local` afterward to confirm `OK`.
+
+### Cardinality fix (2026-08-04, spec 057 follow-up) — related, but does NOT close this issue
+
+`checkForcedWinPredicate` ended with `passes: correctCols.length === 1`, rejecting any board where
+**two or more** columns were each detected as forced-win initiators. That is now
+`correctCols.length >= 1`. Verified safe at source before relaxing it: `correctCols` already
+accumulated every qualifying initiator (only the flag discarded the board); `evalForcedWin`
+(`server/predicates.js`) already returns `{ result: 'tied', tiedWith }` for multi-initiator boards
+rather than grading a valid answer wrong; `'tied'` is an acceptance at all five consumers
+(`answerSetInvariant.js:46`, `evaluateMoveHandler.js:252`, `index.js:2471`, `index.js:3215`,
+`outcomeVocabulary.js:18`); and the only live caller (`index.js:3197`) reads `correctCols` and tests
+`.includes(candidateCol)`, never `passes`. The generic `checkPredicate` fifteen lines below already
+had this exact fix, with a comment explaining the failure mode — `checkForcedWinPredicate` was the
+one path that never received it. Regression tests added in `tests/integration/forced_win.test.js`
+against a solver-verified multi-initiator board (`42142140516015`, 0-indexed initiators `[4, 5]`).
+
+**Effect**: raises generation yield for the category (multi-initiator positions are no longer
+discarded), which is the low match rate observed while refilling it.
+
+**Why this does NOT close the issue — measured, not assumed.** Re-running the predicate against this
+issue's own reported board after the fix:
+
+```
+board:   33343033224450611655500550011116
+passes:  true    correctCols: [6]
+scr (0-indexed): c0=--  c1=--  c2=3  c3=--  c4=0  c5=--  c6=3
+```
+
+Column 2 ties column 6 for the maximum solver score (3), yet is still **absent** from
+`correctCols` — `detectForcedWin` does not recognize it as an initiator at all. `answerSetHolds`
+would therefore still classify this row AMBIGUOUS for exactly the original reason. The cardinality
+flag was never what excluded column 2.
+
+**Restated root cause**: this issue is a **detection completeness** gap in
+`detectForcedWin`/`traceForcedWin` — a column that genuinely wins is not traced as a forced-win
+initiator (candidate causes: the win is reached by a route that is not a single-threat forcing
+chain, the chain exceeds the trace depth, or the first move is excluded by the `detectDoubleThreat`
+carve-out). It is **not** the cardinality restriction, so option (a) above is only half-addressed:
+the `'tied'`-handling half is done, the "detect every winning column" half is not.
+
+**If picked up (revised)**: start from the board above. Determine why column 2 is not traced —
+instrument `detectForcedWin(board.withMove(2), initiator)` directly and compare against the solver's
+verdict for that column. Only then decide whether the fix belongs in `detectForcedWin`'s chain
+definition or in a new "the solver says this column also wins outright" acceptance path. Note the
+category's *serving* pool no longer depends on this (the floor was cleared by fresh generation), so
+this is a correctness/coverage fix, not a pool-availability one.
+
+### What shipped (2026-08-04, spec 057)
+
+Per D2 (every below-floor category is filled to N=20, nothing hidden or exempted) and this issue's
+own "if picked up" option (b): `forced_win` was NOT repaired at the detector level (option (a),
+widening `checkForcedWinPredicate` to accept ties, remains open and undone — the tie-detection gap
+described above is unchanged). Instead, fresh solver-verified boards were generated via
+`server/scripts/generate_all_candidates.mjs --category forced_win` and promoted via `POST
+/api/admin/candidates/approve-batch`, matching option (b)'s replace-not-repair spirit but via
+straight generation rather than `audit_answer_ambiguity.mjs --repair` (no existing row to inherit a
+`goal_prompt` template from at the time — see OI-88). **Local now has ≥20 active `forced_win`
+puzzles** (was 1, dropped to 0 by the original defect, now refilled) — `forced_win` was measured as
+the single rarest category to generate (multiple runs, low match rate per attempt; this rarity is
+itself circumstantial evidence for the tie-detection gap above, since boards near a tied win get
+rejected more often as the search finds them).
+
+**Staging and production are NOT fixed by this change.** `fill-candidate-pools.mjs` (T009) ships the
+same generate-and-insert mechanism for those environments, but writing to live data is owner-run only
+(binding constraint of spec 057; see `staging_checks.md` § "Epic 10 — MVP Launch Gate: content-pool
+fill"). Staging measured 7 active `forced_win` (shortfall 13) and production 29 active (no shortfall)
+as of the T011 dry-run (2026-08-04) — see `docs/deployment_steps.md` § "Spec 057 — content pools" for
+the full table. This entry stays **partially fixed** until the owner runs `--apply` against staging
+and the post-fill count is recorded in `staging_checks.md`.
 
 ## OI-84 — Every lesson confirmation-challenge and DEV-board Challenge play now 404s silently (T054's unconditional `puzzleId` + T051's hard 404-on-miss)
 
@@ -3213,7 +3357,11 @@ is no longer what keeps lessons working.
 
 ## OI-86 — Eight of twelve puzzle categories have zero active puzzles locally, below the N=20 serving floor
 
-**Status**: deferred (content/curation work, not a code defect)
+**Status**: ✅ FULLY FIXED LOCALLY 2026-08-04 (spec 057, T010) — all 12 categories now ≥20 active
+locally (measured directly, not inferred). **Staging and production are a SEPARATE, still-open
+half** — see "What shipped" below; this entry's original local-only scope (see its last line) is
+what's closed, not a claim about live environments.
+**Original status**: deferred (content/curation work, not a code defect)
 **Area**: `puzzles` / `candidates` tables (local dev DB), curation flow
 **Discovered**: spec 051 (Epic 1) pool measurement, 2026-07-30
 
@@ -3243,6 +3391,28 @@ had to be exercised through the DEV board injector instead of real drills for ex
 `feedback_generate_puzzles_for_local_qa` for the exact commands and the `--port` trap. **Measured on
 local only** — staging and production pools were never measured and may be healthy; see
 `staging_checks.md` Epic 1.
+
+### What shipped (2026-08-04, spec 057)
+
+T006 re-measured local fresh (2026-08-04, zero drift from the numbers above except
+`forbidden_columns`, which had self-healed 0→30 from an unrelated concurrent session before this
+batch started): 7 of 12 below floor (`forced_win`, `overcut`, `figure_7`, `j_shape`,
+`odd_even_threat`, `claimeven`, `z_threat`). T010 promoted every queued `correct_cols`-populated
+candidate for each (`POST /api/admin/candidates/approve-batch`) and generated fresh candidates
+(`server/scripts/generate_all_candidates.mjs`) for the remainder, per D2 (every below-floor category
+filled to N=20, nothing hidden or exempted). Re-verified directly against local immediately before
+closing this out: **all 12 categories ≥20 active** (`figure_7` 21, `j_shape` 20, `odd_even_threat`
+20, `claimeven` 20, `z_threat` 20, `overcut` 49 — the retire-and-refill audit for `overcut` also ran
+this session, see OI-92 — and `forced_win` ≥20, the slowest to generate; see OI-83's own closeout for
+why).
+
+**This does NOT close the staging/production half — that was always this entry's explicit
+"measured on local only" caveat, now made concrete.** Staging measured 122 total active, 12/12 below
+floor (T006/T011, 2026-08-04); production measured 279 total active, 4/12 below floor
+(`odd_even_threat`, `claimeven`, `overcut`, `figure_7`). `fill-candidate-pools.mjs` (T009) ships the
+mechanism to fix both, but per this feature's binding constraint no agent session writes to
+staging/production — that run is owner-gated, tracked in `staging_checks.md` § "Epic 10 — MVP Launch
+Gate: content-pool fill". SC-001 is not met until that sign-off item is ticked.
 
 ---
 
@@ -3416,7 +3586,12 @@ unless `--force` is passed. Cross-ref: memory `feedback_scripts_meaningful_help.
 
 ## OI-92 — 18 of 42 live `overcut` puzzle/candidate rows are stale under spec 052's widened detector
 
-**Status**: open — **blocks deploying spec 052 (Epic 2) to staging/production** (measured 2026-07-30
+**Status**: ⚠️ PARTIALLY FIXED 2026-08-04 (spec 057, T005/T008/T009) — the player-facing HALF is
+fixed everywhere (a mathematically correct answer now grades correct regardless of whether the
+retire-and-refill below has run — see T005 below); the DATA half (retiring/refilling the stale rows
+themselves) is owner-gated for staging/production. See "What shipped" below. Note also: **undercut
+now has drift of its own, NOT covered by this entry** — see new **OI-133**.
+**Original status**: open — **blocks deploying spec 052 (Epic 2) to staging/production** (measured 2026-07-30
 against the final post-US2 code; NOT fixed — writing to live data was left for the epic owner)
 **Area**: `public.puzzles` / `public.candidates` rows with `category='overcut'` on **staging and
 production**; `connect-four/server/candidate-generator.js` (`checkOvercutPredicate`),
@@ -3465,6 +3640,29 @@ re-measurement script pattern is in this epic's session scratchpad; it walks
 `.env` / `.env.staging` / `.env.production`, calls `checkOvercutPredicate` per row, and compares
 with key-order-canonicalized JSON (raw `JSON.stringify` false-flags every row on JSONB key order —
 see memory `project_lesson_answer_set_invariant.md`). Cross-ref: spec 052 FR-006, T003, T013.
+
+### What shipped (2026-08-04, spec 057)
+
+**Player-facing half — fixed everywhere, immediately (T005).** `evalOvercut` (and, since T008 widened
+this issue's audit scope, `evalUndercut`/`evalZThreat`) now cross-check the solver-gated
+`puzzle.correctCols` array before returning `'wrong'` from stale `highlightMetadata` alone
+(`server/predicates.js`) — a mathematically correct answer is accepted even on a row this entry's
+retire-and-refill hasn't reached yet, closing OI-92's original "player-facing" complaint outright.
+**This fix is currently INERT on staging/production**, though: both environments still carry only the
+legacy `correct_col` scalar (`061_correct_cols.sql` unapplied — see `docs/deployment_steps.md`'s
+`061`–`064` backlog entry), so `puzzle.correctCols` is `undefined` there until that migration ships.
+The fix is real and will activate the moment the migration runs; it needs no further code change.
+
+**Data half — mechanism shipped, owner-run pending (T008/T009/T011).** T008 re-audited all three
+metadata-graded categories (widening this issue's original overcut-only scope) against the FINAL
+code, 2026-08-04, and found **overcut's numbers unchanged from the 2026-07-30 measurement above** —
+staging 12/4/4 (identical/stale/no-match), production 12/8/2 — confirming no further overcut drift
+occurred in the interim. `fill-candidate-pools.mjs --apply` (T009) is the one mechanism that retires
+these rows and refills the category to N=20; per this feature's binding constraint, no agent session
+runs `--apply` against staging or production. The owner's run is tracked in `staging_checks.md` §
+"Epic 10 — MVP Launch Gate: content-pool fill"; this entry stays partially-fixed until that sign-off
+records staging and production both re-auditing clean (`fill-candidate-pools.mjs --env <env>` exit
+0).
 
 ---
 
@@ -3523,7 +3721,8 @@ the same change. Cross-ref: OI-39, spec 053 FR-011/FR-014, memory
 
 ## OI-95 — A locked lesson cannot tell a signed-out visitor from a signed-in free user, so both see the same "Upgrade" prompt
 
-**Status**: deferred (explicit owner decision, 2026-08-01 — product call not yet made)
+**Status**: ✅ FULLY FIXED 2026-08-04 (spec 057, Epic 10, US3, T043-T046) — see "What shipped" below.
+**Original status**: deferred (explicit owner decision, 2026-08-01 — product call not yet made)
 **Area**: `GET /api/lessons/:id` response contract; `ConceptScreen.jsx`, `SocraticScreen.jsx`,
 `CLChallengeScreen.jsx`
 **Discovered**: spec 053 tasks critique
@@ -3545,6 +3744,28 @@ carries the signal, so the client *could* answer the question with a second call
 `authenticated` to the lesson stub (amending spec 053 FR-002, its "Lesson (locked view)" entity, and
 the epic's Settled decision #7 together — do not amend just one) or have the screens consult the
 entitlement endpoint. Cross-ref: spec 053 FR-002/FR-033.
+
+### What shipped (2026-08-04, spec 057, T043-T046)
+
+The "If picked up" option 2 was taken, not option 1: `GET /api/lessons/:id`'s contract is unchanged
+(no `authenticated` re-added to the stub) — instead, the screens consult
+`GET /api/user/entitlement`'s already-carried `authenticated` signal directly. **Correction to this
+entry's original `Area`**: the real locked-lesson-copy chain is `useLessonLockGuard.js` →
+`sagaLock.js` → `SagaScreen.jsx`/`UpgradeModal.jsx`/`AuthModal.jsx`, not the three lesson screens
+named above — `useLessonLockGuard.js` redirects to `'saga'` before `ConceptScreen.jsx`/
+`SocraticScreen.jsx`/`CLChallengeScreen.jsx` ever mount, so none of them render locked-lesson copy at
+all (T042 re-confirmed this against `data-model.md`/`plan.md`). `sagaLock.js`'s three chained
+functions (`deriveLockReason`, `dispatchLockAction`, `deriveLessonAccess`) each gained a new
+`authenticated` parameter (default `true`, so every pre-existing caller is unaffected) that produces a
+new `'signin'` outcome distinct from `'upgrade'`/`'orderLock'`; `SagaScreen.jsx` renders the existing
+`AuthModal.jsx` (via its pre-existing `reason` prop) instead of `UpgradeModal.jsx` for that outcome.
+A real bug was found and fixed en route (not this entry's original defect, but load-bearing for the
+fix): `getEntitlement()`'s own five `return` statements in `src/lib/entitlement.js` were dropping
+`authenticated` entirely — every caller destructured `authenticated: undefined`, which would have
+routed every locked lesson to `'signin'` regardless of real auth state. Widened additively; see
+`tests/unit/entitlementClient.test.js`. Tests: `tests/unit/deriveLockReason.test.js` (extended, not a
+new file — covers the `'signin'` × `'both'` interaction explicitly).
+
 ## OI-96 — Spec 053's `/pricing` CSP verification (FR-027/SC-008) was never performed in a real browser
 
 **Status**: ✅ RESOLVED 2026-08-01 (spec 053, T044 — verified in a real browser once the shared
@@ -3637,7 +3858,10 @@ already-approved domain triggers re-review; record the answer in `staging_checks
 ---
 ## OI-98 — The Paddle default payment link's `?_ptxn=` auto-open checkout is not handled by any page
 
-**Status**: deferred (pre-existing, not introduced by spec 053 — scoped out of that epic)
+**Status**: ⚠️ PARTIALLY FIXED 2026-08-04 (spec 057, Epic 10, US3, T041) — the agent-satisfiable
+client-code half ships; the owner-gated verification half stays open until sign-off. See "What
+shipped" below.
+**Original status**: deferred (pre-existing, not introduced by spec 053 — scoped out of that epic)
 **Area**: `connect-four/src/lib/useUpgradeCheckout.js`, `connect-four/src/screens/PricingScreen.jsx`,
 Paddle dashboard → Checkout → Checkout settings → Default payment link
 **Discovered**: spec 053, 2026-08-01 (while confirming T047)
@@ -3672,6 +3896,27 @@ calling the existing `getPaddle()`), then read `_ptxn` from the query string and
 transaction. Confirm the dashboard's Default payment link points at that page. **Do not point the
 default payment link at `/pricing-legal`** — it is deliberately static and JS-free (OI-41), so it can
 never satisfy the Paddle.js requirement. Cross-ref: spec 053 FR-024/FR-025, OI-41, OI-97.
+
+### What shipped (2026-08-04, spec 057, T041)
+
+Both code gaps this entry named are closed: `useUpgradeCheckout.js` now exports `getPaddle`, and
+`PricingScreen.jsx` calls it unconditionally in a mount-time `useEffect` (not only from
+`handleUpgrade`'s click path), then reads `?_ptxn=` from the URL and — once Paddle.js has
+initialized — opens `paddle.Checkout.open({ transactionId })` for it. The expired/invalid-`_ptxn`
+edge case is covered explicitly: the page still finishes initializing Paddle.js either way (never
+worse than before this fix) and the auto-open just fails without breaking the page. Test:
+`tests/dom/PricingScreenPaddleInit.dom.test.jsx`.
+
+**What is NOT closed by this fix — the owner-gated half, tracked in `staging_checks.md`'s new
+"Spec 057 (Epic 10) US3" section (T049):**
+1. FR-014 — a real production-build, real-browser CSP check specifically on the new
+   `?_ptxn=`-mount-time path (OI-96's prior pass covered only the click-triggered path).
+2. FR-016 — a real Paddle sandbox transaction confirming the payment-method-update email actually
+   lands an open checkout end-to-end (`VITE_PADDLE_CLIENT_TOKEN` is unset locally).
+
+This entry stays **partially-fixed**, not fully-fixed, until both are signed off. See also
+`docs/deployment_steps.md` § "Spec 053 (Epic 3)", amended 2026-08-04 (T048) to reference this fix
+rather than duplicating the Paddle dashboard config entry.
 
 ---
 ## OI-99 — Every non-tied puzzle attempt through `POST /api/puzzles/:id/check` is silently discarded
@@ -3876,7 +4121,8 @@ against a real insert, not against the current code's belief.
 
 ## OI-104 — A move's `quality` label can change between the live analysis and every later cached view
 
-**Status**: deferred (pre-existing; surfaced by spec 054 QA, out of that epic's scope)
+**Status**: ✅ FULLY FIXED 2026-08-04 (spec 057, Epic 10, US4, T032-T038) — see "UPDATE 2026-08-04" below.
+**Original status**: deferred (pre-existing; surfaced by spec 054 QA, out of that epic's scope)
 **Area**: `connect-four/server/index.js` — `reconstructAnalysisFromBlunders()` and the
 `POST /api/games/analyze` solver-driven path; `scoreMove()` vs `classifyStoredMistake()`
 **Discovered**: spec 054 QA pass, 2026-08-02
@@ -3907,11 +4153,41 @@ and establish whether the gap is intentional. Related: memory
 `project_puzzle_grading_reads_stored_metadata` documents the same class of trap — stored metadata
 diverging from a recomputed detector.
 
+**UPDATE 2026-08-04 (spec 057, Epic 10, US4, T032-T038) — the "which label is authoritative" call
+this entry deferred was made by the owner: `scoreMove` IS authoritative (D4, binding FR-019a — "there
+must be exactly ONE criterion to classify a blunder"). `classifyStoredMistake` no longer computes a
+grade at all — it was narrowed to storage **eligibility only** (`server/mistakeStorageRule.js`); its
+`>4` magnitude-threshold expression (formerly `:102`) is deleted. All write paths
+(`POST /api/games/analyze` at `server/index.js:2410-2416`, papergames import at
+`server/papergamesImporter.js:115-159`) now store `quality` straight from `scoreMove`, so
+`reconstructAnalysisFromBlunders`'s cached read-back (`server/reconstructAnalysisFromBlunders.js`,
+extracted from `index.js` for testability) agrees with the live path **by construction** — there is
+only one computation left to disagree with itself. The exact worked boundary case this entry's
+"boundary" concern describes (`bestScore=2, playedScore=0` — a won game thrown away) is now a live,
+passing regression test: `connect-four/tests/unit/qualitySingleCriterion.test.js` — observed FAILING
+(`cachedMove.quality` = `'suboptimal'`, `live.quality` = `'blunder'`) when the fixture simulated the
+pre-fix write path, and PASSING against the actual current code. Two additional producers that could
+also invent this label were removed in the same change (not this entry's direct subject, but part of
+closing the "exactly one criterion" gap): `server/insertGameBlunder.js`'s write-seam coercion (now
+validates and fails loudly instead of defaulting to `'blunder'`) and `server/index.js`'s
+`GET /api/coach/queue` serve-seam `?? 'blunder'` fallback (deleted as dead code — see
+`docs/architecture/db-schema.md`'s `blunders` section for the full account). A structural test,
+`connect-four/tests/unit/singleQualityGraderStructural.test.js`, now asserts no ninth producer can be
+added silently. Two exemptions remain, both deliberately out of scope, not bugs: the puzzle-answer
+domain (`ChallengeScreen.jsx:586`, different question, no solver scores) and a client-side
+accepted-gate display override (`ChallengeScreen.jsx:386,407,492`), recorded separately as OI-134.
+"Changing the stored value also retroactively re-grades existing rows" — that risk materialized as
+expected: existing `blunders` rows on staging/production were graded by the deleted magnitude rule
+and are now wrong under the single criterion. Per the owner's pre-launch disposable-database
+directive, the remedy is a documented regenerate, not a repair script — see
+`docs/deployment_steps.md`, "Deploy: `blunders.quality` regenerate (post spec-057 T035)".
+
 ---
 
 ## OI-105 — Migration number 061 is used by two different files; the ledger and disk have diverged
 
-**Status**: deferred (pre-existing; surfaced while measuring spec 054's deploy prerequisites)
+**Status**: ✅ FIXED (fully reconciled) 2026-08-04 (spec 057, Epic 10, US5, T019) — see "UPDATE 2026-08-04" below.
+**Original status**: deferred (pre-existing; surfaced while measuring spec 054's deploy prerequisites)
 **Area**: `connect-four/server/migrations/`, `schema_migrations` on staging and production
 **Discovered**: spec 054 deploy-prerequisite measurement, 2026-08-02
 
@@ -3954,6 +4230,34 @@ The real remaining gap, confirmed via `docs/deployment_steps.md` and `staging_ch
 `064_drop_correct_col.sql` — all applied locally only per `staging_checks.md:974` ("`061_correct_cols.sql`
 has been applied locally only") and the corresponding pending-deploy sections for 062/063/064. That
 backlog, not a missing-file mystery, is what an implementer should chase next.
+
+**UPDATE 2026-08-04 (spec 057, Epic 10, US5, T019) — reconciled, closing.** Re-measured read-only
+against both live environments (`psql "$DATABASE_URL" -c "SELECT filename FROM schema_migrations WHERE
+filename LIKE '05%' OR filename LIKE '06%' ORDER BY filename;"`, `.env.staging`/`.env.production`
+`DATABASE_URL`s, no writes):
+
+| filename | on disk (`server/migrations/`) | staging | production |
+|---|---|---|---|
+| `051_blunders_quality.sql` | yes | ✅ applied | ✅ applied |
+| `060_paddle_rename_and_payment_events.sql` | yes | ✅ applied | ✅ applied |
+| `061_security_lints.sql` | yes | ✅ applied (2026-07-30) | ✅ applied |
+| `061_correct_cols.sql` | yes | ❌ not applied | ❌ not applied |
+| `062_candidates_generation_run_unique.sql` | yes | ❌ not applied | ❌ not applied |
+| `063_puzzle_attempts_outcome_narrow.sql` | yes | ❌ not applied | ❌ not applied |
+| `064_drop_correct_col.sql` | yes | ❌ not applied | ❌ not applied |
+
+Both environments' ledgers are identical through `061_security_lints.sql`, then stop — confirming the
+2026-08-03 update's "4-migration backlog" framing exactly, with no new drift. `migrate.js:22`
+(`getDiskFiles` — sorted disk listing) and `:28-29` (`getLedgerSet` — `SELECT filename FROM
+schema_migrations` into a `Set`) confirm the matching is filename-keyed, not numeric-prefix-keyed, so
+`061_security_lints.sql` and `061_correct_cols.sql` coexist in the ledger/disk without collision — the
+number clash is cosmetic, not a runtime hazard. **051 is applied on both staging and production**
+(directly queried, not inferred from the file) — so `server/index.js:2917`'s `quality: b.quality ??
+'blunder'` fallback is confirmed dead code on both live environments today (the column is `NOT NULL
+DEFAULT 'blunder'` per `051_blunders_quality.sql:7-8`, and the ledger confirms that migration actually
+ran, not just that the file exists). This entry is now fully reconciled: disk, ledger, and live state
+all agree, and the only remaining gap — the 4-migration backlog — is tracked in
+`docs/deployment_steps.md`'s schema-migration entry (T021), not here. Closed.
 
 ---
 ## OI-106 — `generate-tts.locale.test.js` is written in vitest syntax and registered in no test script, so it runs nowhere
@@ -4617,7 +4921,8 @@ so a future field mismatch degrades instead of blanking the page. Admin-only, so
 
 ## OI-124 — the Deep Reveal annotation gate never runs on the live explanation path
 
-**Status**: deferred (design question, not a regression; surfaced while resolving OI-120)
+**Status**: ✅ FULLY FIXED 2026-08-04 (spec 057, T028, D3 resolved by the owner) — see "What shipped" below.
+**Original status**: deferred (design question, not a regression; surfaced while resolving OI-120)
 **Area**: `connect-four/server/annotationGate.js` (`validateAnnotation` and its P1/P2/P3/P5/P5-Strong/P6 checks)
 **Discovered**: 2026-08-03, while fixing P2's cell-zone coverage gap
 
@@ -4662,11 +4967,51 @@ designing the enforcement. A gate that fires on 30% of live output needs a diffe
 that fires on 0.5%. Then decide strip-vs-retry-vs-passthrough, and note that sanitising at the response
 seam (as OI's on the dual-path serving recommend) covers both the fresh and cached paths at once.
 
+**Resolution (2026-08-04, spec 057 T028)**: the owner made the strip-vs-retry-vs-passthrough call
+directly (D3, `specs/057-mvp-launch-gate/spec.md`) rather than requiring a measured failure rate
+first — retry was rejected outright (a second LLM call is real cost regardless of how often the
+gate fires), and serve-and-log was rejected as too weak. **Strip-and-log** ships:
+
+- `guardExplainMoveLlmPayload` (`server/reasonRenderGuard.mjs`, the exact response-boundary seam
+  this entry's "sanitising at the response seam ... covers both the fresh and cached paths at once"
+  recommendation named) now accepts an optional `board` and, when supplied, runs
+  `validateAnnotation(explanation, board, null)`. All three `/api/explain-move-llm` call sites in
+  `server/index.js` (cache-hit, not-a-blunder, fresh-generation) now pass the pre-move `Board`
+  already constructed at the top of the handler — so the cache-path bypass this entry raised
+  ("`explanation_cache` can serve rows produced before any gating existed") is closed: a cache hit
+  is validated against the CURRENT board on every read, not against whatever gate existed when the
+  row was written.
+- On a span-carrying failure (`P1:*`, `P2:col_mismatch`, `P5:*`, `P6:*`), the offending
+  `[zone:SPEC]...[/zone:SPEC]` wrapper is dropped (inner text kept) and the failure codes are
+  logged via `console.warn`. Span-less `P3:*` failures (disc notation / player names / engine
+  jargon) are logged and served as-is — nothing to strip; see `docs/architecture/server-conventions.md`'s
+  Annotation Gate section for the full P3 policy writeup.
+- **`allowedSet` is never threaded on the live path** (`guardExplainMoveLlmPayload` always calls
+  `validateAnnotation` with a hardcoded `null` third argument), so **P5Strong does not run** on
+  served explanations today — only P1/P2/P3/P5/P6 apply. This is a recorded, deliberate scope
+  boundary, not an oversight: extending it would require building a real `allowedSet` at the
+  `server/index.js` call site (the shape `buildExplainContext` produces offline), which is out of
+  this task's scope.
+- The two unconditional debug `console.log` calls inside `validateAnnotation` itself
+  (`server/annotationGate.js`, previously unconditional on every call) are deleted — they would
+  otherwise have printed on every served explanation now that the gate is wired into the request
+  path.
+- **Measured latency**: ~0.014ms/call added (synchronous board scan, no I/O — 2000-iteration
+  in-process measurement, 2026-08-04), against the Explanation Engine's <2s budget (Constitution V)
+  — effectively free.
+- Regression coverage: `server/tests/reasonRenderGuard.test.mjs`'s "annotation gate wiring (T028,
+  D3)" block (5 new tests: no-board no-op / span-carrying strip / valid-zone passthrough / P3
+  log-and-serve / P5Strong-does-not-run). `test:fast` 1711/1711, lint exit 0.
+- Not reversed by this fix: OI-129 (prose naming a region with no annotation at all — a
+  *coverage* gap the gate's checks were never designed to catch, since they validate emitted zones,
+  not un-annotated prose) — see below, closed separately in this same batch.
+
 ---
 
 ## OI-125 — "mistake counts include suboptimal" is load-bearing but unnamed: every identifier says `blunder`, and only one of the five sites is test-guarded
 
-**Status**: open (latent regression risk; the behavior is currently CORRECT everywhere)
+**Status**: ✅ FULLY FIXED 2026-08-04 (spec 057, Epic 10, US4, T032/T036) — see "UPDATE 2026-08-04" below.
+**Original status**: open (latent regression risk; the behavior is currently CORRECT everywhere)
 **Area**: `connect-four/server/blunderCountsForGames.js`, `server/index.js` (`/api/games`, `/api/coach/category-counts`, `/api/coach/queue`, both `summaryPhraseKey` branches), `src/screens/PastGamesListScreen.jsx`, `src/i18n/*.json`
 **Discovered**: 2026-08-03, while re-verifying `new_TODOs #16` ("'no mistakes' must not mean 'no blunders'") before deleting it from the backlog
 
@@ -4730,11 +5075,32 @@ branches so `0 blunders + N suboptimal` never yields the `clean` pool; (2) colla
 (3) record the vocabulary in `docs/architecture/data-model.md` — "`blunders` = all mistakes;
 `quality` is the severity" — so the next reader doesn't have to infer it from five comments.
 
+**UPDATE 2026-08-04 (spec 057, Epic 10, US4, T032/T036).** Re-measured at source (`/usr/bin/grep`,
+not bare `grep` — see memory `project_grep_silent_zero_matches`), the real numbers differ from this
+entry's "five sites" framing: there are **18** `from('blunders')` sites total, of which exactly
+**three** are mistake-COUNTING sites (the kind this invariant is about) —
+`server/blunderCountsForGames.js:42` (per-game counts), `GET /api/coach/category-counts`
+(`server/index.js`), and the `GET /api/coach/queue` `countQuery` (`server/index.js`) — and **zero**
+live `.eq('quality', ...)` filters exist anywhere in the repository (`/usr/bin/grep -rn "eq('quality'"
+server src scripts` returns exactly one match, and it is a comment). The invariant now has a name:
+`NO_QUALITY_FILTER_ON_BLUNDER_COUNTS` (`connect-four/server/blunderCountInvariant.js`), referenced by
+an inline comment at all three counting sites instead of five independently-worded ones. It is
+guarded by tests at more than one site: `tests/unit/blunderCountsForGames.test.js` (pre-existing,
+stub-based, asserts `filters.quality === undefined`) plus the new
+`tests/unit/blunderCountQualityInvariant.test.js`, which source-scans the `/api/coach/category-counts`
+and `/api/coach/queue` handler regions in `server/index.js` for a `.eq('quality', ...)` call (with a
+positive-control test proving the scan still catches a real violation and ignores a comment
+describing the rule, so it cannot pass vacuously). The duplicated `summaryPhraseKey` branches this
+entry also flagged were not deduplicated in this change (out of T036's stated scope, which was
+naming+guarding the count-filter invariant specifically) — that risk is unaddressed and could be
+picked up separately if it recurs.
+
 ---
 
 ## OI-126 — the response-boundary guard strips `cXrY` but not bare or ranged column tokens, so `c3-c6` reaches the player
 
-**Status**: open (live defect, reproduced on a served explanation)
+**Status**: ✅ FULLY FIXED 2026-08-04 (spec 057, T024-T026) — see "What shipped" below.
+**Original status**: open (live defect, reproduced on a served explanation)
 **Area**: `connect-four/server/reasonRenderGuard.mjs`
 **Discovered**: 2026-08-03, spec 042 manual QA T048 (`agentic_QA_2026-08-03-1208.md`, finding 1)
 
@@ -4772,6 +5138,38 @@ localized "column N" the `cXrY` branch already produces (`serverT(locale,'column
 reads acceptably — a range may deserve its own "columns 3 through 6" phrasing; (2) keep the match
 word-bounded and digit-anchored so ordinary prose is untouched. Add a guard unit test per shape
 (`c3`, `c3-c6`, `col5`) — the existing suite pins only `cXrY`, which is why this shipped.
+
+**What shipped (2026-08-04, spec 057 T024-T026)**:
+
+- **T024 — harvested, not invented.** The exact served text quoted above was pulled live from
+  `explanation_cache` (`server/.env`, local): `position_hash`
+  `da31d46690710a996abe5dd37d9bb2b28e115e67918790d59fe1dcc92a68cc31`, `locale: 'en'`, the row that
+  backs blunder `455c5272-3143-43d4-aa3f-c10f9d061666` (`board_state: '2522101'`, `move_played: 1`,
+  `correct_move: 4` — matches this entry's "Played move: column 2" / "Better move: column 5").
+  Checked into `connect-four/server/tests/reasonRenderGuard.test.mjs` as
+  `OI126_HARVESTED_EXPLANATION`, verbatim.
+- **T025 — RED observed for the right reason.** A regression suite run against the pre-T026 regex
+  failed on exactly the bare/ranged/es-locale assertions (AssertionError: "raw coordinate token
+  leaked" / untouched `c3`, `c3-c6` substrings) while the pre-existing paired-form tests kept
+  passing — not a crash, not an unrelated failure.
+- **T026 — the fix, as recommended.** `reasonRenderGuard.mjs` now runs three ordered regex passes
+  (paired `cXrY` → ranged `cX-cY` → bare `cX`), each consuming its shape before the narrower pass
+  runs, so nothing is double-matched or half-matched. The ranged form gets its own localized
+  connector — `serverT(locale, 'columnRange')` — added to `locale.mjs`'s `STRINGS` table in **both**
+  `en` ("columns X through Y") and `es` ("columnas X a Y") in the same edit, per memory
+  `project_spanish_output_silent_fallback`. Negative-case coverage confirms ordinary prose (a
+  "column 3" sentence, or "c." followed by a digit in an unrelated context) is untouched.
+  `guardExplainMovePayload` (the `/api/explain-move` legacy endpoint) was also fixed to thread
+  `locale` through — it previously always rendered English regardless of `req.locale`
+  (OI-126 correction (b), not itself an OI-126 symptom but found and fixed alongside it).
+  The dead `server/reasonRenderGuard.locale.test.mjs` (Vitest-style; no `vitest` dependency exists
+  in this repo; registered in neither `test` nor `test:fast`) was deleted; its two assertions were
+  ported into `server/tests/reasonRenderGuard.test.mjs` in `node:test` form so nothing it pinned was
+  lost. Full suite: `test:fast` 1711/1711 (up from the pre-batch 1696 baseline by the 15 new tests
+  in this file — 0 unexplained fail), lint exit 0.
+- **Scope note, unchanged from the original entry**: this was a `stripInternalTokens` text-level fix.
+  Whether the annotation gate itself now backstops a similar leak on the live path is answered
+  separately by **OI-124** (also closed in this batch, see below).
 
 ---
 
@@ -4876,7 +5274,8 @@ restore the ping-pong Back behavior that `new_TODOs #23` was filed for.
 
 ## OI-129 — deep-reveal prose names board regions that carry no zone annotation, so they cannot be highlighted
 
-**Status**: open (minor; highlight integrity)
+**Status**: deliberately-not-fixed 2026-08-04 (spec 057, T027) — measured, not extended this batch. See "Measurement" below.
+**Original status**: open (minor; highlight integrity)
 **Area**: deep-reveal prompt / `[zone:…]` annotation coverage — `server/llmCoachHelpers.js` (offered-zone builder), `src/components/AnnotatedExplanation.jsx`
 **Discovered**: 2026-08-03, spec 042 manual QA T058 (`agentic_QA_2026-08-03-1208.md`, finding 4)
 
@@ -4904,9 +5303,39 @@ zone, which is the missing predicate here.
 names must carry a `[zone:…]`) rather than a render-side one, but it needs a measured failure rate
 first — sample recent `explanation_cache` rows for named-region-without-zone before designing
 enforcement, the same sequencing OI-124 recommends.
-## OI-130 — `verify-undercut-puzzles.mjs` filters on a `puzzles.approved` column that has never existed
 
-**Status**: deferred (pre-existing; out of scope for spec 056, which only corrected the script's `correct_col` → `correct_cols` select)
+**Measurement (2026-08-04, spec 057 T027)**: read-only against `explanation_cache` (local DB,
+`server/.env`) — no write. **Sample size: the FULL local table, 19 rows total, all 19 carrying
+explanation text — fewer than the FR-011 floor of 50, stated explicitly per FR-011's fallback
+clause.** (Staging's `explanation_cache` was also checked and has even fewer — 13 rows — so it does
+not raise the combined sample past 50 either; the local set is reported as the larger of the two.)
+
+Of the 19 rows: **15 name at least one board region** (a `column N`/`columna N` mention, a
+"bottom row"/"top row" phrase, or a "lower side"/"upper side"/"left side"/"right side" phrase).
+Of those 15 naming rows, **9 (60.0%) have at least one named region with no corresponding
+`[zone:…]` annotation** — counted per-mention: 30 total region-mentions across the 15 rows, 18
+(60.0%) unannotated. The "side" phrasing (e.g. "the lower side") is unannotated by construction —
+`zoneParser.js`'s `isValidSpec` recognizes `colN`/`cNrM`/`cells:`/`windows:`/`rowN`/`tg` but has no
+zone-spec shape for a diagonal "side" region at all, so even a maximally-compliant prompt could not
+annotate that phrasing today.
+
+**Stated floor**: this is a measured 60% on a 19-row sample, not a 0%-with-no-floor result — FR-011's
+concern (an unfloored "0 failures found") does not apply here since the rate is clearly non-zero
+even on a small sample.
+
+**Disposition**: deliberately-not-fixed this batch. 60% on 19 rows is a real, non-trivial rate, but
+(a) the sample is well under the 50-row target the task specifies, so a wider re-measurement once
+`explanation_cache` accumulates more real traffic (post-launch) would sharpen this number
+considerably before committing to a specific enforcement design; and (b) the fix is prompt-side
+(per the original "If picked up" note) or a new render-time coverage predicate, neither of which
+this batch's scope covers (T024-T031 is response-seam text integrity, not prompt engineering or a
+new gate predicate). Re-measure with a larger sample before deciding between a prompt-side fix and
+a new predicate.
+
+## OI-130 — verify-undercut-puzzles.mjs filters on a `puzzles.approved` column that has never existed
+
+**Status**: ✅ FULLY FIXED 2026-08-04 (spec 057, T007) — see "What shipped" below.
+**Original status**: deferred (pre-existing; out of scope for spec 056, which only corrected the script's `correct_col` → `correct_cols` select)
 **Area**: `connect-four/scripts/verify-undercut-puzzles.mjs`
 **Discovered**: spec 056 (Epic 9, correct_col retirement), 2026-08-03
 
@@ -4938,6 +5367,16 @@ undercut puzzles exist") and spec FR-047, then most likely change `.eq('approved
 `.eq('is_active', true)` and run it against local to confirm it returns the 25 active undercut
 puzzles that exist there. Note the script has no test coverage — this bug survived precisely because
 nothing exercises it.
+
+### What shipped (2026-08-04, spec 057, T007)
+
+Confirmed intent against the script's own header comment and FR-047, then changed
+`.eq('approved', true)` to `.eq('is_active', true)` (the "most likely" fix this entry already
+predicted, not the `candidates.status='approved'` join alternative — the script queries `puzzles`
+only, and `is_active` is that table's real serving gate per `docs/architecture/db-schema.md`). Ran
+locally: `node scripts/verify-undercut-puzzles.mjs` now returns **"Found 25 active undercut
+puzzle(s)... VERDICT: Puzzles exist — ready for confirmation challenges."** — the 25 active local
+undercut rows, not zero, matching this entry's own predicted verification step exactly.
 
 ## OI-131 — `debug-claimeven.js` passes a raw movestring where `detectClaimeven` expects a Board
 
@@ -5028,3 +5467,429 @@ it into both `stripInternalTokens` calls inside it, mirroring `guardExplainMoveL
 one call site (`server/index.js:1263`) to pass the request's resolved locale. Add a test asserting
 Spanish (`columna N`) output survives the `/api/explain-move` path, not just `/api/explain-move-llm`.
 Cross-ref: spec 057 (Epic 10) US2, **OI-126**.
+
+---
+
+## OI-133 — 4 live `undercut` puzzle/candidate rows on production no longer match `detectUndercutVictim` at all
+
+**Status**: open — surfaced by spec 057 (Epic 10) T008's audit widening OI-92's scope from `overcut`
+only to all three metadata-graded categories, 2026-08-04. Owner-gated (writing to live data is not
+an agent action) — mechanism shipped, not yet run.
+**Area**: `public.puzzles` / `public.candidates` rows with `category='undercut'` on **production
+only**; `connect-four/server/candidate-generator.js` (`checkUndercutPredicate`),
+`connect-four/server/classifier.js` (`detectUndercutVictim`)
+
+T008's read-only audit (reusing `repair-overcut-highlight-metadata.js`'s dry-run/diff logic, extended
+to `undercut`/`z_threat` per this feature's widened scope) found **staging's `undercut` pool is fully
+clean** (20 identical, 0 stale, 0 no-match) but **production has 4 rows that no longer match the
+current `detectUndercutVictim` predicate at all** — 1 `puzzles` row + 1 `candidates` row for
+movestring `13365353214264620046`, and 1 `puzzles` row + 1 `candidates` row for movestring
+`35054462343613031` (out of 56 identical + 4 no-match = 60 total rows checked). Zero rows have
+differing `highlight_metadata` (the shape T005's grading fix protects against) — production
+undercut's live drift is entirely "no longer matches," not "stale metadata."
+
+**This is NOT covered by OI-92** — that entry is explicitly scoped to `overcut` only (its own title
+and Area line). `z_threat` was also audited in the same pass and is fully clean on both environments
+(staging 20/0/0, production 60/0/0) — no new issue needed there.
+
+**Why deferred**: same reasoning as OI-92 — repairing it means writing to live production data, an
+outward-facing action left to the epic owner. The audit was read-only.
+
+**If picked up**: per D1 (retire-and-refill, resolved 2026-08-03), these 4 rows are NOT to be
+repaired in place — retire them (`is_active=false` / `status='rejected'`) and refill `undercut` back
+toward the N=20 floor (production's `undercut` active count was 30 pre-retirement, so retiring these
+2 puzzles-table rows leaves it at 28, still above floor — no generation needed for `undercut`
+specifically as a result of this issue alone). `server/scripts/fill-candidate-pools.mjs --apply` is
+the one mechanism; it audits and retires `undercut` in the same pass as `overcut`/`z_threat`. Re-run
+`fill-candidate-pools.mjs --env production` afterward (dry-run) and confirm the audit reports
+`undercut: identical=X stale=0 ambiguous=0 no_longer_matches=0`. Cross-ref: spec 057 T008, T009;
+OI-92 (the sibling `overcut` issue this one was split out from).
+
+---
+
+## OI-134 — A client-side "accepted gate" display override silently disagrees with the server's `quality` label
+
+**Status**: deliberately-not-fixed (owner scope ruling, 2026-08-03 — "record, do not fix")
+**Area**: `connect-four/src/screens/ChallengeScreen.jsx:386,407,492`
+**Discovered**: spec 057 (Epic 10, MVP Launch Gate) T057, 2026-08-04 — during the FR-019a
+single-criterion audit of every `'blunder'`/`'suboptimal'`-emitting site in the repository
+
+While making `scoreMove` the sole grader of the **game-move** `quality` label (FR-019a, T035), the
+audit found a third domain that also emits this vocabulary: the spec-049/Epic-9 **accepted-gate**
+display logic in the **puzzle-answer** screen. Two verbatim sites:
+
+```js
+// ChallengeScreen.jsx:386 — inside the accepted-gate branch
+          ? { ...data, quality: 'blunder', badge: 'bad', summaryLineKey: pickSummaryKeyOrNull('blunder') ?? data.summaryLineKey }
+
+// ChallengeScreen.jsx:407
+        const coachQuality = acceptedPromoted ? 'optimal' : acceptedDemoted ? 'blunder' : (data.quality ?? 'blunder');
+```
+
+A third, related site feeds the post-set summary screen with the same override pattern:
+
+```js
+// ChallengeScreen.jsx:492 — session-results fallback
+      quality: evaluation?.quality ?? 'blunder',
+```
+
+**What this is**: the spec-049 "accepted gate" lets a puzzle answer the server graded one way get
+*re-labelled* client-side when the accepted-answer-set gate promotes or demotes it (e.g. a technically
+non-optimal-but-accepted answer gets shown as `'optimal'`; a previously-accepted answer that no longer
+qualifies gets shown as `'blunder'`). This is a **display correction in the puzzle-answer domain**
+(SC-002 of spec 049 — the badge/coach line must agree with the accepted-gate verdict), not a second
+grader of the game-move label FR-019a is about. It never writes a `blunders` row — no `insertGameBlunder`
+or `POST /api/blunders`/puzzle-attempt insert call is reachable from this code path — so it cannot
+corrupt stored data; it only affects what a specific screen displays for that request.
+
+**Why deliberately-not-fixed rather than unified**: FR-019a's "exactly one criterion" directive is
+scoped by the owner to the **game-move** label (spec.md FR-019a's own scope-boundary note, "game moves
+only — but name the boundary"). This accepted-gate override belongs to the **puzzle-answer** domain
+(see `docs/architecture/db-schema.md`'s `blunders` table section, "Domain boundary" note, alongside
+`ChallengeScreen.jsx:586`'s puzzle-answer grading) and unifying it was explicitly out of scope for
+spec 057. It is allowlisted (with this same reasoning inline) in the FR-019a structural test,
+`connect-four/tests/unit/singleQualityGraderStructural.test.js`, so the exemption is discoverable both
+from the test and from this entry.
+
+**If picked up**: decide whether the accepted-gate override should instead be computed server-side (so
+`data.quality` arrives already correct and `ChallengeScreen.jsx` never needs to override it), or
+whether the client-side override is the right architecture for a gate that is itself
+client/session-scoped. Either way, this is a puzzle-answer-domain design decision, not a game-move
+grading bug — do not fold it into any future FR-019a-style "single criterion" work without first
+confirming the owner wants the two domains unified. Cross-ref: spec 049 (accepted-answer-set gate,
+Epic 9), spec 057 T057/FR-019a item 7.
+
+---
+
+## OI-135 — `npm run test:dom`'s 72 tests are not gated by anything (CI, pre-commit, or `test:fast`)
+
+**Status**: open — surfaced during spec 057 (Epic 10) T053's cross-cutting verification sweep,
+2026-08-04
+**Area**: `connect-four/package.json` (`test:dom` script, line 14, vs. `test:fast`, line 17),
+`.githooks/pre-commit`
+**Discovered**: spec 057, Epic 10, US-cross-cutting (T053), 2026-08-04
+
+`CLAUDE.md` names `npm run test:fast` as the gate "for all regular development and CI checks."
+Verified at source: `package.json:17`'s `test:fast` script string enumerates roughly 190
+`node --test` targets and does **not** include any file from `test:dom`'s own script string
+(`package.json:14`, 22 `tests/dom/*.dom.test.jsx` files). `.githooks/pre-commit`
+(`git config core.hooksPath` → `.githooks`, auto-set by `npm install`'s `prepare` script) runs
+`npx eslint . --quiet` and `scripts/sync-kb.mjs` only — no test command of any kind. No CI workflow
+file exists to check separately (`.github/workflows/` was not found in this repo). The practical
+consequence: a component-level regression in any of the 22 `test:dom` files — including
+`tests/dom/PricingScreenPaddleInit.dom.test.jsx`, which is the only test proving spec 057's own
+FR-013/OI-98 fix — ships silently unless a human remembers to run `npm run test:dom` by hand.
+
+**Why open, not fixed here**: deciding how to wire `test:dom` into the gate (fold its file list into
+`test:fast`'s single `node --test` invocation, add a second gate command, or add it to the pre-commit
+hook) is a build/tooling design decision with real trade-offs (jsdom test wall-time, whether every
+commit should pay it) that spec 057 did not scope in and an agent should not decide unilaterally.
+
+**If picked up**: the simplest fix is extending `test:fast`'s existing `node --test
+--experimental-test-module-mocks` invocation with `--import ./tests/dom/setup.js` and the `test:dom`
+file list appended, mirroring how `test:dom` itself is already invoked (`package.json:14`) — verify
+this doesn't change `node --test`'s reporting/exit semantics for the non-DOM suite before committing
+to it. Alternatively, add a `posttest:fast` script or a second required check to `.githooks/pre-commit`.
+Either way, re-run the full gate once wired and confirm the new count is `test:fast`'s prior count +
+`test:dom`'s 72, with 0 unexplained new failures.
+
+---
+
+## OI-136 — `src/screens/PricingScreen.jsx` contains literal NUL bytes, so `git diff` reports it as binary
+
+**Status**: open — surfaced during spec 057 (Epic 10) T053's cross-cutting verification sweep,
+2026-08-04
+**Area**: `connect-four/src/screens/PricingScreen.jsx` (`LINK_SENTINEL` constant)
+**Discovered**: spec 057, Epic 10, US-cross-cutting (T053), 2026-08-04
+
+Verified at the byte level: `LINK_SENTINEL = ' PRICING_LEGAL_LINK '` — the two boundary
+characters are literal NUL bytes (`\x00`, confirmed via a Python byte-dump), not spaces, despite
+rendering as spaces in most editors and terminals. This predates spec 057 (the file already carried
+these bytes before this batch's `T041` edit added the `?_ptxn=` mount-time-init code around it) — this
+entry documents a pre-existing landmine, not a regression introduced here.
+
+**Consequence, confirmed empirically**: `git diff -- src/screens/PricingScreen.jsx` and
+`git diff --stat` both print `"Binary files ... differ"` for **any** change to this file, including
+T041's real, substantial code diff (a new import, a new `useEffect`, ~25 added lines) — nothing about
+that diff's content is shown by a normal review. `git diff --text -- <path>` (or `git diff -a`) does
+force a textual diff and shows the real content correctly — this is the workaround, not a fix.
+
+**Why open, not fixed here**: fixing means changing `LINK_SENTINEL`'s value (e.g. to a plain
+non-NUL sentinel string like `' '` → `'@@PRICING_LEGAL_LINK@@'` or similar) and confirming
+`t('pricing.legalNote', { link: LINK_SENTINEL }).split(LINK_SENTINEL)` still round-trips correctly
+against both `en.json` and `es.json`'s `pricing.legalNote` values — a small, safe fix, but outside
+spec 057's US3 scope (this file's `LINK_SENTINEL` logic itself was untouched by T041) and not
+something to slip into an unrelated diff without its own test.
+
+**If picked up**: replace the NUL-delimited sentinel with an ordinary printable-character delimiter
+unlikely to appear in translated prose (e.g. `'@@PRICING_LEGAL_LINK@@'`), verify
+`legalNoteBefore`/`legalNoteAfter` still split correctly for both locales, and re-run
+`tests/dom/PricingScreen.dom.test.jsx`. No urgency — the code works today; this is purely a
+review-visibility hazard for the next person who touches this file.
+
+---
+
+## OI-137 — Freshly generated/promoted puzzle rows from `fill-candidate-pools.mjs` fall back to a hardcoded placeholder `goal_prompt`, not a pedagogically reviewed one
+
+**Status**: open — surfaced during spec 057 (Epic 10) T053's cross-cutting verification sweep,
+2026-08-04
+**Area**: `connect-four/server/scripts/fill-candidate-pools.mjs` (`DEFAULT_GOAL_PROMPTS`, the
+category→string map at `:102`, and the picker function `pickGoalPrompt`-equivalent at `:250-258`)
+**Discovered**: spec 057, Epic 10 (T009/T010, content-pool fill), noted during T053's sweep, 2026-08-04
+
+Verified at source: `fill-candidate-pools.mjs:250-258` harvests a real, previously-served
+`goal_prompt` for a category from an existing row on the same environment when one exists
+(`.select('goal_prompt, difficulty')` against the live table), and **only** falls back to the
+hardcoded `DEFAULT_GOAL_PROMPTS[category]` map (`:102`) when no such row exists — which is exactly
+the case for a category that started this batch at **zero** active rows (e.g. local `forced_win`,
+per OI-83's "What shipped" section — there was no existing row to harvest a template from). Every
+row inserted under that fallback ships whatever generic string `DEFAULT_GOAL_PROMPTS` hardcodes for
+that category, not a prompt written and reviewed against that specific board's actual tactics.
+
+**Consequence**: categories that were mechanically brought up to the N=20 serving floor by this batch
+(see OI-86's "What shipped") are *countably* fixed — `active ≥ 20` — but some fraction of their rows
+carry a placeholder goal prompt that was never checked for pedagogical accuracy against the specific
+board it's attached to. This is invisible to every test and audit this batch ran, since none of them
+assert goal-prompt quality, only presence/shape.
+
+**Why open, not fixed here**: writing per-board goal prompts is content/curation work, not a code
+defect, and spec 057's own Settled decisions frame this epic as "removes blockers; it does not add
+features" (Settled decision 3) — hand-authoring pedagogical copy for every fallback row is out of
+scope.
+
+**If picked up**: query each environment for `puzzles`/`candidates` rows whose `goal_prompt` exactly
+matches `DEFAULT_GOAL_PROMPTS[category]` verbatim (a cheap, precise filter, since the fallback string
+is a fixed literal) to get the exact affected-row count and list per category, then have a human (or
+an LLM pass reviewed by a human, per this project's Spanish/coach-copy quality bar) write real
+per-board prompts for that list. Cross-ref: OI-86, OI-83.
+
+---
+
+## OI-138 — `evalUndercut`'s new `correctCols` short-circuit returns before the live solver-safety floor runs
+
+**Status**: deferred (low live impact pre-launch; the justifying invariant holds for both current writers but is not enforced)
+**Area**: `connect-four/server/predicates.js` (`evalUndercut`)
+**Discovered**: spec 057 (Epic 10), static code review of the accumulated branch diff, 2026-08-04
+
+Verified at source. T005 added a `correctCols` acceptance path to `evalUndercut`:
+
+```js
+const gatedCols = puzzle.correctCols;
+if (Array.isArray(gatedCols) && gatedCols.length > 0 && gatedCols.includes(candidateCol)) {
+  return { result: 'correct' };
+}
+```
+
+It returns **before** the pre-existing live check `if (Array.isArray(scores) && scores.length === COLS && !isSolverSafe(candidateCol, scores))`. The file's own pre-existing header states the two are meant to stay independent: *"T024 (`checkUndercutPredicate`) and this are independent implementations of the same fix — both are required; fixing only one leaves the other's defect live."* The short-circuit collapses that redundancy into one.
+
+The in-code justification is that `correct_cols` is only ever populated by `checkUndercutPredicate` **after** applying the same `isSolverSafe` floor. That was verified true for both current writers (`candidate-generator.js` and `backfill-correct-cols.mjs`, which routes through `checkPredicate`). What was **not** verified is whether any `puzzles.correct_cols` row was written *before* T024 added the floor — such a row would now be accepted without any solver check.
+
+**Why deferred**: staging/production are disposable pre-launch and their pools are being regenerated anyway, so a legacy row surviving from before T024 is unlikely to outlive the fill. The comment's guarantee is stronger than what the code enforces, which is the real defect.
+
+**If picked up**: run `git log -S "isSolverSafe" -- connect-four/server/candidate-generator.js` and compare against the write dates of existing rows, or simply re-run `backfill-correct-cols.mjs` per environment to re-derive every array under the current floor. A cheaper permanent fix is to keep the `isSolverSafe` check on the `correctCols` path too — it costs nothing when `scores` is absent (the check already skips on a short/missing array) and makes the comment's claim structurally true.
+
+---
+
+## OI-139 — `stripFailingZoneSpans` silently no-ops on the `!` (default-active) zone-tag variant
+
+**Status**: deferred (latent — no current emitter of the `!` form found in `server/`)
+**Area**: `connect-four/server/reasonRenderGuard.mjs` (`stripFailingZoneSpans`)
+**Discovered**: spec 057 (Epic 10), static code review, 2026-08-04
+
+Verified at source. The strip regex is built as:
+
+```js
+const escaped = escapeRegExp(spec);
+const re = new RegExp(`\\[zone:${escaped}\\]([\\s\\S]*?)\\[/zone:${escaped}\\]`, 'gi');
+```
+
+`parseZoneSpecs` (`server/zoneParser.js:35`) and the client parser both accept `[zone:SPEC!]…[/zone:SPEC!]`, and the parsed `spec` **excludes** the trailing `!`. So a failing `[zone:col9!]` span is detected by `validateAnnotation`, logged as a violation, and then **served unchanged** — enforcement silently becomes a no-op for that shape, with a log line that claims it acted.
+
+**Why deferred**: no current emitter of the `!` form was found under `server/`, so this is latent rather than live. It becomes live the moment a prompt or composer starts using default-active zones.
+
+**If picked up**: make the trailing `!` optional in the constructed regex (`\\[zone:${escaped}!?\\]`), and add a test asserting a failing `[zone:SPEC!]` span is actually stripped. Confirm first whether any reason-engine prompt template or a real LLM sample emits `!]`.
+
+---
+
+## OI-140 — The annotation gate runs *before* token-stripping, so P6 discards zones the strip would have made valid
+
+**Status**: deferred (behavior may be intentional; not stated either way)
+**Area**: `connect-four/server/reasonRenderGuard.mjs` (`guardExplainMoveLlmPayload` ordering), `connect-four/server/annotationGate.js` (`checkP6`)
+**Discovered**: spec 057 (Epic 10), static code review, 2026-08-04
+
+`checkP6` (`annotationGate.js:~297-303`) fails a zone whose **inner text** contains a raw coordinate (`c4r3`, `col5`). `stripInternalTokens` would rewrite exactly those to "column N" — but it runs *after* `validateAnnotation`. So a zone whose only defect is a raw coordinate in its prose loses its highlight, where the reverse order (strip → validate) would have kept the highlight and cleaned the text.
+
+**Why deferred**: it is not clear this is wrong. Stripping first would mean the gate validates text the LLM did not actually produce, which weakens the gate as a signal about model behavior. The defect is that the ordering is undocumented, so nobody can tell whether the current behavior was chosen or inherited.
+
+**If picked up**: decide and record the intent in `docs/architecture/server-conventions.md`'s Annotation Gate section. If highlight retention wins, reorder and add a test covering a zone with a raw coordinate in its inner text. Related: OI-129 (prose naming a region with no annotation) — both concern how much annotation survives to the client.
+
+---
+
+## OI-141 — `PricingScreen`'s mount-time `getPaddle()` has no rejection handler
+
+**Status**: deferred (blast radius is a console error, not a broken page)
+**Area**: `connect-four/src/screens/PricingScreen.jsx` (mount `useEffect`)
+**Discovered**: spec 057 (Epic 10), static code review, 2026-08-04
+
+T041 added a mount-time `getPaddle()` call chained with `.then(...)` only. `initializePaddle` can reject (network failure fetching Paddle.js from the CDN, or a CSP block), producing an unhandled promise rejection. The inner `try/catch` covers only `Checkout.open`, not the initialization itself.
+
+The pre-existing `handleUpgrade` path has the same exposure but is wrapped by its caller's `catch`, so this is a **new** unprotected entry point rather than a new class of bug. Spec 057's own edge case requires that an expired/invalid `_ptxn` degrade gracefully to the normal `/pricing` page — that part works; this is specifically about `initializePaddle` itself rejecting.
+
+**Why deferred**: the page still renders (the effect's failure doesn't block paint), so the user-visible impact is a console error rather than a white screen. It could not be confirmed against a real rejection locally because `VITE_PADDLE_CLIENT_TOKEN` is unset and `getPaddle()` short-circuits to `null` before any network call.
+
+**If picked up**: add a `.catch()` that logs and leaves the page in its normal state, and cover it with a DOM test that mocks `initializePaddle` to reject (the mocking pattern already exists in `tests/dom/PricingScreenPaddleInit.dom.test.jsx`). Note that suite is not run by `test:fast` — see OI-135.
+
+---
+
+## OI-142 — `fill-candidate-pools.mjs`'s `RETIRE_AND_REFILL_CATEGORIES` set is hardcoded and unguarded against a category rename
+
+**Status**: deferred (no rename pending)
+**Area**: `connect-four/server/scripts/fill-candidate-pools.mjs`
+**Discovered**: spec 057 (Epic 10), while applying code-review fixes, 2026-08-04
+
+The set of categories subject to D1's retire-and-refill disposition (`overcut`, `undercut`, `z_threat` — the three graded from stored `highlight_metadata`) is a hardcoded literal in the script. It is never cross-checked against `CATEGORY_ORDER` / `server/categories.js`. If a category is renamed there, this set silently goes stale: the script would stop retiring drifted rows for the renamed category and report a clean audit, with no test catching it.
+
+This mirrors the class of failure `docs/architecture/server-conventions.md`'s Category Registry section already warns about — a missing registration is a **silent** failure, not an error.
+
+**Why deferred**: no rename is pending, and the script is owner-run rather than on a serving path.
+
+**If picked up**: validate the set against the registry at startup and exit non-zero on an unknown category name, the same way the script already hard-stops on a missing `correct_cols` column. Cross-ref: memory `project_new_category_wiring_checklist.md`.
+
+**Precedent strengthening this (added 2026-08-04)**: a sibling instance of the same class was found
+and fixed hours after this entry was filed. `checkForcedWinPredicate`
+(`connect-four/server/candidate-generator.js`) carried `passes: correctCols.length === 1` — a
+hardcoded single-answer assumption — while the generic `checkPredicate` **fifteen lines below in the
+same file** had already been corrected to `>= 1`, complete with a comment explaining that the strict
+form "wrongly rejected" multi-solution boards. The divergence survived because nothing compared the
+two, and it surfaced only via an unrelated audit (see OI-83's "Cardinality fix" section). Its
+observable symptom was not an error but a **low generation match rate** — the failure was silent and
+looked like ordinary difficulty.
+
+That is the same shape as this issue: an assumption hardcoded in a generation path, with no
+cross-check against the shared source of truth, whose failure mode is silence rather than an error.
+It argues for making the registry cross-check here a startup assertion rather than a doc note, and
+for a broader sweep of `candidate-generator.js` / `fill-candidate-pools.mjs` for other per-category
+constants that duplicate `server/categories.js` without validating against it.
+
+---
+
+## OI-143 — `checkP5Strong` (the only grounding check) never runs live: the allowed set already exists but is dropped before reaching the gate
+
+**Status**: deferred (scoped out of spec 057 — enforcement needs a production strip-rate
+measurement that no environment can supply until this branch deploys; candidate for the post-staging
+deep-reveal epic)
+**Area**: `connect-four/server/reasonRenderGuard.mjs` (`guardExplainMoveLlmPayload`),
+`connect-four/server/annotationGate.js` (`checkP5Strong`),
+`connect-four/server/scripts/renderReasonModel.mjs:235`,
+`connect-four/server/scripts/reason_engine/zoneAnnotations.mjs` (`buildAnnotationOffer`),
+`connect-four/server/mechanismExplainer.mjs` (`computeMechanism`)
+**Discovered**: spec 057 (Epic 10), D3's annotation-gate wiring (T028) + the follow-up trace,
+2026-08-04
+
+### What is wrong
+
+Spec 057 wired `validateAnnotation` into the live explanation response seam and enforces by
+stripping (D3, T028). Five of its six predicates run: P1 (spec syntax/bounds), P2 (prose column vs.
+zone column), P3 (forbidden terminology), P5 (dead-region highlight), P6 (raw coords in zone text).
+
+**`checkP5Strong` does not run.** `guardExplainMoveLlmPayload` calls `validateAnnotation` with a
+hardcoded `null` `allowedSet`, and `/usr/bin/grep -n "allowedSet" server/index.js` returns **zero
+matches** — the serving path has no allowed set in scope.
+
+The five active predicates all ask whether a highlight is **well-formed and self-consistent**.
+`checkP5Strong` is the only one that asks whether it is **true** — i.e. whether the engine ever
+produced evidence for the cell being highlighted.
+
+**Failure that remains possible**: the LLM highlights a square that is in-bounds, still playable,
+not in a dead window, and described consistently by the surrounding prose — but that the reason
+engine never identified as tactically relevant. A confidently-wrong highlight. It passes every
+active check, produces no error at any layer, and is indistinguishable from a correct answer to a
+learner who does not already know the position. On a teaching product this is the most expensive
+class of error available.
+
+Related: OI-129 (prose naming a board region with **no** annotation, measured at 60% on a 19-row
+sample). The two are the same question from opposite ends — annotations without evidence, and prose
+without annotations. They belong in one epic.
+
+### The allowed set already exists — this is a threading gap, not a derivation problem
+
+Traced at source 2026-08-04. Do not re-derive this:
+
+1. `buildAnnotationOffer` (`server/scripts/reason_engine/zoneAnnotations.mjs:49`) computes the
+   closed set of regions the engine offers the LLM as highlightable, derived from pruned evidence.
+   It returns `{ aliases, zoneAliasMap, terms }` (`:106`). Offered specs are `col{N}` for the
+   better/played columns, plus structural tag aliases emitting `windows:c1r1,…` or a single `cNrM`
+   cell for immediate-win / fork / major-threat lines (`roleText`, `:35-41`).
+2. `renderReasonModel.mjs:108/125/189` calls it, and `:235` places **only** `zones: { aliases,
+   terms }` on the render model — **`zoneAliasMap` is dropped here.** The prompt then lists the
+   offer to the model verbatim at `:290-291` as `- [zone:{handle}] = {role}`.
+3. `computeMechanism` (`server/mechanismExplainer.mjs:78`) already returns `renderDecision`
+   alongside `evidence`/`nv`/`prompt` (`:101`), and the live handler already receives it
+   (`server/index.js:1340`).
+
+So the serving path computes a sound allowed set, hands it to the LLM, and then discards it before
+validating the LLM's output against it.
+
+**Do NOT reuse `buildAllowedSetFromPatternMaps`** (`server/explainContext.js:448`). It builds the set
+from `classifyPattern` calls, which cost solver queries the live path does not make, and it lives in
+`buildExplainContext` — which has **zero callers** (verified; dead since the `/api/explain-move`
+retirement, cf. memory `project_prod_llm_call_graph`). Deriving from the annotation offer is both
+cheaper and sounder, because it is the same evidence the explanation was generated from.
+
+### `tg` failing is correct behavior, not an obstacle
+
+`checkP5Strong` unconditionally fails a `[zone:tg]` spec, which reads like an over-strict rule that
+would strip legitimate highlights. It is not:
+
+- `tg` is a **client-only wildcard**. `expandSpec` returns `[]` for it server-side
+  (`server/zoneParser.js:64-66`); the client resolves it at render time from its own
+  `userMajorThreats` (`src/lib/annotatedText.js:228`). The server cannot know which cells will be
+  drawn, so it cannot bound the claim.
+- The LLM is explicitly instructed not to emit it — `server/llmCoachHelpers.js:823`: *"never use
+  `[zone:tg]` or any other invented tag."*
+- The live offer (`buildAnnotationOffer`) never includes it.
+
+So `P5strong:tg` firing means the model invented a forbidden tag — exactly the ungrounded claim the
+check exists to catch. Concrete threats are already representable in the allowed set as bounded
+`cNrM` / `windows:` specs; `tg` is the *unbounded* "all current threats" wildcard, which is a
+different thing.
+
+### Estimated work — roughly half a day of code
+
+| Step | Size |
+|---|---|
+| Expose `zoneAliasMap` on the render model (`renderReasonModel.mjs:235` currently keeps only `aliases` + `terms`) | ~1 line |
+| Thread it from `computeMechanism`'s `renderDecision` into `guardExplainMoveLlmPayload` | ~5 lines |
+| Adapt handle→spec into `checkP5Strong`'s `AllowedSetEntry[]` shape (`{cells}` CONCRETE-ELIGIBLE / `{col}` ABSTRACT-ONLY, per `annotationGate.js:323-340`) | ~30-50 lines + tests |
+| Persist it into `explanation_cache.deep_reveal_json` so cache hits validate too (it is already a JSON blob — **no migration**) | ~10 lines |
+
+**The adapter is where soundness lives, and it is the only part with real design content.** A
+`windows:` spec expands to four cells; the mapping must decide whether a zone naming a *single* cell
+inside an offered window is admissible. Over-admit and the check becomes decorative; under-admit and
+it strips valid highlights. This decision should be made against real examples, not guessed.
+
+### Why deferred rather than done in spec 057
+
+1. **The validation cannot happen on this branch.** Enforcing changes served output on the paid hot
+   path. The responsible sequence is log-only → measure the strip rate against real traffic →
+   enforce. Neither staging nor production has this branch yet, so there is nothing to measure.
+   Shipping enforcement with no production evidence of its strip rate is precisely the failure this
+   epic spent its time avoiding.
+2. **The staging examples the owner plans to collect are the adapter's design input** — they answer
+   the `windows:`-admissibility question directly.
+3. **Not a launch blocker.** Nothing is broken today by its absence; explanations are well-formed but
+   ungrounded. That is a quality ceiling, not a defect, and spec 057's charter was removing
+   blockers, not adding capability.
+
+### If picked up
+
+Start with the log-only phase: thread the allowed set through, run `checkP5Strong`, log failures,
+**change nothing in the response**. Measure the failure rate and the shape of failures over real
+traffic. Only then choose an enforcement policy — and note the existing strip machinery already
+handles it, since P5Strong failures are span-carrying (`P5strong:*:${spec}`), unlike the three
+`P3:*` codes that carry no span (see `server/reasonRenderGuard.mjs`'s `stripFailingZoneSpans` and
+its P3 log-and-serve carve-out).
+
+Fold into the post-staging deep-reveal epic together with **OI-129**. Cross-refs: OI-124 (D3's
+wiring, closed), OI-126 (the token-stripping half, closed), memory
+`project_annotation_gate_and_zones`, `project_prod_llm_call_graph`.

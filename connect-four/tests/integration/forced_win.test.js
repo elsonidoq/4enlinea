@@ -72,3 +72,42 @@ describe('forced_win predicate — board-based', () => {
     }
   });
 });
+
+// ---------------------------------------------------------------------------
+// OI-83 follow-up (spec 057, 2026-08-04): a board where 2+ columns each independently
+// initiate a forced win must PASS, not be rejected as ambiguous.
+//
+// `checkForcedWinPredicate` used to end with `passes: correctCols.length === 1`, discarding
+// every multi-initiator position at generation time — the low match rate seen while refilling
+// the category. The generic `checkPredicate` in the same file already had this fixed
+// (`passes: correctCols.length >= 1`) with a comment explaining why; forced_win was the one
+// path that never got it.
+//
+// Nothing downstream ever required uniqueness: `evalForcedWin` (server/predicates.js) already
+// returns `{ result: 'tied', tiedWith }` for these boards, and `'tied'` is an acceptance at
+// every consumer (answerSetInvariant.js:46, evaluateMoveHandler.js:252, index.js:2471/:3215).
+//
+// Fixture harvested by scanning playGame-style random legal games for a real multi-initiator
+// position (never hand-constructed — CLAUDE.md's movestring rule), then verified with
+// `./visualize_board.sh 42142140516015`: move 14, Green to play, `scr` row 10/2/13/14/12/12/11.
+// Column 4 (1-indexed) carries a gravity-top immediate win and is correctly EXCLUDED as
+// immediate_threat; 0-indexed columns 4 and 5 each initiate a genuine forced-win chain.
+// ---------------------------------------------------------------------------
+const MULTI_INITIATOR_MS = '42142140516015';
+
+test('checkForcedWinPredicate accepts a board with MULTIPLE forced-win initiators (OI-83)', () => {
+  const { passes, correctCols } = checkForcedWinPredicate(MULTI_INITIATOR_MS);
+  assert.ok(correctCols.length > 1,
+    `fixture must be genuinely multi-initiator, got ${JSON.stringify(correctCols)}`);
+  assert.deepEqual(correctCols, [4, 5]);
+  assert.equal(passes, true,
+    'a multi-initiator forced-win board must NOT be rejected as ambiguous — this is the OI-83 regression');
+});
+
+test('checkForcedWinPredicate returns EVERY initiator, not just the first (OI-83)', () => {
+  // The answer set served for the board must be complete: a player picking either valid
+  // initiator has to grade correct, which requires both columns present in correct_cols.
+  const { correctCols } = checkForcedWinPredicate(MULTI_INITIATOR_MS);
+  assert.ok(correctCols.includes(4) && correctCols.includes(5),
+    'both valid initiators must appear in the answer set, or one of them grades a correct answer wrong');
+});

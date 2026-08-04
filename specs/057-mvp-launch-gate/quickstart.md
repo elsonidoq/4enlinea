@@ -111,3 +111,78 @@ account's credentials; recorded as a `staging_checks.md` sign-off, not run here.
 The closing summary must state, per story, shipped-or-deferred-with-reason, and a direct
 launch-readiness answer (FR-030) — this quickstart verifies the mechanics; the launch-readiness
 statement itself is a written closeout artifact, not a script output.
+
+---
+
+## Launch-readiness statement (FR-030, T054) — 2026-08-04
+
+**Per-story disposition:**
+
+- **US1 (pool-health & grading correctness) — SHIPPED, code-complete; live-data half is
+  owner-gated.** `evalOvercut`/`evalUndercut`/`evalZThreat` now cross-check solver-gated
+  `correctCols` everywhere, closing the player-facing half of OI-92 immediately, on every
+  environment, with no data write required. The data half — retiring stale `overcut`/`undercut`
+  rows and refilling every below-N=20 category — has a reviewed, dry-run-verified mechanism
+  (`fill-candidate-pools.mjs`) but has **only been run locally**; staging (12/12 categories below
+  floor) and production (4/12 below floor) still need the owner to run `--apply`. OI-130 (verify
+  script's dead `approved` filter) is fully fixed. OI-133 (4 undercut rows, production-only) was
+  newly discovered and is owner-gated the same way.
+- **US5 (test-suite/deploy trustworthiness) — SHIPPED.** `test:fast`'s 5 pre-existing RED tests are
+  now 0 RED (stale fixture paths fixed); the migration-ledger/pooler discrepancies (OI-31, OI-105)
+  were measured live and documentation-reconciled. OI-5 (refresh-token-rotation probe) remains
+  owner-gated — needs real account credentials no agent session has.
+- **US2 (response-boundary text integrity) — SHIPPED.** `stripInternalTokens` now catches bare and
+  ranged coordinate tokens (OI-126), and `validateAnnotation` is wired into the live response seam
+  with strip-and-log enforcement (OI-124), per the owner's D3 ruling. OI-129 (unannotated named
+  regions) was deliberately measured (60% on a 19-row sample, below the 50-row target) and left
+  unfixed this batch — a real, non-trivial rate, but the fix is prompt-side/a new predicate, out of
+  this batch's response-seam-integrity scope, and the sample should widen post-launch before
+  committing to a design.
+- **US4 (single quality-grading criterion) — SHIPPED.** `scoreMove` is now the sole grader of the
+  game-move `quality` label (D4, FR-019a); `classifyStoredMistake`'s own grading was deleted. The
+  puzzle-answer domain's "accepted gate" client-side override is a deliberately separate, unfixed
+  domain (OI-134, filed per the owner's explicit scope ruling, T057) — FR-019a's "one criterion" is
+  scoped to game moves only and this document does not overclaim it as covering puzzle answers too.
+  `POST /api/blunders` was retired (no client caller and no in-scope score-pair grading path once
+  `classifyStoredMistake` was narrowed to eligibility-only — recorded as a code comment at the
+  former route in `server/index.js` ("POST /api/blunders — RETIRED"), not an open-issues entry;
+  OI-134 is the separate, still-open issue about the puzzle-answer accepted-gate override above).
+- **US3 (entitlement/payment last-mile UX) — SHIPPED, client half; owner sign-off pending.**
+  `/pricing?_ptxn=` now initializes Paddle.js on mount and auto-opens the checkout for that
+  transaction (T041, closing OI-98's code half); the signed-out-vs-free-tier lock-copy distinction
+  is shipped end-to-end (`sagaLock.js` → `SagaScreen.jsx` → `AuthModal.jsx`, OI-95 fully fixed,
+  including a real bug found and fixed en route — `getEntitlement()`'s own return statements were
+  dropping `authenticated`). OI-41 is re-confirmed as a narrowed, accepted risk scoped to
+  `/pricing-legal`'s literals only (not a launch blocker); the owner still needs to make the
+  explicit won't-fix-or-keep-open call. Two owner-only verifications remain per T049: a real
+  production-build browser CSP check on the new mount-time path, and a real Paddle sandbox
+  transaction confirming the payment-method-update email actually opens a checkout.
+
+**Owner-gated items still pending, named in full (nothing above is silently deferred):**
+
+1. `fill-candidate-pools.mjs --apply` against staging AND production (US1, Decision D-b) —
+   staging 12/12 categories below floor, production 4/12 below floor.
+2. The `061_correct_cols`/`062`/`063`/`064` migration backlog — **unapplied on both staging and
+   production**. This is the single hardest blocker: `correct_cols` does not exist as a column on
+   either live environment, so US1's grader fix is inert there and item 1 above cannot even run
+   until this ships.
+3. OI-5's refresh-token-rotation probe (US5) — needs real account credentials.
+4. FR-014's CSP check against a real production build in a real browser, and FR-016's real Paddle
+   sandbox transaction (US3, T049) — `VITE_PADDLE_CLIENT_TOKEN` is unset locally; CSP is invisible
+   under `npm run dev`.
+5. `explanation_cache` TRUNCATE (US2) and `blunders` regenerate (US4) — both queued PENDING in
+   `docs/deployment_steps.md`, not reversible, owner-run against staging then production.
+6. OI-41's explicit won't-fix-or-keep-open call (US3, T047) — an accepted-risk framing is proposed;
+   the owner has not yet signed off on either option.
+
+**Direct answer: the owner cannot launch today.** Every story's *code* is shipped, tested (1725/1725
+`test:fast`, 72/72 `test:dom`, 0 unexplained failures), and independently reviewable — but "the code
+is done" and "the app is deployable" are different questions, and this feature's own binding
+constraint (no agent writes to staging or production) means the second question has real,
+unclosed items only the owner can close: two live schema migrations are unapplied (blocking US1's
+grading fix from having any effect on live puzzle content), all 12 puzzle categories are below the
+serving floor on staging, and two Paddle/CSP verifications and one auth probe still need a human in
+a real browser or a real credential. None of these six items is a code defect — they are exactly the
+live-data and owner-action choreography `CLAUDE.md`'s pre-launch disposability rule intentionally
+deferred to this closeout. Once items 1-4 above are run and items 5-6 are explicitly closed, launch
+is unblocked; until then, the honest status is **implemented, not yet deployable**.

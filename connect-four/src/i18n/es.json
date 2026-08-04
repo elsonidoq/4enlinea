@@ -1088,6 +1088,9 @@
     "empty": "Aún no hay lecciones disponibles.",
     "orderLock": {
       "message": "Terminá la lección anterior para desbloquear esta"
+    },
+    "lock": {
+      "signInReason": "Iniciá sesión para continuar esta lección."
     }
   },
   "onboarding": {

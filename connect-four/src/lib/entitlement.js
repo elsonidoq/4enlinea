@@ -37,7 +37,7 @@ export const ENTITLEMENT_CACHE_TTL_MS = 5 * 60 * 1000;
 // it) — that's what makes fail-open (FR-013) possible. Tests reset this
 // between cases via __resetEntitlementCacheForTests (see
 // tests/unit/entitlementClient.test.js).
-let lastKnownGood = null; // { entitled: boolean } | null
+let lastKnownGood = null; // { entitled: boolean, authenticated: boolean } | null
 let lastFetchedAt = 0; // ms epoch of the fetch that produced lastKnownGood
 
 /**
@@ -115,17 +115,26 @@ async function attemptSessionRefreshAndRetry(fetchFn) {
  * using a bounded TTL cache. Never rejects — every failure path resolves to
  * a best-effort answer (fail-open per FR-013).
  *
+ * `authenticated` (FR-017 / OI-95, spec 057 US3): the server's response body
+ * already carries this signal (server/userRoutes.js, `entitlementForRequest`),
+ * and this wrapper reads it internally (see `isAmbiguousLapse` below) — but
+ * every return statement used to drop it before this change, so callers could
+ * only ever see `entitled`. Now threaded through every return path (cache-hit,
+ * fail-open, refresh-and-retry, and the plain-accept path) so a caller can
+ * distinguish "signed out" from "signed in, free tier" — both currently
+ * resolve to `entitled: false`. No server contract change.
+ *
  * @param {object} [opts] - injectable seams for tests; production callers omit this.
  * @param {typeof fetch} [opts.fetchFn]
  * @param {number} [opts.now] - clock override for TTL tests; defaults to Date.now()
- * @returns {Promise<{entitled: boolean}>}
+ * @returns {Promise<{entitled: boolean, authenticated: boolean}>}
  */
 export async function getEntitlement({ fetchFn = fetch, now = Date.now() } = {}) {
 
   // Cache-first: any prior answer (entitled or not) within the TTL window is
   // served without a network call.
   if (lastKnownGood != null && now - lastFetchedAt < ENTITLEMENT_CACHE_TTL_MS) {
-    return { entitled: lastKnownGood.entitled };
+    return { entitled: lastKnownGood.entitled, authenticated: lastKnownGood.authenticated };
   }
 
   let fresh;
@@ -133,9 +142,26 @@ export async function getEntitlement({ fetchFn = fetch, now = Date.now() } = {})
     fresh = await fetchEntitlement(fetchFn);
   } catch {
     // FR-013: the fetch itself failed (offline/timeout/5xx) — fail open to
-    // the last successfully-obtained answer, or {entitled:false} if this
-    // account has never had one.
-    return { entitled: lastKnownGood?.entitled ?? false };
+    // the last successfully-obtained answer.
+    //
+    // The two fields deliberately fail in OPPOSITE directions when there is no cached answer:
+    //   entitled      -> false : never hand out paid content on a failed probe.
+    //   authenticated -> true  : never tell a user to sign in when we do not know whether they
+    //                            already are. `sagaLock.js`'s `'signin'` outcome (FR-017/OI-95)
+    //                            keys off this field, so a `false` here turns every transient
+    //                            entitlement failure into a "Sign in" prompt shown to an
+    //                            already-signed-in user — strictly more confusing than the
+    //                            pre-OI-95 behavior, which showed "Upgrade". Both consumers
+    //                            independently chose `true` as their safe default
+    //                            (`SagaScreen.jsx`'s `useState(true)`, `sagaLock.js`'s defaulted
+    //                            parameter); this must agree with them or it silently overrides
+    //                            both. A genuinely signed-out visitor falls back to the
+    //                            upgrade CTA, which is exactly the behavior that shipped before
+    //                            the `'signin'` branch existed.
+    return {
+      entitled: lastKnownGood?.entitled ?? false,
+      authenticated: lastKnownGood?.authenticated ?? true,
+    };
   }
 
   const isAmbiguousLapse = !fresh.entitled && !fresh.authenticated;
@@ -149,9 +175,9 @@ export async function getEntitlement({ fetchFn = fetch, now = Date.now() } = {})
     const refreshed = await attemptSessionRefreshAndRetry(fetchFn);
 
     if (refreshed.entitled) {
-      lastKnownGood = { entitled: true };
+      lastKnownGood = { entitled: true, authenticated: true };
       lastFetchedAt = now;
-      return { entitled: true };
+      return { entitled: true, authenticated: true };
     }
 
     // Decision 2 (DB-outage case, discovered at review): the bounded refresh
@@ -169,10 +195,10 @@ export async function getEntitlement({ fetchFn = fetch, now = Date.now() } = {})
     // this with FR-010 — the asymmetry between client and server is
     // intentional (research.md Decision 2 / tasks.md T019).
     lastFetchedAt = now;
-    return { entitled: lastKnownGood.entitled };
+    return { entitled: lastKnownGood.entitled, authenticated: lastKnownGood.authenticated };
   }
 
-  lastKnownGood = { entitled: fresh.entitled };
+  lastKnownGood = { entitled: fresh.entitled, authenticated: fresh.authenticated };
   lastFetchedAt = now;
-  return { entitled: fresh.entitled };
+  return { entitled: fresh.entitled, authenticated: fresh.authenticated };
 }

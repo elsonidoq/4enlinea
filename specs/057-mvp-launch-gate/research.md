@@ -105,6 +105,93 @@ Treat every count above as dated the moment this file was written, not as curren
 Settled Decision 7 ("every measurement expires"). This is exactly the failure mode Settled Decision 7
 exists to catch, not a hypothetical.
 
+### Pool counts per environment — re-measured 2026-08-04 (T006, Batch 1)
+
+Re-queried read-only, all three environments, via a grouped `count`-per-category query against
+`puzzles` (`is_active=true`) and `candidates` (`status='pending'`) for all 12 categories. **Zero
+drift from the numbers above** — every count matches the prior dated measurement exactly. Recorded
+here per Settled Decision 7 ("every measurement expires") as its own dated snapshot, not a silent
+overwrite of the numbers above.
+
+**Local** (`connect-four/server/.env`, floor N=20) — Total active: 323. Below floor (7/12):
+`forced_win` 1, `overcut` 1, `figure_7` 0, `j_shape` 0, `odd_even_threat` 0, `claimeven` 0,
+`z_threat` 0. All others pass (`double_threat` 100, `forced_block` 100, `immediate_threat` 66,
+`undercut` 25, `forbidden_columns` 30).
+
+**Staging** (`connect-four/server/.env.staging`, `jkqilynpshutqcceopdn.supabase.co`) — Total active:
+122. **All 12/12 categories still below floor**: `double_threat` 10, `forced_block` 10,
+`immediate_threat` 15, `undercut` 10, `forbidden_columns` 10, `forced_win` 7, `overcut` 10,
+`figure_7` 10, `j_shape` 10, `odd_even_threat` 10, `claimeven` 10, `z_threat` 10. Pending
+`candidates`: 0 for every category (confirmed again — no promotion path exists on staging for any
+category).
+
+**Production** (`connect-four/server/.env.production`, `kxtqwsumojtexokrtlfp.supabase.co`) — Total
+active: 279. Below floor (4/12): `overcut` 11, `figure_7` 17, `odd_even_threat` 0, `claimeven` 18.
+All others pass: `double_threat` 25, `forced_block` 30, `immediate_threat` 30, `undercut` 30,
+`forbidden_columns` 28, `forced_win` 29, `j_shape` 31, `z_threat` 30. Pending `candidates`:
+`double_threat` 30, `immediate_threat` 30, `claimeven` 20 — `figure_7`, `overcut`,
+`odd_even_threat` still have zero promotable candidates on production.
+
+Both staging and production were reachable and queried successfully — neither environment was
+unreachable during this measurement. The measurement script used
+(`node <script> <envfile>`, read-only `count: 'exact', head: true` queries against `puzzles`/
+`candidates`, no writes) is preserved at
+`/private/tmp/claude-501/.../scratchpad/pool-counts.mjs` for this session only — it was not checked
+into the repo since `fill-candidate-pools.mjs` (T009, a later task in this batch sequence) already
+owns per-(category,environment) counting as part of its dry-run report.
+
+### T008 (Batch 1, 2026-08-04) — read-only highlight_metadata audit, overcut/undercut/z_threat, staging + production
+
+Read-only, no writes. Reused `server/scripts/repair-overcut-highlight-metadata.js`'s dry-run/diff
+logic (canonicalized-JSON comparison of `highlight_metadata`, driven by `checkOvercutPredicate` /
+`checkUndercutPredicate` / `checkZThreatPredicate` in `server/candidate-generator.js`) via a
+throwaway audit script, extended to all three metadata-graded categories per this task's widened
+scope. The audit queries every row in both `puzzles` and `candidates` for the category (matching the
+original script's own query shape — not filtered to `is_active`/`status='approved'` only), against
+the CURRENT detector, as changed by T005.
+
+**Important dependency discovered mid-audit**: staging's and production's `puzzles`/`candidates`
+tables still carry the LEGACY `correct_col` singular scalar column — **not** `correct_cols` (array)
+. Confirmed by selecting a live row's keys on both environments: both list `correct_col`, neither
+lists `correct_cols`. This is the same `061_correct_cols.sql` unapplied-migration finding T019
+records for a different reason. Consequence for T005 specifically: **the correctCols cross-check
+this batch just shipped is INERT on staging and production today** — `puzzle.correctCols` will be
+`undefined` for every row built from live data until that migration ships, so T005's fix only
+protects `/api/evaluate-move` callers once `061_correct_cols.sql` is applied to both environments.
+This audit therefore compares `highlight_metadata` only (matching the original script's own
+comparison surface, which never touched `correct_cols` either).
+
+**overcut** — staging: identical 12, stale 4, ambiguous 0, no_longer_matches 4 (across
+puzzles+candidates, 10 rows each table = 20 total). production: identical 12, stale 8, ambiguous 0,
+no_longer_matches 2 (11 rows each table = 22 total). **These numbers are an EXACT match to the
+existing `OI-92` table** (staging: 6+6 identical / 2+2 differs / 2+2 fails = 12/4/4; production:
+6+6 identical / 4+4 differs / 1+1 fails = 12/8/2) — overcut has not drifted further since OI-92 was
+last measured (2026-07-30).
+
+**undercut** — staging: identical 20, stale 0, ambiguous 0, no_longer_matches 0 (fully clean).
+production: identical 56, stale 0, ambiguous 0, no_longer_matches 4 — movestrings
+`13365353214264620046` and `35054462343613031`, one puzzles-row and one candidates-row each, no
+longer match `detectUndercutVictim` at all under the current detector. **This is NEW drift OI-92
+never covered** (OI-92 is scoped to `overcut` only). Zero rows have differing `highlight_metadata`
+(the specific shape T005's fix protects against) on either environment — undercut's live drift is
+entirely "no longer matches," not "stale metadata."
+
+**z_threat** — staging: identical 20, stale 0, ambiguous 0, no_longer_matches 0. production:
+identical 60, stale 0, ambiguous 0, no_longer_matches 0. **Fully clean on both environments** — no
+drift of any kind.
+
+**Disposition**: per D1 (retire-and-refill, resolved), all `stale` and `no_longer_matches` rows
+above are candidates for `fill-candidate-pools.mjs --apply`'s wholesale category refill (T009,
+owner-run per T015) — no in-place repair script is written for undercut/z_threat, matching the
+"no second repair script" directive. **The 4 production `undercut` no_longer_matches rows are drift
+not yet named in `docs/open_issues.md`** (OI-92 only documents overcut); Batch 2's T016, which closes
+out OI-92, should either widen OI-92's scope to cover this or open a new OI-N for it — this batch
+(T001-T008) does not touch `docs/open_issues.md` and defers that call to T016 as scoped.
+
+Audit script: throwaway, not checked into the repo (mirrors T009's "no second repair/audit script
+lives in the repo" posture); preserved for this session at
+`/private/tmp/claude-501/.../scratchpad/audit-t008.mjs`.
+
 ### Migration ledger vs disk — the epic's central claim here is stale
 
 `ls connect-four/server/migrations/` (git-clean, `git status --short` empty) shows, among the newest

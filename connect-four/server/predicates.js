@@ -306,6 +306,15 @@ function evalForbiddenColumns(candidateCol, scores, moveString) {
 // membership against a solver-gated one-element set (detectZThreat's own candidates.length !== 1
 // rejection keeps this a singleton — no cardinality relaxation), not a bare scalar equality check.
 function evalZThreat(candidateCol, puzzle) {
+  // T005 (FR-006/OI-92): a solver-gated puzzle.correctCols is an ADDITIONAL acceptance path on top
+  // of the highlightMetadata-derived check below, not a replacement for it — an absent/empty
+  // correctCols falls through to the existing metadata logic unchanged. This makes a mathematically
+  // correct answer immune to stale stored highlightMetadata whether or not a retire-and-refill pass
+  // (fill-candidate-pools.mjs) has run on this specific row yet.
+  const gatedCols = puzzle.correctCols;
+  if (Array.isArray(gatedCols) && gatedCols.length > 0 && gatedCols.includes(candidateCol)) {
+    return { result: 'correct', correctCol: candidateCol };
+  }
   const correctCol = puzzle.highlightMetadata?.column;
   if (correctCol === undefined || correctCol === null) return { result: 'wrong' };
   const correctCols = [correctCol];
@@ -346,6 +355,15 @@ function evalClaimeven(candidateCol, puzzle) {
 // means "cannot verify the floor" and the check is skipped rather than failed closed — only a
 // real, full-length score array can prove a column unsafe.
 function evalUndercut(candidateCol, puzzle, scores) {
+  // T005 (FR-006/OI-92): correctCols is an ADDITIONAL acceptance path, not a replacement — an
+  // absent/empty correctCols falls through unchanged to the metadata + live solver-safety check
+  // below. correctCols itself is only ever populated by checkUndercutPredicate after applying the
+  // same isSolverSafe floor (candidate-generator.js), so accepting a correctCols-listed column here
+  // does not weaken the safety floor — it is already baked into that array's membership.
+  const gatedCols = puzzle.correctCols;
+  if (Array.isArray(gatedCols) && gatedCols.length > 0 && gatedCols.includes(candidateCol)) {
+    return { result: 'correct' };
+  }
   const cells = puzzle.highlightMetadata?.cells;
   if (!cells) return { result: 'wrong' };
   const killing = cells.find(c => c.role === 'killing_threat');
@@ -362,6 +380,13 @@ function evalUndercut(candidateCol, puzzle, scores) {
 // `checkOvercutPredicate`'s `correctCols.length !== 1` check — Finding F1), not a bare scalar
 // equality check.
 function evalOvercut(candidateCol, puzzle) {
+  // T005 (FR-006/OI-92): correctCols is an ADDITIONAL acceptance path on top of the
+  // highlightMetadata-derived check below, not a replacement — an absent/empty correctCols falls
+  // through to the existing metadata logic unchanged.
+  const gatedCols = puzzle.correctCols;
+  if (Array.isArray(gatedCols) && gatedCols.length > 0 && gatedCols.includes(candidateCol)) {
+    return { result: 'correct', correctCol: candidateCol };
+  }
   const cells = puzzle.highlightMetadata?.cells;
   if (!cells) return { result: 'wrong' };
   const major = cells.find(c => c.role === 'major_threat');

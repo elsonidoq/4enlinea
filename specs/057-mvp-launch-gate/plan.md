@@ -252,9 +252,9 @@ connect-four/
 │   │   ├── PricingScreen.jsx                   # US3 FR-013 — mount useEffect exists (:36-48) but doesn't call
 │   │   │                                       #        getPaddle(); needs mount-time init + ?_ptxn= read
 │   │   ├── sagaLock.js                         # US3 FR-017 — 3 chained functions must each thread a new 'signin'
-│   │   │                                       #        outcome: deriveLockReason (:12) → dispatchLockAction (:30)
-│   │   │                                       #        → deriveLessonAccess (:44) — not just deriveLessonAccess alone
-│   │   └── SagaScreen.jsx                      # US3 FR-017 — renders UpgradeModal on lockAction:'upgrade' (:305);
+│   │   │                                       #        outcome: deriveLockReason (:12) → dispatchLockAction (:31)
+│   │   │                                       #        → deriveLessonAccess (:47) — not just deriveLessonAccess alone
+│   │   └── SagaScreen.jsx                      # US3 FR-017 — renders UpgradeModal on lockAction:'upgrade' (:304);
 │   │                                           #        needs a signed-out branch to AuthModal instead
 │   └── components/
 │       ├── UpgradeModal.jsx                    # US3 FR-017 — does NOT need to distinguish "sign in" vs "upgrade"

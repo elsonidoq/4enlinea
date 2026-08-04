@@ -1019,7 +1019,7 @@ The `row` shape:
 
 **`move_index` stamping**: `insertGameBlunder` computes `move_index` as `row.board_state?.length ?? null`. This is the 0-indexed global ply number where the blunder occurred. Callers do NOT pass `move_index` — the function derives it from `board_state`. The column and its partial unique indexes (`idx_blunders_papergames_unique` for papergames rows, `idx_blunders_game_unique` for AI-sparring `game_id` rows — migration 054) back the `23505`-as-success dedup for idempotent re-analysis/re-import per `(user_id, <fk>, move_index)`.
 
-**Storage gate — `server/mistakeStorageRule.js`**: `classifyStoredMistake(bestScore, playedScore, movestring)` is the single shared gate that decides whether a non-optimal ply is written at all, and with which `quality`. All three write paths call it *before* `insertGameBlunder`/the `POST /api/blunders` insert: `POST /api/games/analyze`, `papergamesImporter.extractBlunders`, and `POST /api/blunders`. It returns `null` (do not store) for slower wins and dead-position faster losses; otherwise `{ quality }` graded by score drop (`> 4` → `'blunder'`). Its `playerHasPotentialWin(board, player)` liveness check (any 4-window free of opponent discs) is deliberately NOT the forbidden `bestScore < 0` skip — solver-lost-but-alive positions are still stored. See `data-model.md` for the full rule and rationale.
+**Storage gate — `server/mistakeStorageRule.js`**: `classifyStoredMistake(bestScore, playedScore, movestring)` is the single shared gate that decides only whether a non-optimal ply is ELIGIBLE for storage — it returns a boolean (`true`/`false`), never a `quality`. Grading is NOT its job: per spec 057 FR-019a (owner directive, 2026-08-03), `scoreMove` (`moveQualityScorer.js`) is the sole grader of the game-move `quality` label anywhere in the repo; callers take `quality` from `scoreMove` and pass it through. The two live write paths call `classifyStoredMistake` before `insertGameBlunder`: `POST /api/games/analyze` and `papergamesImporter.extractBlunders`. **`POST /api/blunders` is retired** (spec 057 T035 item 2 option (b) — see `server/index.js` around the "POST /api/blunders — RETIRED" comment; it had no client caller and required the score-pair grading path `classifyStoredMistake` no longer provides). `classifyStoredMistake` returns `false` (do not store) for slower wins (case 1) and dead-position faster losses (case 3's aliveness gate); otherwise `true` (case 2/3). Its `playerHasPotentialWin(board, player)` liveness check (any 4-window free of opponent discs) is deliberately NOT the forbidden `bestScore < 0` skip — solver-lost-but-alive positions are still stored. See `data-model.md` for the full rule and rationale.
 
 - `game_id` and `papergames_game_id` are both nullable. Pass `null` (or omit) when the blunder does not originate from that source.
 - Returns `true` on success or a `23505` dedup (already recorded), `false` on any other DB error. Callers that track import quality (e.g. `importForUser`) count `false` returns as `blunderErrors`.
@@ -1165,7 +1165,64 @@ independent of the HTTP layer.
 
 ## Annotation Gate (`POST /api/explain-move-llm`)
 
-All LLM outputs from `/api/explain-move-llm` pass through `validateAnnotation` (in `server/annotationGate.js`) before being cached or delivered to the client.
+**Updated 2026-08-04 (spec 057 Epic 10 US2, T028, D3) — the rest of this section describes an
+earlier, never-shipped design (retry-on-failure + a `deep_reveal_failures`-backed tier-1 fallback
+string) that OI-124 found had **zero production callers**: nothing under `server/` imported
+`validateAnnotation` outside `server/scripts/run_eval.mjs` and
+`server/scripts/corpus_annotation_check.mjs` (both offline). What actually ships as of T028 is
+narrower — **strip-and-log**, not retry-and-fallback. Read this paragraph and the one after it as
+authoritative; the "Signature"/"Checks"/"Retry"/"Tier-1 fallback" prose below is historical
+context for the offline eval path only, not a description of `/api/explain-move-llm`'s live
+behavior.
+
+**What's wired in (T028)**: `guardExplainMoveLlmPayload` (`server/reasonRenderGuard.mjs`) — the
+single response-boundary seam every player-facing explanation crosses on its way out of
+`server/index.js` (documented in `server/reasonRenderGuard.mjs`'s own file header; also see OI-126
+below for the `stripInternalTokens` half of the same module) — now accepts an optional `board` and,
+when supplied, runs `validateAnnotation(explanation, board, null)` before serving the text. All
+three `/api/explain-move-llm` call sites (`server/index.js`: the cache-hit early return, the
+not-a-blunder early return, the fresh-generation response) pass the **pre-move** `Board` already
+constructed at the top of the handler (`new Board(movestring)`) — the same convention the offline
+callers use (the played column is passed separately, never baked into the board).
+
+- **Enforcement is strip, not retry.** The owner explicitly rejected retry (a second LLM call is
+  real cost) and serve-and-log (too weak) — see D3 in `specs/057-mvp-launch-gate/spec.md`. On any
+  span-carrying failure (`P1:*:SPEC`, `P2:col_mismatch:SPEC`, `P5:*:SPEC`, `P6:*:SPEC`), the
+  offending `[zone:SPEC]...[/zone:SPEC]` wrapper is removed but its **inner text is kept** — the
+  interactive highlight disappears, the sentence stays readable. The failure codes are logged via
+  `console.warn('[annotation gate] stripped failing zone annotation(s)...', failures)` — a
+  conditional warn, fired only on an actual failure, deliberately distinct from the unconditional
+  debug `console.log`s that used to live inside `validateAnnotation` itself (deleted in T028; see
+  "Deleted debug logs" below).
+- **P3 policy (span-less failures — disc notation / player names / engine jargon): LOG AND SERVE,
+  not stripped.** `checkP3` pushes a bare code (`'P3:disc_notation'`, `'P3:player_name'`,
+  `'P3:engine_jargon'`) with no zone spec attached, so there is nothing to strip — a third of the
+  failure vocabulary is fundamentally not span-shaped. The text-level floor for this category is
+  `stripInternalTokens`'s widened coordinate regex (T026, below) plus the prompt-side instruction
+  at `llmCoachHelpers.js:804`; neither is a hard guarantee, so a P3-flagged explanation can still
+  reach the player today. This is a deliberate, recorded gap, not an oversight.
+- **`allowedSet` is never threaded on the live path, so P5Strong never runs there.**
+  `guardExplainMoveLlmPayload` always calls `validateAnnotation(explanation, board, null)` — the
+  third argument is hardcoded `null`. `checkP5Strong` only runs when `allowedSet != null`
+  (`annotationGate.js:500`), and no `server/index.js` call site builds one
+  (`/usr/bin/grep -n "allowedSet" server/index.js` → zero matches). So of the checks in the table
+  below, only **P1, P2, P3, P5, P6** apply to a served explanation; P5strong remains offline-eval-only
+  (`run_eval.mjs`, which does thread a real `allowedSet`).
+- **Deleted debug logs.** `validateAnnotation` (`server/annotationGate.js`) used to
+  unconditionally `console.log` its parsed zones and `allowedSet` on every call — which would have
+  printed on every served explanation once T028 wired the gate into the request path. Both lines
+  are deleted; `server/scripts/corpus_annotation_check.mjs`'s `withSilencedConsole` wrapper (built
+  to work around them) is now a no-op for that purpose and left in place, noted as such.
+- **Measured latency**: the gate is a synchronous board scan with no I/O (`annotationGate.js`'s own
+  header: "No side effects, no DB, no I/O"). Measured 2026-08-04 in-process (Node, warm, 2000
+  iterations, a 4-zone explanation string): ~0.0147ms/call with the gate wired in vs. ~0.0009ms/call
+  without it — a delta of **~0.014ms per call**, effectively free against the Explanation Engine's
+  <2s budget (Constitution V).
+- **`guardExplainMovePayload` (`/api/explain-move`, the legacy `composeExplanation` path) is
+  deliberately NOT wired to the gate.** Per `docs/knowledge-base`/memory
+  `project_prod_llm_call_graph`, this endpoint has no frontend caller, and `composeExplanation`'s
+  output never carries `[zone:...]` tags in the first place — there is nothing for the gate to
+  validate there.
 
 ### Signature
 
@@ -1173,22 +1230,24 @@ All LLM outputs from `/api/explain-move-llm` pass through `validateAnnotation` (
 validateAnnotation(explanation, board, allowedSet = null)
 ```
 
-The third parameter `allowedSet` is an internal grounding contract array built by `buildExplainContext`. When provided, an additional check runs.
+The third parameter `allowedSet` is an internal grounding contract array built by `buildExplainContext`, used only by the offline eval scripts today. When provided, an additional check (P5strong) runs.
 
 ### Checks
 
 The gate runs up to seven checks:
 
-| Check | Description |
-|---|---|
-| **P1** — spec syntax/bounds | Every `[zone:SPEC]` must be a known format and resolve to ≥1 in-bounds cell. `tg` is always valid. |
-| **P2** — column-reference consistency | For `colN` zones, any explicit column reference in the inner text must match N. |
-| **P3** — forbidden terminology | Explanation must not contain disc notation (`\bR\b`, `\bY\b`), player names (Red/Yellow/Black), or engine jargon (forced win, the solver, forced_win, etc.). |
-| **P5** — blocked 4-windows | Each zone must have at least one live 4-window (not blocked by both players) on the actual board. |
-| **P6** — raw coordinates | Zone inner text must not contain raw coordinate strings like `c4r3` or `col5`. |
-| **P5strong** — zone-vs-allowedSet (Epic B) | When `allowedSet` is provided: `tg` always fails; `colN` must match an allowed column; cell-level specs must appear in a CONCRETE-ELIGIBLE entry's `cells` list. ABSTRACT-ONLY entries satisfy `colN` zones but NOT cell-level zones. |
+| Check | Description | Runs on the live `/api/explain-move-llm` path? |
+|---|---|---|
+| **P1** — spec syntax/bounds | Every `[zone:SPEC]` must be a known format and resolve to ≥1 in-bounds cell. `tg` is always valid. | Yes |
+| **P2** — column-reference consistency | For `colN` (and any cell-bearing spec), any explicit column reference in the inner text must match a column the zone actually occupies. | Yes |
+| **P3** — forbidden terminology | Explanation must not contain disc notation (`\bR\b`, `\bY\b`), player names (Red/Yellow/Black), or engine jargon (forced win, the solver, forced_win, etc.). | Yes (failures are logged and served, not strippable — no span) |
+| **P5** — blocked 4-windows | Each zone must have at least one live 4-window (not blocked by both players) on the actual board. | Yes |
+| **P6** — raw coordinates | Zone inner text must not contain raw coordinate strings like `c4r3` or `col5`. | Yes |
+| **P5strong** — zone-vs-allowedSet (Epic B) | When `allowedSet` is provided: `tg` always fails; `colN` must match an allowed column; cell-level specs must appear in a CONCRETE-ELIGIBLE entry's `cells` list. ABSTRACT-ONLY entries satisfy `colN` zones but NOT cell-level zones. | **No** — the live seam never builds/threads an `allowedSet` (see above) |
 
-**Backward compatibility**: When the `allowedSet` parameter is `null` or omitted (old callers), P5strong is silently skipped. The Epic A API is fully preserved.
+**Backward compatibility**: When the `allowedSet` parameter is `null` or omitted (old callers, and every live call today), P5strong is silently skipped. The Epic A API is fully preserved.
+
+**Historical design notes below (never shipped on the live path — offline-eval-only concepts, superseded on the live path by strip-and-log per D3 above):**
 
 **Retry**: If the first attempt fails validation, the same prompt is sent to the LLM a second time (bypassing cache and quota). If the retry also fails, the fallback path is taken.
 
@@ -1199,12 +1258,13 @@ The gate runs up to seven checks:
 2. The actual **decrement** (`checkAndDecrementQuota`) still runs **after** a valid explanation is confirmed — never before the LLM call, never for fallback/cache-hit/non-blunder responses.
 Cache hits (served before the LLM is called) do not consume quota. Note the intended behavioral consequence: an over-quota free user is now paywalled even on a *non-blunder* position (the gate precedes the "not a blunder → no quota consumed" early return). Do not collapse these two phases into a single post-compute check.
 
-**All-or-nothing rejection**: If ANY zone fails ANY check, the entire LLM output is rejected (FR-010).
+**All-or-nothing rejection (offline eval only)**: In `run_eval.mjs`'s usage, if ANY zone fails ANY check, the entire LLM output is rejected (FR-010). On the live path (T028), failures are handled per-annotation (strip-and-log) rather than all-or-nothing.
 
 **Relevant modules**:
 - `server/zoneParser.js` — `parseZoneSpecs`, `expandSpec`, `isValidSpec`
 - `server/annotationGate.js` — `validateAnnotation`, `checkP1`–`checkP6`, `getWindowsThroughCell`, `isWindowBlocked`
-- `server/migrations/031_deep_reveal_failures.sql` — failure log table DDL
+- `server/reasonRenderGuard.mjs` — `guardExplainMoveLlmPayload` (the live wiring point, T028), `stripFailingZoneSpans`
+- `server/migrations/031_deep_reveal_failures.sql` — failure log table DDL (offline eval path only; the live strip-and-log path does not write here)
 
 ## Deep Reveal Quota
 

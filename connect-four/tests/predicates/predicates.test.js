@@ -248,3 +248,76 @@ describe('/check endpoint — regression: single-move categories unaffected', ()
     });
   }
 });
+
+// ── T004 (spec 057, FR-006/OI-92) — a correct answer must survive stale highlightMetadata ──────
+//
+// evalOvercut/evalUndercut/evalZThreat historically graded purely off `puzzle.highlightMetadata`,
+// which is stored at generation time and never re-derived. If the detector logic later changes (or
+// a row simply drifts), a mathematically correct answer — one that IS present in the solver-gated
+// `puzzle.correctCols` — could still be graded 'wrong' because the stale metadata points somewhere
+// else. This test constructs exactly that shape: a real, solver-harvested board + correctCols, paired
+// with a deliberately stale highlightMetadata (a plausible pre-widening shape pointing at a WRONG
+// column). Per T005/FR-006, the grader must accept the correctCols-listed answer regardless of what
+// the stale metadata says.
+//
+// All movestrings/columns below were harvested live against the real c4solver (never hand-built),
+// via `detectOvercutBeneficiary`/`detectUndercutVictim`/`detectZThreat` and
+// `checkUndercutPredicate`/`checkZThreatPredicate` (server/candidate-generator.js), see the T004
+// harvesting commands in this batch's report. No repair/backfill (T009) can make this test pass —
+// the row's stored highlightMetadata is deliberately never repaired in this scenario; only a grader
+// change (T005) can.
+describe('T004 — stale highlightMetadata must not shadow a solver-gated correctCols answer', () => {
+  test('evalZThreat: correctCols-listed column wins over a stale highlightMetadata.column', () => {
+    // Harvested: ms="001122" — detectZThreat fires with real column=3, correctCols=[3].
+    // highlightMetadata.column is deliberately corrupted to 0 (a real, but WRONG, column on this
+    // board) to simulate a stale/mis-derived stored row.
+    const puzzle = {
+      id: 9004, category: 'z_threat', moveString: '001122',
+      highlightMetadata: { type: 'capsule', column: 0, fromRow: 0, toRow: 0, badgeCount: 1 },
+      correctCols: [3],
+    };
+    const result = evaluatePredicate(puzzle, 3, []);
+    assert.equal(result.result, 'correct', 'the correctCols-listed column must grade correct despite stale metadata');
+  });
+
+  test('evalOvercut: correctCols-listed column wins over a stale highlightMetadata major_threat', () => {
+    // Harvested: ms="26533454144531123345224155" — detectOvercutBeneficiary fires with real
+    // major_threat column=6, correctCols=[6]. highlightMetadata is corrupted to point major_threat
+    // at column 1 (a real column on the board, but not the answer) to simulate staleness.
+    const puzzle = {
+      id: 9005, category: 'overcut', moveString: '26533454144531123345224155',
+      highlightMetadata: {
+        type: 'cells',
+        cells: [
+          { column: 1, row: 2, role: 'neutralised_threat' },
+          { column: 1, row: 3, role: 'major_threat' },
+        ],
+      },
+      correctCols: [6],
+    };
+    const result = evaluatePredicate(puzzle, 6, []);
+    assert.equal(result.result, 'correct', 'the correctCols-listed column must grade correct despite stale metadata');
+  });
+
+  test('evalUndercut: correctCols-listed column wins over a stale highlightMetadata killing_threat', () => {
+    // Harvested: ms="33211553350634544", scores=[-10,-7,-12,-10,2,-10,-10] — detectUndercutVictim
+    // fires with real killing_threat column=2; checkUndercutPredicate's solver-safety floor yields
+    // correctCols=[4] (the only non-killing column with a non-negative score). highlightMetadata is
+    // corrupted so column 4 itself is flagged as the killing_threat column — under the OLD grader
+    // this makes submitting col 4 (the actually-correct answer) grade 'wrong'.
+    const puzzle = {
+      id: 9006, category: 'undercut', moveString: '33211553350634544',
+      highlightMetadata: {
+        type: 'cells',
+        cells: [
+          { column: 4, row: 0, role: 'killing_threat' },
+          { column: 4, row: 1, role: 'dead_threat' },
+        ],
+      },
+      correctCols: [4],
+    };
+    const scores = [-10, -7, -12, -10, 2, -10, -10];
+    const result = evaluatePredicate(puzzle, 4, scores);
+    assert.equal(result.result, 'correct', 'the correctCols-listed column must grade correct despite stale metadata');
+  });
+});

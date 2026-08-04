@@ -1,11 +1,11 @@
 ---
 name: feedback-verify-at-the-source-layer
-description: "Every false belief hides in a layer of representation — verify at the layer where the truth lives (signature not doc comment, diff not report, real output not your fixture, the app's request not your curl, all instances not a sample, call sites not tests, working tree not file list)"
+description: "Every false belief hides in a layer of representation — verify at the layer where the truth lives (signature not doc comment, diff not report, real output not your fixture, the app's request not your curl, all instances not a sample, call sites not tests, working tree not file list) — INCLUDING your own cost estimates and options tables: cite file:line for every claim you put in front of the user, or mark it UNVERIFIED"
 metadata: 
   node_type: memory
   type: feedback
   originSessionId: beac6818-214f-4294-b8d7-b0f88677a1a0
-  modified: 2026-08-02T17:17:01.793Z
+  modified: 2026-08-04T14:58:47.084Z
 ---
 
 **You trust representations of reality over reality itself. That is one mistake, and it wears many costumes.**
@@ -28,6 +28,7 @@ Whenever you are about to believe something about a system, ask: *is this the tr
 | A test summary saying `fail 0` | **The test's own case names in the output.** `node --test` silently skips a missing file *in a list*, and — measured on Node v23.11.0 — the **exit code is 0 and `grep -c "Could not find"` is 0** too, so neither of those catches it (they only fire when the missing file is the sole argument). `test:fast` is always a list. See `docs/architecture/testing-conventions.md` §`test:fast` |
 | An Opus critique agent's confident, specific premise | **The code it names.** Critique agents assert false premises as fluently as implementers ("StatsScreen reuses its existing AuthModal" → StatsScreen has no AuthModal). Give every fix agent a **stop-and-report** instruction instead of a fix-it mandate, so a false premise surfaces rather than getting built on |
 | A line number | **The symbol name.** Line refs drift; names don't |
+| **Your own cost estimate, options table, or "that would require X"** | **The function behind each option.** An estimate is a claim about this codebase and needs a citation exactly like a finding does. Framings inherited from `plan.md`/`spec.md`/epic research are the worst offenders — they read as settled but are routinely written by a session that never opened the file |
 
 **Why (2026-07-16 QA-remediation session — 19 errors, one root cause):**
 
@@ -46,6 +47,8 @@ Whenever you are about to believe something about a system, ask: *is this the tr
 - **A whole spec→plan→tasks pipeline never wrote one line of the artifact it was specifying.** Spec 055's central deliverable was a *new* `eslint.config.js`. Every other item in that epic was a doc edit (verifiable by reading) or a mutation of an existing file (verifiable by diff), so four stages of review found real defects everywhere else — and described the new file only as *intent*, never *structure*. Two consequences only surfaced at the last review: the specified "catch-all block" is **unexpressible** in ESLint flat config (blocks merge; there is no "files not matched elsewhere"), and the `--print-config` guardrail written to catch that **would have passed the broken config**, because it only asserted "rules > 0". **When the deliverable is code that does not exist yet, no amount of citation discipline verifies it — the pipeline can only check itself against documents.** Write and run the smallest real instance during planning, or state plainly that the artifact is unvalidated and make its verification step a blocking gate with a failing case, not a smoke check. A guardrail you specified is a representation too; ask what broken input it would let through.
 - **A "no precedent found" claim suppressed the right answer.** The same pipeline reported no migration-constraint-test precedent existed and left a placeholder. `blunderTagConstraint.test.js` is exactly that precedent — it asserts code-vs-constraint parity by parsing the migration SQL, with no DB connection. A negative claim about the repo manufactured a placeholder where a copyable pattern already existed. See [[project_grep_silent_zero_matches]].
 
+- **I verified every claim except my own — and the owner caught seven in one session (2026-08-04, spec 057).** I re-ran every sub-agent's test counts rather than trust them, planted a fake grader to falsify a structural test, and queried both live databases instead of believing a `correct_cols` report. All of that discipline was real, and all of it pointed *outward*. The claims I never checked were the ones I authored: **cost estimates and options tables.** Every owner intervention was some form of *"is that actually true?"*, and each answer cost 3–4 greps: *"would enforcing make another LLM call?"* → no, `annotationGate.js:2` says **"No side effects, no DB, no I/O"** (only the *retry* policy would); *"where is each function called?"* → both graders ran **seven lines apart** at `index.js:2410`/`:2417`, with a whole frontend module existing to reconcile them; *"why doesn't it accept ties?"* → the grader already returned `'tied'` and the fix was **one character**, while I had claimed it "would reintroduce the bug we just fixed"; *"can't we include threats in the allowedSet?"* → the allowed set **already existed** (`buildAnnotationOffer`), turning a "2 day" estimate into half a day. The D3 cost framing I put to the owner ("latency + failure-policy change on the paid hot path") was copied verbatim out of `plan.md`'s Complexity Tracking table by a session that had not opened `annotationGate.js` either. **Inflation felt safe and wasn't** — a false cost nearly closed a correct option, and unlike an underestimate, nobody re-checks a decision that's already been made. `AskUserQuestion` is the highest-risk moment in the loop: whatever framing you present is decided on and then treated as settled.
+
 **The lesson that generalizes past all of it:** I first wrote these rules scoped to *plan authoring* — and then made three more of the same errors, in *verification*, *code review*, and *orchestration*. **A rule scoped to one costume does not transfer.** The principle is the deliverable, not the checklist.
 
 **How to apply:**
@@ -58,5 +61,6 @@ Whenever you are about to believe something about a system, ask: *is this the tr
 7. **Treat "already satisfied" as unverified** until you read the code that satisfies it.
 8. **Serialize write-capable agents**, or give one `isolation: "worktree"`. Never two in one tree.
 9. **Locate by symbol, not line.**
+10. **Cite-or-flag every claim inside an options table.** Before `AskUserQuestion` on a technical choice, open the primary artifact behind **each** option. Then put a `file:line` next to every factual claim in the table — cost, latency, "this would require X", size estimates. **If you can't cite it, write `UNVERIFIED` next to it.** This is the one rule here that does not depend on your recall: it converts an invisible failure into a visible one, so the reader can aim a single skeptical question at exactly the load-bearing claim instead of having to suspect the whole table. Prevention failed seven times in one session while this file was loaded in context; visibility would have caught all seven at a glance.
 
 Related: `CLAUDE.md` §"When writing specs for existing components", [[feedback_llm_output_root_cause]], [[feedback_engine_soundness_then_render]], [[feedback_occam_principled_extrapolation]].

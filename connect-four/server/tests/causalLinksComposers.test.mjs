@@ -8,7 +8,7 @@ import { classifyCausalLink } from '../scripts/reason_engine/causalLinks.mjs';
 import { patternOnAfterBestBoard } from '../scripts/reasonBoardSelect.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const CORPUS = join(__dirname, '../scripts/reason_evidence_boards_coverage_2026-07-02T11-37-56Z.jsonl');
+const CORPUS = join(__dirname, '../scripts/fv_suff/reason_evidence_boards_coverage_2026-07-02T11-37-56Z.jsonl');
 const rows = readFileSync(CORPUS, 'utf8').trim().split('\n').map((l) => JSON.parse(l));
 export function classifyById(id) {
   const fv = pruneVector(toNarratorVector(rows.find((r) => r.id === id).evidence));

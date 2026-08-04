@@ -49,6 +49,7 @@ describe('insertGameBlunder', () => {
       move_played: 3,
       correct_move: 4,
       pattern_category: 'totally_invalid_tag',
+      quality: 'blunder',
       reason: 'test reason',
       direction: 'missed_own',
       severity: 5,
@@ -68,6 +69,7 @@ describe('insertGameBlunder', () => {
       move_played: 3,
       correct_move: 4,
       pattern_category: 'forced_win',
+      quality: 'blunder',
       reason: 'test reason',
       direction: 'missed_own',
       severity: 5,
@@ -75,6 +77,64 @@ describe('insertGameBlunder', () => {
     });
     // If we reach here without throwing, the 23505 was handled
     assert.ok(true, '23505 did not throw');
+  });
+});
+
+// FR-019a (spec 057): the write-seam coercion `row.quality === 'suboptimal' ? 'suboptimal'
+// : 'blunder'` was a third, silent grading criterion — it invented 'blunder' whenever the
+// real grader (scoreMove) produced nothing. It is now removed: missing/invalid quality
+// must fail loudly (console.error + no insert), never default.
+describe('insertGameBlunder — quality validation (FR-019a)', () => {
+  it('fails loudly and does not insert when quality is missing', async () => {
+    const supabase = makeStubSupabase();
+    const result = await insertGameBlunder(supabase, {
+      user_id: '550e8400-e29b-41d4-a716-446655440000',
+      board_state: '012345',
+      move_played: 3,
+      correct_move: 4,
+      pattern_category: 'forced_win',
+      reason: 'test reason',
+      direction: 'missed_own',
+      severity: 5,
+      blunder_severity: 0.5,
+    });
+    assert.equal(result, false);
+    assert.equal(supabase.captured(), null, 'insert should not have been called');
+  });
+
+  it('fails loudly and does not insert when quality is an invalid value (e.g. "optimal" or a typo)', async () => {
+    const supabase = makeStubSupabase();
+    const result = await insertGameBlunder(supabase, {
+      user_id: '550e8400-e29b-41d4-a716-446655440000',
+      board_state: '012345',
+      move_played: 3,
+      correct_move: 4,
+      pattern_category: 'forced_win',
+      quality: 'optimal',
+      reason: 'test reason',
+      direction: 'missed_own',
+      severity: 5,
+      blunder_severity: 0.5,
+    });
+    assert.equal(result, false);
+    assert.equal(supabase.captured(), null, 'insert should not have been called');
+  });
+
+  it('accepts an explicit "blunder" or "suboptimal" quality verbatim (no coercion)', async () => {
+    const supabase = makeStubSupabase();
+    await insertGameBlunder(supabase, {
+      user_id: '550e8400-e29b-41d4-a716-446655440000',
+      board_state: '012345',
+      move_played: 3,
+      correct_move: 4,
+      pattern_category: 'forced_win',
+      quality: 'suboptimal',
+      reason: 'test reason',
+      direction: 'missed_own',
+      severity: 5,
+      blunder_severity: 0.5,
+    });
+    assert.equal(supabase.captured().quality, 'suboptimal');
   });
 });
 

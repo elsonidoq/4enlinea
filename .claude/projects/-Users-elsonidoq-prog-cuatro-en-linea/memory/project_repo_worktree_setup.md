@@ -62,8 +62,16 @@ and the tool's base-ref is a harness setting, not something the repo can pin.
 **How to apply:** reset the new worktree to stagging HEAD, `npm install`, copy `server/.env`,
 then take a `test:fast` baseline before treating any failure as your own.
 
-**2d. That baseline is NOT green, and the 5 reds are NOT a worktree artifact.** As of 2026-08-01 a
-clean `npm run test:fast` is **1522 tests / 1517 pass / 5 fail** — `branchInvariance`,
+**2d. FIXED 2026-08-04 — the baseline IS green now; judge yourself against 0, not 5.** Spec 057's
+T017 repointed all five test files at the real corpus directory (`server/scripts/fv_suff/`), and a
+clean `npm run test:fast` is **1739 tests / 1739 pass / 0 fail** (261 suites, lint 0 errors /
+47 warnings). OI-82 is closed. **A red run is now yours.** Two things worth keeping from the
+original note: the failures reproduced in the MAIN checkout too, so a red `test:fast` is still not
+automatically a worktree artifact; and `.gitignore:6` is a blanket `*jsonl`, so corpus files are
+force-added and a *new* one you create will be invisible to git unless you force-add it as well.
+
+(Historical, for the record.) As of 2026-08-01 a
+clean `npm run test:fast` was **1522 tests / 1517 pass / 5 fail** — `branchInvariance`,
 `causalLinksComposers`, `reasonRenderFixes`, `renderCoverageCorpus`, `renderCoverageUniverse`, all
 `ENOENT` on `server/scripts/reason_evidence_boards_coverage_*.jsonl`. This is **OI-82**: the tests
 build the path at `server/scripts/`, but the corpora live one directory deeper in

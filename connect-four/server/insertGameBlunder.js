@@ -12,20 +12,32 @@ import { VALID_BLUNDER_TAGS } from './blunderTags.js';
  *   Authenticated rows carry user_id; anonymous rows carry device_uuid.
  *   Pass game_id for AI sparring games, papergames_game_id for papergames imports.
  *   Both are nullable — omit or pass null for puzzle blunders.
- * @returns {Promise<void>}
+ * @returns {Promise<boolean>} `true` on a successful insert OR a `23505` dedup (already
+ *   recorded — treated as success); `false` when the row was rejected (missing owner
+ *   identity, invalid `quality`) or the insert itself failed. Never throws or rejects —
+ *   `papergamesImporter.js`'s `if (!ok) blunderErrors++;` relies on both rejection paths
+ *   collapsing to the same falsy value.
  */
 export async function insertGameBlunder(supabase, row) {
   // Owner gate: authenticated rows carry user_id; anonymous rows carry device_uuid
   // (device-keyed, re-associated to user_id on /api/user/migrate). Reject only
   // when NEITHER identity is present.
-  if (!row.user_id && !row.device_uuid) return;
+  if (!row.user_id && !row.device_uuid) return false;
 
   // Tag guard: substitute unrecognized tags before INSERT
   const safeTag = VALID_BLUNDER_TAGS.has(row.pattern_category)
     ? row.pattern_category
     : 'suboptimal_move';
 
-  const quality = row.quality === 'suboptimal' ? 'suboptimal' : 'blunder';
+  // FR-019a (spec 057): `quality` MUST come from the caller's grading (scoreMove is
+  // the sole grader). Do NOT default a missing/invalid value to 'blunder' — that was
+  // a third, silent criterion that fired exactly when the real grader produced
+  // nothing. Fail loudly instead.
+  if (row.quality !== 'suboptimal' && row.quality !== 'blunder') {
+    console.error('[insertGameBlunder] invalid or missing quality:', row.quality);
+    return false;
+  }
+  const quality = row.quality;
 
   const payload = {
     user_id: row.user_id ?? null,

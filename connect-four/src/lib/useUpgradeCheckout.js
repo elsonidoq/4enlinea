@@ -29,7 +29,14 @@ export const PADDLE_CHECKOUT_DISMISSED_EVENT = 'paddle:checkout-dismissed';
 // sole caller of /api/paddle/verify-transaction).
 let paddlePromise = null;
 
-async function getPaddle() {
+// Exported for PricingScreen.jsx's mount-time init (spec 057 US3, T041/FR-013,
+// OI-98) — a visitor arriving via Paddle's default payment link
+// (`/pricing?_ptxn=<transaction id>`) needs Paddle.js ready before it can
+// auto-open a checkout for that transaction. Still the same module-level
+// singleton promise as every other caller (handleUpgrade,
+// handleCheckoutCompleted below), so mount-time init and a later click both
+// resolve the one shared `paddle` instance.
+export async function getPaddle() {
   if (!paddlePromise) {
     paddlePromise = (async () => {
       const token = import.meta.env.VITE_PADDLE_CLIENT_TOKEN;

@@ -29,7 +29,10 @@ const SYNTHETIC_EXPLANATION = 'This was not the right move here.';
 const TARGET_COUNT = 50;
 
 // ---------------------------------------------------------------------------
-// Silence validateAnnotation's debug console.log calls during the run.
+// NOTE (spec 057 T028, 2026-08-04): validateAnnotation's unconditional debug console.log calls
+// were deleted at the source (`annotationGate.js:488-489`) — this wrapper is now a no-op for that
+// purpose. Left in place (harmless) in case another callee under this run starts logging; not
+// removed here to keep this task's diff scoped to the live-wiring change, not this offline script.
 // ---------------------------------------------------------------------------
 function withSilencedConsole(fn) {
   const originalLog = console.log;
@@ -41,6 +44,9 @@ function withSilencedConsole(fn) {
   }
 }
 
+// Async twin of withSilencedConsole above — same rationale (currently silences nothing, since
+// the debug console.log calls it was written to suppress were deleted at the source; kept as a
+// harmless defensive wrapper around its call site rather than removed, per the note above).
 async function withSilencedConsoleAsync(fn) {
   const originalLog = console.log;
   console.log = () => {};

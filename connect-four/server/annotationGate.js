@@ -485,8 +485,6 @@ export function normalizeZoneTags(text) {
  */
 export function validateAnnotation(explanation, board, allowedSet = null) {
   const zones = parseZoneSpecs(explanation);
-  console.log('[DEBUG validateAnnotation] parsed zones:', JSON.stringify(zones.map(z => z.spec)));
-  console.log('[DEBUG validateAnnotation] allowedSet:', JSON.stringify(allowedSet));
 
   const failures = [
     ...checkP1(zones),
