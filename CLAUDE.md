@@ -129,6 +129,22 @@ Always read memory `reference_supabase_connection.md` before writing any inline 
 - Service key var is `SUPABASE_SERVICE_ROLE_KEY` (not `SUPABASE_SERVICE_KEY`)
 - Parse `.env` manually — `dotenv` is not reliably available in `node -e`
 
+## Staging and production databases are disposable (pre-launch)
+
+**The app has not launched. Nobody uses staging or production.** Until the owner says otherwise, treat both databases as **disposable** — they can be dropped and regenerated at any time, and no row on them is worth preserving.
+
+Owner, 2026-08-03: *"Forget about production data for now. Nobody is using production or staging, we can drop the entire database and regenerate it if needed. Focus on developing these fixes as simple as possible, and documenting what should be done in production considering that the app is not being used yet."* And: *"I will let you know when we release, then we will have to plan how to do these features so we don't break any relevant user data."*
+
+What this changes:
+- **Prefer regenerate-from-scratch over surgical repair.** Do not plan idempotent in-place repair scripts, retire-vs-repair dispositions, attempt-history preservation, or backfills whose only purpose is protecting existing live rows.
+- **Production work is documentation, not tooling.** Write what the owner should do in `docs/deployment_steps.md` and stop. Do not build safety machinery around a live repair.
+- **A pending deploy backlog is not an ordering puzzle.** "Deploy current code, then regenerate the content" resolves most per-spec sequencing constraints.
+- **Do not inflate a defect's severity on the premise that a real user is hitting it.** Much of `docs/open_issues.md` and the epics are written as if live rows have users behind them; today they do not.
+
+What this does **not** change: code correctness. Detectors, guards, grading logic and tests must still be right — this only collapses the *live-data choreography* around them. Per-change deploy prerequisites still get recorded in `docs/deployment_steps.md`; the entry is just a note to the owner rather than an engineered procedure.
+
+**This rule expires at launch.** When the owner announces release, every constraint above inverts and live-data safety has to be planned deliberately. Re-confirm before relying on this if you have reason to think launch has happened.
+
 ## Running tests
 Use `npm run test:fast` (inside `connect-four/`) for all regular development and CI checks. It omits `candidate-generator.test.js`, which calls the real c4solver up to 400 times per test and frequently hangs for 10+ minutes due to solver IPC deadlock. Only run `npm test` when explicitly testing candidate generation.
 

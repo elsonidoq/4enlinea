@@ -43,8 +43,11 @@ The only `##` headings that name an epic are `## Epic 1 …` through `## Epic 9 
 > **Launch gating lives elsewhere.** [`docs/epics/pre-launch-mvp-epic.md`](pre-launch-mvp-epic.md)
 > (**Epic 10 — MVP Launch Gate**, Lane D, runs alone) carries the 16 `OI-N`s judged blocking for a
 > public paid launch, several of which are *not* covered by Epics 1–9 because they were filed after
-> this file was written (OI-92, OI-104, OI-126, OI-130, …). The two files do not overlap in scope and
-> neither renumbers the other; the epics here are quality/correctness work, not a launch checklist.
+> this file was written (OI-92, OI-104, OI-126, OI-130, …). Three issues — OI-41, OI-5, OI-31 — were
+> reassigned from Epics 3/4 to Epic 10 on 2026-08-03 (Epics 3 and 4 had already shipped, as spec 053
+> and spec 054, without doing that work); see the Traceability table below. Apart from those three, the
+> two files do not overlap in scope, and neither renumbers the other; the epics here are
+> quality/correctness work, not a launch checklist.
 
 ---
 
@@ -2087,8 +2090,8 @@ Every open `OI-N` maps to exactly one epic.
 |---|---|---|
 | 1 | A | OI-61(1), OI-75 |
 | 2 | A | OI-30, OI-33, OI-48, OI-60, OI-76 |
-| 3 | A | OI-25, OI-34, OI-39, OI-41, OI-55, OI-66 |
-| 4 | A | OI-5, OI-14, OI-17, OI-22, OI-31, OI-40, OI-47, OI-49, OI-50, OI-51, OI-52, OI-53 |
+| 3 | A | OI-25, OI-34, OI-39, OI-55, OI-66 |
+| 4 | A | OI-14, OI-17, OI-22, OI-40, OI-47, OI-49, OI-50, OI-51, OI-52, OI-53 |
 | 5 | B | OI-9†, OI-23, OI-26, OI-27, OI-28, OI-32, OI-42, OI-43†, OI-45, OI-64†, OI-65 |
 | 6 | B | OI-19, OI-38‡, OI-44, OI-46, OI-62, OI-63, OI-68, OI-69, OI-73 |
 | 7 | B | OI-21, OI-35, OI-37 |
@@ -2098,5 +2101,9 @@ Every open `OI-N` maps to exactly one epic.
 † subsumed by OI-65 — the remaining work is identical (generate the clips).
 ‡ Epic 6 corrects OI-38's stale count (47 entries / 43 missing `short_summary_es` / 4 present) but defers the
 translation itself to a standalone content spec — see Epic 6's Deferred section.
+
+**Reassigned to Epic 10:** OI-41 (was Epic 3), OI-5 and OI-31 (were Epic 4) — moved to
+[`docs/epics/pre-launch-mvp-epic.md`](pre-launch-mvp-epic.md) (Epic 10, US3/US5) on 2026-08-03. Epics 3
+and 4 had already shipped (specs 053 and 054) without doing that work, so nothing is orphaned.
 
 **Excluded as resolved:** OI-1, 2, 3, 4, 7, 8, 10, 11, 12, 13, 15, 18, 20, 24, 36, 54, 56, 57, 59, 67, 74, 77.

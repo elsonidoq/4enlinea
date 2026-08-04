@@ -1049,6 +1049,25 @@ followed by a redeploy so `migrate.js` picks up the corrected value before the n
 Recorded in `staging_checks.md` under the Epic 4 section, dated 2026-08-02. This OI remains **open**
 pending that variable change.
 
+**UPDATE 2026-08-03 (session closeout) — this entry's own rationale is now stale relative to
+`docs/architecture/server-conventions.md`.** The premise stated in the body above — "6543 is FORBIDDEN
+for DDL and multi-statement transactions" — was walked back in that doc on 2026-08-02:
+`server-conventions.md:1501-1504` now reads "The **transaction-mode pooler** (port **6543**) is **not
+the supported configuration** — converge on 5432. Two corrections to the previous wording here...
+[transaction-mode pgBouncer pins a backend connection for the duration of an explicit
+`BEGIN…COMMIT`]... Empirically they have: **staging's `DATABASE_URL` is on 6543 and its
+`schema_migrations` ledger shows five migrations applied through it**, most recently
+`061_security_lints.sql` on 2026-07-30." In other words, 6543 does **not** break `migrate.js`'s
+transactional DDL in practice — staging has been shipping real migrations on it — and the doc now
+explicitly instructs: "Treat a 6543 `DATABASE_URL` as **configuration drift to fix on its own
+schedule, not as a broken deploy**." The one thing 6543 genuinely cannot do is `pg_dump`.
+
+This does not close the entry — staging's port is still 6543 while production's is correctly 5432,
+which is a real inconsistency worth converging — but the "if picked up" framing above (fix before it
+silently corrupts a migration) overstates the risk. What remains is a **doc-sync / consistency task**
+(align staging's pooler port with production's for its own sake), not an active migration-breaking
+bug being freshly discovered. Cross-ref `server-conventions.md`'s Migration Runner section.
+
 ## OI-32 — Existing English coach + lesson clips are stale-model (tts-1), not regenerated onto gpt-4o-mini-tts
 
 **Status**: ⚠️ PARTIALLY FIXED, STAYING OPEN 2026-07-30 (spec 051 / Epic 5, US5 T050/T055) — the drift
@@ -2928,6 +2947,41 @@ have silently not been running. Then diagnose the remaining three. Verify with
 `cd connect-four && npm run test:fast` from the **main checkout**, not a worktree, so an inherited
 gitignored-file problem is not mistaken for a code one.
 
+**UPDATE 2026-08-03 (session closeout) — re-measured; count still 5, and all 5 confirmed the SAME root
+cause (not "2 diagnosed, 3 undiagnosed").** `cd connect-four && npm run test:fast` (lint passes first,
+~47 warnings baseline) currently reports **1672 pass / 5 fail**, the same five files as above:
+`server/tests/branchInvariance.test.mjs`, `server/tests/causalLinksComposers.test.mjs`,
+`server/tests/reasonRenderFixes.test.mjs`, `server/tests/renderCoverageCorpus.test.mjs`,
+`server/tests/renderCoverageUniverse.test.mjs`.
+
+Running each individually (`node --test server/tests/<file>.test.mjs`) shows all five throw the exact
+same shape of top-level `ENOENT` at import/setup time, all pointing at a path missing the same
+directory segment:
+
+```
+Error: ENOENT: no such file or directory, open
+'.../connect-four/server/scripts/reason_evidence_boards_coverage_2026-07-02T11-37-56Z.jsonl'
+```
+
+(`renderCoverageUniverse.test.mjs` wants the `2026-07-03T17-14-51Z` timestamp variant of the same
+pattern; the other four want `2026-07-02T11-37-56Z`.)
+
+**Correcting the epic's "filename prefix dropped" framing**: `find server/scripts -iname
+"*coverage*"` shows both files exist, prefix intact, one directory deeper than the tests look:
+`server/scripts/fv_suff/reason_evidence_boards_coverage_2026-07-02T11-37-56Z.jsonl` and
+`server/scripts/fv_suff/reason_evidence_boards_coverage_2026-07-03T17-14-51Z.jsonl`. The
+`reason_evidence_` prefix is **not** dropped anywhere on disk — every test's string literal is simply
+missing the `fv_suff/` path segment. The fix is inserting that one segment into 5 string literals, not
+renaming or re-prefixing anything.
+
+Because all five tests fail at the identical `readFileSync(...)` ENOENT step (three of them — 
+`branchInvariance`, `causalLinksComposers`, `reasonRenderFixes` — die at *module import* time before
+any test body runs, which is why they were previously reported as "undiagnosed whole-file failures"),
+this is **one bug, not three-plus-two**. The suite can plausibly reach 0 failures from a single
+mechanical fix (add `fv_suff/` to each literal path), not just the "2 of 5" the epic assumed — though
+per the original entry's own caution, each test still needs to be confirmed to actually exercise its
+assertions (not just stop throwing) once the path is fixed.
+
 ## OI-83 — Backfilling `correct_cols` with real solver scores retires the only `forced_win` puzzle (AMBIGUOUS, tied win column not detected)
 
 **Status**: open — surfaced by the spec 051 (Epic 1, US3) real backfill run, 2026-07-29
@@ -3884,6 +3938,22 @@ which is history this session did not have.
 '*061*'`) and whether its DDL is still needed. Then decide whether to renumber `061_correct_cols.sql`
 or leave it. Add a `migrate.js` pre-flight that warns when a ledger filename has no counterpart on
 disk. See memory `project_migration_ledger_and_pooler`.
+
+**UPDATE 2026-08-03 (session closeout).** The central claim above — that `061_security_lints.sql` is
+recorded as applied but **absent from `server/migrations/`** — is wrong and was disproved this
+session. The file is on disk (`ls connect-four/server/migrations/` lists both `061_correct_cols.sql`
+and `061_security_lints.sql`) and git-committed: `git log --diff-filter=A -- 
+connect-four/server/migrations/061_security_lints.sql` returns commit `1fbcd4f` ("migration:
+061_security_lints.sql — Supabase linter security findings"). The number-collision half of this entry
+(two files both named `061_*`) still holds. What does **not** hold is any claim that
+`061_security_lints.sql` is missing from the working tree — it never was.
+
+The real remaining gap, confirmed via `docs/deployment_steps.md` and `staging_checks.md`, is a
+**4-migration backlog never applied to staging/production**: `061_correct_cols.sql`,
+`062_candidates_generation_run_unique.sql`, `063_puzzle_attempts_outcome_narrow.sql`, and
+`064_drop_correct_col.sql` — all applied locally only per `staging_checks.md:974` ("`061_correct_cols.sql`
+has been applied locally only") and the corresponding pending-deploy sections for 062/063/064. That
+backlog, not a missing-file mystery, is what an implementer should chase next.
 
 ---
 ## OI-106 — `generate-tts.locale.test.js` is written in vitest syntax and registered in no test script, so it runs nowhere
@@ -4902,3 +4972,59 @@ construct it, then verify against a known claimeven movestring from
 `docs/knowledge-base/claimeven.md`'s worked examples so the fix is checked against a position that
 should match, not just against "it stopped throwing". Cross-ref memory
 `project_correct_cols_engine_traps`.
+
+---
+
+## OI-132 — `/api/explain-move`'s response guard strips internal tokens in English regardless of the caller's locale
+
+**Status**: open (latent; not yet observed to misfire because the current replacement text varies
+little across locales, but the fix that closes OI-126 will make it fire)
+**Area**: `connect-four/server/reasonRenderGuard.mjs` — `guardExplainMovePayload` vs.
+`guardExplainMoveLlmPayload`
+**Discovered**: spec 057 (Epic 10, MVP Launch Gate) planning session, 2026-08-03
+
+The two response-seam guards in `reasonRenderGuard.mjs` are asymmetric in how they thread `locale`
+into `stripInternalTokens`:
+
+```js
+export function stripInternalTokens(text, locale = 'en') { /* ... */ }
+
+export function guardExplainMovePayload({ oneLiner, patternTag, deepReveal }) {
+  return {
+    oneLiner: stripInternalTokens(oneLiner),
+    patternTag,
+    deepReveal: deepReveal
+      ? { ...deepReveal, fullText: stripInternalTokens(deepReveal.fullText) }
+      : deepReveal,
+  };
+}
+
+export function guardExplainMoveLlmPayload({ explanation, prompt, terms, locale = 'en', ...rest }) {
+  return {
+    ...rest,
+    explanation: stripInternalTokens(explanation, locale),
+    prompt,
+    terms: sanitizeTermsMap(terms),
+  };
+}
+```
+
+`guardExplainMovePayload` (the `/api/explain-move` seam, called at `server/index.js:1263`) doesn't
+even accept a `locale` parameter in its destructure, so every call to `stripInternalTokens` inside it
+falls through to the `'en'` default. Its sibling `guardExplainMoveLlmPayload` (the
+`/api/explain-move-llm` seam) threads `locale` through correctly.
+
+**Why it matters**: today the `column` translation happens not to diverge much between `en` and `es`
+replacement text, so this is latent. Spec 057 US2 (`docs/epics/...`/`specs/057-mvp-launch-gate/spec.md`
+D3, closing **OI-126**) widens `CXRY_RE`/`stripInternalTokens` to also rewrite bare (`c3`) and ranged
+(`c3-c6`) column tokens into localized "column N" text via `serverT(locale, 'column')`. The moment
+that widening lands, a Spanish-locale user hitting `/api/explain-move` gets English column words
+("column 3") injected into otherwise-Spanish prose. Per memory
+`project_spanish_output_silent_fallback.md`, this class of defect degrades **silently** — no error,
+no failed test, just wrong-language text served to a real user.
+
+**If picked up**: add a `locale = 'en'` parameter to `guardExplainMovePayload`'s destructure and pass
+it into both `stripInternalTokens` calls inside it, mirroring `guardExplainMoveLlmPayload`. Update the
+one call site (`server/index.js:1263`) to pass the request's resolved locale. Add a test asserting
+Spanish (`columna N`) output survives the `/api/explain-move` path, not just `/api/explain-move-llm`.
+Cross-ref: spec 057 (Epic 10) US2, **OI-126**.

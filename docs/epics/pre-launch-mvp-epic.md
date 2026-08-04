@@ -6,7 +6,11 @@
 The single gate between the current tree and a **public paid launch**. It contains only work that is
 *blocking* — every item here has a path by which a real paying user hits it. Companion to
 [`docs/epics/open-issues-epics.md`](open-issues-epics.md), which holds the 9 quality/correctness epics;
-this file does **not** duplicate them and does not renumber them.
+this file does not renumber them. **This file does take over three issues that file's Traceability table
+previously assigned elsewhere — OI-41 (was Epic 3), OI-5 and OI-31 (were Epic 4)** — because Epics 3 and
+4 already shipped (specs 053 and 054) without doing that work; `open-issues-epics.md`'s Traceability
+table and its header note were corrected in the same change that added this sentence. Apart from those
+three, this epic does not duplicate the other 9.
 
 **Lane:** D — runs **alone**. It repairs live staging/production data (US1) and changes the response
 seam every explanation flows through (US2); both conflict with any concurrent branch touching
@@ -81,10 +85,19 @@ Do not relitigate these. They were taken during the 2026-08-03 triage.
 These are the `/clarify` targets. Each one changes the shape of the implementation, so none should be
 answered by the implementing agent on its own.
 
+**D2 is no longer open.** It was resolved by the owner during spec-057 review (2026-08-03), and that
+resolution was itself reversed and corrected by the owner afterward. There is no serving-policy decision
+to make: a category below the N=20 floor is never hidden or excluded from serving. The remedy for any
+category below the floor — `forced_win` or any of the other seven — is to generate candidates as needed
+and approve/promote them through the admin tooling until the floor is met, per environment. Empty pools
+are not a launch blocker and not a design decision; this is routine, available work, not a project.
+Nothing is deferred post-launch. **D1 is also no longer open** — the owner resolved it 2026-08-03 (see
+below). Two decisions remain genuinely open — D3, D4.
+
 | # | Story | Question | Why it changes the plan |
 |---|---|---|---|
-| **D1** | US1 | For the 6 live `overcut` rows that no longer pass the widened predicate and the 12 whose `highlight_metadata` differs: **repair the stored metadata in place, or retire the rows and promote fresh candidates?** | In-place repair is one UPDATE and preserves attempt history; retire-and-regenerate is safer but drops the pool below the floor and pulls OI-86's promotion work into the critical path. |
-| **D2** | US1 | **What is the serving policy for a category that cannot reach N=20?** Hide it, serve it below the floor, or block launch on it? | Determines whether US1 ends in a promotion pass, a feature-flag, or a category-registry change. `forced_win` has only 2 queued candidates (OI-86) and may be unable to reach 20 at all. |
+| ~~**D1**~~ | US1 | **RESOLVED (2026-08-03) — retire and refill.** For the 6 live `overcut` rows that no longer pass the widened predicate and the 12 whose `highlight_metadata` differs: repair the stored metadata in place, or retire the rows and promote fresh candidates? | **Answer: retire and refill.** Stale `overcut`/`undercut`/`z_threat` rows are marked inactive and the category is brought back to the N=20 floor by `fill-candidate-pools.mjs`, which this feature builds regardless (FR-003/FR-004). No second repair script is written, and `repair-overcut-highlight-metadata.js` is not extended to `undercut`/`z_threat`. The owner directive (`CLAUDE.md` §"Staging and production databases are disposable (pre-launch)") removed the "preserves attempt history" weight that used to favor in-place repair — no row on staging or production is worth keeping — and in-place repair would require per-category branch logic across three different metadata shapes, the speculative abstraction Constitution II forbids. No longer changes the plan — it is now a fixed input to it, same status as D2. |
+| ~~**D2**~~ | US1 | **RESOLVED** — `forced_win` cannot reach the N=20 floor by promotion alone (2 queued candidates, and OI-83 is the bug that retired its last puzzle), nor can several of the other seven categories once their queued counts are recognized as local-only. Generate fresh candidates (costs solver calls), or hide below-floor categories from serving? | **Answer: there is no serving-policy decision.** Generate candidates and approve/promote them through the admin tooling until the floor is met, per environment. Nothing is hidden; nothing is deferred post-launch. No longer changes the plan — it is now a fixed input to it. |
 | **D3** | US2 | **Widen the regex only, or wire `validateAnnotation` into the live response path (OI-124)?** And on a violation: strip the offending span, retry the LLM, or serve anyway and log? | Regex-only is a one-line fix that leaves the systemic hole open — OI-126 *and* OI-129 both escaped because nothing gates the live path. Wiring the gate in is a latency + failure-policy change on the paid feature's hot path. |
 | **D4** | US4 | **Which `quality` label is authoritative — the live solver judgement (`scoreMove`) or the stored storage-rule one (`classifyStoredMistake`)?** | Picking live means backfilling or re-deriving on read; picking stored means the first analysis must stop showing a different answer. The two thresholds are allowed to diverge *by design* today, so this is a product call, not a bug fix. |
 
@@ -115,7 +128,11 @@ Harvested and verified 2026-08-03 against this working tree. Re-verify before de
   `figure_7` 21, `j_shape` 14, `odd_even_threat` 13, `overcut` 9, `claimeven` 7, `z_threat` 3,
   `forced_win` 2). Promotion makes **no solver calls**. [[feedback_generate_puzzles_for_local_qa]]
 - **The floor is N = 20 active puzzles per category**, defined in
-  `specs/051-pattern-acceptance/pool-thresholds.md` (FR-022).
+  `specs/051-pattern-acceptance/pool-thresholds.md` (FR-022). That file records an owner ruling
+  (2026-07-30) that closes off two of D2's three options: *"The threshold is absolute. A category
+  below 20 active puzzles is not servable, whatever put it there."* and *"The remedy is always the
+  same: generate and promote more puzzles. Never lower the threshold, and never exempt a category for
+  having been broken already."* Do not re-open "serve it below the floor" as a live option.
 - **A bulk promotion loop will trip the rate limiter.** 120 req/min per IP, shared with any browser QA
   session; the 429 comes back as **plain text**, which surfaces as an opaque JSON decode error with no
   handler log line. [[project_api_rate_limit_breaks_bulk_scripts]]
@@ -151,10 +168,30 @@ Harvested and verified 2026-08-03 against this working tree. Re-verify before de
   `src/lib/useUpgradeCheckout.js:119` and `:160`, both inside async click handlers. A visitor who merely
   *lands* on `/pricing` never loads the SDK — so even a page that read `_ptxn` could not auto-open the
   checkout today.
+- **Settled: the default payment link points at `/pricing`, reusing the existing `PricingScreen`** — not
+  a new dedicated route. Settled decision 3 ("this epic adds no new screens") stands unamended.
+  `/pricing-legal` is disqualified for this purpose; it must stay JavaScript-free. Pointing the Paddle
+  dashboard's default-payment-link setting at `/pricing` is the owner-gated half of OI-98 (see US3
+  acceptance criteria).
 - **A Paddle CSP change is a multi-round discovery, not a one-line edit**, and CSP is invisible under
   `npm run dev` — the server reads `dist` at **boot**, so you must rebuild *and* restart to see it.
-  Budget for this if D3/US3 adds a mount-time SDK load. [[project_csp_helmet_traps]] [[project_paddle_integration]]
+  Budget for this since US3 adds a mount-time SDK load. [[project_csp_helmet_traps]] [[project_paddle_integration]]
 - **Sandbox vs live is selected by key prefix, not by `NODE_ENV`/`MODE`.** [[project_paddle_integration]]
+- **OI-96 records the owner's confirmation that `VITE_PADDLE_CLIENT_TOKEN` is unset — Paddle does not
+  work locally.** The sandbox end-to-end transaction verification for OI-98 can only be run against
+  staging, which is another reason it is owner-gated rather than an agent task.
+- **OI-95's fix is a client-side branch, not a contract change.** `GET /api/user/entitlement` already
+  carries the `authenticated` signal that FR-033's session-lapse logic consumes. **Correction
+  (spec-057 planning, 2026-08-03): the three lesson screens never render locked-lesson copy** —
+  `src/lib/useLessonLockGuard.js` redirects away from `ConceptScreen.jsx`/`SocraticScreen.jsx`/
+  `CLChallengeScreen.jsx` before any of them render, to `SagaScreen.jsx` via `sagaLock.js`'s three
+  chained functions (`deriveLockReason` → `dispatchLockAction` → `deriveLessonAccess`). The fix
+  threads a new `'signin'` outcome through all three functions and reuses the existing
+  `AuthModal.jsx`/`UpgradeModal.jsx` components at that real render point — not a change to any of
+  the three lesson screens. Re-adding `authenticated` to the locked-lesson stub (option C in
+  `docs/open_issues.md`'s OI-95 entry) would require amending spec 053 FR-002, its "Lesson (locked
+  view)" entity, and that epic's Settled decision #7 together — out of scope for this epic's
+  smallest-correct-version rule (Settled decision 3).
 
 ### Grading stability (US4)
 
@@ -230,11 +267,20 @@ Read before writing code — not the memory summaries, the actual files.
 **US1 — live puzzle answers grade correctly**
 - Staging and production pool counts per category are **measured and recorded** in the epic's research
   artifact (local counts alone do not satisfy this).
-- Every live `overcut` row either re-derives identically under the current detector or has been
-  dispositioned per D1, with the disposition applied by an owner-run script.
+- Every live `overcut`, `undercut`, and `z_threat` row either re-derives identically under the current
+  detector or has been retired (`is_active=false`) and the category refilled to the N=20 floor by
+  `fill-candidate-pools.mjs`, per D1's 2026-08-03 resolution — applied by the owner-run script, never by
+  an agent session writing to staging or production.
+- `evalOvercut`/`evalUndercut`/`evalZThreat` (`connect-four/server/predicates.js`) cross-check the
+  solver-gated `correct_cols` array before rejecting a player's answer, following the `evalFigure7`
+  pattern — a correct answer is never graded wrong on the strength of stale stored
+  `highlight_metadata` alone, independent of whether the D1 retire-and-refill has run yet.
 - `scripts/verify-undercut-puzzles.mjs` returns real rows against local (OI-130), demonstrated by the
   25 active undercut puzzles known to exist there.
-- Every category the app can serve either meets the N=20 floor or is dispositioned per D2.
+- Every category the app can serve meets the N=20 floor: the seven categories with queued candidates
+  are filled by a promotion pass (no solver calls, no decision needed); `forced_win` is filled by
+  generating fresh candidates and promoting them (D2 — no serving-policy decision required, generation
+  is the routine remedy).
 - A regression test asserts a stale-metadata row cannot silently grade a correct answer wrong.
 
 **US2 — no internal token reaches the player**
@@ -243,12 +289,32 @@ Read before writing code — not the memory summaries, the actual files.
   fixture. The OI-126 reproduction (`455c5272-3143-43d4-aa3f-c10f9d061666`) is the starting point.
 - D3's decision on the annotation gate is implemented **or** recorded as a deliberate deferral with its
   rationale in OI-124.
+- **OI-129 gets an explicit disposition, not just a D3 input.** Per its own "If picked up" note, this
+  needs a measured failure rate before a fix is designed — the same sequencing OI-124 uses. The
+  measurement (sample recent `explanation_cache` rows for a named board region with no `[zone:…]`) rides
+  along with D3's investigation; the result either extends the gate/prompt to catch a named-region-without-
+  zone or is recorded as a deliberate deferral with its rationale in OI-129, mirroring the OI-124
+  disposition above.
 - `explanation_cache` handling on deploy is stated in `docs/deployment_steps.md`.
 
 **US3 — billing recovery completes**
-- A subscriber following a Paddle payment-method-update link (`?_ptxn=…`) reaches an **open checkout**,
-  verified end-to-end in the sandbox with a real transaction id.
-- CSP verified against a **production build**, in a real browser — not under `npm run dev`.
+- **Agent-satisfiable half of OI-98**: `/pricing` (the existing `PricingScreen`) gains a mount-time
+  Paddle.js init and reads `?_ptxn=…` to auto-open the checkout, proven by a unit test, and CSP is
+  verified against a **production build** in a real browser — not under `npm run dev`.
+  `/pricing-legal` stays out of scope; it must remain JavaScript-free.
+- **Owner-gated half of OI-98**: pointing Paddle's dashboard default-payment-link setting at `/pricing`
+  and confirming a real subscriber's payment-method-update email reaches an **open checkout**, verified
+  end-to-end in the sandbox with a real transaction id. This is not an agent task — it is recorded as a
+  sign-off item in `staging_checks.md` (repo root), the same pattern `open-issues-epics.md` Epic 4 uses
+  for its ops verifications.
+- OI-95's smallest correct form ships: the lesson-lock guard chain — `useLessonLockGuard.js` →
+  `sagaLock.js`'s three chained functions (`deriveLockReason`/`dispatchLockAction`/
+  `deriveLessonAccess`, each threading a new `'signin'` outcome) → `SagaScreen.jsx`/`UpgradeModal.jsx`
+  — calls the existing `GET /api/user/entitlement` and branches the locked-lesson copy between "Sign
+  in" (signed out, via the existing `AuthModal.jsx`) and "Upgrade" (signed in, free tier) — no API
+  contract change, no amendment to spec 053 FR-002/FR-033 or its "Lesson (locked view)" entity. This
+  corrects the epic's original file map, which named the three lesson screens directly — they never
+  render locked-lesson copy; `useLessonLockGuard.js` redirects away from them first.
 - OI-41 needs no code: its stale half was corrected on 2026-08-03 and its substantive half narrowed to
   the `/pricing-legal` accepted risk. The story either re-confirms that decision or closes the entry
   won't-fix; either outcome is recorded in `docs/open_issues.md`.
@@ -262,7 +328,10 @@ Read before writing code — not the memory summaries, the actual files.
 **US5 — the gate is trustworthy**
 - `npm run test:fast` is **green, or red only for failures explicitly enumerated and justified** in the
   epic's closing summary. The two ENOENT fixture-path tests must actually run and assert.
-- OI-5's probe has been run and the result recorded (close it, or build the de-dup Map).
+- **OI-5 is owner-gated** (the probe needs a real account's credentials): the run is recorded as a
+  sign-off item in `staging_checks.md` (repo root), the owner runs
+  `cd connect-four && node --env-file=server/.env scripts/probe-refresh-rotation.mjs <email> <password>`,
+  and the result is applied (close it, or build the de-dup Map) and recorded in `docs/open_issues.md`.
 - OI-31 and OI-105 are each closed with a **measurement** of what the live deploy actually does, not a
   rule-based edit.
 
@@ -295,8 +364,8 @@ Enumerated so scope cannot grow silently. All of these stay open in `docs/open_i
   hand-maintained test lists, or fix the demoted `react-hooks` warnings.
 - **Latent / no-live-caller detector work**: OI-89, OI-90, OI-30, OI-33, OI-109, OI-108.
 - **Doc, dead-code and test-integrity debt with no user-facing defect**: OI-122, OI-127, OI-113, OI-32.
-- **Minor UX polish**: OI-128 (stepper URL), OI-129 is in-scope *only* as a D3 input — its own fix may
-  be deferred.
+- **Minor UX polish**: OI-128 (stepper URL). (OI-129 is in scope under US2 — see its acceptance
+  criterion — not listed here.)
 - **New features of any kind**, including the OI-95 product decision beyond its smallest correct form.
 - **Direct writes to staging or production by an agent** (settled decision 4).
 - The 9 epics in `open-issues-epics.md`. This epic does not absorb, renumber, or reorder them.
@@ -313,7 +382,7 @@ Enumerated so scope cannot grow silently. All of these stay open in `docs/open_i
 | OI-130 | US1 | The pool-verification script can never return a row, so pool audits are vacuous |
 | OI-126 | US2 | Raw `c3-c6` reproduced in text served to a real user |
 | OI-124 | US2 | Nothing gates the live explanation path — the root cause behind OI-126 and OI-129 |
-| OI-129 | US2 | Prose names board regions that carry no annotation (D3 input) |
+| OI-129 | US2 | Prose names board regions that carry no annotation — measured alongside D3, then fixed or deliberately deferred |
 | OI-98 | US3 | Payment-method-update email dead-ends → involuntary churn |
 | OI-95 | US3 | Signed-out visitors and free users get the same upgrade prompt (conversion) |
 | OI-41 | US3 | Verified stale 2026-08-03 and narrowed to an accepted risk on `/pricing-legal` — re-confirm the decision only |

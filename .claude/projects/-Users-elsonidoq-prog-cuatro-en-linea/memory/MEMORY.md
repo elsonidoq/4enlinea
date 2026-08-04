@@ -15,10 +15,10 @@
 ## Puzzle categories, challenge & lessons
 
 - [New-category wiring](project_new_category_wiring_checklist.md) — before adding a category read server-conventions §Category Registry; missing candidate-generator.js = SILENT failure
-- [Grading reads STORED metadata](project_puzzle_grading_reads_stored_metadata.md) — changing a detector silently invalidates live rows; they mark correct answers wrong. 18/42 in spec 052
+- [Grading reads STORED metadata](project_puzzle_grading_reads_stored_metadata.md) — detector change silently invalidates live rows; graders NOT uniform (only evalFigure7 cross-checks correct_cols) ⇒ no repair makes the test pass
 - [puzzle_attempts write traps](project_puzzle_attempt_outcome_traps.md) — ALL 4 writers fire-and-forget ⇒ CHECK/type errors vanish; moves_tried is integer[]; a green store-mock test proves nothing
 - [correct_cols engine traps](project_correct_cols_engine_traps.md) — undercut/overcut "show nothing" is EMERGENT from a NULL, not implemented (`correct_cols[0]` renders col 0); checkPredicate ≠ checkPredicateRaw (sort/sync only in the wrapper); a load-bearing circular import; mass backfill rejections are usually stale data
-- [Generate puzzles for local QA](feedback_generate_puzzles_for_local_qa.md) — local `puzzles` is EMPTY for most categories; YOU can generate+promote (all localhost-gated, `--port` defaults to a WRONG 3001 in worktrees) — never report "unreachable" or lower a threshold
+- [Generate puzzles for local QA](feedback_generate_puzzles_for_local_qa.md) — local `puzzles` is EMPTY for most categories; YOU can generate+promote (all localhost-gated, `--port` defaults to a WRONG 3001 in worktrees) — never report "unreachable", lower a threshold, or let an empty pool become a SPEC-level decision (hide/exempt/defer)
 - [Opening theory scoping](project_opening_theory_scoping.md) — NO opening challenge category (won boards have losing side to move); openings → Lessons
 - [Lesson interactivity](project_lesson_interactivity_evaluation.md) — Socratic = client-side col===correctCol; inline challenges DO work (/api/evaluate-move, no DB row)
 - [Lesson board sourcing traps](project_lesson_answer_set_invariant.md) — undercut boards are valid for ONE side only; lesson-11 MUST fail detectUndercutVictim; JSONB key-order false drift
@@ -28,6 +28,7 @@
 - [Lesson write lands elsewhere](project_lesson_disk_edit_cache_clobber.md) — a 200 ≠ it saw your file, or wrote the one you watch (slug≠id forks it)
 - [odd_even_threat split life](project_detect_odd_even_threat_yellow.md) — still a classifyPattern tag + puzzle category, but OFF the coach prompt & blunder vocab
 - [New lesson slide field wiring](project_lesson_slide_field_wiring.md) — 6 wiring points; the SlideEditor control is forgotten EVERY time (OI-67, then showWindowCounts)
+- [Locked-lesson copy is NOT in the lesson screens](project_lesson_lock_copy_lives_in_saga.md) — useLessonLockGuard redirects BEFORE mount ⇒ copy lives in SagaScreen/UpgradeModal; sagaLock = 3 chained fns; getEntitlement() drops `authenticated`
 - [Lesson unlock is pairwise, not furthest-pointer](project_lesson_progress_unlock_is_pairwise.md) — editing one lesson_progress row doesn't unblock earlier ones; use backfill-lesson-progress.mjs
 - [windowHighlights capsule traps](project_lesson_window_highlights_traps.md) — cells must be ORDERED (drawn first→last, unchecked); opaque colours only; never via legendItems
 - [Lesson text clips silently](project_lesson_text_overflow_traps.md) — 120px coach cap on EVERY screen (not just `fixed`); splitting a message makes it WORSE; ES binds; a wrapping legend row steals visible infoProse
@@ -109,6 +110,7 @@
 - [Bare grep silently finds nothing](project_grep_silent_zero_matches.md) — multibyte ⇒ binary, ZERO matches, no error; grep is ugrep (use /usr/bin/grep); `node --test` counts start with `ℹ` not `#`
 - [Verify at the source layer](feedback_verify_at_the_source_layer.md) — every false belief hides in a layer: signature NOT doc comment, diff NOT agent report, real output NOT your fixture, all-N NOT a sample
 - [Measurements expire](feedback_measurement_expires.md) — re-measure against FINAL code; an UNCHANGED line ≠ an unfixed bug (the fix may have landed in another file) — git log --grep first
+- [Live envs have NO real users (pre-launch)](project_live_envs_have_no_real_users.md) — staging/prod DBs are DISPOSABLE until the owner says released; regenerate > surgically repair; prod work = docs not tooling. Now in CLAUDE.md
 - [Implemented ≠ deployable](feedback_implemented_vs_deployable.md) — answer both; per-change prereqs → `docs/deployment_steps.md` = a WORK QUEUE (producers append only; reset only after all-DONE-in-prod; non-empty = not shipped); standing procedure → `deploy-runbook.md`; `staging_checks.md` is at the REPO ROOT, not `docs/`
 - [A wrong test is part of the bug](feedback_wrong_test_is_part_of_the_bug.md) — never keep a test green over a fix; read the fixture not its name; a test can be VACUOUS: f(a)===f(a) reads as coverage
 - [Sub-agent reports are scoped claims](feedback_subagent_reports_are_scoped_claims.md) — a batch's green test run may be its WORKING TREE not its commit; it reports only what the handoff schema asked for

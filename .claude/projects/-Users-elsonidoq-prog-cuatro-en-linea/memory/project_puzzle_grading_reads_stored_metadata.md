@@ -5,12 +5,21 @@ metadata:
   node_type: memory
   type: project
   originSessionId: 09ab1bbf-3752-44fc-9a64-d05aa25d0cce
-  modified: 2026-07-31T01:46:47.564Z
+  modified: 2026-08-04T02:29:19.869Z
 ---
 
 `evalOvercut` (and the same shape for other metadata-graded categories) derives the accepted answer
 from the row's **stored** `highlight_metadata` — `overcut` rows carry `correct_col: null` precisely
 because the column is read back out of the metadata. Nothing recomputes it at serve time.
+
+**The graders are NOT uniform, and that asymmetry is the fix.** In `connect-four/server/predicates.js`
+three graders read only the stored blob — `evalZThreat` (`highlightMetadata?.column`), `evalUndercut`
+and `evalOvercut` (`highlightMetadata?.cells`) — while `evalFigure7` **cross-checks the solver-gated
+`correct_cols` array**. So a stale-metadata row can only mark a correct answer wrong in the first
+three. Consequence discovered 2026-08-03 (spec 057 / Epic 10): **no data repair can make a
+stale-metadata regression test pass** — the grader reads the blob, so only a code change to the
+grader can. If you are writing a test whose premise is "a correct answer survives stale metadata",
+the `evalFigure7` cross-check pattern is the mechanism you need, not a repair script.
 
 **Why this is a trap:** it makes every detector/predicate change a **content migration**. Widen a
 detector and the live pool does not follow — it keeps grading against cells derived by the old code,

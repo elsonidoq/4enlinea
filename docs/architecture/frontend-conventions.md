@@ -773,6 +773,38 @@ holding `SagaScreen`'s lock-derivation logic:
 auto-dismiss inline banner (i18n key `saga.orderLock.message`) — never the `UpgradeModal`, since an
 order-lock is not a paywall; `'navigate'` proceeds normally.
 
+### Direct-URL lock guard (`useLessonLockGuard.js`) — the lesson screens never render locked copy
+
+`sagaLock.js` exports a third function built on the two above:
+
+- **`deriveLessonAccess(lessonId, lessons, progress, tier)` → `'allowed' | 'upgrade' | 'orderLock'`** —
+  the direct-URL guard decision for the three lesson screens (`ConceptScreen`, `SocraticScreen`,
+  `CLChallengeScreen`). It short-circuits an already-`done` lesson to `'allowed'` (matching
+  `handleNodeTap`), otherwise composes `dispatchLockAction(deriveLockReason(...))` and collapses
+  `'navigate'` to `'allowed'`. An unknown `lessonId` also returns `'allowed'` — the screen's own
+  `/api/lessons/:id` fetch surfaces the not-found error; this guard only enforces locks.
+
+Because a new lock outcome has to be threaded through all three functions — a new `deriveLockReason`
+return value needs a matching `dispatchLockAction` branch, which in turn needs a matching
+`deriveLessonAccess`/`SagaScreen.handleNodeTap` branch — changing the lock taxonomy is not a one-function
+edit.
+
+`src/lib/useLessonLockGuard.js` is the hook that calls `deriveLessonAccess` for `/concept/:id`,
+`/socratic/:id` and `/clchallenge/:id`. It fetches the same inputs `SagaScreen` fetches (lessons list,
+`getLessonProgress()`, and tier via `getEntitlement()` — see below), and returns `'checking' | 'allowed'
+| 'blocked'`. **The redirect happens before the lesson screen renders any content**: on `'blocked'`
+(or a failed lessons-list fetch, locked-safe) the hook calls `goReplace('saga', { lockAction })` — passing
+`'upgrade'`/`'orderLock'` for `SagaScreen` to reopen `UpgradeModal` or the order-lock banner, the same
+affordances as a direct tap — and `ConceptScreen.jsx`/`SocraticScreen.jsx`/`CLChallengeScreen.jsx` never
+mount their normal body in that case. **Consequently these three screens have no locked-lesson copy of
+their own to edit** — the user-visible "this lesson is locked" experience lives entirely in
+`SagaScreen.jsx` (order-lock banner) and `UpgradeModal.jsx` (tier lock), not in the lesson screens. `goReplace`
+(not `go`) is used so browser Back doesn't bounce through the locked URL.
+
+Today `deriveLessonAccess`'s `tier` argument only distinguishes `'free'` vs `'paid'` — `getEntitlement()`'s
+`authenticated` flag (see below) is not threaded into `sagaLock.js`, so the guard cannot currently tell a
+signed-out visitor apart from a signed-in free-tier user; both resolve to `tier === 'free'`.
+
 ## Upgrade / Checkout flow (Epic 5)
 
 **Reading the user's tier — the entitlement helper, never session (never a cached profile.tier read either).**
