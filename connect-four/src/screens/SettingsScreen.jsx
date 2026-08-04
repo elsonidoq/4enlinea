@@ -22,6 +22,12 @@ export function SettingsScreen({ go, goBack }) {
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(false);
   const [saving, setSaving] = useState(false);
+  // Fix 3/5 (2026-08-04): the Save button was `disabled={saving}`, so it stayed enabled with
+  // nothing to save. Trim BOTH sides: handleSave compares `papergamesId.trim()`, so an untrimmed
+  // check would call a trailing space an edit and enable a save that changes nothing.
+  // `savedValue` is kept current by handleSave's 204 branch, which sets it (and normalizes
+  // `papergamesId`) to the trimmed value — so the button correctly re-disables after a save.
+  const isDirty = papergamesId.trim() !== savedValue.trim();
 
   // ── Subscription section (D3) ───────────────────────────────────────────
   const [tier, setTier] = useState('free');
@@ -399,7 +405,7 @@ export function SettingsScreen({ go, goBack }) {
             <button
               className="btn btn-primary"
               onClick={handleSave}
-              disabled={saving}
+              disabled={saving || !isDirty}
               style={{ fontSize: 14, padding: '8px 20px' }}
             >
               {saving ? t('settings.papergames.saving') : t('settings.papergames.save')}
