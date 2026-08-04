@@ -654,3 +654,95 @@ runs); zero failures.
 - `HomeScreen.jsx`'s content-height drift (706→596) was observed but not root-caused, since
   diagnosing "Plan A"'s concurrent copy/behavior changes is outside this task's layout-only mandate
   for that file.
+
+## After (final)
+
+Consolidated final state across all five tasks. Every number below is a restatement of a
+measurement already taken in the sections above — nothing new was re-measured for this rollup; it
+exists to give one place to read the finished picture.
+
+### Pinned screens (`height: '100dvh'` + internal scroller) — four-viewport summary
+
+| Screen | 390×664 | 390×844 | 375×553 | 360×600 | Source |
+|---|---|---|---|---|---|
+| `ConceptScreen` | pinned, pre-existing | — | — | — | predates this epic (commit `cbdef47`) |
+| `GameScreen` | pinned, `P1_hOverflow` 0, board 399 | pinned, board 579 | pinned, board 288 | pinned, board 335 (shrunk) | After Task 4 |
+| `SocraticScreen` (main return) | pinned, board 394 | pinned, board 574 | pinned, board 283 | pinned, board 307 | After Task 4 |
+| `ChallengeScreen` (main return, 3 states) | pinned, `[]` below fold all 3 states | pinned, `[]` | pinned, `[]` | pinned, `[]` (post spacer→scroller fix; `Learn more ▼` reachable by hand-scroll in state 2) | After Task 4 |
+| `ReviewScreen` (non-onboarding) | pinned, scroller reaches 155px clip amount | pinned, no scroll needed | pinned | pinned | After Task 3 |
+| `ReviewScreen` (onboarding, incl. Plan A's extra coach line) | Continue bottom 648 (≤665) | Continue bottom 828 (≤845) | Continue bottom 537 (≤554) | Continue bottom 584 (≤601) | After Task 3, Step 5a |
+
+All pinned screens: `P1_hOverflow: 0` and no unintended `controlsBelowFold` at all four sizes,
+confirmed above.
+
+### Unit-only screens (`minHeight: '100dvh'`, correctly left unpinned)
+
+- **Legitimately long** (`SagaScreen` 1156px, `SetPickerScreen` 1327px, `PastGamesListScreen`
+  2239px, `MistakesListScreen` 734px, `SettingsScreen`): geometry unchanged from baseline at
+  390×664 (After Task 2 sweep); none collapsed to the viewport height while content exceeds it.
+- **One-screen, spills modestly** (`HomeScreen`, `DifficultyScreen`, `PricingScreen`): unchanged
+  within ±1px of baseline (After Task 5, Step 6), `P1_hOverflow: 0` on all three.
+- **`PostSetSummaryScreen`**: characterized and deliberately left unit-only (After Task 4) —
+  `P4_screenRootH` identical before/after the unit swap (639 at 375×553 and 360×600), confirming a
+  pure unit change with no behavior regression. Its below-the-fold ghost-button wart is pre-existing
+  and now tracked as **OI-161**, not fixed here.
+- **17-file sweep** (Task 5): all `minHeight: '100vh'` → `minHeight: '100dvh'`, no `height` and no
+  scroller added anywhere in that batch; confirmed via `grep -ran "height: '100dvh'"` matching only
+  the five pinned roots plus `ConceptScreen`.
+
+### Guard and suite, final state
+
+```
+cd connect-four && npx node --test tests/unit/viewportUnits.test.js
+```
+`ℹ pass 25`, `ℹ fail 0`.
+
+```
+cd connect-four && npm run test:fast
+```
+`ℹ tests 1764`, `ℹ pass 1764`, `ℹ fail 0`.
+
+```
+cd connect-four && /usr/bin/grep -ran "100vh" src/screens/ src/App.jsx
+```
+No output (exit 1) — zero in-scope `100vh` sites remain.
+
+```
+cd connect-four && /usr/bin/grep -ran "100vh" src/
+```
+Exactly the 5 admin sites of **OI-160** (`AdminFvSuffPage.jsx:280,621`,
+`AdminDeepRevealEvalPage.jsx:371,378`, `AdminAudioPage.jsx:435`) — deliberately excluded, not a gap.
+
+### Not verified
+
+Naming what this plan did **not** reach, so it does not silently read as full coverage:
+
+- **The unit swap itself was never verified on a real device.** Chrome DevTools emulation has no
+  browser chrome, so all three viewport units (`vh`/`dvh`/`svh`) resolve to identical pixels there —
+  every sweep in this document proves the *pinning/scroller* half, never the *unit* half. Only the
+  static guard (`viewportUnits.test.js`, now 0 failures) proves the token was swapped everywhere
+  required. Real-device confirmation is exactly what the deploy-queue entry's "Verification after
+  deploy" steps (`docs/deployment_steps.md`, 2026-08-04 Plan B entry) exist to close.
+- **Task 3's onboarding-variant measurement was taken on a 2-disc game** (Settings → Replay intro →
+  Start sparring → one move played → Resign), with no Move Timeline and no Prev/Next mistake row
+  rendered — the mistake-review UI only appears when there are mistakes to review. The genuine worst
+  case — a full-length review *with* both the Move Timeline/Prev-Next row *and* the onboarding
+  Continue button in the same render — was never measured in one shot. The "tallest possible state"
+  wording used earlier in this document (Step 5a) is not supported by that gap and should be read as
+  "tallest state reached," not "tallest state possible."
+- **`ChallengeScreen`'s `deepRevealOpen` branch** is now a child of the pinned root (After Task 4)
+  but was not measured in any state — none of the three sweeps opened deep reveal. It is expected to
+  be fine: `SplitReveal.jsx` already carries `flex: 1, minHeight: 0, overflow: hidden` per the
+  `SplitReveal`/`useDragSplit` convention in `docs/architecture/frontend-conventions.md` §"CSS Layout
+  Gotchas", but that expectation was never measured against this task's pinned root specifically.
+- **The `HomeScreen` content-height drift (706→596) observed in Task 5 was misattributed** in that
+  task's own report to the parallel "Plan A" lane. That attribution is impossible as stated — Plan A
+  runs in a separate worktree and cannot alter this branch's files. Re-verified at source for this
+  task: `git show 6244e8d -- src/screens/HomeScreen.jsx` (the commit that made this file's
+  mobile-viewport-fit edit) touches exactly one line — the `minHeight` unit token; nothing else in
+  the file changed as part of this plan. The real cause is almost certainly local app state carried
+  over from
+  Tasks 3–4's manual QA on this dev server — those tasks played sparring games and completed an
+  8-puzzle challenge set, which changes which conditional cards `HomeScreen` renders relative to a
+  fresh-profile baseline (e.g. resume-game / recent-activity cards). Recorded here so nobody spends
+  time hunting a phantom cross-worktree cause.

@@ -5893,3 +5893,49 @@ its P3 log-and-serve carve-out).
 Fold into the post-staging deep-reveal epic together with **OI-129**. Cross-refs: OI-124 (D3's
 wiring, closed), OI-126 (the token-stripping half, closed), memory
 `project_annotation_gate_and_zones`, `project_prod_llm_call_graph`.
+
+### OI-160 — Admin pages still use `100vh` (5 sites) — deliberately excluded
+
+**Status:** OPEN (deliberate, low priority) — opened 2026-08-04.
+
+**What:** After the Plan B mobile-viewport-fit sweep converted every user-facing screen to `100dvh`,
+five `100vh` sites remain, all under `src/pages/`:
+
+- `AdminFvSuffPage.jsx:280` (`height: '100vh'`, error state) and `:621`
+  (`height: '100vh', overflow: 'hidden'`)
+- `AdminDeepRevealEvalPage.jsx:371` (`height: '100vh'`, error state) and `:378`
+  (`height: '100vh', overflow: 'hidden'`)
+- `AdminAudioPage.jsx:435` (`minHeight: '100vh'`)
+
+Note the two main pages already use the pinned-root shape — only the unit is wrong.
+
+**Number range:** OI-160 was taken from the OI-160…OI-169 block reserved for this lane (highest
+existing entry at the time was OI-147; two other lanes were appending concurrently). If a merge
+produces a duplicate `OI-160`, renumber this one within 161–169 — see the `merging-parallel-lanes`
+skill's duplicate-`OI-N` renumbering step.
+
+**Why deferred:** the entire `/admin` surface is localhost-gated (`src/App.jsx`, `isLocalhostOrigin()`
+checked before any admin bundle is even fetched) and these are desktop analyst tools that are never
+opened on a phone. The change is one word per site with no user-visible benefit, against a non-zero
+chance of disturbing two dense analyst layouts nobody will re-QA.
+
+**If picked up:** `tests/unit/viewportUnits.test.js` scans `src/screens/` + `src/App.jsx` only; extend
+`IN_SCOPE` to `src/pages/Admin*.jsx` at the same time, or the fix will silently regress.
+
+### OI-161 — `PostSetSummaryScreen`'s inner scroller never scrolls; CTA sits below the fold
+
+**Status:** OPEN (pre-existing, low priority) — opened 2026-08-04.
+
+**What:** `PostSetSummaryScreen.jsx:167` has a child styled `flex: 1, overflowY: 'auto'`, but that
+child never actually scrolls, because the screen's root uses `minHeight` and simply grows instead.
+The consequence is that the "Back to Challenges" ghost button sits below the fold at short viewports
+(measured: 375×553 and 360×600) and is reachable only by scrolling the page, not the intended inner
+region.
+
+**Why deferred:** pre-existing, and explicitly out of scope for the mobile-viewport-fit plan, which
+decided this screen unit-only (it has no bottom-anchored `Toolbar`, so it correctly was not pinned).
+The control IS reachable today via page scroll — this is a polish wart, not a broken screen.
+
+**If picked up:** the fix is either to pin the root (`height: '100dvh'`) so the existing
+`overflowY: 'auto'` child becomes a real scroller, or to drop the misleading `overflowY` from that
+child. Do not do both.

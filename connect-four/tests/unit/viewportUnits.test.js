@@ -6,7 +6,11 @@
 // check. The PROPERTY half (pinned root + internal scroller) is verified
 // visually per-screen instead.
 //
-// Admin pages are deliberately excluded — see OI-160 and the plan's D4.
+// `screenFiles()` scans src/screens/ wholesale, which does reach the two
+// screens named Admin* in that directory (AdminLessonEditorScreen.jsx,
+// AdminLessonListScreen.jsx) — they are in scope and already clean. The
+// genuine, deliberate exclusion is the analyst tooling under src/pages/
+// Admin*, which this scan never reaches — see OI-160 and the plan's D4.
 
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';

@@ -1098,6 +1098,34 @@ games already stored in `games`/`papergames_games`, not primary user data. A use
 game outcomes are unaffected — only the mistake-review annotations are cleared and will repopulate as
 that user's games are next reviewed or new games are analyzed.
 
+## 2026-08-04 — Plan B mobile viewport fit (`100vh` → `100dvh`, pinned roots)
+
+**Status:** PENDING
+**Applies to:** staging, production
+**When:** either — this is a frontend-only CSS-value change. No schema, no data, no env var, no
+cache invalidation. It ships with the code deploy and needs nothing around it.
+
+**What changed:** all 24 in-scope `100vh` sites in `connect-four/src/screens/` and
+`connect-four/src/App.jsx` became `100dvh`; five screens (`ReviewScreen`, `GameScreen`,
+`SocraticScreen`, `ChallengeScreen`, and `ConceptScreen` which was already done) use
+`height: 100dvh` + an internal scroller instead of `minHeight`. Admin pages deliberately untouched
+(OI-160).
+
+**Prerequisite:** none.
+
+**Verification after deploy** — on a **real phone**, not an emulator. DevTools emulation resolves
+`vh === dvh === svh`, so it cannot confirm the unit half:
+
+1. Open the deployed URL in mobile Safari **and** mobile Chrome with the address bar visible.
+2. Finish or resign a sparring game to reach the post-game Review screen.
+3. Success condition: the **Prev/Next mistake** buttons are reachable without the page scrolling past
+   its own content, and the page does not scroll horizontally. Before this change they sat ~155px
+   below the fold at a 390×664 visible viewport.
+4. Also check `/saga` and `/pastGames` still scroll to their last row — a wrongly-pinned list would
+   make the tail unreachable.
+
+**Rollback:** revert the frontend commit and redeploy. No data or schema to undo.
+
 ## Template for new entries
 
 ```markdown
