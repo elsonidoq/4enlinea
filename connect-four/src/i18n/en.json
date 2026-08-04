@@ -575,6 +575,9 @@
             "1": "A few moments to learn from — let's look.",
             "2": "You played well. Let's find the edge.",
             "3": "Some tactical moments worth revisiting."
+          },
+          "onboarding": {
+            "0": "Tap any red or orange move to see what went wrong."
           }
         },
         "outcome": {

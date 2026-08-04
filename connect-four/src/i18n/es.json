@@ -575,6 +575,9 @@
             "1": "Algunos momentos para aprender — vamos a verlos.",
             "2": "Jugaste bien. Busquemos el margen.",
             "3": "Algunos momentos tácticos que vale la pena repasar."
+          },
+          "onboarding": {
+            "0": "Tocá cualquier jugada roja o naranja para ver qué salió mal."
           }
         },
         "outcome": {

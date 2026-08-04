@@ -1024,6 +1024,94 @@
     "approved_at": "2026-07-17T02:03:25.867Z"
   },
   {
+    "key": "coach.spoken.forfeited_win.prompt.0",
+    "slug": "coach--spoken--forfeited--win--prompt--0",
+    "status": "needs_audio",
+    "reason": null,
+    "generated_at": null,
+    "approved_at": null
+  },
+  {
+    "key": "coach.spoken.forfeited_win.prompt.1",
+    "slug": "coach--spoken--forfeited--win--prompt--1",
+    "status": "needs_audio",
+    "reason": null,
+    "generated_at": null,
+    "approved_at": null
+  },
+  {
+    "key": "coach.spoken.forfeited_win.hint.0",
+    "slug": "coach--spoken--forfeited--win--hint--0",
+    "status": "needs_audio",
+    "reason": null,
+    "generated_at": null,
+    "approved_at": null
+  },
+  {
+    "key": "coach.spoken.forfeited_win.hint.1",
+    "slug": "coach--spoken--forfeited--win--hint--1",
+    "status": "needs_audio",
+    "reason": null,
+    "generated_at": null,
+    "approved_at": null
+  },
+  {
+    "key": "coach.spoken.forfeited_win.optimal.0",
+    "slug": "coach--spoken--forfeited--win--optimal--0",
+    "status": "needs_audio",
+    "reason": null,
+    "generated_at": null,
+    "approved_at": null
+  },
+  {
+    "key": "coach.spoken.forfeited_win.optimal.1",
+    "slug": "coach--spoken--forfeited--win--optimal--1",
+    "status": "needs_audio",
+    "reason": null,
+    "generated_at": null,
+    "approved_at": null
+  },
+  {
+    "key": "coach.spoken.forfeited_win.suboptimal.0",
+    "slug": "coach--spoken--forfeited--win--suboptimal--0",
+    "status": "needs_audio",
+    "reason": null,
+    "generated_at": null,
+    "approved_at": null
+  },
+  {
+    "key": "coach.spoken.forfeited_win.suboptimal.1",
+    "slug": "coach--spoken--forfeited--win--suboptimal--1",
+    "status": "needs_audio",
+    "reason": null,
+    "generated_at": null,
+    "approved_at": null
+  },
+  {
+    "key": "coach.spoken.forfeited_win.blunder.0",
+    "slug": "coach--spoken--forfeited--win--blunder--0",
+    "status": "needs_audio",
+    "reason": null,
+    "generated_at": null,
+    "approved_at": null
+  },
+  {
+    "key": "coach.spoken.forfeited_win.blunder.1",
+    "slug": "coach--spoken--forfeited--win--blunder--1",
+    "status": "needs_audio",
+    "reason": null,
+    "generated_at": null,
+    "approved_at": null
+  },
+  {
+    "key": "coach.spoken.forfeited_win.blunder.2",
+    "slug": "coach--spoken--forfeited--win--blunder--2",
+    "status": "needs_audio",
+    "reason": null,
+    "generated_at": null,
+    "approved_at": null
+  },
+  {
     "key": "coach.spoken.generic.optimal.0",
     "slug": "coach--spoken--generic--optimal--0",
     "status": "approved",
@@ -1350,6 +1438,14 @@
     "reason": null,
     "generated_at": "2026-07-17T01:52:07.609Z",
     "approved_at": "2026-07-17T02:03:25.867Z"
+  },
+  {
+    "key": "coach.spoken.sparring.review.onboarding.0",
+    "slug": "coach--spoken--sparring--review--onboarding--0",
+    "status": "needs_audio",
+    "reason": null,
+    "generated_at": null,
+    "approved_at": null
   },
   {
     "key": "coach.spoken.sparring.outcome.win",
