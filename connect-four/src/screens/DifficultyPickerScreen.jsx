@@ -27,7 +27,7 @@ export function DifficultyPickerScreen({ go, goBack }) {
   }
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100dvh' }}>
       <TopBar
         title={t('nav.sparring')}
         onBack={goBack}

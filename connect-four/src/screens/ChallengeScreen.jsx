@@ -744,7 +744,7 @@ export function ChallengeScreen({
 
   if (lessonMode && puzzles.length === 0 && phase !== 'loading') {
     return (
-      <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh', background: 'var(--bg-lessons)' }}>
+      <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100dvh', background: 'var(--bg-lessons)' }}>
         <TopBar onBack={handleBack} title={lessonMode ? t('lesson.confirmation.header', { title: lessonTitle }) : undefined} onLogoClick={() => go('home')} />
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 16, padding: '2rem', textAlign: 'center', color: 'var(--ink-soft)' }}>
           <p style={{ margin: 0, fontSize: 15 }}>{t('lesson.confirmation.empty', 'No practice puzzles available yet.')}</p>
@@ -759,7 +759,7 @@ export function ChallengeScreen({
   if (phase === 'loading') {
     return (
       <div style={{
-        display: 'flex', flexDirection: 'column', minHeight: '100vh',
+        display: 'flex', flexDirection: 'column', minHeight: '100dvh',
         background: 'var(--bg-chal)',
       }}>
         <TopBar

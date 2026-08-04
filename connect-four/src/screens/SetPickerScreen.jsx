@@ -137,7 +137,7 @@ export function SetPickerScreen({ go }) {
   }, [isAuthenticated]);
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100dvh' }}>
       <TopBar
         title={t('setpicker.title')}
         onBack={() => go('home')}

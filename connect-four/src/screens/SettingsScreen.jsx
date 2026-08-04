@@ -335,7 +335,7 @@ export function SettingsScreen({ go, goBack }) {
   // ── Unauthenticated view ──────────────────────────────────────────────────
   if (!isAuthenticated) {
     return (
-      <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
+      <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100dvh' }}>
         <TopBar title={t('settings.title')} onBack={() => goBack ? goBack() : go('home')} onLogoClick={() => go('home')} />
         <div style={{ padding: '40px 18px', textAlign: 'center', color: 'var(--ink-soft)' }}>
           <p style={{ fontSize: 16, margin: 0 }}>{t('settings.papergames.signInPrompt')}</p>
@@ -357,7 +357,7 @@ export function SettingsScreen({ go, goBack }) {
 
   // ── Authenticated view ────────────────────────────────────────────────────
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100dvh' }}>
       <TopBar title={t('settings.title')} onBack={() => goBack ? goBack() : go('home')} onLogoClick={() => go('home')} />
 
       <div style={{ padding: '8px 18px 26px', display: 'flex', flexDirection: 'column', gap: 20, flex: 1 }}>

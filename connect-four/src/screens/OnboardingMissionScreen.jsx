@@ -69,7 +69,7 @@ export function OnboardingMissionScreen({ go, onboardingSource }) {
   }
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100dvh' }}>
       <TopBar
         onLogoClick={() => go('home')}
         rightIcon="user"

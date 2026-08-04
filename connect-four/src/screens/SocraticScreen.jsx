@@ -194,7 +194,7 @@ export function SocraticScreen({ go, goBack, goReplace, lessonId }) {
 
   if (loadState === 'loading') {
     return (
-      <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
+      <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100dvh' }}>
         <TopBar onBack={() => goBack()} onLogoClick={() => go('home')} />
         <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--ink-soft)' }}>
           {t('common.loading', 'Loading…')}
@@ -205,7 +205,7 @@ export function SocraticScreen({ go, goBack, goReplace, lessonId }) {
 
   if (loadState === 'error' || !lesson || !lesson.socratic) {
     return (
-      <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
+      <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100dvh' }}>
         <TopBar onBack={() => goBack()} onLogoClick={() => go('home')} />
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 16, padding: 24 }}>
           <p style={{ color: 'var(--ink-soft)', fontSize: 15 }}>{t('common.error', 'Something went wrong.')}</p>
@@ -217,7 +217,7 @@ export function SocraticScreen({ go, goBack, goReplace, lessonId }) {
 
   if (!board) {
     return (
-      <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
+      <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100dvh' }}>
         <TopBar onBack={() => goBack()} onLogoClick={() => go('home')} />
         <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--ink-soft)' }}>
           {t('common.loading', 'Loading…')}

@@ -264,7 +264,7 @@ export function SagaScreen({ go, lockAction }) {
   const sortedLessons = [...lessons].sort((a, b) => a.order - b.order);
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100dvh' }}>
       <TopBar
         title={t('saga.title', 'Lessons')}
         onBack={() => go('home')}

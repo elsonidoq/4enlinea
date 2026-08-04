@@ -79,7 +79,7 @@ export function OnboardingImportOfferScreen({ go }) {
   }
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100dvh' }}>
       <TopBar onLogoClick={() => go('home')} />
 
       <div style={{ padding: '0 18px 16px', display: 'flex', flexDirection: 'column', gap: 14, flex: 1, justifyContent: 'center' }}>

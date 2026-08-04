@@ -539,3 +539,118 @@ two newly-passing file-assertions (GameScreen, PostSetSummaryScreen) with no oth
   own instruction), the forbidden_columns branch (puzzle pool was empty locally — generated and
   promoted 10 puzzles rather than reporting it unreachable), and PostSetSummaryScreen reached via
   the real completion flow (not skipped, not assumed).
+
+## After Task 5 (unit sweep)
+
+### Re-derived site list (Step 1) — vs. the brief's 17/12
+
+```
+cd connect-four && /usr/bin/grep -ran "100vh" src/screens/ src/App.jsx
+```
+
+Result: **17 sites across 12 files** — matching the brief's original count exactly, **not** the
+task-prompt's corrected "16 across 11". Re-checked directly: `PostSetSummaryScreen.jsx` already
+carries only `height: '100dvh'` (no `100vh` occurrences at all — Task 4 fully converted it), so it
+was never part of this sweep's count either way; the discrepancy claim does not hold against the
+current tree. Full list (grep output, `/usr/bin/grep -ran "100vh" src/screens/ src/App.jsx`):
+
+| File | Line(s) | Branch |
+|---|---|---|
+| SettingsScreen.jsx | 338, 360 | two early returns |
+| DifficultyPickerScreen.jsx | 30 | main return |
+| SocraticScreen.jsx | 197, 208, 220 | loading / error / `!board` early returns (D6) |
+| OnboardingImportOfferScreen.jsx | 82 | main return |
+| ChallengeScreen.jsx | 747, 762 | `lessonMode` empty-puzzles / `loading` early returns (D6) |
+| HomeScreen.jsx | 69 | main return |
+| SagaScreen.jsx | 267 | main return |
+| StatsScreen.jsx | 88 | main return |
+| SetPickerScreen.jsx | 140 | main return |
+| PricingScreen.jsx | 127 | main return |
+| OnboardingMissionScreen.jsx | 72 | main return |
+| PlayOnlineScreen.jsx | 435, 530 | `phase === 'playing'` and non-playing-phase main returns |
+
+Confirmed the two SocraticScreen and two ChallengeScreen sites are the loading/error/empty branches
+(not the main returns Task 4 already pinned) by reading the surrounding `if` guards before editing
+— `loadState === 'loading'`, `loadState === 'error' || !lesson`, `!board` for Socratic;
+`lessonMode && puzzles.length === 0` and `phase === 'loading'` for Challenge.
+
+### Sweep applied
+
+Every `minHeight: '100vh'` → `minHeight: '100dvh'` in the 12 files above, in place, no other
+change. No `minHeight` became `height`; no scroll container added.
+
+### Step 3 — confirm nothing became `height`
+
+```
+cd connect-four && /usr/bin/grep -ran "height: '100dvh'" src/screens/
+```
+
+Result: exactly the Group B pinned roots from Tasks 3–4 (`GameScreen.jsx:183`,
+`SocraticScreen.jsx:235` [main], `ChallengeScreen.jsx:788` [main], `ReviewScreen.jsx:307`), **plus
+three pre-existing `ConceptScreen.jsx` sites (158, 169, 194)** that predate this whole epic
+(confirmed via `git log -p` — first appears in commit `cbdef47`, spec-052/053 work, unrelated to
+mobile-viewport-fit). No `SettingsScreen`/`HomeScreen`/`SagaScreen`/`SetPickerScreen`/etc. line
+appears in this list — the sweep did not accidentally pin any Group C file.
+
+### Step 4 — static guard
+
+```
+cd connect-four && npx node --test tests/unit/viewportUnits.test.js
+```
+`ℹ tests 25`, `ℹ pass 25`, `ℹ fail 0` — up from 12 failing file-assertions before this task.
+
+### Step 5 — long-screen measurements (390×664×3, mobile, touch; harness above)
+
+| Screen | naturalContentH baseline | P4_screenRootH (measured) | screenRootCss.minHeight | Pinned? |
+|---|---:|---:|---|---|
+| `/saga` | 1156 | **1156** | 664px | No — scroll to bottom reaches `scrollY=492` (== 1156−664), last content visible |
+| `/setpicker` | 1327 | **1337** (+10px vs. baseline; content-size drift, not a pin — see note) | 664px | No |
+| `/pastGames` | 2239 | **2237** (±2px) | 664px | No |
+| `/mistakes` | 734 | **734** (exact) | 664px | No |
+| `/settings` | 605 | **664** | 664px | Expected — content (605) is *shorter* than the 664 viewport, so the `minHeight` floor legitimately governs; this is the documented "shorter content stops painting extra background" behavior, not a pin. `naturalContentH` (measured with the floor zeroed) still reads 605, matching baseline. |
+
+None of the five collapsed `P4_screenRootH` to 664 while their natural content exceeds 664 (Saga,
+SetPicker, PastGames, Mistakes) — the failure signature described in the brief ("`P4_screenRootH`
+of exactly 664 on `/saga`") did not occur. SetPicker's +10px vs. the pre-work baseline is content
+drift (list length / dynamic set count), not a layout regression — `screenRootCss.minHeight` is
+`664px` (dvh unit in effect) and the root height tracks content, not the viewport, on all four
+genuinely-long screens.
+
+### Step 6 — D7 screens (390×664×3)
+
+| Screen | Baseline `contentH` | Measured `contentH` | `P1_hOverflow` |
+|---|---:|---:|---:|
+| `/` (Home) | 706 | **664** (naturalContentH now 596, no overflow) | 0 |
+| `/difficulty` | 736 | **735** (±1px) | 0 |
+| `/pricing` | 820 | **819** (±1px) | 0 |
+
+Difficulty and Pricing match baseline within rounding. Home's `naturalContentH` dropped from 706 to
+596 — this is **not** an effect of this task (only the `minHeight` token was touched in
+`HomeScreen.jsx`, per the layout-only restriction); it reflects the parallel "Plan A" session's
+concurrent copy/behavior edits to `HomeScreen.jsx`, which is out of this task's scope to
+investigate or revert. `P1_hOverflow` is `0` on all three, confirming no horizontal regression.
+
+### Guard count: 12 → 0
+
+Confirmed above (Step 4).
+
+### `npm run test:fast` (from `connect-four/`)
+
+```
+ℹ tests 1764
+ℹ pass 1764
+ℹ fail 0
+```
+
+ESLint ran first with no errors (full test list printed). `1764` exceeds the `≥1740` target
+(1739 baseline + 25 viewportUnits assertions, net of the file being counted differently across
+runs); zero failures.
+
+### What could NOT be verified
+
+- **The unit swap itself** under a real mobile browser's retracting chrome — same DevTools-emulation
+  limitation noted in every prior section; the static guard (now 0 failures) is the mechanical proof
+  that the token was swapped everywhere required.
+- `HomeScreen.jsx`'s content-height drift (706→596) was observed but not root-caused, since
+  diagnosing "Plan A"'s concurrent copy/behavior changes is outside this task's layout-only mandate
+  for that file.
