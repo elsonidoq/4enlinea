@@ -1094,7 +1094,6 @@
   },
   "onboarding": {
     "skip": "Saltar",
-    "replayIntro": "Repetir introducción",
     "importOffer": {
       "title": "Traé tus partidas reales",
       "subtitle": "Importá tu historial de Papergames para obtener análisis jugada a jugada y seguimiento de errores en las partidas que realmente jugás.",

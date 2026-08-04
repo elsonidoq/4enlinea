@@ -17,22 +17,6 @@ export function SettingsScreen({ go, goBack }) {
   const { lang, changeLanguage } = useLanguage();
   const isAuthenticated = !!session;
 
-  // Epic 8 — Onboarding Experience, US4 (T043/FR-010, research.md R6): "Replay intro" —
-  // visible for ANY onboarding state, reaches Settings from Home in <=2 nav actions (SC-004).
-  //
-  // Task 20 (finding 17): the 2026-07-13 mission-screen spec put a mission screen in front of
-  // first-run onboarding, but only retargeted the App.jsx auto-route — this control still
-  // dropped straight into the game, bypassing the mission screen the control's own name
-  // promises ("Replay intro" should replay the intro, and the mission screen now IS the
-  // intro). Route through onboardingMission instead; its CTA still launches the game with
-  // ONBOARDING_GAME_PARAMS. `onboarding_started` is fired ONCE from the mission screen's own
-  // mount effect (not here) — pass the source through as a param so the single call still
-  // carries `{source: 'settings_replay'}` instead of double-firing (mission screen mount +
-  // this handler).
-  function handleReplayIntro() {
-    go('onboardingMission', { onboardingSource: 'settings_replay' });
-  }
-
   const [papergamesId, setPapergamesId] = useState('');
   const [savedValue, setSavedValue] = useState('');
   const [error, setError] = useState(null);
@@ -340,16 +324,6 @@ export function SettingsScreen({ go, goBack }) {
         <div style={{ padding: '40px 18px', textAlign: 'center', color: 'var(--ink-soft)' }}>
           <p style={{ fontSize: 16, margin: 0 }}>{t('settings.papergames.signInPrompt')}</p>
         </div>
-        <div style={{ padding: '0 18px 26px' }}>
-          <button
-            type="button"
-            onClick={handleReplayIntro}
-            className="btn btn-ghost"
-            style={{ width: '100%', fontSize: 14, padding: '10px 0' }}
-          >
-            {t('onboarding.replayIntro')}
-          </button>
-        </div>
         {devReset && <div style={{ padding: '0 18px 26px' }}>{devReset}</div>}
       </div>
     );
@@ -469,18 +443,6 @@ export function SettingsScreen({ go, goBack }) {
               {t('settings.papergames.viewImportedGames')}
             </button>
           )}
-        </section>
-
-        {/* Epic 8 — Onboarding Experience, US4 (T043/FR-010): re-launchable for any state */}
-        <section>
-          <button
-            type="button"
-            onClick={handleReplayIntro}
-            className="btn btn-ghost"
-            style={{ width: '100%', fontSize: 14, padding: '10px 0' }}
-          >
-            {t('onboarding.replayIntro')}
-          </button>
         </section>
 
         {/* D3: tier-aware Subscription section — free -> UpgradeModal (5th call

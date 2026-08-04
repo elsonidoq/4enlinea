@@ -56,12 +56,14 @@ export function HomeScreen({ go }) {
       <TopBar
         onLogoClick={() => go('home')}
         right2="gear"
-        // Epic 8 — Onboarding Experience, US4 (T043/FR-010, SC-004): navigate to Settings
-        // regardless of auth state — SettingsScreen already renders a graceful unauthenticated
-        // view, and "Replay intro" must be reachable from Home in <=2 nav actions for anonymous
-        // users too (onboarding's auto-route is anonymous-only, so skipped users are frequently
-        // anonymous). Previously this gated anonymous taps behind AuthModal, which made Settings
-        // (and therefore Replay intro) unreachable without signing in first.
+        // Navigate to Settings regardless of auth state — SettingsScreen renders a graceful
+        // unauthenticated view (language switcher, sign-in prompt), so gating the gear behind
+        // AuthModal would make Settings unreachable for anonymous users for no benefit.
+        //
+        // HISTORY (do not "restore" the button): this was originally justified by Epic 8 US4 /
+        // SC-004, "'Replay intro' must be reachable from Home in <=2 nav actions for anonymous
+        // users". That button was REMOVED on 2026-08-04 at the owner's request. The unconditional
+        // navigation is kept on its own merits, not as a leftover of the removed requirement.
         onRight2={() => go('settings')}
         rightIcon="user"
         onRight={handleProfile}

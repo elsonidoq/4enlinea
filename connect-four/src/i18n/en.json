@@ -1094,7 +1094,6 @@
   },
   "onboarding": {
     "skip": "Skip",
-    "replayIntro": "Replay intro",
     "importOffer": {
       "title": "Bring your real games in",
       "subtitle": "Import your Papergames history to get move-by-move analysis and mistake tracking on the games you actually play.",
