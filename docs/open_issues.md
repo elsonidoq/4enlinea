@@ -5893,3 +5893,87 @@ its P3 log-and-serve carve-out).
 Fold into the post-staging deep-reveal epic together with **OI-129**. Cross-refs: OI-124 (D3's
 wiring, closed), OI-126 (the token-stripping half, closed), memory
 `project_annotation_gate_and_zones`, `project_prod_llm_call_graph`.
+
+## OI-148 — `ChallengeScreen`'s coach speech has the same `coachMessages.length` defect as `GameScreen` did
+
+**Status**: deferred (latent)
+
+`src/screens/ChallengeScreen.jsx`'s narration effect is `}, [coachMessages.length]);` and reads a
+single `lastCoachKeyRef`, exactly the shape fix 1 replaced in `GameScreen`. It is mostly masked today
+because `initPuzzle` resets the array to length 1 after feedback bubbles pushed it to ≥2, so the
+length does change between puzzles — but any flow that replaces a 1-element list with another
+1-element list is silent, and `:729` sets `lastCoachKeyRef.current = 'error.generic'`, a key with no
+`coach.spoken.*` slug (harmless, silently no-ops, same class as the `sparring.draw` bug fixed in
+`useGameBoard`). Fix: migrate it to `selectUnspokenKeys` (`src/lib/coachSpeechCursor.js`) and stamp
+its messages. Deferred because the brief scoped fix 1 to `GameScreen` and `ChallengeScreen`'s message
+flow (sequence mode, lesson overrides, the path-addressed `lastLessonAudioRef`) needs its own
+characterization pass.
+
+## OI-149 — approving one coach clip rebuilds the whole manifest and can silently drop live slugs
+
+**Status**: open (real, currently latent)
+
+`server/index.js`'s `writeTtsManifest` is `entries.filter(e => e.status === 'approved').map(e =>
+e.slug).sort()`, called by `POST /api/admin/audio/approve` and `/approve-all`. This **rebuilds** from
+registry status, which directly contradicts `docs/architecture/coach-audio-conventions.md`'s own
+rule: *"Any bulk operation must therefore **remap the existing manifest array in place**, never
+rebuild it from registry status — a rebuild silently drops whatever the manifest disagrees about."*
+Measured 2026-08-04, before this branch: 5 English slugs (`figure--7--blunder--2`,
+`immediate--threat--hint--0`, `sparring--outcome--loss`, `sparring--outcome--win`,
+`undercut--optimal--2`) and 1 Spanish slug (`home--welcome--0`) were in the manifest but not
+`approved` — so approving any single unrelated key would have dropped all six, orphaned their mp3s
+(turning `tests/unit/coachSpokenNamespace.test.js` red) and silenced clips that play today. Two of
+them are the sparring outcome clips. Worked around by hand in Task 5 of
+`docs/superpowers/plans/2026-08-04-plan-a-eight-small-fixes.md`; the durable fix is to make
+`writeTtsManifest` a union of the existing manifest and the newly-approved slug, or to make the drift
+itself a test failure.
+
+## OI-150 — `useCoachSpeech`'s pending-key buffer holds only one key
+
+**Status**: deferred (latent)
+
+`src/lib/useCoachSpeech.js`: `pendingKeyRef.current = key;` — when `speakCoachMessage` is called
+before the language manifest has loaded, the key is buffered in a single-slot ref, so a second call
+overwrites the first and that clip is lost. Not on any path fix 1 touches (the only pre-load speech is
+a screen's single mount message; the batched double-update happens at game end, long after the
+manifest resolves), which is why it was left alone. Fix: make it a small array and drain it in
+`ensureManifest`'s `.then`.
+
+## OI-151 — "Replay intro" was removed, retiring Epic 8 US4 / FR-010 / SC-004
+
+**Status**: accepted (owner's decision, 2026-08-04)
+
+`SettingsScreen`'s "Replay intro" control is gone from both the authenticated and unauthenticated
+views, along with `handleReplayIntro`, the `onboarding.replayIntro` i18n key in both locales, and the
+`onboardingSource` prop on `OnboardingMissionScreen` (it had exactly one producer). This **retires a
+shipped requirement**: Epic 8 US4, FR-010, and SC-004's "re-launch onboarding from Settings in ≤2 nav
+actions". Consequence to know before touching onboarding: `App.jsx`'s anonymous first-run auto-route
+is now the **only** path into onboarding, and since `shouldAutoRouteToOnboarding` is anonymous-only, a
+signed-in user cannot reach it at all. `HomeScreen`'s unconditional gear→Settings navigation is
+deliberately retained on its own merits — see the HISTORY comment there and
+`docs/architecture/frontend-conventions.md`.
+
+## OI-152 — `--sync` made 11 dormant `forfeited_win.*` keys eligible for bulk TTS synthesis
+
+**Status**: open (latent, low severity, no user impact today)
+
+`connect-four/src/i18n/en.json` has long carried 11 `coach.spoken.forfeited_win.*` keys that had
+**no** entry in `server/tts-registry.json` / `.es.json`. Task 5 of this plan ran `node
+scripts/generate-tts.js --sync --lang all` (required, to register a new coach key), and `--sync` is
+documented to merge the whole i18n tree into the registry, adding every unregistered `coach.spoken.*`
+key as `needs_audio`. It did exactly that: both registries went 217 → 229 entries (11 pre-existing
+`forfeited_win.*` keys + 1 new key).
+
+**Nothing is broken and no clip was generated** — `needs_audio` entries have no mp3 and are absent
+from the manifest, so `tests/unit/coachSpokenNamespace.test.js` stays green and the app is unaffected.
+
+**What changed is exposure.** Before this, `generate-tts.js --all-new` (which synthesizes every
+`needs_audio` entry) would have skipped these keys entirely, because they had no registry rows. Now
+it would synthesize 11 clips nobody asked for, at real OpenAI API cost, in a single unattended
+command. The underlying debt pre-existed; the exposure is new and was created by a `--sync` the plan
+mandated.
+
+Decide deliberately whether those 11 keys should be voiced (they are under `coach.spoken.*`, which by
+convention *declares intent to be voiced* — see `docs/architecture/coach-audio-conventions.md`
+§"Intent, not reachability") or whether the keys belong under `coach.ui.*` instead. Until then, prefer
+`--key <k>` over `--all-new`.

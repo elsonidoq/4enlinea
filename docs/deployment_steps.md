@@ -1098,6 +1098,60 @@ games already stored in `games`/`papergames_games`, not primary user data. A use
 game outcomes are unaffected — only the mistake-review annotations are cleared and will repopulate as
 that user's games are next reviewed or new games are analyzed.
 
+## Plan A small fixes — deep-reveal TTS sanitization (fix 7 / fix 8)
+
+**Status**: PENDING
+**When**: after the code deploy (either is safe; the app self-heals, this just avoids a silent stale window)
+**Blocks**: nothing hard — but until it runs, previously-cached deep reveals keep serving their OLD audio
+**Applies to**: staging / production
+
+### What's wrong
+
+`GET /api/user/tts/deep-reveal` now runs `stripInternalTokens` before `stripAnnotationsForTTS`
+(`buildTtsSpeechText`, `server/reasonRenderGuard.mjs`), so the coach speaks "column 5" where it used
+to speak "c5". The stored audio path is derived from that text:
+
+```js
+const textHash = createHash('sha256').update(cleanText).digest('hex');
+const audioPath = `tts/deep-reveal/${textHash}.mp3`;
+```
+
+compared against `explanation_cache.audio_path`. Every existing row's `audio_path` was computed from
+the **unsanitized** string, so it no longer matches and each affected reveal re-synthesizes once —
+correct, but it means the old clips linger as dead objects in the `coach-tts` bucket.
+
+Separately, `RANGE_RE` now matches en/em-dash ranges, so cached *text* generated before this deploy
+can still contain `c2–c5` renders that the guard would now fix. The guard runs at the response seam
+on every read, so served text self-corrects; the **cached raw mechanism** does not change.
+
+### Run it
+
+Pre-launch, staging and production are disposable — this is a truncate, not a migration or a
+backfill:
+
+```sql
+TRUNCATE explanation_cache;
+```
+
+Optionally clear the stale audio objects under `coach-tts/tts/deep-reveal/` in Supabase Storage.
+Not required for correctness — orphaned objects are only wasted bytes.
+
+### Verify
+
+```sql
+SELECT count(*) FROM explanation_cache;
+```
+
+Success: `0`. Then open one past mistake, tap the deep reveal, and play the audio. The **spoken**
+text must match the **rendered** text: no "c5", no "c1r3", and a dash range must be spoken as
+"columns 2 through 5" (en) / "columnas 2 a 5" (es). Check both locales — `buildTtsSpeechText`
+takes the locale the route already resolved via `resolveTtsLocale(lang, req.locale)`.
+
+### Roll back
+
+**Not reversible, and does not need to be.** `explanation_cache` is a derived cache: every row
+regenerates on the next reveal of that position. No user data is stored in it.
+
 ## Template for new entries
 
 ```markdown
