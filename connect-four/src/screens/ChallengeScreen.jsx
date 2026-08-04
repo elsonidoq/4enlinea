@@ -783,7 +783,9 @@ export function ChallengeScreen({
 
   return (
     <div style={{
-      display: 'flex', flexDirection: 'column', minHeight: '100vh',
+      // height (not minHeight): pins the root so the Toolbar (Hint / Submit /
+      // Next →) stays reachable at the viewport bottom. See ConceptScreen.jsx.
+      display: 'flex', flexDirection: 'column', height: '100dvh',
       background: 'var(--bg-chal)',
     }}>
       {import.meta.env.DEV && <DevBoardInjector onLoad={handleDevLoad} />}
@@ -877,6 +879,13 @@ export function ChallengeScreen({
         />
       ) : (
         <>
+          {/* Scrollable region: with the root pinned to 100dvh, the board + the
+              Tier-1 evaluation strip are the only flexible content, so THEY (not
+              just the trailing spacer) must live inside the scroller — the spacer
+              is a sibling of the board, not its parent, and cannot rescue an
+              over-tall board on its own. flex:1 + minHeight:0 lets this region
+              shrink and scroll instead of clipping the board on a short viewport. */}
+          <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', display: 'flex', flexDirection: 'column' }}>
           {/* Board — original layout when reveal is closed */}
           {board && (
             <div style={{ padding: '0 8px', flex: '0 0 auto' }}>
@@ -952,8 +961,11 @@ export function ChallengeScreen({
             </div>
           )}
 
-          {/* Spacer to push toolbar to bottom */}
+          {/* Spacer: pushes the Toolbar to the bottom of the scroller when
+              content is short. When content is tall, the scroller above
+              absorbs the overflow instead. */}
           <div style={{ flex: 1 }} />
+          </div>
         </>
       )}
 

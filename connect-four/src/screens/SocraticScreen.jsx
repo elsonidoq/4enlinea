@@ -229,7 +229,10 @@ export function SocraticScreen({ go, goBack, goReplace, lessonId }) {
   const canPlay = phase === 'ask' || phase === 'wrong1';
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
+    // height (not minHeight) + minHeight:0 on the scroller below: pins the root
+    // so the Toolbar stays reachable at the viewport bottom. Same shape as
+    // ConceptScreen.jsx.
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100dvh' }}>
       <TopBar
         title={lesson.title}
         onBack={() => go('saga')}
@@ -238,7 +241,7 @@ export function SocraticScreen({ go, goBack, goReplace, lessonId }) {
 
       <CoachDialog messages={currentMessages} onReplay={handleReplayNarration} />
 
-      <div style={{ flex: 1, overflowY: 'auto', padding: '0 18px 8px' }}>
+      <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: '0 18px 8px' }}>
         {/*
           lastDrop audit (034): SocraticScreen has its own lastDrop state.
           Set at line 88 when user places a disc during interactive phases

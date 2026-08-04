@@ -326,3 +326,216 @@ Nothing. Both the non-onboarding and onboarding variants were reached and measur
 sizes, Step 5a's coach-clone claim was verified (not assumed), and both locales were checked. The
 only deviation from the brief's Step 5 primary route (the `onboarding=true` query param) was
 anticipated by the brief itself and the documented fallback route worked on the first attempt.
+
+## After Task 4 (board screens)
+
+Four screens with a bottom `<Toolbar>`: `GameScreen.jsx`, `SocraticScreen.jsx` (main return only —
+sites 8/9/10 loading/error/no-board branches are Task 5's), `ChallengeScreen.jsx` (main return
+only — sites 11/12 lesson-empty/loading are Task 5's), `PostSetSummaryScreen.jsx` (characterized,
+downgraded to unit-only — see below).
+
+**Caveat repeated from Task 2/3:** Chrome DevTools emulation has no browser chrome, so
+`100vh === 100dvh === 100svh` under emulation. The sweeps below prove the **pinning and
+shrink-to-fit behavior** (roots holding at `innerH`, board areas shrinking, Toolbars staying
+reachable) — they do not and cannot prove the unit swap itself; that is the static guard's job.
+
+### Edits
+
+**GameScreen.jsx** — Step 1 (root pin) and Step 2 (`minHeight: 0` on the board wrapper),
+transcribed verbatim from the brief. No deviations.
+
+**SocraticScreen.jsx** — Step 4 (root pin, main return only — confirmed the other three
+`minHeight: '100vh'` occurrences, lines 197/208/220, are untouched) and Step 5 (`minHeight: 0` on
+the existing scroller). Transcribed verbatim.
+
+**ChallengeScreen.jsx** — Step 7's root pin transcribed verbatim (confirmed lines 747/762
+untouched). The spacer edit **required more than the brief's literal transcription** — see
+deviation below.
+
+**PostSetSummaryScreen.jsx** — Step 9: unit-only swap (`minHeight: '100vh'` →
+`minHeight: '100dvh'`), no pinning. Decision and evidence below.
+
+### Deviation from the brief: ChallengeScreen's spacer fix, expanded per the brief's own warning
+
+The brief's Step 7 "After" for the spacer (`<div style={{ flex: 1, minHeight: 0, overflowY: 'auto' }} />`)
+was applied first and measured at 360×600 as instructed. Confirmed the predicted failure exactly:
+
+```json
+{"controlsBelowFold":[{"label":"Hint","bottom":632,"belowFold":true}, ...three mute buttons...],
+ "kids":[40,52,21,140,297,0,82]}
+```
+
+The spacer collapsed to `0` height (as designed) but the Hint button was still below the fold,
+because the spacer is a flex **sibling** of the board — collapsing it to zero does nothing to an
+over-tall board that precedes it. Per the brief's explicit instruction ("Do that wrapping in this
+task; do not defer it"), wrapped the board + Tier-1 evaluation-strip region in a
+`flex: 1, minHeight: 0, overflowY: 'auto', display: 'flex', flexDirection: 'column'` scroller, kept
+a plain `flex: 1` spacer *inside* it (to still push the Toolbar down when content is short), and
+removed the now-redundant standalone spacer. Re-measured at 360×600: `controlsBelowFold` empty,
+board area 249px (visibly shrunk). Comment text avoids the literal `100vh` token per the guard
+constraint.
+
+Before (post brief's literal Step 7):
+```jsx
+          {/* Spacer that also absorbs overflow: with the root pinned to 100dvh
+              this is the only flexible child, so it must be able to shrink
+              (minHeight: 0) and scroll rather than clip on a short viewport. */}
+          <div style={{ flex: 1, minHeight: 0, overflowY: 'auto' }} />
+        </>
+      )}
+```
+
+After (final):
+```jsx
+        <>
+          {/* Scrollable region: with the root pinned to 100dvh, the board + the
+              Tier-1 evaluation strip are the only flexible content, so THEY (not
+              just the trailing spacer) must live inside the scroller — the spacer
+              is a sibling of the board, not its parent, and cannot rescue an
+              over-tall board on its own. flex:1 + minHeight:0 lets this region
+              shrink and scroll instead of clipping the board on a short viewport. */}
+          <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', display: 'flex', flexDirection: 'column' }}>
+          {/* Board — original layout when reveal is closed */}
+          {board && ( ... )}
+          {/* Tier-1 evaluation strip — shown after move is evaluated */}
+          {phase === 'post-move' && evaluation && ( ... )}
+          {/* Spacer: pushes the Toolbar to the bottom of the scroller when
+              content is short. When content is tall, the scroller above
+              absorbs the overflow instead. */}
+          <div style={{ flex: 1 }} />
+          </div>
+        </>
+      )}
+```
+
+### GameScreen — sweep (`/game?devBoard=3233333556&devSide=first&devDifficulty=easy`)
+
+| Viewport | innerH | P1_hOverflow | P4_screenRootH | controlsBelowFold | board area `h` (kids[2]) |
+|---|---:|---:|---|---|---:|
+| 390×844×3 | 844 | 0 | 844 (pinned) | `[]` | 579 |
+| 390×664×3 | 664 | 0 | 664 (pinned) | `[]` | 399 (matches baseline exactly) |
+| 375×553×3 | 553 | 0 | 553 (pinned) | `[]` | 288 |
+| 360×600×3 | 600 | 0 | 600 (pinned) | `[]` | 335 (< 399 baseline — visibly shrunk, confirming `minHeight: 0` landed) |
+
+### SocraticScreen — sweep (`/socratic/immediate-threat`)
+
+| Viewport | innerH | P1_hOverflow | P4_screenRootH | controlsBelowFold | board area `h` (kids[2]) |
+|---|---:|---:|---|---|---:|
+| 390×844×3 | 844 | 0 | 844 (pinned) | `[]` | 574 |
+| 390×664×3 | 664 | 0 | 664 (pinned) | `[]` | 394 (matches baseline exactly) |
+| 375×553×3 | 553 | 0 | 553 (pinned) | `[]` | 283 |
+| 360×600×3 | 600 | 0 | 600 (pinned) | `[]` | 307 |
+
+### ChallengeScreen — three-state sweep (`/challenge/claimeven?devBoard=3233333556`; forbidden_columns via generated+promoted puzzle)
+
+**State 1 — `phase === 'pre-move'`** (as loaded):
+
+| Viewport | innerH | P1_hOverflow | P4_screenRootH | controlsBelowFold |
+|---|---:|---:|---|---|
+| 390×844×3 | 844 | 0 | 844 (pinned) | `[]` |
+| 390×664×3 | 664 | 0 | 664 (pinned) | `[]` |
+| 375×553×3 | 553 | 0 | 553 (pinned) | `[]` |
+| 360×600×3 | 600 | 0 | 600 (pinned) | `[]` (before the spacer→scroller wrap: `Hint` + 3 mute buttons below fold) |
+
+**State 2 — `phase === 'post-move'`** (clicked column 1, waited ~2.2s for the Tier-1 strip):
+
+| Viewport | innerH | P1_hOverflow | P4_screenRootH | controlsBelowFold | Notes |
+|---|---:|---:|---|---|---|
+| 390×844×3 | 844 | 0 | 844 (pinned) | `[]` | |
+| 390×664×3 | 664 | 0 | 664 (pinned) | `[]` | |
+| 375×553×3 | 553 | 0 | 553 (pinned) | `[]` | |
+| 360×600×3 | 600 | 0 | 600 (pinned) | `["Learn more ▼" bottom 715]` | PASS by hand: scrolled the scroller (`scrollTop = scrollHeight`) and the button's bottom moved to 504 (≤600) — reachable via its nearest scrollable ancestor, per the harness's P3 rule. Toolbar (Hint/Submit/Next) itself never listed. |
+
+**State 3 — `category === 'forbidden_columns'`** (`/challenge/forbidden_columns?devBoard=333336451255115110106446424400` — see "Puzzle pool" below):
+
+| Viewport | innerH | P1_hOverflow | P4_screenRootH | controlsBelowFold |
+|---|---:|---:|---|---|
+| 390×844×3 | 844 | 0 | 844 (pinned) | `[]` |
+| 390×664×3 | 664 | 0 | 664 (pinned) | `[]` |
+| 375×553×3 | 553 | 0 | 553 (pinned) | `[]` |
+| 360×600×3 | 600 | 0 | 600 (pinned) | `[]` |
+
+Toolbar showed **Submit** (not Hint), confirming the multi-select branch was actually reached.
+
+**Puzzle pool note:** local `puzzles` had zero active `forbidden_columns` rows and `candidates` had
+zero pending ones (measured directly against Supabase). Per
+`feedback_generate_puzzles_for_local_qa`, generated 10 with
+`node server/scripts/generate_all_candidates.mjs --category forbidden_columns --count 10 --port $API_PORT`
+and promoted all 10 via `POST /api/admin/candidates/approve-batch` (goal_prompt harvested from an
+existing, non-active `forbidden_columns` puzzle row: "Avoid columns that hand your opponent an
+immediate win."). Not reported as unreachable; not deferred.
+
+### PostSetSummaryScreen — characterization and pin-vs-unit-only decision
+
+**Reached via the real flow** (not devBoard, since `/summary` is `SESSION_ONLY_SCREENS`):
+`/setpicker` → Immediate Threat (8-puzzle set) → answered all 8 (mix of optimal/suboptimal/blunder
+— outcome doesn't matter for layout) → landed on `/summary`.
+
+**Characterization at 390×664 (before editing):**
+```json
+{"naturalContentH": 628, "P1_hOverflow": 0, "P4_screenRootH": 664, "controlsBelowFold": []}
+```
+`kids: [{h:52,"DecodeC4"}, {h:612,"Set complete!|0/8 optimal|0%"}]` — a `TopBar` plus **one**
+scrollable content div (`flex: 1, overflowY: 'auto'`, already present at `PostSetSummaryScreen.jsx:160`)
+that contains the hero, accuracy card, coach recommendation, primary CTA **and** the ghost
+"Back to Challenges" button — there is no separate `<Toolbar>` and no bottom-pinned control outside
+that scroller.
+
+**At 360×600 (before editing):** `P4_screenRootH: 639` (root grows past the 600 floor, as
+`minHeight` always allows), and "Back to Challenges" (`bottom: 615`) is below the fold. Confirmed
+by hand this is a **page-level** scroll, not a clip: `document.documentElement` itself overflows
+(the root's `minHeight` grows to fit content), and scrolling the page — not some inner region —
+brings the button into view. This is the same "legitimately long, scrolls" shape as Saga/SetPicker
+in the Before table, not the Toolbar-pinning defect Steps 1–8 fix.
+
+**Decision: unit-only** (per the brief's second bullet — "plain scrolling summary with no
+bottom-pinned control"). Changed `minHeight: '100vh'` → `minHeight: '100dvh'` at
+`PostSetSummaryScreen.jsx:155`, no pinning, no scroller changes.
+
+**Post-edit re-verification (same session, via Vite HMR — no reload, since `/summary` can't survive one):**
+
+| Viewport | innerH | P1_hOverflow | P4_screenRootH | controlsBelowFold |
+|---|---:|---:|---|---|
+| 390×664×3 | 664 | 0 | 664 | `[]` |
+| 390×844×3 | 844 | 0 | 844 | `[]` |
+| 375×553×3 | 553 | 0 | 639 | `["Go to Immediate Threat…" 555, "Back to Challenges" 615]` |
+| 360×600×3 | 600 | 0 | 639 | `["Back to Challenges" 615]` |
+
+Geometry at 375×553 and 360×600 is **unchanged from pre-edit** (`P4_screenRootH: 639` both before
+and after) — confirms this was a pure unit swap with no behavior regression, matching the intent of
+a unit-only change. `screenRootCss.minHeight` computed to `600px` at the 360×600 emulation (i.e.
+the `dvh` value took effect), even though under DevTools emulation it necessarily equals what `vh`
+would have given (see the emulation caveat above).
+
+### Static guard: `tests/unit/viewportUnits.test.js`
+
+- Before Task 4: 14 failing file-assertions (Task 3's end state).
+- After Task 4: **12** failing file-assertions — `GameScreen.jsx uses no 100vh` and
+  `PostSetSummaryScreen.jsx uses no 100vh` now pass. `SocraticScreen.jsx uses no 100vh` and
+  `ChallengeScreen.jsx uses no 100vh` remain failing **as expected** — each file's other
+  loading/error/empty early-return branches (Socratic sites 8/9/10 at lines 197/208/220; Challenge
+  sites 11/12 at lines 747/762) still carry the old unit and are explicitly Task 5's scope, not
+  this task's. Predicted 12 (PostSetSummaryScreen fully converted) before running; confirmed.
+
+### `npm run test:fast` (from `connect-four/`)
+
+```
+ℹ tests 1764
+ℹ pass 1752
+ℹ fail 12
+```
+
+eslint ran first with no errors (full test list printed, confirming the run wasn't
+short-circuited). `fail` dropped by exactly 2 relative to Task 3's end state (14→12), matching the
+two newly-passing file-assertions (GameScreen, PostSetSummaryScreen) with no other regression.
+
+### What could NOT be verified
+
+- **The unit swap itself** (that a real mobile browser's retracting chrome no longer inflates the
+  floor) — inherent to DevTools emulation, not specific to this task; the static guard is the only
+  mechanical proof, and it passes for the two files this task fully converted.
+- Everything else in scope was verified directly: all four screens/states at all four viewports,
+  the ChallengeScreen spacer defect predicted by the brief (reproduced, then fixed per the brief's
+  own instruction), the forbidden_columns branch (puzzle pool was empty locally — generated and
+  promoted 10 puzzles rather than reporting it unreachable), and PostSetSummaryScreen reached via
+  the real completion flow (not skipped, not assumed).
