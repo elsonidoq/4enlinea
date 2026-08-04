@@ -11,7 +11,7 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { stripInternalTokens, sanitizeTermsMap, guardExplainMoveLlmPayload } from '../reasonRenderGuard.mjs';
+import { stripInternalTokens, sanitizeTermsMap, guardExplainMoveLlmPayload, buildTtsSpeechText } from '../reasonRenderGuard.mjs';
 import { Board } from '../classifier.js';
 
 // T024 fixture: the REAL served explanation string that reproduced OI-126, harvested from
@@ -323,5 +323,48 @@ describe('RANGE_RE dash widening (fix 8)', () => {
     assert.equal(out.startsWith('[zone:cells:c4r1,c4r2]'), true);
     assert.equal(out.endsWith('[/zone:cells:c4r1,c4r2]'), true);
     assert.equal(out.includes('columns 2 through 5'), true);
+  });
+});
+
+describe('buildTtsSpeechText (fix 7)', () => {
+  it('buildTtsSpeechText speaks what the screen shows (fix 7)', () => {
+    // Harvested from staging (Epic 11 evidence table, board 3154): the coach SPOKE "c5"/"c6"
+    // while the screen showed "column 5"/"column 6".
+    assert.equal(
+      buildTtsSpeechText('By playing c5 you threaten, but c6 is the tougher defense.', 'en'),
+      'By playing column 5 you threaten, but column 6 is the tougher defense.',
+    );
+    // Board 315444233213134122: a paired cell coordinate.
+    assert.equal(
+      buildTtsSpeechText('A deep threat at c1r3 decides it.', 'en'),
+      'A deep threat at column 1 decides it.',
+    );
+  });
+
+  it('buildTtsSpeechText strips annotation markup as well (fix 7)', () => {
+    assert.equal(
+      buildTtsSpeechText('the [zone:col4]pivot[/zone:col4] at c3.', 'en'),
+      'the pivot at column 3.',
+    );
+  });
+
+  it('buildTtsSpeechText composes fix 8 with fix 7 (board 315444233213)', () => {
+    // Together, the two fixes turn the raw en-dash range into a speakable phrase.
+    assert.equal(
+      buildTtsSpeechText('the c2–c5 strip; [zone:col4]column 4[/zone:col4] is the pivot.', 'en'),
+      'the columns 2 through 5 strip; column 4 is the pivot.',
+    );
+  });
+
+  it('buildTtsSpeechText honours the locale it is given (fix 7)', () => {
+    assert.equal(
+      buildTtsSpeechText('A deep threat at c1r3 decides it.', 'es'),
+      'A deep threat at columna 1 decides it.',
+    );
+  });
+
+  it('buildTtsSpeechText handles empty input the way the route expects', () => {
+    assert.equal(buildTtsSpeechText('', 'en'), '');
+    assert.equal(buildTtsSpeechText(null, 'en'), '');
   });
 });

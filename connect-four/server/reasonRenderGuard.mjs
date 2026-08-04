@@ -230,3 +230,52 @@ export function guardExplainMoveLlmPayload({ explanation, prompt, terms, locale 
     terms: sanitizeTermsMap(terms),
   };
 }
+
+/**
+ * Strip annotation markers from LLM explanation text for TTS speech.
+ * Removes [zone:X]...[/zone:X] and [term:X]...[/term:X] tag wrappers,
+ * keeping only the inner text. Also strips any leftover unmatched bracket tokens.
+ *
+ * Moved here from `server/index.js` (where it was a private function with one caller) so that
+ * the audio seam and the HTTP response seam are provably the same code. See
+ * `buildTtsSpeechText` below.
+ *
+ * @param {string} raw - Raw LLM explanation from deep_reveal_json.explanation
+ * @returns {string} Clean prose suitable for TTS synthesis
+ */
+export function stripAnnotationsForTTS(raw) {
+  if (!raw) return '';
+  return raw
+    // Remove opening zone/term tags: [zone:col3], [zone:tg], [term:kbId], etc.
+    .replace(/\[zone:[^\]]+\]/gi, '')
+    .replace(/\[term:[^\]]+\]/gi, '')
+    // Remove closing tags: [/zone:col3], [/term:kbId], etc.
+    .replace(/\[\/zone:[^\]]+\]/gi, '')
+    .replace(/\[\/term:[^\]]+\]/gi, '')
+    // Collapse multiple spaces and trim
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+/**
+ * The ONE function `GET /api/user/tts/deep-reveal` may use to turn a raw cached explanation into
+ * speakable text.
+ *
+ * Both the HTTP response seam (`guardExplainMoveLlmPayload`) and the audio seam read the SAME
+ * `explanation_cache` row. Until 2026-08-04 only the HTTP seam ran `stripInternalTokens`, so the
+ * coach SPOKE "c5" / "c1r3" while the screen showed "column 5" / "column 1" (verified on staging;
+ * see docs/epics/deep-reveal-grounding-epic.md's evidence table). Routing the audio seam through
+ * this composed function is what makes the two surfaces derive from one sanitized string.
+ *
+ * ORDER IS PART OF THE CONTRACT: `stripInternalTokens` runs FIRST, exactly as it does at the
+ * response seam. It is zone-tag-aware (see ZONE_TAG_RE above) precisely so a transform can run
+ * while `[zone:...]` delimiters are still present without mangling their machine-readable specs.
+ * Annotation removal is the last step. Do not swap these.
+ *
+ * @param {string} raw - `deep_reveal_json.explanation` (or the legacy `fullText`)
+ * @param {string} [locale='en']
+ * @returns {string}
+ */
+export function buildTtsSpeechText(raw, locale = 'en') {
+  return stripAnnotationsForTTS(stripInternalTokens(raw, locale));
+}
