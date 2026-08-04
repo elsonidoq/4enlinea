@@ -271,17 +271,43 @@ postgresql://postgres.[project-ref]:[password]@aws-0-[region].pooler.supabase.co
 
 This is the recurring deploy flow used for **all future feature deploys** — not just the one-time bootstrap.
 
-### 1. Push and Deploy to Staging
+### 0. Branch → environment mapping (the deploy trigger)
+
+**Each environment deploys from one specific branch. Pushing to that branch IS the deploy trigger.**
+
+| Environment | Branch | URL |
+|---|---|---|
+| **Staging** | **`stagging`** | `https://staging.decodec4.xyz/` |
+| **Production** | **`main`** | `https://decodec4.xyz/` |
+
+⚠️ **`stagging` is spelled with a doubled `g`. That is the real branch name, not a typo in this
+document — do not "correct" it to `staging`.** The environment, the URL and the Railway environment
+are all spelled `staging` with one `g`; only the **branch** is `stagging`. Pushing to `staging` will
+create a new branch that deploys nowhere and produce no error.
+
+**Feature branches do not deploy anywhere.** Work is deployed by merging it into `stagging` (for
+staging) or `main` (for production) and pushing — corrected 2026-08-04; this section previously said
+to `git push origin <feature-branch>`, which deploys nothing and silently leaves the environment on
+its old code while the push appears to succeed.
+
+### 1. Deploy to Staging
 
 ```bash
-# Push the feature branch
-git push origin <feature-branch>
-
-# Trigger a Railway staging deploy (via dashboard or CLI)
-railway up --environment staging
+# From the feature branch, merge into the staging branch and push.
+# The push is the deploy trigger — Railway builds `stagging` for the staging environment.
+git checkout stagging
+git merge <feature-branch>
+git push origin stagging
 ```
 
-Railway will run the build phase (solver compile + Vite build) followed by the start phase (`migrate.js && node server/index.js`). If the feature branch includes new migration files, `migrate.js` automatically detects and applies only the new files.
+Railway will run the build phase (solver compile + Vite build) followed by the start phase (`migrate.js && node server/index.js`). If the merged branch includes new migration files, `migrate.js` automatically detects and applies only the new files.
+
+**Migrations run automatically on every deploy, before the server starts.** Any entry in
+`docs/deployment_steps.md` carrying a "migration must run before/after its code deploy" ordering
+constraint must be reconciled against that fact — the automatic runner applies migrations *between*
+the new build and the new server starting, while the previous instance may still be serving. A
+migration that drops or narrows something the outgoing code still reads is unsafe in a single deploy
+and must be split across two.
 
 ### 2. Smoke Test Staging
 
@@ -295,13 +321,19 @@ If any step fails, fix the issue and redeploy to staging before proceeding to pr
 
 ### 3. Deploy to Production
 
-Once the smoke test passes on staging, redeploy the **same commit** to production:
+Once the smoke test passes on staging, promote the **same commit** to production by merging it into
+`main` and pushing — **`main` is the production branch, and the push is the deploy trigger** (see §0):
 
 ```bash
-railway up --environment production
+git checkout main
+git merge stagging          # promote the exact commit that passed staging
+git push origin main
 ```
 
-Or trigger via the Railway dashboard: select the production environment → Deploy.
+Do **not** promote by pushing a feature branch or by running `railway up` from an arbitrary checkout:
+production builds `main`, so anything not on `main` does not reach it. (Corrected 2026-08-04 — this
+step previously read `railway up --environment production` with no mention of the branch, which
+deploys whatever `main` already had rather than the commit you just validated on staging.)
 
 `migrate.js` runs automatically as part of the production start command. It compares the migration files on disk against the `schema_migrations` ledger and applies only new files (if any), each inside its own transaction.
 
