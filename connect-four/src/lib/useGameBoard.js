@@ -54,15 +54,25 @@ export function useGameBoard({ initialMoves = '', side, difficulty, onGameEnd, i
   const usedPhraseKeysRef = useRef(new Set());
   const trackPhrase = (key) => { usedPhraseKeysRef.current.add(key); return key; };
 
-  // Last i18n key pushed as a coach message — consumed by useCoachSpeech.
-  const lastCoachKeyRef = useRef(null);
+  // Fix 1: every coach message carries its own i18n key and a monotonic sequence number, so the
+  // screen can speak each new bubble exactly once. The old single `lastCoachKeyRef` could not
+  // express "two bubbles arrived in one batch" or "the array was replaced in place".
+  const coachSeqRef = useRef(0);
 
   // ── Helpers ────────────────────────────────────────────────────
-  function updateCoach(text, mood, replace = false, key = null) {
-    if (key) lastCoachKeyRef.current = key;
-    setCoachMessages((prev) =>
-      replace ? [{ text, mood }] : [...prev, { text, mood }],
-    );
+  /**
+   * Append (or, with `replace`, reset to) a coach bubble.
+   *
+   * `key` is REQUIRED and positional-third on purpose: a bubble with no i18n key can never be
+   * spoken, so making it easy to omit is what caused fix 1. Pass an explicit `null` only for a
+   * bubble that genuinely has no clip (there are none today in this hook).
+   */
+  function updateCoach(text, mood, key, replace = false) {
+    if (import.meta.env.DEV && key === undefined) {
+      throw new Error('updateCoach: `key` is required — pass an explicit null for an unspoken bubble');
+    }
+    const stamped = { text, mood, key: key ?? null, seq: ++coachSeqRef.current };
+    setCoachMessages((prev) => (replace ? [stamped] : [...prev, stamped]));
   }
 
   // ── Hint toggle ────────────────────────────────────────────────
@@ -72,6 +82,7 @@ export function useGameBoard({ initialMoves = '', side, difficulty, onGameEnd, i
       setHintOverlays([]);
       setHintActive(false);
       if (preHintCoach) {
+        // Already-stamped messages: every seq is <= the screen's cursor, so nothing re-speaks.
         setCoachMessages(preHintCoach);
         setPreHintCoach(null);
       }
@@ -104,7 +115,7 @@ export function useGameBoard({ initialMoves = '', side, difficulty, onGameEnd, i
 
       // Show generic hint phrase
       const key = trackPhrase(pickRandomKey(t, 'coach.spoken.sparring.hint.generic', usedPhraseKeysRef.current));
-      updateCoach(t(key), 'think', false, key);
+      updateCoach(t(key), 'think', key);
     } catch {
       // Silently handle network errors
     }
@@ -114,8 +125,7 @@ export function useGameBoard({ initialMoves = '', side, difficulty, onGameEnd, i
   // Show intro phrase on mount
   useEffect(() => {
     const key = pickRandomKey(t, introKey);
-    lastCoachKeyRef.current = key;
-    setCoachMessages([{ text: t(key), mood: 'happy' }]);
+    updateCoach(t(key), 'happy', key, true);
   }, [t]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Auto-play AI opening when side='second' and starting from an empty board
@@ -177,18 +187,18 @@ export function useGameBoard({ initialMoves = '', side, difficulty, onGameEnd, i
 
     // FR-008: preserve intro-replacement when side='second' and empty board
     const replace = currentMoves.length === 0 && side === 'second';
-    updateCoach(t(phraseKey), mood, replace, phraseKey);
+    updateCoach(t(phraseKey), mood, phraseKey, replace);
 
     // Check AI win — from commitMove return value
     if (won) {
-      updateCoach(t('sparring.aiWon'), 'oops', false, 'coach.spoken.sparring.outcome.loss');
+      updateCoach(t('sparring.aiWon'), 'oops', 'coach.spoken.sparring.outcome.loss');
       onGameEnd?.('loss', newHistory);
       return;
     }
 
     // Check draw
     if (draw) {
-      updateCoach(t('sparring.draw'), 'think', false, 'coach.spoken.sparring.outcome.draw');
+      updateCoach(t('sparring.draw'), 'think', 'coach.spoken.sparring.outcome.draw');
       onGameEnd?.('draw', newHistory);
       return;
     }
@@ -286,21 +296,22 @@ export function useGameBoard({ initialMoves = '', side, difficulty, onGameEnd, i
         coachKey = trackPhrase(pickRandomKey(t, `coach.spoken.generic.${data.quality ?? 'blunder'}`, used));
         coachText = t(coachKey);
       }
-      updateCoach(coachText, coachMood, false, coachKey);
+      updateCoach(coachText, coachMood, coachKey);
     } catch {
       // Silently handle network errors
     }
 
     // 5. Check win (from commitMove return value)
     if (won) {
-      updateCoach(t('sparring.youWon'), 'happy', false, 'coach.spoken.sparring.outcome.win');
+      updateCoach(t('sparring.youWon'), 'happy', 'coach.spoken.sparring.outcome.win');
       onGameEnd?.('win', newHistory);
       return;
     }
 
-    // 6. Check draw
+    // 6. Check draw. WAS 'sparring.draw', which has no audio slug
+    // (`sparring--draw` is not in coach-audio-manifest.json). Now matches the AI-move sibling above.
     if (draw) {
-      updateCoach(t('sparring.draw'), 'think', false, 'sparring.draw');
+      updateCoach(t('sparring.draw'), 'think', 'coach.spoken.sparring.outcome.draw');
       onGameEnd?.('draw', newHistory);
       return;
     }
@@ -318,7 +329,7 @@ export function useGameBoard({ initialMoves = '', side, difficulty, onGameEnd, i
     setAiThinking(false);
     // useBoardState only sets gameOver on win/draw — resign uses local override
     setResignedOver({ result: 'loss' });
-    updateCoach(t('sparring.aiWon'), 'oops', false, 'coach.spoken.sparring.outcome.loss');
+    updateCoach(t('sparring.aiWon'), 'oops', 'coach.spoken.sparring.outcome.loss');
     onGameEnd?.('loss', moveHistory);
   }
 
@@ -333,7 +344,6 @@ export function useGameBoard({ initialMoves = '', side, difficulty, onGameEnd, i
     hintOverlays,
     hintActive,
     coachMessages,
-    lastCoachKeyRef,
     handleColumnClick,
     handleHintToggle,
     handleResign,

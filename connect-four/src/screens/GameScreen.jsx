@@ -13,6 +13,7 @@ import { pickGameEndScreen } from '../lib/onboardingGameEnd.js';
 import { createOnboardingSkipHandler } from '../lib/onboardingSkip.js';
 import { useAudio } from '../lib/useAudio.js';
 import { useCoachSpeech } from '../lib/useCoachSpeech.js';
+import { selectUnspokenKeys } from '../lib/coachSpeechCursor.js';
 
 const API = import.meta.env.VITE_API_BASE_URL || '';
 
@@ -119,7 +120,6 @@ export function GameScreen({ go, goReplace, difficulty, side, initialMoves = '',
     hintOverlays,
     hintActive,
     coachMessages,
-    lastCoachKeyRef,
     handleColumnClick,
     handleHintToggle,
     handleResign,
@@ -156,12 +156,17 @@ export function GameScreen({ go, goReplace, difficulty, side, initialMoves = '',
   }, [lastDrop]);
 
   // ── Audio: coach speech playback ─────────────────────────────────
+  // Fix 1: keyed on the MESSAGE LIST, not its length. A replace-mode update leaves the length
+  // unchanged (the bubble used to be silent) and a batched double-update raises it by 2 while
+  // firing this effect once (only the last key used to be spoken). The cursor speaks each
+  // message exactly once, in order.
+  const lastSpokenSeqRef = useRef(0);
   useEffect(() => {
-    if (lastCoachKeyRef.current) {
-      speakCoachMessage(lastCoachKeyRef.current);
-    }
+    const { keys, nextSeq } = selectUnspokenKeys(coachMessages, lastSpokenSeqRef.current);
+    lastSpokenSeqRef.current = nextSeq;
+    for (const key of keys) speakCoachMessage(key);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [coachMessages.length]);
+  }, [coachMessages]);
 
   // ── Audio: background music lifecycle ────────────────────────────
   useEffect(() => {
