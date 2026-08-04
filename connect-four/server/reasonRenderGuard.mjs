@@ -30,7 +30,14 @@ const CXRY_RE = /\bc(\d+)r\d+\b/gi;
 // Matches a RANGED internal-coordinate token, e.g. "c3-c6" (OI-126: this shape reached the
 // player because the original guard only had CXRY_RE). Must run before BARE_COL_RE, or the bare
 // pass would consume each endpoint separately and this rule would never see the pair.
-const RANGE_RE = /\bc(\d+)-c(\d+)\b/gi;
+//
+// The dash class covers every separator the model actually emits, not just ASCII hyphen-minus:
+// U+002D hyphen-minus, U+2013 en-dash, U+2014 em-dash, U+2212 minus sign. Harvested from staging
+// (Epic 11 evidence, board `315444233213`): the raw mechanism reads "the c2–c5 strip" with an
+// EN-DASH, so the ASCII-only rule missed it and BARE_COL_RE rewrote each endpoint separately —
+// the player was served "column 2–column 5 strip". Optional surrounding whitespace is allowed
+// because a spaced en-dash ("c2 – c5") is ordinary typography for the same range.
+const RANGE_RE = /\bc(\d+)\s*[-–—−]\s*c(\d+)\b/gi;
 
 // Matches a BARE internal column token, e.g. "c3" (OI-126, same report). Word-bounded on both
 // sides so it never matches inside an unrelated alphanumeric string, and requires the digit to

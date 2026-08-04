@@ -287,3 +287,41 @@ describe('sanitizeTermsMap', () => {
     assert.deepEqual(sanitizeTermsMap({}), {});
   });
 });
+
+describe('RANGE_RE dash widening (fix 8)', () => {
+  it('RANGE_RE matches every dash form the model types (fix 8)', () => {
+    // Harvested from staging: the model writes an en-dash, not an ASCII hyphen.
+    assert.equal(stripInternalTokens('the c2–c5 strip', 'en'), 'the columns 2 through 5 strip');
+    assert.equal(stripInternalTokens('the c2—c5 strip', 'en'), 'the columns 2 through 5 strip');
+    assert.equal(stripInternalTokens('the c2−c5 strip', 'en'), 'the columns 2 through 5 strip');
+    assert.equal(stripInternalTokens('the c2 – c5 strip', 'en'), 'the columns 2 through 5 strip');
+    // The ASCII form must keep working.
+    assert.equal(stripInternalTokens('the c2-c5 strip', 'en'), 'the columns 2 through 5 strip');
+  });
+
+  it('the widened range rule localizes (fix 8)', () => {
+    assert.equal(stripInternalTokens('the c2–c5 strip', 'es'), 'the columnas 2 a 5 strip');
+  });
+
+  it('widening the dash class does not corrupt "C4" (Connect Four)', () => {
+    // BARE_COL_RE has no `i` flag on purpose; the range rule must not reintroduce the problem.
+    assert.equal(stripInternalTokens('This is a C4 position', 'en'), 'This is a C4 position');
+  });
+
+  it('the range rule stays case-insensitive, as it already was', () => {
+    // RANGE_RE carries /gi TODAY, so "C2-C5" already rewrites — this pins that PRE-EXISTING
+    // behaviour so widening the dash class is a pure superset, not a silent semantic change.
+    // Unlike BARE_COL_RE's bare "C4", an uppercase PAIR is not a plausible Connect Four
+    // abbreviation, so there is no prose to protect here.
+    assert.equal(stripInternalTokens('a C2-C5 strip', 'en'), 'a columns 2 through 5 strip');
+    assert.equal(stripInternalTokens('a C2–C5 strip', 'en'), 'a columns 2 through 5 strip');
+  });
+
+  it('a dash range inside a zone spec is left byte-for-byte alone', () => {
+    const spec = '[zone:cells:c4r1,c4r2]the c2–c5 strip[/zone:cells:c4r1,c4r2]';
+    const out = stripInternalTokens(spec, 'en');
+    assert.equal(out.startsWith('[zone:cells:c4r1,c4r2]'), true);
+    assert.equal(out.endsWith('[/zone:cells:c4r1,c4r2]'), true);
+    assert.equal(out.includes('columns 2 through 5'), true);
+  });
+});
