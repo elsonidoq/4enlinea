@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect, useMemo, memo } from 'react';
 import { Icon } from './Icon.jsx';
 import { getColumnA11yProps } from './boardA11y.js';
+import { getColumnLabels, getRowLabels } from './boardCoordinateLabels.js';
 import { boardPropsAreEqual } from '../lib/board.js';
 import { windowCountTint } from '../lib/lessonWindows.js';
 
@@ -103,6 +104,10 @@ function BoardImpl({
   // Per-cell live-window counts for lesson overlays — (number|null)[6][7], [row][col],
   // row 0 = bottom, null where a disc sits. Rendered only on EMPTY cells.
   windowCounts = null,
+  // Deep-reveal-only opt-in (spec 058 US4, FR-014). Renders 1-indexed column numbers above the
+  // grid and 1-indexed row numbers to the left, additive to the existing layout — never changes
+  // cell size or grid dimensions. Every other caller omits this prop and is visually unchanged.
+  showCoordinates = false,
 }) {
   const [hoverCol, setHoverCol] = useState(null);
 
@@ -175,7 +180,12 @@ function BoardImpl({
     );
   }, [zhCells, boardWidth, pad, gap, hasBadge]);
 
-  return (
+  // Deep-reveal-only coordinate labels (spec 058 US4, FR-014). Rendered as extra siblings
+  // around the existing board markup — the board `<div>` below is byte-identical to the
+  // showCoordinates=false case, so cell size/grid dimensions never change.
+  const rowLabelWidth = compact ? 16 : 20;
+
+  const boardEl = (
     <div
       ref={boardRef}
       style={{
@@ -418,6 +428,41 @@ function BoardImpl({
           </div>
         );
       })}
+    </div>
+  );
+
+  if (!showCoordinates) return boardEl;
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 4, width: '100%' }} data-testid="board-coordinates-wrap">
+      {/* Column numbers (1-indexed, per CLAUDE.md frontend display convention). Uses the exact
+          same pad/gap/flex('1 1 0') recipe as the column divs below so headers line up with
+          their columns without needing pixel measurement. */}
+      <div
+        style={{
+          display: 'flex',
+          gap,
+          paddingLeft: rowLabelWidth + 4 + pad,
+          paddingRight: pad,
+        }}
+      >
+        {getColumnLabels().map(n => (
+          <div key={n} style={{ flex: '1 1 0', textAlign: 'center', fontSize: compact ? 10 : 12, fontWeight: 700, color: 'var(--ink-soft, #6b7280)' }}>
+            {n}
+          </div>
+        ))}
+      </div>
+      <div style={{ display: 'flex', gap: 4 }}>
+        {/* Row numbers (1-indexed), top→bottom matching the board's internal row 5→0 render order. */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap, width: rowLabelWidth, paddingTop: pad + (hasBadge ? 20 : 0), paddingBottom: pad }}>
+          {getRowLabels().map(n => (
+            <div key={n} style={{ flex: '1 1 0', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: compact ? 10 : 12, fontWeight: 700, color: 'var(--ink-soft, #6b7280)' }}>
+              {n}
+            </div>
+          ))}
+        </div>
+        {boardEl}
+      </div>
     </div>
   );
 }

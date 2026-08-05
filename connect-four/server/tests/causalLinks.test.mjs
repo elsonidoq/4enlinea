@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { classifyCausalLink, CAUSAL_LINKS } from '../scripts/reason_engine/causalLinks.mjs';
+import { classifyCausalLink, CAUSAL_LINKS, denialCell } from '../scripts/reason_engine/causalLinks.mjs';
 
 test('L1 missed_own', () => {
   const fv = { case: 'win_to_lose', route: 'realized_denied', direction: 'missed_own',
@@ -103,4 +103,15 @@ test('every catalog entry has the required shape', () => {
   for (const l of CAUSAL_LINKS) {
     assert.ok(l.id && l.family && l.confidence && typeof l.when === 'function' && Array.isArray(l.covers));
   }
+});
+
+// ── denialCell export (spec 058, US2, research.md D1) ────────────────────────────────────────
+// deriveRequiredSet (renderReasonModel.mjs) imports and reuses this exact precedence rather than
+// reimplementing the `??` chain — export it, no behavior change.
+test('denialCell is exported and its cell ?? completingCell ?? null precedence is unchanged', () => {
+  assert.equal(typeof denialCell, 'function');
+  assert.equal(denialCell({ cell: 'c2r3', completingCell: 'c5r5' }), 'c2r3');   // cell wins over completingCell
+  assert.equal(denialCell({ completingCell: 'c5r5' }), 'c5r5');                 // falls back to completingCell
+  assert.equal(denialCell({}), null);                                          // neither present -> null
+  assert.equal(denialCell(undefined), null);                                   // no half at all -> null
 });

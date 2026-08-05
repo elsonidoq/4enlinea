@@ -1,0 +1,94 @@
+[
+  {
+    "movestring": "3154",
+    "col": 4,
+    "offeredSpecs": [
+      "col6",
+      "col5"
+    ],
+    "requiredSpecs": [],
+    "emittedSpecs": [
+      "col6",
+      "col5"
+    ],
+    "requiredSubsetOfEmitted": true,
+    "missingHandlesFromRetry": [],
+    "decisionARejectionCount": 0,
+    "decisionARejectedSpecs": [],
+    "servedExplanation": "You needed the [zone:col6]column 6[/zone:col6] move to keep the deepest parity fight alive; it is the tougher defense because it preserves your winning line and makes your opponent work through the main central group. By contrast, the [zone:col5]column 5[/zone:col5] move lets your opponent answer in a way that takes over the parity battle and turns your resource into a losing sequence instead.",
+    "rawMechanism": "You needed the [zone:col6]column 6[/zone:col6] move to keep the deepest parity fight alive; it is the tougher defense because it preserves your winning line and makes your opponent work through the main central group. By contrast, the [zone:col5]column 5[/zone:col5] move lets your opponent answer in a way that takes over the parity battle and turns your resource into a losing sequence instead."
+  },
+  {
+    "movestring": "315444233213",
+    "col": 1,
+    "offeredSpecs": [
+      "col4",
+      "col2",
+      "c3r4",
+      "future:windows:c3r5,c7r1"
+    ],
+    "requiredSpecs": [],
+    "emittedSpecs": [
+      "col2",
+      "col4",
+      "c3r4"
+    ],
+    "requiredSubsetOfEmitted": true,
+    "missingHandlesFromRetry": [],
+    "decisionARejectionCount": 0,
+    "decisionARejectedSpecs": [],
+    "servedExplanation": "Your move in [zone:col2]column 2[/zone:col2] lets your opponent start a faster double threat, so you lose the race to control the key center chain. The tougher defense is [zone:col4]column 4[/zone:col4], which keeps your central support tied to the [zone:c3r4]four-in-a-row line[/zone:c3r4] and preserves the long parity fight instead of handing them the forcing line.",
+    "rawMechanism": "Your move in [zone:col2]column 2[/zone:col2] lets your opponent start a faster double threat, so you lose the race to control the key center chain. The tougher defense is [zone:col4]column 4[/zone:col4], which keeps your central support tied to the [zone:c3r4]four-in-a-row line[/zone:c3r4] and preserves the long parity fight instead of handing them the forcing line."
+  },
+  {
+    "movestring": "315444233213134122",
+    "col": 5,
+    "offeredSpecs": [
+      "col3",
+      "col6",
+      "c1r3",
+      "c1r4"
+    ],
+    "requiredSpecs": [
+      "c1r3"
+    ],
+    "emittedSpecs": [
+      "col3",
+      "c1r3",
+      "col6"
+    ],
+    "requiredSubsetOfEmitted": true,
+    "missingHandlesFromRetry": [],
+    "decisionARejectionCount": 0,
+    "decisionARejectedSpecs": [],
+    "servedExplanation": "Your move in [zone:col3]column 3[/zone:col3] keeps the [zone:c1r3]four-in-a-row line[/zone:c1r3] alive, so you still have the deepest winning threat and force your opponent to answer it. By contrast, [zone:col6]column 6[/zone:col6] lets them take away that same line, so you lose the strongest way to keep the game under pressure and the result slips to a draw.",
+    "rawMechanism": "Your move in [zone:col3]column 3[/zone:col3] keeps the [zone:c1r3]four-in-a-row line[/zone:c1r3] alive, so you still have the deepest winning threat and force your opponent to answer it. By contrast, [zone:col6]column 6[/zone:col6] lets them take away that same line, so you lose the strongest way to keep the game under pressure and the result slips to a draw."
+  },
+  {
+    "movestring": "3154442332131341225551",
+    "col": 5,
+    "offeredSpecs": [
+      "col3",
+      "col6",
+      "c1r3",
+      "c1r4",
+      "windows:c1r3,c7r6",
+      "c7r6",
+      "future:windows:c2r6,c5r5"
+    ],
+    "requiredSpecs": [],
+    "emittedSpecs": [
+      "col6",
+      "col3"
+    ],
+    "requiredSubsetOfEmitted": true,
+    "missingHandlesFromRetry": [],
+    "decisionARejectionCount": 2,
+    "decisionARejectedSpecs": [
+      "c2r6",
+      "c5r5"
+    ],
+    "servedExplanation": "By playing [zone:col6]column 6[/zone:col6], you let your opponent answer with a [term:double_threat]double threat[/term:double_threat]: they can press the four-in-a-row line at column 2 and also keep the linked threat at column 5, so you cannot cover both. The tougher defense was [zone:col3]column 3[/zone:col3], which keeps your own deep winning line alive instead of handing them that fork.",
+    "rawMechanism": "By playing [zone:col6]column 6[/zone:col6], you let your opponent answer with a [term:double_threat]double threat[/term:double_threat]: they can press the four-in-a-row line at c2r6 and also keep the linked threat at c5r5, so you cannot cover both. The tougher defense was [zone:col3]column 3[/zone:col3], which keeps your own deep winning line alive instead of handing them that fork."
+  }
+]

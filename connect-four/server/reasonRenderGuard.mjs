@@ -17,6 +17,8 @@
 // `community-`/`allen-` substring never legitimately appears in player-facing prose otherwise).
 import { serverT } from './locale.mjs';
 import { validateAnnotation } from './annotationGate.js';
+import { expandSpec } from './zoneParser.js';
+import { rcToCellStr } from './scripts/reason_engine/zoneAnnotations.mjs';
 
 const LABEL_PREFIX_RE = /\b(?:community|allen)-/gi;
 
@@ -112,6 +114,112 @@ export function stripInternalTokens(text, locale = 'en') {
 }
 
 /**
+ * Promotes a bare, un-highlighted `cXrY` board-coordinate token in prose into a real,
+ * player-findable `[zone:...]` highlight (spec 058, US3, FR-011; data-model.md §5).
+ *
+ * This is a NEW, separate export — Plan A's `stripInternalTokens`/`RANGE_RE` in this file are left
+ * byte-identical (cross-lane constraint 1). Detection reuses `stripInternalTokens`'s own `CXRY_RE`;
+ * delimiter-skipping reuses the same `ZONE_TAG_RE`/`split` pattern.
+ *
+ * The wrapped inner text is the ALREADY-FLATTENED word (`[zone:c4r3]column 4[/zone:c4r3]`), never
+ * the raw token (`[zone:c4r3]c4r3[/zone:c4r3]`) — wrapping the raw token would make
+ * `checkP6` (`annotationGate.js`) unconditionally reject the zone regardless of `allowedSet` (its
+ * `rawCoordRegex` test runs on inner text with no `allowedSet` gate), self-destructing the
+ * promotion before `checkP5Strong` ever runs. This is the single most load-bearing fact in this
+ * function — do not "simplify" it to wrap the raw token.
+ *
+ * Decision B (settled, data-model.md §5): a `cXrY` token already inside an EXISTING zone's own
+ * inner text (e.g. `[zone:c4r1]watch c4r1 closely[/zone:c4r1]`) must be left alone, not re-wrapped
+ * into a nested/malformed pair. Splitting on `ZONE_TAG_RE` alone is not enough — an open zone's
+ * inner text is itself an even-indexed (non-delimiter) segment, so this tracks open/close zone-tag
+ * DEPTH across the split segments and skips promotion in any segment where depth > 0 (rejected
+ * alternative: net-zero-depth-segments-only — it silently skips promotion in any segment containing
+ * both an opened and a closed zone tag).
+ *
+ * Ordering (called first in `guardExplainMoveLlmPayload`, before `validateAnnotation`) delivers
+ * Decision 2's fallback for free: if the promoted spec is later rejected by `checkP5Strong` (not
+ * actually offered), `stripFailingZoneSpans` drops the `[zone:...]` wrapper but keeps the already-
+ * flattened inner text — identical to what `stripInternalTokens` alone would have produced. No
+ * second fallback code path is written for this.
+ *
+ * @param {string} text
+ * @param {string} [locale='en']
+ * @returns {string}
+ */
+export function promoteRawCoordinates(text, locale = 'en') {
+  if (typeof text !== 'string' || text.length === 0) return text;
+  const columnWord = serverT(locale, 'column');
+
+  const parts = text.split(ZONE_TAG_RE);
+  let depth = 0;
+  const out = parts.map((seg, i) => {
+    if (i % 2 === 1) {
+      // Delimiter segment: an opening [zone:...] increases depth, a closing [/zone:...] decreases
+      // it. Depth (not segment parity) is what distinguishes an already-open zone's inner text.
+      if (seg.startsWith('[/zone:')) depth = Math.max(0, depth - 1);
+      else depth += 1;
+      return seg;
+    }
+    if (depth > 0) return seg; // already inside an existing zone's own inner text — leave alone
+    return seg.replace(CXRY_RE, (match) => `[zone:${match}]${columnWord(match.match(/^c(\d+)r\d+$/i)[1])}[/zone:${match}]`);
+  });
+  return out.join('');
+}
+
+/**
+ * Adapter: maps `zones.aliases[]` (the OFFERED handle set, data-model.md §1) into
+ * `AllowedSetEntry[]` for `checkP5Strong` (`annotationGate.js`).
+ *
+ * Each `{col,row}` from `expandSpec` (0-indexed) is mapped through `rcToCellStr` (the SAME
+ * `c${col+1}r${row+1}` conversion `zoneAnnotations.mjs` already uses internally) — NOT fed to
+ * `checkP5Strong` as raw `{col,row}` objects, which would never match its 1-indexed-string
+ * `concreteCells` Set.
+ *
+ * Admission default — Decision A (owner's explicit call, deep-reveal-grounding
+ * tasks-answers.md, against the reviewer's own recommendation of per-cell admission):
+ * whole-window-only. A `windows:`/multi-cell `cells:` alias (`expandSpec` yields >1 cell) admits
+ * ONLY the full window as a single unit — marked `windowOnly: true` so `checkP5Strong` excludes its
+ * cells from the shared `concreteCells`/`concreteRows`/`concreteCols` Sets and instead requires an
+ * exact signature match. A single-cell alias (`expandSpec` yields exactly 1 cell) is unaffected —
+ * pushed as an ordinary, single-cell-eligible entry. The owner was warned this risks losing real,
+ * correct single-cell highlights drawn from inside an offered window (a false REJECTION, not a
+ * false admission — `checkP5Strong` rejections now actually strip the span, see
+ * `SPAN_CARRYING_CODES` below) and chose it anyway; T040 measures and records the per-board
+ * rejection count as the required evidence for a possible future revisit of this decision.
+ *
+ * Only `computeMechanism`'s fresh-generation response path (`server/index.js`) has a
+ * `renderDecision.zones.aliases` in scope to build this from (research.md D11) — the cache-hit and
+ * not-a-blunder call sites keep `allowedSet: null` (see the comments at those call sites).
+ *
+ * A `colN` alias (the always-offered better-col/played-col move-column reference,
+ * `zoneAnnotations.mjs`'s "Move-column aliases" block) is deliberately mapped to `checkP5Strong`'s
+ * pre-existing `{ col: N }` ABSTRACT-ONLY shape, not the generic multi-cell/windowOnly path below —
+ * `expandSpec('col4')` yields all 6 cells in the column, and Decision A's windowOnly bucket is
+ * checked ONLY via `offeredWindowSignatures` (exact-signature match), which `checkP5Strong`'s
+ * `colN` highlight branch never consults (it checks `abstractCols`/`concreteCells`). Routing a
+ * move-column alias through the windowOnly path would silently make the single most common
+ * highlight class un-matchable — a real regression, not a stylistic choice.
+ *
+ * @param {Array<{spec: string}>} aliases
+ * @returns {Array<{cells: string[], windowOnly?: true} | {col: number}>}
+ */
+export function toAllowedSet(aliases) {
+  const out = [];
+  for (const alias of aliases ?? []) {
+    const spec = alias.spec.startsWith('future:') ? alias.spec.slice('future:'.length) : alias.spec;
+    const colMatch = spec.match(/^col(\d+)$/);
+    if (colMatch) {
+      out.push({ col: parseInt(colMatch[1], 10) - 1 }); // ABSTRACT-ONLY, 0-indexed
+      continue;
+    }
+    const cells = expandSpec(alias.spec).map(rcToCellStr);
+    if (cells.length === 0) continue; // 'tg' or an unresolvable spec — nothing to admit
+    out.push(cells.length === 1 ? { cells } : { cells, windowOnly: true });
+  }
+  return out;
+}
+
+/**
  * Rewrites every key of a `terms` response map through the same `community-`/`allen-` prefix-
  * stripping rule as `stripInternalTokens`, so a raw KB-slug id (e.g. if an LLM emits
  * `[term:community-z-threat]` instead of the instructed `[term:z_threat]`) can never reach
@@ -160,7 +268,15 @@ export function guardExplainMovePayload({ oneLiner, patternTag, deepReveal, loca
 // may itself contain colons — e.g. `cells:c1r1,c2r1` — so this joins everything past the first
 // two segments rather than splitting on the last colon). Verified against `annotationGate.js`'s
 // actual `failures.push(...)` call sites (P1 :102/:109, P2 :157, P5 :260/:277, P6 :302).
-const SPAN_CARRYING_CODES = new Set(['P1', 'P2', 'P5', 'P6']);
+//
+// 'P5strong' (spec 058, US3, data-model.md §3 gap 3): `checkP5Strong`'s `col_not_allowed:*` /
+// `cell_not_allowed:*` failures DO carry a span the same shape as P1/P2/P5/P6 — without this entry,
+// once `allowedSet` is threaded live (T030), a `checkP5Strong` rejection would mark
+// `validateAnnotation`'s `valid: false` but `stripFailingZoneSpans` would leave the ungrounded
+// `[zone:...]` span completely intact, serving it to the player unchanged. Known, carried-forward,
+// narrower gap NOT fixed by this: a codeless `P5strong:tg` failure has no third `:`-segment for the
+// span extraction below to find, so its span is still never stripped (docs/open_issues.md).
+const SPAN_CARRYING_CODES = new Set(['P1', 'P2', 'P5', 'P6', 'P5strong']);
 
 function escapeRegExp(str) {
   return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -202,11 +318,14 @@ function stripFailingZoneSpans(text, failures) {
  * is optional (defaults to `null`, which skips the gate entirely) so existing/offline callers
  * that don't have a `Board` in scope keep working unguarded, matching the pre-T028 behavior.
  *
- * `allowedSet` is intentionally NOT threaded here — the live call site
- * (`server/index.js`) never builds one (`/usr/bin/grep -n "allowedSet" server/index.js` = zero
- * matches), so `checkP5Strong` never runs on the live path; only P1/P2/P3/P5/P6 apply. This is a
- * real, currently-accepted coverage gap versus the offline eval path (`run_eval.mjs`), not an
- * oversight — see `docs/architecture/server-conventions.md`'s Annotation Gate section.
+ * `allowedSet` (spec 058, US3, OI-143): as of this feature, threaded ONLY at the fresh-generation
+ * call site in `server/index.js` (via `toAllowedSet`, built from `result.renderDecision.zones.
+ * aliases` — the only call site with a `renderDecision` in scope, research.md D11). The cache-hit
+ * and not-a-blunder call sites keep `allowedSet: null` (no `renderDecision`/`zones` in scope at
+ * all — see the comments at those call sites in `server/index.js`), so `checkP5Strong` still never
+ * runs on those two paths; only P1/P2/P3/P5/P6 apply there. This narrows, but does not eliminate,
+ * the coverage gap OI-143 (docs/open_issues.md) originally described — see
+ * `docs/architecture/server-conventions.md`'s Annotation Gate section.
  *
  * P3 policy (disc notation / player name / engine jargon — `annotationGate.js:181,186,195,212`):
  * these failures carry NO span, so there is nothing to strip. They are LOGGED and the text is
@@ -214,14 +333,20 @@ function stripFailingZoneSpans(text, failures) {
  * catches the raw-coordinate leak shape of P3-adjacent content, and `llmCoachHelpers.js:804`'s
  * prompt instruction is the first line of defense against the wording P3 flags.
  *
- * @param {{explanation: string, prompt?: string, terms?: Record<string, unknown>, locale?: string, board?: object|null}} payload
+ * Ordering (contracts/deep-reveal-grounding-contracts.md §2, load-bearing): `promoteRawCoordinates`
+ * runs FIRST (only when `board` is supplied — same backward-compatible no-op gate as the rest of
+ * this function), then `validateAnnotation` (which runs `checkP5Strong` when `allowedSet` is
+ * non-null), then `stripFailingZoneSpans`, then the final `stripInternalTokens` pass below.
+ *
+ * @param {{explanation: string, prompt?: string, terms?: Record<string, unknown>, locale?: string, board?: object|null, allowedSet?: Array|null}} payload
  */
-export function guardExplainMoveLlmPayload({ explanation, prompt, terms, locale = 'en', board = null, ...rest }) {
+export function guardExplainMoveLlmPayload({ explanation, prompt, terms, locale = 'en', board = null, allowedSet = null, ...rest }) {
   let sanitizedExplanation = explanation;
   if (board && typeof explanation === 'string' && explanation.length > 0) {
-    const { valid, failures } = validateAnnotation(explanation, board, null);
+    sanitizedExplanation = promoteRawCoordinates(sanitizedExplanation, locale);
+    const { valid, failures } = validateAnnotation(sanitizedExplanation, board, allowedSet);
     if (!valid) {
-      sanitizedExplanation = stripFailingZoneSpans(explanation, failures);
+      sanitizedExplanation = stripFailingZoneSpans(sanitizedExplanation, failures);
       // Intentional console.warn (not console.log) — distinct from, and NOT a reintroduction of,
       // annotationGate.js's deleted unconditional debug logs (T028 correction (a)). Fires only on
       // an actual failure, not on every request.

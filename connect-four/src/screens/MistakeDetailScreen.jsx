@@ -409,7 +409,7 @@ export function MistakeDetailScreen({ go, goBack, blunderNavList: navListProp, i
             returnTo={{ screenKey: 'blunderDetail', params: { id: blunder.id } }}
             boardContent={
               <div style={{ width: '100%' }}>
-                <Board board={boardObj.board} compact canPlay={false} overlays={overlays} zhCells={zhCells} />
+                <Board board={boardObj.board} compact canPlay={false} overlays={overlays} zhCells={zhCells} showCoordinates />
               </div>
             }
           />

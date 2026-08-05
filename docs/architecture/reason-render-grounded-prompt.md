@@ -812,3 +812,95 @@ reason-case and no new harvested board; only `renderUniverse.mjs`'s predicate se
   raw_llm_output: <answer.mechanism BEFORE processAnnotations ran>, failure_reason: JSON.stringify(repairs),
   created_at: new Date().toISOString() }` — the same shape/convention `server/index.js` (~line 1085)
   already uses for `P5strong:*` validation failures.
+
+## 11. Required-set derivation + `future:` spec prefix (spec 058 — deep-reveal-grounding, shipped 2026-08-05)
+
+Two additions layered on top of §10's offer/prompt/grader machinery, both scoped to the
+condition-D grounded path only.
+
+### 11a. The required-set Derivation Rule
+
+`deriveRequiredSet(pruned, zones)` (`server/scripts/renderReasonModel.mjs:109`) narrows the
+*offered* alias set (§10) to the subset the explanation cannot be honest without. Verbatim from
+the epic (spec.md's Derivation Rule, do not re-derive):
+
+```js
+export function deriveRequiredSet(pruned, zones) {
+  const aliasBySpec = new Map((zones?.aliases ?? []).map((a) => [a.spec, a]));
+  const groups = [];
+  for (const half of ['lostResource', 'opponentPunishment']) {
+    const h = pruned?.[half];
+    if (!h) continue;
+    const cell = denialCell(h);
+    const spec = cell ?? (Array.isArray(h.window) && h.window.length ? 'windows:' + h.window.join(',') : null);
+    if (!spec) continue; // neither a cell nor a window — abstain, do not invent (FR-006)
+    const alias = aliasBySpec.get(spec);
+    if (!alias) continue; // match failure — drop, required ⊆ offered (FR-004)
+    if (groups.some((g) => g.spec === alias.spec)) continue;
+    groups.push({ half, spec: alias.spec, handle: alias.handle, role: alias.role });
+  }
+  return groups.slice(0, 3);
+}
+```
+
+Mechanics:
+
+- **Per-half load-bearing cell**: for each of `pruned.lostResource` / `pruned.opponentPunishment`,
+  the cell is `denialCell(h)` — the same `h?.cell ?? h?.completingCell ?? null` precedence
+  `causalLinks.mjs`'s own `denialCell()` uses. If the half has no resolvable cell but does have a
+  `window` array, the whole window becomes the spec (`'windows:' + h.window.join(',')`) — "the
+  half's story is a line, not a single square."
+- **Abstain, never invent (FR-006)**: a half with neither a cell nor a window contributes nothing.
+  Measured over the 29-record coverage corpus: 16 non-empty `requiredSet`s, 13 correctly empty.
+- **Required ⊆ offered (FR-004)**: the derived spec is matched against `zones.aliases[].spec` by
+  **exact string equality**, never a freshly-derived spec format. A match failure drops the group
+  silently rather than leaving an unenforceable requirement in the prompt.
+- **Dedup**: both halves routinely resolve to the same offered alias (measured: 9 of the 16
+  non-empty cases, e.g. `eval-4 -> c5r4` from both halves) — the required set is a genuine *subset*
+  of the offered handles, so a duplicate spec is dropped before the cap.
+- **Cap at 3**: `.slice(0, 3)`. With exactly two halves, at most one group per half is possible in
+  practice, so the cap is a defensive ceiling, not something the two-half shape normally reaches.
+
+`assembleGroundedPrompt` (`renderReasonModel.mjs:333`) turns `model.requiredSet` into a
+`# You MUST build the explanation around these` block, one line per group
+(`` `- [zone:${g.handle}] = ${g.role}` ``), or an explicit `(none for this explanation — do not
+invent one)` when the set is empty (FR-006 must be visible in the prompt, not silently omitted).
+
+**Known structural gap (not a defect to fix here):** the Derivation Rule reads
+`h.cell ?? h.completingCell` or `h.window` — it never reads `h.forkCells`, which is what backs
+`future:`-prefixed fork aliases (§11b). Measured over the 29-record corpus: 7 `future:` specs are
+offered and 0 are ever required. This is filed as an open issue (see `docs/open_issues.md`), not a
+bug in `deriveRequiredSet` — the Derivation Rule is copied verbatim from the epic and must not be
+re-derived to "fix" this.
+
+### 11b. The `future:` spec prefix
+
+No prior art existed in the codebase before this feature for annotating a highlight as "true, but
+not yet" rather than "true right now." `buildAnnotationOffer`
+(`server/scripts/reason_engine/zoneAnnotations.mjs`, around the "Deep fork cells" block) emits a
+`future:`-prefixed spec whenever a half's `tacticTag === 'double_threat'` carries `forkCells` that
+the STRUCTURAL near-term-board loop never sees (the projected-deep board is excluded from
+`NEAR_TERM`, and vector-named overlay tags are excluded from `STRUCTURAL` by design — see §10).
+These fork cells are real and solver-grounded, but often complete several plies away; offering them
+as an ordinary present-tense alias would repeat the eval-3 present-threat illusion the STRUCTURAL
+exclusion already guards against for other tags. Instead:
+
+```js
+const rawSpec = half.forkCells.length === 1 ? half.forkCells[0] : 'windows:' + half.forkCells.join(',');
+const spec = 'future:' + rawSpec;
+```
+
+with `handle: '<you|opp>-future-fork'`, `truthBoard: 'projectedDeep'`, `kbId: 'double_threat'`, and
+a future-tense `roleText()` variant (so the prompt and the client both frame it as "matters later,"
+never as a present threat — FR-002).
+
+**Parsing**: `isValidSpec`/`expandSpec` in both `server/zoneParser.js` and
+`src/lib/annotatedText.js` strip the `future:` prefix before applying the ordinary shape grammar —
+validity-recognition and cell resolution are byte-identical to the unprefixed form; only the
+prefix itself is special-cased.
+
+**Client color**: `getZoneColor` (`src/lib/annotatedText.js`) early-returns a dedicated
+`FUTURE_ZONE_COLOR = '#D97706'` (amber) constant for any `future:`-prefixed spec, checked *before*
+the normal `ZONE_COLORS[hash % length]` lookup. `FUTURE_ZONE_COLOR` is deliberately kept **parallel**
+to `ZONE_COLORS`, never appended into that array — appending would change the array length and
+silently recolor every other existing highlight (the hash is `mod length`).

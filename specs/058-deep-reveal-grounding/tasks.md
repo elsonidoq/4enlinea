@@ -77,11 +77,11 @@ T041** (Phase 6.5), and **AC7/SC-008's closing re-run → T042** (Phase 7, end).
 **Purpose**: Confirm baseline and re-verify the two facts research.md flags as time-sensitive
 before any implementation task depends on them.
 
-- [ ] T001 Run `eval "$(./worktree-ports.sh)"` from repo root, then `cd connect-four && npm run
+- [x] T001 Run `eval "$(./worktree-ports.sh)"` from repo root, then `cd connect-four && npm run
   test:fast` and confirm the baseline is **0 failures** (per `CLAUDE.md`, confirmed since
   2026-08-04). Record the count; any task below that turns this red is a regression, not
   pre-existing flake.
-- [ ] T002 [P] **Re-verify the `065` migration number immediately before T022 executes** (the task
+- [x] T002 [P] **Re-verify the `065` migration number immediately before T022 executes** (the task
   that authors the migration file) **and again before T038 executes** (the task that documents it
   in the runbook) — not just once at plan time: `ls connect-four/server/migrations/ | tail -5`.
   research.md D8/D4 and plan.md's Source Code map name `065_deep_reveal_failures_two_attempts.sql`
@@ -93,7 +93,7 @@ before any implementation task depends on them.
   "T020," which is US2's `postprocessAnswer` plumbing task and has nothing to do with the migration
   file — T020 always runs before T022 regardless, so anchoring there was conservative-but-wrong and
   could still let the number drift between T020 and T022.)
-- [ ] T003 [P] Confirm the hard prerequisite above (Plan A merged into this branch/base) via
+- [x] T003 [P] Confirm the hard prerequisite above (Plan A merged into this branch/base) via
   `git log --oneline -- connect-four/server/reasonRenderGuard.mjs`. If Plan A's en-dash fix is
   absent, stop and escalate — do not begin any US3 task.
 
@@ -119,12 +119,12 @@ offered `aliases[]` now includes a distinct future-square entry for them.
 
 ### Tests for User Story 1
 
-- [ ] T004 [P] [US1] Extend `connect-four/server/tests/zoneAnnotations.test.mjs`: assert
+- [x] T004 [P] [US1] Extend `connect-four/server/tests/zoneAnnotations.test.mjs`: assert
   `buildAnnotationOffer` emits a `future:cNrM`/`future:windows:...`-prefixed alias for a
   `forkCells` deep-fork board (use `3154442332131341225551`, solver-verified per
   `./visualize_board.sh`, not a hand-built board), with `role` text distinct from the present-tense
   structural `roleText()` output (FR-001/FR-002).
-- [ ] T005 [P] [US1] **Create `connect-four/server/tests/zoneParser.test.mjs` (NEW file — corrected
+- [x] T005 [P] [US1] **Create `connect-four/server/tests/zoneParser.test.mjs` (NEW file — corrected
   from an earlier draft of this task that said "or the nearest existing test file... do not create a
   new file"; verified there is none).** Grepping `connect-four/tests/` and
   `connect-four/server/tests/` for `expandSpec`/`isValidSpec` finds only
@@ -137,7 +137,7 @@ offered `aliases[]` now includes a distinct future-square entry for them.
   not rewrite the line. (This is load-bearing, not optional: the `future:` prefix strip lands in
   `isValidSpec`/`expandSpec` and is a dependency of `checkP1`/`checkP2`/`checkP5` — shipping it
   untested is the exact silent-failure shape constraint 5 exists to prevent.)
-- [ ] T006 [P] [US1] Extend `connect-four/tests/unit/annotatedText.test.js` (or nearest existing
+- [x] T006 [P] [US1] Extend `connect-four/tests/unit/annotatedText.test.js` (or nearest existing
   test file covering `src/lib/annotatedText.js` — locate by grep): assert `isValidSpec` accepts a
   `future:`-prefixed spec, `getZoneColor` returns the new reserved future-square constant for any
   `future:`-prefixed spec (not one of the 4 `ZONE_COLORS` hash-pool entries), and
@@ -145,11 +145,11 @@ offered `aliases[]` now includes a distinct future-square entry for them.
 
 ### Implementation for User Story 1
 
-- [ ] T007 [US1] In `connect-four/server/scripts/reason_engine/zoneParser.js`: add a one-line
+- [x] T007 [US1] In `connect-four/server/scripts/reason_engine/zoneParser.js`: add a one-line
   `future:` prefix strip at the top of `isValidSpec` and of `expandSpec`, before delegating to the
   existing shape checks (plan.md §"The future-square visual mechanism"; data-model.md §1). Cell
   *resolution* must stay byte-identical to the unprefixed form.
-- [ ] T008 [US1] **Pin the future-square hex colour** (currently `UNVERIFIED SKETCH — adapt` per
+- [x] T008 [US1] **Pin the future-square hex colour** (currently `UNVERIFIED SKETCH — adapt` per
   research.md D6/plan.md's Deploy prerequisites framing — this is implementation work, not a
   deploy step). In `connect-four/src/lib/annotatedText.js`: add a new, reserved **parallel**
   constant (e.g. `FUTURE_ZONE_COLOR`) — it must NOT be appended to the `ZONE_COLORS` array, because
@@ -161,14 +161,14 @@ offered `aliases[]` now includes a distinct future-square entry for them.
   `Board.jsx:13-42`) for collision. Add the one-line `spec.startsWith('future:')` early-return
   branch to `getZoneColor`, and the same prefix-strip line to `isValidSpec`,
   `zoneToOverlays`, `zoneToWindowGroups` (data-model.md §1; plan.md's per-file breakdown).
-- [ ] T009 [US1] In `connect-four/server/scripts/reason_engine/zoneAnnotations.mjs`: add a new
+- [x] T009 [US1] In `connect-four/server/scripts/reason_engine/zoneAnnotations.mjs`: add a new
   handle-class source in `buildAnnotationOffer` for deep fork cells named by `tacticTag:
   "double_threat"` on the projected-deep board (Settled decision 8), pushing
   `{ handle, spec: 'future:' + <cNrM or windows:...>, role, truthBoard, kbId }` aliases alongside
   the existing `STRUCTURAL` (`immediate`/`major`/`double`) source. Add a future-tense branch to
   `roleText()` (`:36-41`) selected by the `future:` prefix on the derived spec, e.g. "this square
   matters later, once the forced sequence reaches it — not a threat right now" (FR-002).
-- [ ] T010 [US1] In `connect-four/server/scripts/renderReasonModel.mjs`'s `assembleGroundedPrompt`
+- [x] T010 [US1] In `connect-four/server/scripts/renderReasonModel.mjs`'s `assembleGroundedPrompt`
   (the `# Highlightable regions` block, currently ~line 311 — locate by symbol, not line number):
   state explicitly that a `future:`-prefixed handle must be described in future/conditional
   language, never as a present threat (Settled decision 8(b)).
@@ -193,28 +193,28 @@ Rule's own match-and-drop step).
 
 ### Tests for User Story 2
 
-- [ ] T011 [P] [US2] Extend `connect-four/server/tests/causalLinks.test.mjs`: assert `denialCell`
+- [x] T011 [P] [US2] Extend `connect-four/server/tests/causalLinks.test.mjs`: assert `denialCell`
   is now exported from `causalLinks.mjs` and its `h?.cell ?? h?.completingCell ?? null` precedence
   is unchanged (research.md D1 — `deriveRequiredSet` imports and reuses this constant rather than
   reimplementing the `??` chain).
-- [ ] T012 [P] [US2] Extend `connect-four/server/tests/renderReasonModel.test.mjs`: assert
+- [x] T012 [P] [US2] Extend `connect-four/server/tests/renderReasonModel.test.mjs`: assert
   `deriveRequiredSet(pruned, zones)` (a) returns 1–3 entries with `{half, spec, handle, role}`
   matched against `zones.aliases[].spec` by exact string equality (D2), (b) drops a group silently
   (no error, no placeholder) when the derived cell/window has no offered handle (FR-004/FR-006),
   and (c) covers the `T-parity` case (`covers: ['route', 'lostResource.terminal',
   'opponentPunishment.terminal']`) falling back to `lostResource.window` per the Derivation Rule's
   own worked example (spec.md, verbatim from the epic).
-- [ ] T013 [P] [US2] Extend `connect-four/server/tests/zoneAnnotations.test.mjs`: assert
+- [x] T013 [P] [US2] Extend `connect-four/server/tests/zoneAnnotations.test.mjs`: assert
   `processAnnotations`'s return widens to include `usedSpecs: [...usedSpecs]` (data-model.md §2,
   hop 1) alongside the existing `{mechanism, keyCells, zonesEmitted, repairs}` fields, and that
   `usedSpecs` contains only specs whose handle actually appeared as `[zone:{handle}]` in the input
   text.
-- [ ] T014 [P] [US2] Extend `connect-four/server/tests/computeConditionD.test.mjs` (already the
+- [x] T014 [P] [US2] Extend `connect-four/server/tests/computeConditionD.test.mjs` (already the
   file that owns `postprocessAnswer` coverage per plan.md's Testing section — verified, do not
   create a new file): assert `postprocessAnswer` destructures and returns `usedSpecs` on its return
   value (data-model.md §2, hop 2), including the `usedSpecs: []` case on the early-return branch
   (`!answer || !render_decision?.zones`).
-- [ ] T015 [P] [US2] Extend `connect-four/server/tests/mechanismExplainer.test.mjs` with a
+- [x] T015 [P] [US2] Extend `connect-four/server/tests/mechanismExplainer.test.mjs` with a
   required-set-miss fixture: a synthetic first-attempt answer whose `mechanism` omits a required
   handle triggers exactly one retry with an amended prompt explicitly naming the missing
   handle(s); the returned shape is `{...attempt2, attempt1, missingHandles}` (both attempts
@@ -224,7 +224,7 @@ Rule's own match-and-drop step).
   `processAnnotations` has already rewritten every handle to its expanded spec before this check
   runs). Also assert `runLlmAttempt` (`mechanismExplainer.mjs:50-58`) now surfaces `usedSpecs` on
   its returned `attempt` object (data-model.md §2, hop 3).
-- [ ] T016 [US2] **NEW test file** `server/deepRevealFailuresLogging.test.mjs` — the two-attempt
+- [x] T016 [US2] **NEW test file** `server/deepRevealFailuresLogging.test.mjs` — the two-attempt
   insert path (no existing file tests today's single-insert terminal-failure path in isolation).
   Assert: a "missing required squares after retry" incident writes `attempt1_raw_llm_output`,
   `attempt1_mechanism`, `attempt2_raw_llm_output`, `attempt2_mechanism`, `missing_handles` (jsonb),
@@ -236,9 +236,9 @@ Rule's own match-and-drop step).
 
 ### Implementation for User Story 2
 
-- [ ] T017 [US2] In `connect-four/server/scripts/reason_engine/causalLinks.mjs`: export the
+- [x] T017 [US2] In `connect-four/server/scripts/reason_engine/causalLinks.mjs`: export the
   existing `denialCell` (`:23`) — no behavior change, just widen its export (research.md D1).
-- [ ] T018 [US2] In `connect-four/server/scripts/renderReasonModel.mjs`: add
+- [x] T018 [US2] In `connect-four/server/scripts/renderReasonModel.mjs`: add
   `deriveRequiredSet(pruned, zones)` per the Derivation Rule (spec.md, copied verbatim from the
   epic — do not re-derive or re-word it). Call it from both `buildReasonRenderModel` and
   `buildRenderDecision` (research.md D1 — both already share the identical `pruneVector` →
@@ -248,14 +248,14 @@ Rule's own match-and-drop step).
   `assembleGroundedPrompt` (**not** `compute.mjs`'s `buildPromptForCondition` — Corrections item 5 /
   research.md D6), naming each required handle + role and the rule that each must appear as a zone
   tag in `mechanism` (Settled decision 6).
-- [ ] T019 [US2] In `connect-four/server/scripts/reason_engine/zoneAnnotations.mjs`: widen
+- [x] T019 [US2] In `connect-four/server/scripts/reason_engine/zoneAnnotations.mjs`: widen
   `processAnnotations`'s return (`:216`) to `{ mechanism, keyCells, zonesEmitted, repairs,
   usedSpecs: [...usedSpecs] }` — data-model.md §2 hop 1, quoted verbatim.
-- [ ] T020 [US2] In `connect-four/server/scripts/compute.mjs`: widen `postprocessAnswer`'s
+- [x] T020 [US2] In `connect-four/server/scripts/compute.mjs`: widen `postprocessAnswer`'s
   (`:294`) return to also destructure and return `usedSpecs` from `processAnnotations`'s result —
   data-model.md §2 hop 2, quoted verbatim, including the early-return branch returning
   `usedSpecs: []`.
-- [ ] T021 [US2] In `connect-four/server/mechanismExplainer.mjs`: widen `runLlmAttempt`'s
+- [x] T021 [US2] In `connect-four/server/mechanismExplainer.mjs`: widen `runLlmAttempt`'s
   (`:50-58`) return to include `usedSpecs` from `postprocessAnswer`'s result — data-model.md §2 hop
   3, quoted verbatim. Then extend `computeMechanism`'s retry loop (`:98-99`) with a second trigger
   alongside `isLlmError`: after attempt 1, compute `requiredSet.every(g =>
@@ -265,17 +265,17 @@ Rule's own match-and-drop step).
   new trigger must not). Widen the return shape to `{ ...attempt2, attempt1, missingHandles }`
   (FR-009/FR-010 — both attempts always kept, second attempt always served, never re-evaluated for
   quality against the first).
-- [ ] T022 [US2] In `connect-four/server/migrations/065_deep_reveal_failures_two_attempts.sql`
+- [x] T022 [US2] In `connect-four/server/migrations/065_deep_reveal_failures_two_attempts.sql`
   (number per T002's re-verification): add the six nullable columns from data-model.md §4
   (`attempt1_raw_llm_output text`, `attempt1_mechanism text`, `attempt2_raw_llm_output text`,
   `attempt2_mechanism text`, `missing_handles jsonb`, `served_attempt smallint`) to
   `deep_reveal_failures`, additive only — the existing terminal-failure insert
   (`server/index.js:1363-1372`) must keep working unchanged.
-- [ ] T023 [US2] In `connect-four/server/index.js`: add a new insert site (in its own region, away
+- [x] T023 [US2] In `connect-four/server/index.js`: add a new insert site (in its own region, away
   from the TTS handler — cross-lane constraint 2) for the "retry still omitted required squares"
   case, writing the six new columns and `failure_reason = 'missing_required_squares'`. Keep the
   existing terminal-failure insert (`:1363-1372`) untouched.
-- [ ] T024 — **moved to Phase 7 (see below); relocated and retargeted per tasks-critique blocking
+- [x] T024 — **moved to Phase 7 (see below); relocated and retargeted per tasks-critique blocking
   issue 3.**
 
 **Checkpoint**: US1 + US2 together are independently testable — re-run the Independent Test above
@@ -299,7 +299,7 @@ this story checks against).
 
 ### Tests for User Story 3
 
-- [ ] T025 [US3] **Combined task — do not split.** Extend `connect-four/tests/annotationGate.test.js`
+- [x] T025 [US3] **Combined task — do not split.** Extend `connect-four/tests/annotationGate.test.js`
   (verified the file that owns `checkP5Strong`'s existing P1–P5Strong coverage today — plan.md's
   Testing section) with cases for **all three** `checkP5Strong` gaps, shipped as one PR/commit per
   the owner's explicit decision (data-model.md §3, research.md D5: "landing them separately leaves
@@ -318,7 +318,7 @@ this story checks against).
   narrower gap ... deliberately out of scope for this plan, not introduced by this plan"). Assert
   this explicitly as a documented-gap regression guard (a test that currently fails would mean the
   gap silently closed or silently widened) rather than leaving it unasserted.
-- [ ] T026 [US3] **Must land in the same commit as T028 (same treatment as T025/T027) — the nested-
+- [x] T026 [US3] **Must land in the same commit as T028 (same treatment as T025/T027) — the nested-
   promotion guard rule (item 3 below) is now decided (Decision B) and this test must encode exactly
   that rule, not whatever the implementer of T028 picks independently.** Extend
   `connect-four/server/tests/reasonRenderGuard.test.mjs` (already imports
@@ -345,7 +345,7 @@ this story checks against).
 
 ### Implementation for User Story 3
 
-- [ ] T027 [US3] **Combined task, matching T025 — do not split.** In
+- [x] T027 [US3] **Combined task, matching T025 — do not split.** In
   `connect-four/server/annotationGate.js`'s `checkP5Strong` (`:323-403`):
   1. add a `windows:(.+)` branch mirroring the existing `cells:` branch (`:380-389`) — split on
      `,`, require every resulting cell in `concreteCells`;
@@ -375,7 +375,7 @@ this story checks against).
      decision, deep-reveal-grounding tasks-answers.md Decision A — a single-cell highlight from
      inside an offered window is a KNOWN, ACCEPTED false-rejection; measured per T040).` This is not
      an oversight — it must read as a deliberate choice at the code site.
-- [ ] T028 [US3] **Must land in the same commit as T026 (Decision B is settled — see below; do not
+- [x] T028 [US3] **Must land in the same commit as T026 (Decision B is settled — see below; do not
   pick independently).** In `connect-four/server/reasonRenderGuard.mjs`: add a **new exported
   function** `promoteRawCoordinates(text, locale)` — a new symbol, leaving Plan A's
   `stripInternalTokens` and `RANGE_RE` in this file byte-identical (cross-lane constraint 1;
@@ -400,7 +400,7 @@ this story checks against).
   **first** step, before `validateAnnotation` and before the final `stripInternalTokens` call
   (contracts §2's fixed ordering: `promoteRawCoordinates` → `validateAnnotation` →
   `stripFailingZoneSpans` → `stripInternalTokens`).
-- [ ] T029 [US3] In `connect-four/server/reasonRenderGuard.mjs`: add a `toAllowedSet(aliases)`
+- [x] T029 [US3] In `connect-four/server/reasonRenderGuard.mjs`: add a `toAllowedSet(aliases)`
   adapter mapping `zones.aliases[]` into `AllowedSetEntry[]` for `checkP5Strong`. **Use the
   corrected mapping, not the earlier-drafted defective one**: for a `cells:`/`windows:` alias, map
   each `{col,row}` (from `expandSpec`, 0-indexed) through the `c${col+1}r${row+1}` conversion
@@ -442,7 +442,7 @@ this story checks against).
   draft of this task said "revisit this default against the four staging boards during T032" — T032
   is the unrelated `boardShowCoordinates.test.js` US4 task and never revisits anything; the
   reference now correctly points at T040.)
-- [ ] T030 [US3] In `connect-four/server/index.js`: thread a real `allowedSet` (via `toAllowedSet`,
+- [x] T030 [US3] In `connect-four/server/index.js`: thread a real `allowedSet` (via `toAllowedSet`,
   built from `result.renderDecision.zones.aliases`) into `guardExplainMoveLlmPayload`, **only at
   the fresh-generation call site** (`:1424`, after `computeMechanism` returns). **Do not** add
   `allowedSet` construction at the cache-hit (`:1316`) or not-a-blunder (`:1349`) call sites — they
@@ -450,7 +450,7 @@ this story checks against).
   this narrows, does not eliminate, the pre-existing coverage gap; state this explicitly in a code
   comment at both unchanged call sites so a future reader does not treat it as an oversight to
   "complete"). This closes OI-143 — do not open a duplicate issue (cross-lane constraint 4).
-- [ ] T031 [US3] Mark **OI-143 resolved** in `docs/open_issues.md`, referencing this spec (058) and
+- [x] T031 [US3] Mark **OI-143 resolved** in `docs/open_issues.md`, referencing this spec (058) and
   T030 as the closing change. Do not open a new issue for it.
 
 **Checkpoint**: US1 + US2 + US3 together are independently testable — re-run all three Independent
@@ -469,7 +469,7 @@ them.
 
 ### Tests for User Story 4
 
-- [ ] T032 [US4] **NEW test file** `tests/unit/boardShowCoordinates.test.js` — assert (a)
+- [x] T032 [US4] **NEW test file** `tests/unit/boardShowCoordinates.test.js` — assert (a)
   `Board.jsx`'s new `showCoordinates` prop defaults to `false` and, when `true`, renders visible
   column (1–7) and row (1–6, per `CLAUDE.md`'s frontend 1-indexed display convention) numbering
   additive to the existing grid, without changing cell size or grid dimensions; (b) every other
@@ -483,11 +483,11 @@ them.
 
 ### Implementation for User Story 4
 
-- [ ] T033 [US4] In `connect-four/src/components/Board.jsx`: add an opt-in `showCoordinates` prop
+- [x] T033 [US4] In `connect-four/src/components/Board.jsx`: add an opt-in `showCoordinates` prop
   (default `false`) to `BoardImpl` (`:84-106`), additive only — do not rename, retype, or change
   the default of any existing prop (preserving the existing API per cross-lane constraint 3; Board
   sizing/layout stays Plan B's). When `true`, render column/row number labels around the grid.
-- [ ] T034 [US4] In `connect-four/src/screens/MistakeDetailScreen.jsx`: pass
+- [x] T034 [US4] In `connect-four/src/screens/MistakeDetailScreen.jsx`: pass
   `showCoordinates={true}` **only** to the `<Board>` instance inside the `deepRevealOpen` branch
   (`:410`) — the structurally identical call at `:422` (non-deep-reveal branch, same screen) must
   **not** change (D7's verified insertion point). No other of `Board.jsx`'s ~17 callers change at
@@ -504,7 +504,7 @@ them.
 movestrings appeared only in checkpoint prose, never in an executable task. These two tasks close
 that gap. **Depends on US1 + US2 + US3 (T004–T031)**; independent of US4 (T032–T034).
 
-- [ ] T040 **End-to-end acceptance — re-run the 4 real staging boards through the real pipeline.**
+- [x] T040 **End-to-end acceptance — re-run the 4 real staging boards through the real pipeline.**
   Per `quickstart.md`'s "End-to-end acceptance (epic AC1)" section, for each of
   `3154`, `315444233213`, `315444233213134122`, `3154442332131341225551` (the epic's own evidence
   table, `docs/epics/deep-reveal-grounding-epic.md`): re-run the explanation through the deployed
@@ -520,7 +520,7 @@ that gap. **Depends on US1 + US2 + US3 (T004–T031)**; independent of US4 (T032
   have kept — report a per-board count. This is the owner's explicitly required evidence for a
   possible future revisit of Decision A; it must be a recorded output of this task, not a side
   observation.
-- [ ] T041 [P] **Required ⊆ offered corpus assertion (AC3/SC-004 — unit test).** Add a new test
+- [x] T041 [P] **Required ⊆ offered corpus assertion (AC3/SC-004 — unit test).** Add a new test
   to the existing `connect-four/server/tests/renderCoverageCorpus.test.mjs` (already on
   `package.json` line 17 — no new line-17 entry needed; verified the file already builds
   `buildReasonRenderModel(toNarratorVector(row.evidence))` per corpus row, which is where
@@ -538,17 +538,17 @@ that gap. **Depends on US1 + US2 + US3 (T004–T031)**; independent of US4 (T032
 
 ## Phase 7: Documentation (lockstep, per the epic + Constitution Check)
 
-- [ ] T035 [P] Add an addendum to `docs/architecture/reason-render-grounded-prompt.md` documenting
+- [x] T035 [P] Add an addendum to `docs/architecture/reason-render-grounded-prompt.md` documenting
   (a) the required-set Derivation Rule and its `deriveRequiredSet` implementation, (b) the
   `future:` spec-prefix mechanism (no prior art in the codebase before this feature — plan.md's
   Constitution Check flags this as the one undocumented convention this plan resolves, not defers).
-- [ ] T036 [P] Add a new decision entry (**D35**) to `docs/architecture/reason-DECISIONS.md`
+- [x] T036 [P] Add a new decision entry (**D35**) to `docs/architecture/reason-DECISIONS.md`
   recording: the two-attempt-logging schema (T022's six columns + `served_attempt` semantics), the
   `future:` spec convention, and the explicit carve-out that `checkP5Strong` coverage remains
   partial by design even after this epic (only the fresh-generation call site builds a real
   `allowedSet` — research.md D11; this is a documented, accepted scope boundary, not a residual bug
   to silently "complete" in a later pass).
-- [ ] T037 [P] **Carry forward the deliberately out-of-scope `P5strong:tg` strip gap.** Add an entry
+- [x] T037 [P] **Carry forward the deliberately out-of-scope `P5strong:tg` strip gap.** Add an entry
   to `docs/open_issues.md` (or confirm it's already tracked — check first) describing: a
   `P5strong:tg` failure's span is never stripped even after T027's `SPAN_CARRYING_CODES` fix,
   because its failure-code shape (`P5strong:tg`, no third `:`-segment) doesn't fit
@@ -557,7 +557,7 @@ that gap. **Depends on US1 + US2 + US3 (T004–T031)**; independent of US4 (T032
   never offered as an alias `spec` in practice — flagged for completeness (invariant I12,
   "counterexample per case"), not required for this epic to close. If a new issue id is needed, use
   **OI-170+** (cross-lane constraint 4).
-- [ ] T024 [P] **Document the schema change (relocated from Phase 4 / US2, retargeted per
+- [x] T024 [P] **Document the schema change (relocated from Phase 4 / US2, retargeted per
   tasks-critique blocking issue 3).** `deep_reveal_failures` does not appear anywhere in
   `docs/architecture/db-schema.md` — it is documented in `docs/architecture/data-model.md` (full
   column list + `Migration: 031_deep_reveal_failures.sql` footer), which the constitution's
@@ -569,7 +569,7 @@ that gap. **Depends on US1 + US2 + US3 (T004–T031)**; independent of US4 (T032
   migration filename (`065_deep_reveal_failures_two_attempts.sql`, number per T002's re-verification).
   A new enum-like value on an existing free-text column needs no migration of its own, only this
   documentation.
-- [ ] T042 **AC7/SC-008 closing re-run (added post-critique — T001 only captures the baseline, no
+- [x] T042 **AC7/SC-008 closing re-run (added post-critique — T001 only captures the baseline, no
   task previously re-ran it after implementation).** After T001–T041 (all implementation, tests, and
   the end-to-end acceptance tasks) are complete: run `eval "$(./worktree-ports.sh)"` then `cd
   connect-four && npm run test:fast` again and confirm **0 failures**, with **no reduction** in the
@@ -584,7 +584,7 @@ that gap. **Depends on US1 + US2 + US3 (T004–T031)**; independent of US4 (T032
 Per `CLAUDE.md`'s pre-launch disposability rule: no task in this phase writes to staging or
 production. Every live-data action becomes a runbook entry the owner executes personally.
 
-- [ ] T038 Append the "Spec 058 — Deep-Reveal Grounding" entry to `docs/deployment_steps.md`,
+- [x] T038 Append the "Spec 058 — Deep-Reveal Grounding" entry to `docs/deployment_steps.md`,
   following the file's own "Template for new entries" section (Status / When / Blocks / Applies to
   / What's wrong / Run it / Verify — command **and** success condition / Roll back). Content per
   plan.md's "Deploy prerequisites" section (already drafted there, source-verified — copy forward,
@@ -611,7 +611,7 @@ production. Every live-data action becomes a runbook entry the owner executes pe
   - Note explicitly in the entry: **Plan A merges first** (hard prerequisite) — this epic's own
     migration/TRUNCATE steps are independent of Plan A's changes but should not be run before Plan
     A's code is live, since this epic's code depends on the post-Plan-A `reasonRenderGuard.mjs`.
-- [ ] T039 Confirm no new script is needed for T038's two commands. **Reasoning to verify, not
+- [x] T039 Confirm no new script is needed for T038's two commands. **Reasoning to verify, not
   assume**: the migration step is a standard `migrate.js` run (`connect-four/server/migrate.js`,
   already the house tool for applying numbered migrations — no per-migration script exists or is
   needed for any other spec's migrations) and the TRUNCATE is a single documented SQL statement the

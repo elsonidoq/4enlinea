@@ -11,7 +11,7 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { stripInternalTokens, sanitizeTermsMap, guardExplainMoveLlmPayload, buildTtsSpeechText } from '../reasonRenderGuard.mjs';
+import { stripInternalTokens, sanitizeTermsMap, guardExplainMoveLlmPayload, buildTtsSpeechText, promoteRawCoordinates, toAllowedSet } from '../reasonRenderGuard.mjs';
 import { Board } from '../classifier.js';
 
 // T024 fixture: the REAL served explanation string that reproduced OI-126, harvested from
@@ -323,6 +323,169 @@ describe('RANGE_RE dash widening (fix 8)', () => {
     assert.equal(out.startsWith('[zone:cells:c4r1,c4r2]'), true);
     assert.equal(out.endsWith('[/zone:cells:c4r1,c4r2]'), true);
     assert.equal(out.includes('columns 2 through 5'), true);
+  });
+});
+
+// T026 (spec 058, US3): promoteRawCoordinates + toAllowedSet + the full allowedSet-threading
+// pipeline through guardExplainMoveLlmPayload. Extends the existing file per research.md D12 — no
+// new file.
+describe('promoteRawCoordinates', () => {
+  it('promotes a bare cXrY token to a real, flattened-inner-text highlight', () => {
+    const result = promoteRawCoordinates('Watch c4r3 closely.', 'en');
+    assert.equal(result, 'Watch [zone:c4r3]column 4[/zone:c4r3] closely.');
+  });
+
+  it('the wrapped inner text is the flattened word, never the raw token (load-bearing per checkP6)', () => {
+    const result = promoteRawCoordinates('The fork is at c1r4.', 'en');
+    assert.ok(result.includes('[zone:c1r4]column 1[/zone:c1r4]'), result);
+    assert.ok(!result.includes('[zone:c1r4]c1r4[/zone:c1r4]'), result);
+  });
+
+  it('is locale-aware, matching stripInternalTokens\' column word', () => {
+    const result = promoteRawCoordinates('Mirá c2r5 con cuidado.', 'es');
+    assert.equal(result, 'Mirá [zone:c2r5]columna 2[/zone:c2r5] con cuidado.');
+  });
+
+  it('Decision B: a cXrY token already inside an existing zone tag\'s own spec (the delimiter) is left alone', () => {
+    const text = 'Play [zone:c4r3]here[/zone:c4r3] to win.';
+    assert.equal(promoteRawCoordinates(text, 'en'), text);
+  });
+
+  it('Decision B: a cXrY token already inside an existing zone\'s own INNER TEXT is left alone, not re-wrapped', () => {
+    const text = '[zone:c4r1]watch c4r1 closely[/zone:c4r1]';
+    assert.equal(promoteRawCoordinates(text, 'en'), text, 'a coordinate inside an already-open zone must not be re-wrapped');
+  });
+
+  it('Decision B: depth tracking (not segment parity) — a coordinate BETWEEN two zone tags, at depth 0, IS promoted', () => {
+    const text = '[zone:col4]note c4r3[/zone:col4] and also c5r2.';
+    const result = promoteRawCoordinates(text, 'en');
+    assert.equal(
+      result,
+      '[zone:col4]note c4r3[/zone:col4] and also [zone:c5r2]column 5[/zone:c5r2].',
+      'the coordinate INSIDE the zone (depth>0) must stay untouched; the one AFTER it (depth 0) must be promoted'
+    );
+  });
+
+  it('promotes multiple independent bare coordinates in the same string', () => {
+    const result = promoteRawCoordinates('You missed c1r4 and c4r3.', 'en');
+    assert.equal(result, 'You missed [zone:c1r4]column 1[/zone:c1r4] and [zone:c4r3]column 4[/zone:c4r3].');
+  });
+
+  it('is a no-op on text with no bare coordinates', () => {
+    const text = 'Playing column 3 blocks the threat.';
+    assert.equal(promoteRawCoordinates(text, 'en'), text);
+  });
+
+  it('is a no-op on non-string / empty input', () => {
+    assert.equal(promoteRawCoordinates(''), '');
+    assert.equal(promoteRawCoordinates(undefined), undefined);
+    assert.equal(promoteRawCoordinates(null), null);
+  });
+});
+
+describe('toAllowedSet', () => {
+  it('maps a single-cell alias to a plain, non-windowOnly entry', () => {
+    const out = toAllowedSet([{ handle: 'h', spec: 'c4r3' }]);
+    assert.deepEqual(out, [{ cells: ['c4r3'] }]);
+  });
+
+  it('maps a windows: alias to a windowOnly entry (Decision A)', () => {
+    const out = toAllowedSet([{ handle: 'h', spec: 'windows:c2r6,c5r5' }]);
+    assert.equal(out.length, 1);
+    assert.equal(out[0].windowOnly, true);
+    assert.deepEqual([...out[0].cells].sort(), ['c2r6', 'c5r5']);
+  });
+
+  it('maps a col alias to the pre-existing ABSTRACT-ONLY {col: N} shape, not a windowOnly cells entry (regression guard: a windowOnly 6-cell bucket would make checkP5Strong\'s colN branch, which never checks offeredWindowSignatures, silently un-matchable for the always-offered move-column highlight)', () => {
+    const out = toAllowedSet([{ handle: 'h', spec: 'col4' }]);
+    assert.deepEqual(out, [{ col: 3 }]);
+  });
+
+  it('drops a tg alias (expandSpec yields no cells — nothing to admit)', () => {
+    assert.deepEqual(toAllowedSet([{ handle: 'h', spec: 'tg' }]), []);
+  });
+
+  it('handles a future:-prefixed spec identically to its unprefixed form', () => {
+    const out = toAllowedSet([{ handle: 'h', spec: 'future:c2r6' }]);
+    assert.deepEqual(out, [{ cells: ['c2r6'] }]);
+  });
+
+  it('handles an empty/undefined aliases array', () => {
+    assert.deepEqual(toAllowedSet([]), []);
+    assert.deepEqual(toAllowedSet(undefined), []);
+  });
+});
+
+describe('guardExplainMoveLlmPayload — allowedSet + promoteRawCoordinates end to end (T026)', () => {
+  const EMPTY_BOARD = new Board('');
+
+  it('1: a bare cXrY that IS offered is promoted into a real, surviving highlight', () => {
+    const allowedSet = toAllowedSet([{ handle: 'h', spec: 'c4r3' }]);
+    const out = guardExplainMoveLlmPayload({
+      explanation: 'The key square is c4r3, watch it.',
+      prompt: '',
+      terms: {},
+      board: EMPTY_BOARD,
+      allowedSet,
+    });
+    assert.equal(out.explanation, 'The key square is [zone:c4r3]column 4[/zone:c4r3], watch it.');
+  });
+
+  it('2: a bare cXrY that is NOT offered falls back to flattened "column N" prose, with no residual [zone:...] tag', () => {
+    const allowedSet = toAllowedSet([{ handle: 'h', spec: 'c1r1' }]); // c4r3 is NOT offered
+    const out = guardExplainMoveLlmPayload({
+      explanation: 'The key square is c4r3, watch it.',
+      prompt: '',
+      terms: {},
+      board: EMPTY_BOARD,
+      allowedSet,
+    });
+    assert.ok(!out.explanation.includes('[zone:'), `no residual zone tag expected: ${out.explanation}`);
+    assert.equal(out.explanation, 'The key square is column 4, watch it.');
+  });
+
+  it('3: Decision B — a cXrY already inside the LLM\'s own zone is left unpromoted by promoteRawCoordinates, then handled by the existing pipeline (checkP6 flags the raw text, the wrapper is dropped, stripInternalTokens flattens the leftover prose)', () => {
+    const allowedSet = toAllowedSet([{ handle: 'h', spec: 'c4r1' }]);
+    const out = guardExplainMoveLlmPayload({
+      explanation: '[zone:c4r1]watch c4r1 closely[/zone:c4r1]',
+      prompt: '',
+      terms: {},
+      board: EMPTY_BOARD,
+      allowedSet,
+    });
+    // promoteRawCoordinates leaves the already-wrapped "c4r1" untouched (Decision B), so it never
+    // becomes the flattened word — its own inner text then trips checkP6's raw-coordinate check
+    // (c4r1 is offered, so checkP5Strong alone would have passed it), the wrapper is stripped, and
+    // the leftover raw "c4r1" prose is caught by the final stripInternalTokens pass exactly as it
+    // would have been pre-feature. No residual [zone:...] tag either way.
+    assert.ok(!out.explanation.includes('[zone:'), out.explanation);
+    assert.equal(out.explanation, 'watch column 4 closely');
+  });
+
+  it('4: SPAN_CARRYING_CODES including P5strong strips an unoffered, EXPLICIT (non-promoted) zone end to end', () => {
+    const allowedSet = toAllowedSet([{ handle: 'h', spec: 'c1r1' }]);
+    const out = guardExplainMoveLlmPayload({
+      explanation: 'Watch [zone:c4r3]that square[/zone:c4r3] closely.',
+      prompt: '',
+      terms: {},
+      board: EMPTY_BOARD,
+      allowedSet,
+    });
+    assert.ok(!out.explanation.includes('[zone:c4r3]'), `zone tag should be stripped: ${out.explanation}`);
+    assert.ok(out.explanation.includes('that square'), `inner text should survive: ${out.explanation}`);
+  });
+
+  it('5 (FR-013): a fully valid, fully grounded explanation passes through unaltered', () => {
+    const allowedSet = toAllowedSet([{ handle: 'h', spec: 'col4' }]);
+    const explanation = 'Play [zone:col4]the center column[/zone:col4] to stay strong.';
+    const out = guardExplainMoveLlmPayload({
+      explanation,
+      prompt: '',
+      terms: {},
+      board: EMPTY_BOARD,
+      allowedSet,
+    });
+    assert.equal(out.explanation, explanation);
   });
 });
 

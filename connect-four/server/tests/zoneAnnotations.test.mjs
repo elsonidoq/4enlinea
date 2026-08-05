@@ -43,6 +43,73 @@ test('aliases: structural tags only (overlay excluded), deduped, deep board igno
   for (const a of aliases) assert.equal(zoneAliasMap[a.handle], a.spec);
 });
 
+// ── future: deep fork cells (US1, deep-reveal-grounding spec 058, Settled decision 8) ──────────
+//
+// Harvested (not hand-built), per CLAUDE.md's "Verifying any claim about this codebase": this is
+// the REAL `{ pruned, boards }` produced by running the actual production pipeline —
+// `computeReason('3154442332131341225551', 5, { solver })` -> `toNarratorVector` -> `pruneVector`
+// -> `boardSelectionDecisions(pruned)` — against the solver-verified staging movestring
+// `3154442332131341225551` (epic evidence row; `./visualize_board.sh` confirms the board), with
+// `playedCol=5` (0-indexed) as the blunder. Trimmed to the fields buildAnnotationOffer reads.
+// `opponentPunishment.forkCells: ["c2r6","c5r5"]` + `tacticTag: "double_threat"` match the epic's
+// evidence table exactly. Note `boards[3]` (projectedDeep) has EMPTY tags — confirming the new
+// alias source must read forkCells/tacticTag off the halves directly, not off board.tags (which
+// NEAR_TERM already excludes projectedDeep from in the existing STRUCTURAL loop).
+const deepForkPruned = {
+  bestCol: 2, playedCol: 5,
+  lostResource: {
+    kind: 'winning_line', register: 'parity', completingCell: 'c7r3',
+    window: ['c7r3', 'c6r4', 'c5r5', 'c4r6'], tacticTag: null, forkCells: undefined,
+  },
+  opponentPunishment: {
+    kind: 'winning_line', register: 'forced_sequence', completingCell: 'c2r6',
+    window: ['c5r3', 'c4r4', 'c3r5', 'c2r6'], terminal: 'fork', forkCase: 'A',
+    forkCells: ['c2r6', 'c5r5'],
+    forkWindows: [['c5r3', 'c4r4', 'c3r5', 'c2r6'], ['c2r5', 'c3r5', 'c4r5', 'c5r5']],
+    tacticTag: 'double_threat', tacticCells: ['c2r6', 'c5r5'],
+  },
+};
+const deepForkBoards = [
+  { id: 'decision', tags: [
+      { cell: 'c1r3', kind: 'major', owner: 'you' },
+      { cell: 'c1r4', kind: 'major', owner: 'opp' } ] },
+  { id: 'afterPlayed', tags: [
+      { cell: 'c1r3', kind: 'major', owner: 'you' },
+      { cell: 'c1r3', kind: 'double', owner: 'you', window: ['c1r3', 'c7r6'] },
+      { cell: 'c1r4', kind: 'major', owner: 'opp' },
+      { cell: 'c7r6', kind: 'major', owner: 'you' } ] },
+  { id: 'projectedDeep', tags: [] }, // real production output — empty, confirms the point above
+];
+
+test('future: deep fork cells (tacticTag double_threat) are offered as a distinct future: alias', () => {
+  const { aliases, zoneAliasMap } = buildAnnotationOffer(deepForkPruned, deepForkBoards);
+  const future = aliases.find((a) => a.spec.startsWith('future:'));
+  assert.ok(future, 'a future:-prefixed alias must be offered for the deep fork cells');
+  assert.equal(future.spec, 'future:windows:c2r6,c5r5');
+  assert.equal(zoneAliasMap[future.handle], future.spec);
+  assert.equal(future.truthBoard, 'projectedDeep');
+  assert.equal(future.kbId, 'double_threat');
+});
+
+test('future: alias role text is distinct from the present-tense structural roleText() output', () => {
+  const { aliases } = buildAnnotationOffer(deepForkPruned, deepForkBoards);
+  const future = aliases.find((a) => a.spec.startsWith('future:'));
+  const presentDouble = aliases.find((a) => a.spec.startsWith('windows:') && !a.spec.startsWith('future:'));
+  assert.ok(future && presentDouble, 'fixture must offer both a future and a present structural fork alias');
+  assert.notEqual(future.role, presentDouble.role);
+  // FR-002: never framed as a present threat — future/conditional language only.
+  assert.match(future.role, /later|once|not.*right now/i);
+  assert.doesNotMatch(future.role, /^the fork square where/); // the present-tense 'double' phrasing
+});
+
+test('future: alias does not shadow or duplicate the near-term structural aliases', () => {
+  const { aliases } = buildAnnotationOffer(deepForkPruned, deepForkBoards);
+  // the genuinely near-term fork (c1r3/c7r6, board-true on afterPlayed) is still offered normally
+  assert.ok(aliases.some((a) => a.spec === 'windows:c1r3,c7r6'));
+  // and the future alias for the deep fork cells is additional, not a replacement
+  assert.equal(aliases.filter((a) => a.spec.startsWith('future:')).length, 1);
+});
+
 test('terms: KB-backed slugs only, canonicalPhrase from TAG_PHRASE, conditional_swindle never a term', () => {
   const { terms } = buildAnnotationOffer(
     { bestCol: 2, playedCol: 3, lostResource: { kind: 'conditional_swindle' }, opponentPunishment: { tag: 'figure_7' } },
@@ -95,6 +162,28 @@ test('processAnnotations expands offered handles and derives key_cells', () => {
   assert.ok(keyCells.includes('c5r1'));
   assert.ok(keyCells.includes('c3r1')); // col3 row1
   assert.equal(new Set(keyCells).size, keyCells.length);
+});
+
+// ── usedSpecs (spec 058, US2, data-model.md §2 hop 1) ────────────────────────────────────────
+// The required-set retry-compliance check (next batch) is pinned to this field, not a raw
+// `[zone:handle]` string search — see spec.md's Corrections item 4 / research.md D3.
+test('processAnnotations returns usedSpecs: only the expanded specs of handles actually used in the text', () => {
+  const raw = 'Column [zone:better-col]3[/zone:better-col] denies the '
+    + '[zone:opp-double][term:double_threat]double threat[/term:double_threat][/zone:opp-double].';
+  const { usedSpecs } = processAnnotations(raw, ZONES);
+  assert.ok(Array.isArray(usedSpecs));
+  assert.deepEqual([...usedSpecs].sort(), ['col3', 'windows:c5r1,c7r1']);
+});
+
+test('processAnnotations usedSpecs excludes an offered handle that never appears in the text', () => {
+  const raw = 'Column [zone:better-col]3[/zone:better-col] alone.'; // opp-double handle never used
+  const { usedSpecs } = processAnnotations(raw, ZONES);
+  assert.deepEqual(usedSpecs, ['col3']);
+});
+
+test('processAnnotations usedSpecs is empty when no offered handle is used at all', () => {
+  const { usedSpecs } = processAnnotations('just prose, no zone tags at all.', ZONES);
+  assert.deepEqual(usedSpecs, []);
 });
 
 test('processAnnotations drops an unoffered handle/slug but keeps the words', () => {

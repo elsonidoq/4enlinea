@@ -292,11 +292,11 @@ function parseAnswer(raw) {
 // until it is prompted to emit handles, keep the model's own key_cells so the /admin/fv-suff overlay
 // doesn't silently empty out. (G5 grading is unaffected — it reads render_decision, not answer.key_cells.)
 export function postprocessAnswer(answer, render_decision) {
-  if (!answer || !render_decision?.zones) return { answer, repairs: [] };
-  const { mechanism, keyCells, zonesEmitted, repairs } = processAnnotations(answer.mechanism ?? '', render_decision.zones);
+  if (!answer || !render_decision?.zones) return { answer, repairs: [], usedSpecs: [] };
+  const { mechanism, keyCells, zonesEmitted, repairs, usedSpecs } = processAnnotations(answer.mechanism ?? '', render_decision.zones);
   answer.mechanism = mechanism;
   if (zonesEmitted) answer.key_cells = keyCells;
-  return { answer, repairs };
+  return { answer, repairs, usedSpecs };
 }
 
 async function runLlm(evidenceRows) {

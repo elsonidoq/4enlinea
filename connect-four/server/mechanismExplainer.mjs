@@ -45,8 +45,8 @@ export function parseAnswer(raw) {
 }
 
 // ── One LLM attempt for a prebuilt prompt (no solver) ────────────────────────────────────────
-// Returns { raw, answer, mechanism, parseError, callError, annotationRepairs }. Pure w.r.t. the
-// solver, so it is the unit the retry loop re-runs.
+// Returns { raw, answer, mechanism, parseError, callError, annotationRepairs, usedSpecs }. Pure
+// w.r.t. the solver, so it is the unit the retry loop re-runs.
 async function runLlmAttempt(prompt, renderDecision, call) {
   let raw = null, answer = null, parseError = null, callError = null;
   try {
@@ -55,7 +55,7 @@ async function runLlmAttempt(prompt, renderDecision, call) {
   } catch (err) {
     callError = err.message;
   }
-  const { answer: postAnswer, repairs: annotationRepairs } = postprocessAnswer(answer, renderDecision);
+  const { answer: postAnswer, repairs: annotationRepairs, usedSpecs } = postprocessAnswer(answer, renderDecision);
   return {
     raw,
     answer: postAnswer,
@@ -63,17 +63,56 @@ async function runLlmAttempt(prompt, renderDecision, call) {
     parseError,
     callError,
     annotationRepairs,
+    usedSpecs,
   };
 }
 
-// An LLM-related error (call failure or unparseable response) is the ONLY retry trigger.
+// An LLM-related error (call failure or unparseable response) is the ONLY retry trigger for the
+// pre-existing retry path (identical prompt resent).
 const isLlmError = (r) => Boolean(r.callError || r.parseError);
 
-// ── Compute one board's mechanism (with a single LLM retry) ──────────────────────────────────
+// ── Required-set compliance (spec 058, US2, FR-007/FR-008) ───────────────────────────────────
+// requiredSet entries (renderReasonModel.mjs's deriveRequiredSet, threaded onto renderDecision by
+// buildRenderDecision) are matched by their expanded `spec` against the attempt's `usedSpecs` —
+// the post-processAnnotations set of specs the LLM's [zone:{handle}] tags actually resolved to
+// (data-model.md §2 Consumer 2). A raw `[zone:{handle}]` string search is wrong: processAnnotations
+// has already rewritten every offered handle to its expanded spec by the time this runs.
+function missingRequiredGroups(requiredSet, attempt) {
+  const usedSpecs = attempt.usedSpecs ?? [];
+  return (requiredSet ?? []).filter((g) => !usedSpecs.includes(g.spec));
+}
+
+// Builds the retry prompt for a required-set miss (FR-008: explicitly name the missing
+// square(s)/line(s) to the coach). This is a genuinely amended prompt, not a resend of the
+// original — the missing-handle block below is new text appended to the same evidence/instructions.
+function buildMissingSquaresRetryPrompt(prompt, missing) {
+  const missingLines = missing.map((g) => `- [zone:${g.handle}] = ${g.role}`).join('\n');
+  return `${prompt}
+
+---
+
+# Retry: required squares were missing
+Your previous answer did not wrap the following required square(s)/line(s) in a
+[zone:<handle>]...[/zone:<handle>] tag using the exact handle listed below. Write the explanation
+again, following every instruction above, and this time make sure each one of these appears as a
+zone tag in your \`mechanism\`:
+${missingLines}
+
+Return the full JSON object again (all fields), not just the changed part.`;
+}
+
+// ── Compute one board's mechanism (with a single retry — LLM error OR required-square miss) ──
 // Returns a discriminated result:
 //   { notABlunder: true, evidence }                       — played move is not a blunder
 //   { notABlunder: false, evidence, nv, prompt, renderDecision,
-//     raw, answer, mechanism, parseError, callError, annotationRepairs }
+//     raw, answer, mechanism, parseError, callError, annotationRepairs, usedSpecs,
+//     attempt1, missingHandles }
+// The top-level raw/answer/mechanism/... fields are always the LAST attempt made (attempt2 when a
+// retry happened, attempt1 otherwise) — `attempt1` is additionally always present so the caller
+// never silently loses the first attempt, and `missingHandles` is the (possibly empty) list of
+// required-set groups attempt 1 omitted, when that is what triggered the retry (FR-009/FR-010: the
+// second attempt is always served, deterministically, never re-evaluated for quality against the
+// first — even if the second attempt itself still misses a required square).
 // `callLLM` may be injected (tests); otherwise defaultCallLLM(model, OPENAI_API_KEY) is used.
 export async function computeMechanism(movestring, col, { solver, model, callLLM, userId = null, locale = 'en' } = {}) {
   const evidence = await computeReason(movestring, col, { solver }); // terminal boards throw → propagate
@@ -95,8 +134,27 @@ export async function computeMechanism(movestring, col, { solver, model, callLLM
       purpose: 'deep-reveal',
     });
 
-  let attempt = await runLlmAttempt(prompt, renderDecision, call);
-  if (isLlmError(attempt)) attempt = await runLlmAttempt(prompt, renderDecision, call); // retry once
+  const attempt1 = await runLlmAttempt(prompt, renderDecision, call);
+  let finalAttempt = attempt1;
+  let missingHandles = [];
 
-  return { notABlunder: false, evidence, nv, prompt, renderDecision, ...attempt };
+  if (isLlmError(attempt1)) {
+    // Pre-existing retry trigger: resend the identical prompt once (an LLM-level failure, not a
+    // content problem the prompt can address).
+    finalAttempt = await runLlmAttempt(prompt, renderDecision, call);
+  } else {
+    // New trigger (spec 058, US2, FR-008): attempt 1 succeeded as an LLM call but omitted one or
+    // more required squares/lines. Retry exactly once, with an amended prompt naming exactly what
+    // was missing. An empty requiredSet (FR-006 abstain, ~13/29 of the measured corpus) makes
+    // `missing` empty and this is a clean no-op.
+    const requiredSet = renderDecision?.requiredSet ?? [];
+    const missing = missingRequiredGroups(requiredSet, attempt1);
+    if (missing.length > 0) {
+      missingHandles = missing;
+      const retryPrompt = buildMissingSquaresRetryPrompt(prompt, missing);
+      finalAttempt = await runLlmAttempt(retryPrompt, renderDecision, call);
+    }
+  }
+
+  return { notABlunder: false, evidence, nv, prompt, renderDecision, ...finalAttempt, attempt1, missingHandles };
 }

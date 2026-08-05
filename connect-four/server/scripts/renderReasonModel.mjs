@@ -3,7 +3,7 @@
 // P2 adds tags/grounding; P3 adds rich causal-frame text.
 
 import { pruneVector } from './reasonNarratorVector.mjs';
-import { classifyCausalLink } from './reason_engine/causalLinks.mjs';
+import { classifyCausalLink, denialCell } from './reason_engine/causalLinks.mjs';
 import { dispositionOf, assertCoverage, leafPaths } from './fieldDisposition.mjs';
 import { selectBoards, renderThreatList, patternOnAfterBestBoard, boardSelectionDecisions } from './reasonBoardSelect.mjs';
 import { groundCell, horizonForRegister } from './reasonCellGrounding.mjs';
@@ -95,6 +95,40 @@ function pruneOpeningResidue(rendered) {
   return out;
 }
 
+// The required set (spec 058, US2 — Derivation Rule, spec.md, copied verbatim from the epic). For
+// each of pruned.lostResource / pruned.opponentPunishment, the load-bearing cell (if any) is
+// denialCell(half) — the same `h?.cell ?? h?.completingCell ?? null` precedence causalLinks.mjs's
+// own denialCell() uses — or, when the half has no resolvable cell, the full half.window array
+// (the half's story is a line, not a single square; the T-parity worked example, covers:
+// ['route', 'lostResource.terminal', 'opponentPunishment.terminal']). A half with neither field
+// yields NO required cell — it is not forced into one (FR-006). Each derived cell/window is then
+// matched to an offered handle by EXACT spec-string equality against zones.aliases[].spec (D2) —
+// never a freshly-derived spec format. On match failure the group is dropped (FR-004) rather than
+// left unenforceable. Capped at 1-3 groups (one per half that resolves to a cell, plus at most one
+// line/window) — with exactly two halves, at most one group per half is possible in practice.
+export function deriveRequiredSet(pruned, zones) {
+  const aliasBySpec = new Map((zones?.aliases ?? []).map((a) => [a.spec, a]));
+  const groups = [];
+  for (const half of ['lostResource', 'opponentPunishment']) {
+    const h = pruned?.[half];
+    if (!h) continue;
+    const cell = denialCell(h);
+    const spec = cell ?? (Array.isArray(h.window) && h.window.length ? 'windows:' + h.window.join(',') : null);
+    if (!spec) continue; // neither a cell nor a window — abstain, do not invent (FR-006)
+    const alias = aliasBySpec.get(spec);
+    if (!alias) continue; // match failure — drop, required ⊆ offered (FR-004)
+    // Both halves routinely resolve to the SAME offered alias (measured: 9 of the 16 non-empty
+    // requiredSets over the 29-record coverage corpus, e.g. eval-4 -> c5r4 from both halves).
+    // The required set is "the subset of the offered handle set" (spec.md, Key Entities) — a
+    // subset has no duplicates. Emitting the group twice would print the identical
+    // `- [zone:h] = role` line twice in assembleGroundedPrompt's required block and burn one of
+    // FR-005's three capped slots on nothing.
+    if (groups.some((g) => g.spec === alias.spec)) continue;
+    groups.push({ half, spec: alias.spec, handle: alias.handle, role: alias.role });
+  }
+  return groups.slice(0, 3);
+}
+
 export function buildReasonRenderModel(nv) {
   const pruned = pruneVector(nv);
   const ctx = pruned.direction === 'enabled_opponent'
@@ -115,6 +149,7 @@ export function buildReasonRenderModel(nv) {
                  covers: openingFrame.covers, guardrail: openingFrame.guardrail }],
       boards: [decisionBoard],
       zones,
+      requiredSet: deriveRequiredSet(pruned, zones),
       rendered: pruneOpeningResidue(renderedFields(pruned, link.covers)),
       openingReadingKey: OPENING_READING_KEY,
       coverage: { ok: true, unowned: [] },
@@ -130,6 +165,7 @@ export function buildReasonRenderModel(nv) {
     frames: [{ id: link.id, confidence: link.confidence, text: link.text, covers: link.covers, guardrail: link.guardrail }],
     boards: selectBoards(pruned),
     zones,
+    requiredSet: deriveRequiredSet(pruned, zones),
     rendered: renderedFields(pruned, link.covers),
     coverage: { ok: true, unowned: [] },
   };
@@ -233,6 +269,7 @@ export function buildRenderDecision(nv) {
     finalMovestring: decisiveFinalMovestring(pruned),
     openingContext,
     zones: { aliases: zones.aliases, terms: zones.terms },
+    requiredSet: deriveRequiredSet(pruned, zones),
   };
 }
 
@@ -293,6 +330,13 @@ export function assembleGroundedPrompt(model) {
   const termLines = model.zones.terms.length
     ? model.zones.terms.map((t) => `- [term:${t.slug}] = ${t.canonicalPhrase}: ${t.description}`).join('\n')
     : '(no named terms apply here)';
+  // Required-set block (spec 058, US2, FR-007): every group deriveRequiredSet produced is a square
+  // or line the explanation cannot be honest without — the model MUST wrap it in a [zone:...] tag
+  // using the listed handle, verbatim, exactly as the Highlightable regions block above already
+  // instructs. An empty required set (FR-006) says so explicitly rather than being silently omitted.
+  const requiredLines = (model.requiredSet ?? []).length
+    ? model.requiredSet.map((g) => `- [zone:${g.handle}] = ${g.role}`).join('\n')
+    : '(none for this explanation — do not invent one)';
   return [
     renderDecision(model.decision),
     '',
@@ -315,8 +359,19 @@ export function assembleGroundedPrompt(model) {
       + 'were a word. Bad: "the [term:immediate_threat] on c2 is worth keeping" (no closing tag; '
       + 'used as a noun). Good: "[term:immediate_threat]the threat you need to keep '
       + 'alive[/term:immediate_threat] on c2". Never write a raw square. Do not overlap a '
-      + 'highlight and a term on the same words.',
+      + 'highlight and a term on the same words. A handle whose role below says it "matters later" '
+      + 'or "once the forced sequence reaches it" names a square that is not yet playable — '
+      + 'describe it in future or conditional language ("this matters once...", "later, if..."), '
+      + 'never as a present threat or as something happening right now.',
     regions,
+    '',
+    '# You MUST build the explanation around these',
+    'Every handle listed below MUST appear as a [zone:<handle>] ... [/zone:<handle>] tag somewhere '
+      + 'in your `mechanism` — the explanation is not honest without it. Use the exact handle from '
+      + 'this list, wrapping the phrase that names or refers to it, the same way the Highlightable '
+      + 'regions instructions above describe. Do not omit any of these, and do not invent a required '
+      + 'square that is not listed here.',
+    requiredLines,
     '',
     '# KB terms you may name',
     'When you use one of these ideas, wrap the words in BOTH an opening and a closing tag: '

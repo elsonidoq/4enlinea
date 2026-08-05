@@ -12,6 +12,10 @@ const ROWS = 6;
  * @returns {boolean}
  */
 export function isValidSpec(spec) {
+  // future: prefix (US1, deep-reveal-grounding spec 058) — a future square/line uses the same
+  // shape grammar as a present one, just wrapped. Strip it before the existing shape checks so
+  // validity-recognition is the only thing that branches on the prefix.
+  if (spec.startsWith('future:')) spec = spec.slice('future:'.length);
   return /^col\d+$/.test(spec)
     || /^c\d+r\d+$/.test(spec)
     || /^cells:/.test(spec)
@@ -60,6 +64,11 @@ export function parseZoneSpecs(explanationText) {
  * @returns {Array<{ col: number, row: number }>}
  */
 export function expandSpec(spec) {
+  // future: prefix (US1, deep-reveal-grounding spec 058) — strip before resolution so cell
+  // resolution stays byte-identical to the unprefixed form; only validity-recognition and (client-
+  // side) color selection branch on the prefix.
+  if (spec.startsWith('future:')) spec = spec.slice('future:'.length);
+
   // tg — client-only spec, returns empty for server-side checks
   if (spec === 'tg') {
     return [];

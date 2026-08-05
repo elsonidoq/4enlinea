@@ -20,7 +20,9 @@ const hasSharedCell = (fv) =>
 
 // ── Composer helpers (P3) ──
 const col1 = (c) => (c == null ? '?' : c + 1);
-const denialCell = (h) => h?.cell ?? h?.completingCell ?? null;
+// Exported (spec 058, US2): deriveRequiredSet (renderReasonModel.mjs) reuses this exact precedence
+// rather than reimplementing the `??` chain — see spec.md's Derivation Rule.
+export const denialCell = (h) => h?.cell ?? h?.completingCell ?? null;
 const horizonPhrase = (reg) =>
   reg === 'forced_sequence' ? 'deep on a forced line'
   : reg === 'parity' ? 'deep, via a parity battle'

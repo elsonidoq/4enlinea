@@ -3,9 +3,12 @@ import assert from 'node:assert/strict';
 import {
   parseAnnotatedText,
   zoneToOverlays,
+  zoneToWindowGroups,
   regexFallbackParse,
   getZoneColor,
   ZONE_COLORS,
+  FUTURE_ZONE_COLOR,
+  isValidSpec,
 } from '../../src/lib/annotatedText.js';
 
 // ── parseAnnotatedText ──────────────────────────────────────────────────────────
@@ -441,5 +444,55 @@ describe('getZoneColor', () => {
       ['col1', 'col2', 'col3', 'col4', 'row5', 'tg'].map(getZoneColor),
     );
     assert.ok(colors.size > 1, `only ${colors.size} color — hash should distribute`);
+  });
+});
+
+// ── future: prefix (US1, deep-reveal-grounding spec 058) ───────────────────────
+
+describe('isValidSpec — future: prefix', () => {
+  test('accepts a future:-prefixed single-cell spec', () => {
+    assert.equal(isValidSpec('future:c2r6'), true);
+  });
+
+  test('accepts a future:-prefixed windows spec', () => {
+    assert.equal(isValidSpec('future:windows:c2r6,c5r5'), true);
+  });
+
+  test('rejects a future: wrapper around an invalid shape', () => {
+    assert.equal(isValidSpec('future:diagonal3'), false);
+  });
+});
+
+describe('getZoneColor — future: prefix reserved color', () => {
+  test('any future:-prefixed spec returns FUTURE_ZONE_COLOR', () => {
+    assert.equal(getZoneColor('future:c2r6'), FUTURE_ZONE_COLOR);
+    assert.equal(getZoneColor('future:windows:c2r6,c5r5'), FUTURE_ZONE_COLOR);
+  });
+
+  test('FUTURE_ZONE_COLOR is not one of the 4 ZONE_COLORS hash-pool entries', () => {
+    assert.ok(!ZONE_COLORS.includes(FUTURE_ZONE_COLOR),
+      'FUTURE_ZONE_COLOR must be a reserved, parallel constant — never appended to ZONE_COLORS');
+  });
+
+  test('a future:-prefixed spec never collides with the hash-pool color its unprefixed form would get', () => {
+    // The unprefixed spec still hashes into the pool; the prefixed one must not.
+    const unprefixedColor = getZoneColor('c2r6');
+    assert.ok(ZONE_COLORS.includes(unprefixedColor));
+    assert.notEqual(getZoneColor('future:c2r6'), unprefixedColor);
+  });
+});
+
+describe('zoneToOverlays / zoneToWindowGroups — future: prefix resolves identically to the unprefixed form', () => {
+  test('future:c2r6 resolves to the same cell as c2r6', () => {
+    assert.deepEqual(zoneToOverlays('future:c2r6'), zoneToOverlays('c2r6'));
+    assert.deepEqual(zoneToOverlays('future:c2r6'), [{ c: 1, r: 5 }]);
+  });
+
+  test('future:windows:c2r6,c5r5 resolves to the same cells as windows:c2r6,c5r5', () => {
+    assert.deepEqual(zoneToOverlays('future:windows:c2r6,c5r5'), zoneToOverlays('windows:c2r6,c5r5'));
+  });
+
+  test('zoneToWindowGroups: future:windows:c2r6,c5r5 resolves to the same groups as windows:c2r6,c5r5', () => {
+    assert.deepEqual(zoneToWindowGroups('future:windows:c2r6,c5r5'), zoneToWindowGroups('windows:c2r6,c5r5'));
   });
 });

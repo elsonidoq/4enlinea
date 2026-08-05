@@ -33,10 +33,15 @@ const TERM_KB = {
 };
 
 // Plain-language role text per (owner, kind) for the prompt's "Highlightable regions" list.
+// kind === 'future' (US1, deep-reveal-grounding spec 058) is a deep fork cell — it must read as
+// something that matters LATER, once a forced sequence reaches it, never as a present threat
+// (FR-002; Settled decision 8(b)). This is deliberately distinct wording from the 'double' branch
+// below, which describes a genuinely near-term, right-now fork.
 function roleText(owner, kind) {
   const who = owner === 'you' ? 'you' : 'your opponent';
   if (kind === 'immediate') return `the square where ${who} can make four next move`;
   if (kind === 'double') return `the fork square where ${who} gets two winning squares at once`;
+  if (kind === 'future') return `this square matters later, once the forced sequence reaches it — not a threat right now`;
   return `a square completing ${who}'s four-in-a-row line`; // major
 }
 
@@ -83,6 +88,25 @@ export function buildAnnotationOffer(pruned, boardDecisions) {
                      kbId: KIND_TO_SLUG[tag.kind] ?? null });
       zoneAliasMap[handle] = spec;
     }
+  }
+
+  // Deep fork cells (US1, deep-reveal-grounding spec 058 / Settled decision 8): a half's own
+  // `tacticTag: 'double_threat'` + `forkCells` names a fork the STRUCTURAL loop above never sees
+  // (NEAR_TERM excludes the projectedDeep board, and the vector-named overlay kinds are excluded by
+  // design — see the STRUCTURAL comment above). These forkCells are real, solver-grounded, but
+  // often complete several plies away — offering them as an ordinary present-tense alias would be
+  // the eval-3 present-threat trap. Instead they get a distinct `future:`-prefixed spec + role, so
+  // the prompt and client can frame them as "matters later," never as a present threat (FR-002).
+  for (const [half, owner] of [[pruned.lostResource, 'you'], [pruned.opponentPunishment, 'opp']]) {
+    if (!half || half.tacticTag !== 'double_threat' || !half.forkCells?.length) continue;
+    const rawSpec = half.forkCells.length === 1 ? half.forkCells[0] : 'windows:' + half.forkCells.join(',');
+    const spec = 'future:' + rawSpec;
+    if (seen.has(spec)) continue;
+    seen.add(spec);
+    const handle = mkHandle(`${owner}-future-fork`);
+    aliases.push({ handle, spec, role: roleText(owner, 'future'), truthBoard: 'projectedDeep',
+                   kbId: TERM_KB.double_threat ? 'double_threat' : null });
+    zoneAliasMap[handle] = spec;
   }
 
   // Fired term vocabulary: structural board tags that map to a KB slug + the two halves' tags,
@@ -135,7 +159,9 @@ export function normalizeAnnotationTags(text) {
   return text;
 }
 
-const rcToCellStr = ({ col, row }) => `c${col + 1}r${row + 1}`;
+// Exported for reasonRenderGuard.mjs's toAllowedSet adapter (spec 058, US3, data-model.md §3) — no
+// other export in this file uses this name, verified before exporting.
+export const rcToCellStr = ({ col, row }) => `c${col + 1}r${row + 1}`;
 
 // Strip a [kind:X]…[/kind:X] wrapper whose X is not in `allowed`, keeping the inner text. The
 // non-greedy backreference handles the common flat case; on malformed *overlapping* same-kind tags a
@@ -213,5 +239,10 @@ export function processAnnotations(mechanism, zones) {
 
   const cells = new Set();
   for (const spec of usedSpecs) for (const rc of expandSpec(spec)) cells.add(rcToCellStr(rc));
-  return { mechanism: text, keyCells: [...cells].sort(), zonesEmitted: usedSpecs.size > 0, repairs };
+  // usedSpecs (spec 058, US2 data-model.md §2 Consumer 2): the expanded specs actually emitted by the
+  // LLM's mechanism — the exact membership test the required-set retry-compliance check needs
+  // (`requiredSet.every(g => attempt.usedSpecs.includes(g.spec))`). Surfaced here, not reimplemented
+  // downstream, since this Set already excludes a handle that merely appears as unrelated prose.
+  return { mechanism: text, keyCells: [...cells].sort(), zonesEmitted: usedSpecs.size > 0, repairs,
+           usedSpecs: [...usedSpecs] };
 }

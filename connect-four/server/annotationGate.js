@@ -312,12 +312,20 @@ export function checkP6(zones) {
 /**
  * Check P5 Strong: every zone spec must be within the allowed set.
  * `tg` always fails (no trusted evidence for "all current threats").
+ * A leading `future:` prefix (US1, deep-reveal-grounding spec 058) is stripped before matching, so
+ * `future:cNrM` / `future:windows:...` are checked identically to their unprefixed form — the
+ * failure code (if any) still names the ORIGINAL (prefixed) spec so `reasonRenderGuard.mjs`'s
+ * `stripFailingZoneSpans` can find the exact `[zone:...]` tag actually present in the served text.
  * colN must match an allowed column (ABSTRACT-ONLY col or CONCRETE-ELIGIBLE cell in that col).
- * cell-level specs (cNrM, cells:...) must appear in a CONCRETE-ELIGIBLE entry's cells.
- * rowN passes if any CONCRETE-ELIGIBLE entry has a cell in that row.
+ * cell-level specs (cNrM, cells:...) must appear in a CONCRETE-ELIGIBLE (non-windowOnly) entry's
+ * cells.
+ * windows:... (Decision A, data-model.md §3) matches ONLY by exact signature against a windowOnly
+ * entry — never by per-cell membership, even though the cells: branch above still allows per-cell
+ * membership for a `cells:` HIGHLIGHT spec against non-windowOnly entries.
+ * rowN passes if any CONCRETE-ELIGIBLE (non-windowOnly) entry has a cell in that row.
  *
  * @param {Array<{ spec: string, innerText: string }>} zones
- * @param {Array<{cells?: string[], col?: number, zoneSpec: string}>} allowedSet
+ * @param {Array<{cells?: string[], windowOnly?: true, col?: number, zoneSpec: string}>} allowedSet
  * @returns {string[]}  failure codes
  */
 export function checkP5Strong(zones, allowedSet) {
@@ -328,10 +336,23 @@ export function checkP5Strong(zones, allowedSet) {
   const concreteRows = new Set();
   const concreteCols = new Set();
   const abstractCols = new Set();
+  // Decision A (deep-reveal-grounding spec 058, data-model.md §3 / tasks-answers.md): a set of
+  // sorted, comma-joined cell-string signatures, one per `windowOnly` allowedSet entry.
+  const offeredWindowSignatures = new Set();
 
   for (const entry of allowedSet) {
     if (entry.cells) {
-      // CONCRETE-ELIGIBLE
+      if (entry.windowOnly) {
+        // Deliberate divergence from the single-cell cNrM/cells: matching below: a windows:-offered
+        // alias is only satisfiable as the exact same window, never per-cell (owner decision,
+        // deep-reveal-grounding tasks-answers.md Decision A — a single-cell highlight from inside an
+        // offered window is a KNOWN, ACCEPTED false-rejection; measured per T040). Excluded from
+        // concreteCells/concreteRows/concreteCols entirely so it cannot be admitted via per-cell
+        // membership below.
+        offeredWindowSignatures.add([...entry.cells].sort().join(','));
+        continue;
+      }
+      // CONCRETE-ELIGIBLE, single-cell-admissible
       for (const cell of entry.cells) {
         concreteCells.add(cell);
         const m = cell.match(/c(\d+)r(\d+)/);
@@ -346,7 +367,10 @@ export function checkP5Strong(zones, allowedSet) {
     }
   }
 
-  for (const { spec } of zones) {
+  for (const { spec: rawSpec } of zones) {
+    // future: prefix strip (US1) — matching only, failures below reference rawSpec.
+    const spec = rawSpec.startsWith('future:') ? rawSpec.slice('future:'.length) : rawSpec;
+
     // tg always fails
     if (spec === 'tg') {
       failures.push('P5strong:tg');
@@ -363,7 +387,7 @@ export function checkP5Strong(zones, allowedSet) {
         return m && parseInt(m[1], 10) - 1 === c;
       });
       if (!allowedInAbstract && !allowedInConcrete) {
-        failures.push(`P5strong:col_not_allowed:${spec}`);
+        failures.push(`P5strong:col_not_allowed:${rawSpec}`);
       }
       continue;
     }
@@ -372,7 +396,7 @@ export function checkP5Strong(zones, allowedSet) {
     const cellMatch = spec.match(/^c(\d+)r(\d+)$/);
     if (cellMatch) {
       if (!concreteCells.has(spec)) {
-        failures.push(`P5strong:cell_not_allowed:${spec}`);
+        failures.push(`P5strong:cell_not_allowed:${rawSpec}`);
       }
       continue;
     }
@@ -383,7 +407,17 @@ export function checkP5Strong(zones, allowedSet) {
       const parts = cellsMatch[1].split(',');
       const allAllowed = parts.every(p => concreteCells.has(p.trim()));
       if (!allAllowed) {
-        failures.push(`P5strong:cell_not_allowed:${spec}`);
+        failures.push(`P5strong:cell_not_allowed:${rawSpec}`);
+      }
+      continue;
+    }
+
+    // windows:... (comma-separated 1-indexed) — Decision A: exact signature match only.
+    const windowsMatch = spec.match(/^windows:(.+)$/);
+    if (windowsMatch) {
+      const sig = windowsMatch[1].split(',').map(p => p.trim()).sort().join(',');
+      if (!offeredWindowSignatures.has(sig)) {
+        failures.push(`P5strong:cell_not_allowed:${rawSpec}`);
       }
       continue;
     }
@@ -393,7 +427,7 @@ export function checkP5Strong(zones, allowedSet) {
     if (rowMatch) {
       const r = parseInt(rowMatch[1], 10) - 1;
       if (!concreteRows.has(r)) {
-        failures.push(`P5strong:cell_not_allowed:${spec}`);
+        failures.push(`P5strong:cell_not_allowed:${rawSpec}`);
       }
       continue;
     }

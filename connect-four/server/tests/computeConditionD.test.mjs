@@ -38,17 +38,20 @@ test('postprocessAnswer expands handles + rederives key_cells only when a zone w
   assert.match(withZone.answer.mechanism, /\[zone:col3\]column 3\[\/zone:col3\]/);
   assert.deepEqual(withZone.answer.key_cells, ['c3r1', 'c3r2', 'c3r3', 'c3r4', 'c3r5', 'c3r6']); // col3 expanded
   assert.deepEqual(withZone.repairs, []);
+  assert.deepEqual(withZone.usedSpecs, ['col3']); // data-model.md §2 hop 2 — usedSpecs surfaced
   // NO zone emitted -> key_cells preserved (transition safety, M4): don't zero the model's cells
   // before it is prompted to emit handles
   const noZone = postprocessAnswer({ mechanism: 'just prose', key_cells: ['c1r1'] }, rd);
   assert.deepEqual(noZone.answer.key_cells, ['c1r1']);
   assert.deepEqual(noZone.repairs, []);
+  assert.deepEqual(noZone.usedSpecs, []);
   // an unclosed offered term is bare-stripped and surfaced in repairs
   const withUnclosed = postprocessAnswer({ mechanism: 'the [term:double_threat] on c2', key_cells: [] }, rd);
   assert.doesNotMatch(withUnclosed.answer.mechanism, /\[term:/);
   assert.deepEqual(withUnclosed.repairs, ['unclosed_tag:term:double_threat']);
-  // no-op paths
+  assert.deepEqual(withUnclosed.usedSpecs, []);
+  // no-op paths (early-return branch) — usedSpecs: [] per data-model.md §2 hop 2's explicit spec
   const same = { mechanism: 'x', key_cells: ['c1r1'] };
-  assert.deepEqual(postprocessAnswer(same, null), { answer: same, repairs: [] });
-  assert.deepEqual(postprocessAnswer(null, rd), { answer: null, repairs: [] });
+  assert.deepEqual(postprocessAnswer(same, null), { answer: same, repairs: [], usedSpecs: [] });
+  assert.deepEqual(postprocessAnswer(null, rd), { answer: null, repairs: [], usedSpecs: [] });
 });

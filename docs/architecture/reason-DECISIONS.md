@@ -1110,3 +1110,69 @@ Scenario 3 describes.
 **Source:** spec 052 (Epic 2) T042–T048, T064b, 2026-07-30. Modules: `classifier.js`
 (`detectForcedWin`'s `blockCol` field, `classify()` Category 4), `tests/classifier/classifier.test.js`.
 Related: FR-018–FR-021, research.md Decision D5, OI-33, OI-90.
+
+### D42 — deep-reveal-grounding closing batch: two-attempt failure-logging schema, the `future:` spec convention, and `checkP5Strong`'s coverage remains partial by design
+
+**Context.** Spec 058 (deep-reveal-grounding), User Stories 1–4, closing documentation batch,
+2026-08-05. This entry records three things settled across the epic's four implementation batches
+that had not yet been written into the decision log. **Numbering note:** the epic's own task list
+(`specs/058-deep-reveal-grounding/tasks.md`, T036) names this entry "D35" — by the time this
+closing batch ran, a separate lane's merge had already taken D35 (see the entry immediately above,
+"three condition-D render fixes from the 57-board grading run"), so this is D42, the next free
+number, not D35. Do not renumber the existing D35.
+
+**1. Two-attempt failure-logging schema (US2, migration `065_deep_reveal_failures_two_attempts.sql`).**
+Six new nullable columns on `deep_reveal_failures`:
+
+| Column | Type | Meaning |
+|---|---|---|
+| `attempt1_raw_llm_output` | `text` | The raw LLM output of the FIRST attempt, before any retry. |
+| `attempt1_mechanism` | `text` | The post-processed `mechanism` text of the first attempt. |
+| `attempt2_raw_llm_output` | `text` | The raw LLM output of the retry attempt, if one occurred. |
+| `attempt2_mechanism` | `text` | The post-processed `mechanism` text of the retry attempt. |
+| `missing_handles` | `jsonb` | The required-set handles the first attempt failed to use — what triggered the retry. |
+| `served_attempt` | `smallint` | `1` or `2` — which attempt's output was actually served to the user. |
+
+`served_attempt` semantics: a row is only written when at least one attempt failed some guard (a
+terminal failure after both attempts, or a `missing_required_squares` retry) — a clean first-attempt
+pass writes no row at all (unchanged from the epic's pre-existing failure-logging posture). When a
+row is written, `served_attempt` records whichever attempt's text the user actually saw: `1` when
+the retry itself also failed and the system fell back to serving attempt 1's output anyway (a
+partial answer beats none), `2` when the retry succeeded and its output was served. This is why
+both `attemptN_*` column pairs exist independently rather than a single "the" output column — the
+row must be able to show what each attempt produced even when only one was shown to the user.
+New `failure_reason` value: `'missing_required_squares'` — no `CHECK` constraint exists on that
+column (verified against `031_deep_reveal_failures.sql`'s body), so no migration was needed for the
+value itself, only this documentation entry and the corresponding entry in `data-model.md`.
+
+**2. The `future:` spec-prefix convention (US1).** No prior art existed in this codebase for
+marking a highlight as "true, but not yet, don't treat it as a present threat" before this feature.
+`buildAnnotationOffer` (`zoneAnnotations.mjs`) now emits `future:`-prefixed specs for a half's
+`forkCells` when they come from a `tacticTag: 'double_threat'` fork that completes on the deep
+`projectedDeep` board rather than a near-term one. Full mechanics are documented in
+`docs/architecture/reason-render-grounded-prompt.md` §11b — this entry exists to make the decision
+searchable from the D-log rather than duplicate the mechanics.
+
+**3. `checkP5Strong` coverage remains partial by design — not a residual bug.** US3's guard-layer
+work (`server/annotationGate.js`, `server/index.js`) wires a real `allowedSet` into `checkP5Strong`
+at exactly **one** of the three call sites that reach it in `server/index.js`: the fresh-generation
+path (a genuinely new LLM call, where the offered alias/term set is known and enforceable). The
+other two call sites — the `explanation_cache` cache-hit path and the not-a-blunder short-circuit —
+pass `allowedSet: null`, deliberately, with an explicit comment at each site. This means a cached or
+not-a-blunder response is never checked against a *specific* offered set — only the cache-hit path's
+pre-existing sanitization (see memory `project_blunder_serving_dual_paths.md`) applies. **This is an
+accepted scope boundary of this epic, not something a future batch should silently "complete" by
+threading `allowedSet` into the other two sites.** The reason it was left this way: the cache-hit
+path has no live `zones` object to build an `allowedSet` from (the cached row does not carry the
+render model that produced it), and the not-a-blunder path never calls the grounded-prompt machinery
+at all — there is no offered set to enforce against. Widening coverage there is a distinct piece of
+work (re-deriving or persisting the offered set alongside the cached explanation) that this epic's
+scope never included; see `docs/open_issues.md` for the tracked residual gap this leaves open
+(`P5strong:tg` span-strip, a narrower and separate gap from this one).
+
+**Source:** spec 058 (deep-reveal-grounding) Batches 1–5, 2026-08-04/05. Modules:
+`server/migrations/065_deep_reveal_failures_two_attempts.sql`, `server/deepRevealFailuresRow.js`,
+`server/mechanismExplainer.mjs` (`computeMechanism`'s retry trigger), `server/annotationGate.js`
+(`checkP5Strong`), `server/index.js` (the three call sites), `server/scripts/reason_engine/
+zoneAnnotations.mjs`, `server/zoneParser.js`, `src/lib/annotatedText.js`. Related: US1/US2/US3 FRs,
+`docs/architecture/data-model.md` "Deep Reveal Failures" section, `docs/open_issues.md`.

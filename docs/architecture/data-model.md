@@ -215,12 +215,28 @@ Records LLM outputs that failed annotation validation after retry, for offline a
 | `endpoint` | `text` | NOT NULL, DEFAULT `'/api/explain-move-llm'` |
 | `llm_prompt` | `text` | NOT NULL — full prompt sent to the LLM |
 | `raw_llm_output` | `text` | NOT NULL — the retry attempt's raw LLM output (which failed) |
-| `failure_reason` | `text` | NOT NULL — JSON-serialized `string[]` of failure codes from `validateAnnotation` |
+| `failure_reason` | `text` | NOT NULL — JSON-serialized `string[]` of failure codes from `validateAnnotation`, OR the literal string `'missing_required_squares'` (spec 058, US2 — see below) |
 | `created_at` | `timestamptz` | NOT NULL, DEFAULT `now()` |
+| `attempt1_raw_llm_output` | `text` | nullable — the FIRST attempt's raw LLM output, before any retry (spec 058, US2) |
+| `attempt1_mechanism` | `text` | nullable — the first attempt's post-processed `mechanism` text (spec 058, US2) |
+| `attempt2_raw_llm_output` | `text` | nullable — the retry attempt's raw LLM output, if a retry occurred (spec 058, US2) |
+| `attempt2_mechanism` | `text` | nullable — the retry attempt's post-processed `mechanism` text (spec 058, US2) |
+| `missing_handles` | `jsonb` | nullable — the required-set handles the first attempt failed to use, i.e. what triggered the retry (spec 058, US2) |
+| `served_attempt` | `smallint` | nullable — `1` or `2`, which attempt's output was actually served to the user (spec 058, US2) |
 
 Access pattern: Backend-only. Server writes via Supabase service-role-key client (bypasses RLS). No public SELECT policies. Never read at runtime by the application.
 
-Migration: `031_deep_reveal_failures.sql`.
+Migration: `031_deep_reveal_failures.sql`. The six `attemptN_*`/`missing_handles`/`served_attempt` columns were added additively (all nullable, no backfill — pre-launch disposability rule) by migration `065_deep_reveal_failures_two_attempts.sql`.
+
+**`failure_reason = 'missing_required_squares'` (spec 058, US2).** A new free-text value on the
+existing `failure_reason` column — there is no `CHECK` constraint on that column (verified against
+`031_deep_reveal_failures.sql`'s body), so no schema migration was needed for the value itself, only
+this documentation entry. It is written when the coach's retry attempt still omitted a square from
+the required set (`deriveRequiredSet`, see `docs/architecture/reason-render-grounded-prompt.md`
+§11a) even after being told which handles were missing. See `docs/architecture/reason-DECISIONS.md`
+D42 for the full two-attempt logging schema rationale (including `served_attempt`'s fallback
+semantics) and `server/deepRevealFailuresRow.js` (`buildTerminalFailureRow`/
+`buildMissingRequiredSquaresRow`) for the two row shapes this table now accepts.
 
 ## Games (`games`)
 

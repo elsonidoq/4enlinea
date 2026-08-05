@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'fs';
-import { buildReasonRenderModel, assembleGroundedPrompt, buildRenderDecision } from '../scripts/renderReasonModel.mjs';
+import { buildReasonRenderModel, assembleGroundedPrompt, buildRenderDecision, deriveRequiredSet } from '../scripts/renderReasonModel.mjs';
 
 const OPENING = JSON.parse(readFileSync(new URL('./fixtures/opening_vectors.json', import.meta.url)));
 
@@ -210,4 +210,105 @@ test('assembled prompt does not duplicate the guardrail on a non-opening record'
 test('assembled prompt includes the opening frame\'s own guardrail alongside the link guardrail', () => {
   const prompt = assembleGroundedPrompt(buildReasonRenderModel(OPENING.namedOpening));
   assert.match(prompt, /do not ground a specific deep/i); // openingFrame.mjs's own GUARDRAIL text
+});
+
+// ── deriveRequiredSet (spec 058, US2 — Derivation Rule, spec.md, verbatim from the epic) ────────
+
+test('deriveRequiredSet returns 1-3 {half,spec,handle,role} entries matched by exact spec equality (D2)', () => {
+  const pruned = {
+    lostResource: { completingCell: 'c6r5' },
+    opponentPunishment: { completingCell: 'c3r3' },
+  };
+  const zones = { aliases: [
+    { handle: 'you-cell', spec: 'c6r5', role: 'the square you needed', truthBoard: 'decision', kbId: null },
+    { handle: 'opp-cell', spec: 'c3r3', role: 'the square the opponent took', truthBoard: 'decision', kbId: null },
+  ] };
+  const req = deriveRequiredSet(pruned, zones);
+  assert.ok(req.length >= 1 && req.length <= 3);
+  assert.equal(req.length, 2);
+  for (const g of req) {
+    assert.deepEqual(Object.keys(g).sort(), ['half', 'handle', 'role', 'spec']);
+    assert.ok(['lostResource', 'opponentPunishment'].includes(g.half));
+  }
+  const lr = req.find((g) => g.half === 'lostResource');
+  assert.equal(lr.spec, 'c6r5');
+  assert.equal(lr.handle, 'you-cell');
+  assert.equal(lr.role, 'the square you needed');
+});
+
+test('deriveRequiredSet drops a group silently (no error, no placeholder) on match failure (FR-004/FR-006)', () => {
+  const pruned = {
+    lostResource: { completingCell: 'c6r5' },       // no offered alias for c6r5 below
+    opponentPunishment: { completingCell: 'c3r3' },
+  };
+  const zones = { aliases: [
+    { handle: 'opp-cell', spec: 'c3r3', role: 'the square the opponent took', truthBoard: 'decision', kbId: null },
+  ] };
+  const req = deriveRequiredSet(pruned, zones);
+  assert.equal(req.length, 1);
+  assert.equal(req[0].half, 'opponentPunishment');
+  assert.equal(req[0].spec, 'c3r3');
+});
+
+test('deriveRequiredSet yields no entry (not a forced placeholder) when a half has neither cell nor window', () => {
+  const pruned = { lostResource: {}, opponentPunishment: { kind: 'denial' } };
+  const zones = { aliases: [] };
+  assert.deepEqual(deriveRequiredSet(pruned, zones), []);
+});
+
+test('deriveRequiredSet falls back to the full half.window array (T-parity worked example, covers: [route, lostResource.terminal, opponentPunishment.terminal])', () => {
+  // The Derivation Rule's own worked example (spec.md): a half with no cell/completingCell but a
+  // window falls back to the window as a line, matched against a windows: alias spec.
+  const pruned = {
+    lostResource: { kind: 'winning_line', register: 'parity', window: ['c1r1', 'c2r2', 'c3r3', 'c4r4'] },
+    opponentPunishment: { kind: 'winning_line', register: 'parity' }, // no cell/completingCell/window -> no entry
+  };
+  const zones = { aliases: [
+    { handle: 'parity-line', spec: 'windows:c1r1,c2r2,c3r3,c4r4', role: 'the parity group', truthBoard: 'decision', kbId: null },
+  ] };
+  const req = deriveRequiredSet(pruned, zones);
+  assert.equal(req.length, 1);
+  assert.equal(req[0].half, 'lostResource');
+  assert.equal(req[0].spec, 'windows:c1r1,c2r2,c3r3,c4r4');
+  assert.equal(req[0].handle, 'parity-line');
+});
+
+test('deriveRequiredSet never matches a future:-prefixed alias against a plain derived cell spec', () => {
+  // A future: spec is string-distinct from its unprefixed form (US1) — spec equality (D2) means a
+  // deep fork's future:cNrM alias can never satisfy a derived plain cNrM requirement by accident.
+  const pruned = { lostResource: { completingCell: 'c7r3' }, opponentPunishment: {} };
+  const zones = { aliases: [
+    { handle: 'you-future-fork', spec: 'future:c7r3', role: 'this square matters later', truthBoard: 'projectedDeep', kbId: null },
+  ] };
+  assert.deepEqual(deriveRequiredSet(pruned, zones), []);
+});
+
+test('buildReasonRenderModel and buildRenderDecision both expose requiredSet (research.md D1 — identical routing)', () => {
+  const model = buildReasonRenderModel(NV);
+  const rd = buildRenderDecision(NV);
+  assert.ok(Array.isArray(model.requiredSet));
+  assert.ok(Array.isArray(rd.requiredSet));
+  // Neither of NV's completingCells (c6r5/c3r3) is offered as a structural alias by this synthetic
+  // fixture's boards, so both correctly abstain rather than invent a requirement (FR-006).
+  assert.deepEqual(model.requiredSet, []);
+  assert.deepEqual(rd.requiredSet, []);
+});
+
+test('opening records also compute requiredSet (deriveRequiredSet runs on both buildReasonRenderModel branches)', () => {
+  const model = buildReasonRenderModel(OPENING.centrality);
+  assert.ok(Array.isArray(model.requiredSet));
+});
+
+test('assembled prompt includes the "You MUST build the explanation around these" block, naming required handles', () => {
+  const model = buildReasonRenderModel(NV);
+  model.requiredSet = [{ half: 'lostResource', spec: 'c6r5', handle: 'you-major', role: 'the square you needed' }];
+  const prompt = assembleGroundedPrompt(model);
+  assert.match(prompt, /# You MUST build the explanation around these/);
+  assert.match(prompt, /\[zone:you-major\] = the square you needed/);
+});
+
+test('the required-set prompt block states explicitly when there is nothing required, without inventing one', () => {
+  const prompt = assembleGroundedPrompt(buildReasonRenderModel(NV)); // NV's requiredSet is [] (see above)
+  assert.match(prompt, /# You MUST build the explanation around these/);
+  assert.match(prompt, /none for this explanation/i);
 });

@@ -51,7 +51,8 @@ import { shapeKeyForPuzzle } from './shapeDescriptor.js';
 import { buildGoogleAuthorizeUrl, resolveAuthToken } from './authUtils.js';
 import { logError } from './logger.js';
 import { computeThreatCells, computePatternCells, buildBlunderDetailResponse, fetchBlunderDetailContext } from './blunderDetailResponse.js';
-import { guardExplainMovePayload, guardExplainMoveLlmPayload, buildTtsSpeechText } from './reasonRenderGuard.mjs';
+import { guardExplainMovePayload, guardExplainMoveLlmPayload, buildTtsSpeechText, toAllowedSet } from './reasonRenderGuard.mjs';
+import { buildTerminalFailureRow, buildMissingRequiredSquaresRow } from './deepRevealFailuresRow.js';
 import { localeMiddleware, serverT, resolveTtsLocale } from './locale.mjs';
 import { resolveAdminLang } from './adminAudioLang.mjs';
 import { buildTtsInstructions } from './ttsInstructions.mjs';
@@ -1313,6 +1314,11 @@ app.post('/api/explain-move-llm', async (req, res) => {
       // row (research.md §5) — including a row cached before the gate was wired in. `board` is
       // the pre-move board constructed above (`new Board(movestring)`, :1287) — same convention
       // the offline callers use (col is passed separately, not baked into the board).
+      //
+      // allowedSet stays null here on purpose (spec 058, US3, research.md D11): a cache hit reads
+      // `cached.deep_reveal_json` directly — there is no `renderDecision`/`zones.aliases` in scope
+      // to build a real allowedSet from, since `computeMechanism` never ran. Do not treat this as
+      // an oversight to "complete" — `checkP5Strong` correctly stays un-run on this path.
       return res.json(guardExplainMoveLlmPayload({
         explanation: cached.deep_reveal_json.explanation,
         prompt: cached.deep_reveal_json.prompt ?? '',
@@ -1346,6 +1352,11 @@ app.post('/api/explain-move-llm', async (req, res) => {
 
     if (result.notABlunder) {
       // The played move is not a blunder — nothing to punish. No LLM call, no quota consumed.
+      //
+      // allowedSet stays null here on purpose (spec 058, US3, research.md D11): this branch
+      // returns before computeMechanism runs any prompt/zone logic, so there is no
+      // `renderDecision`/`zones.aliases` in scope. Do not treat this as an oversight to
+      // "complete" — `checkP5Strong` correctly stays un-run on this path.
       return res.json(guardExplainMoveLlmPayload({
         explanation: serverT(locale, 'notABlunder'),
         prompt: '',
@@ -1360,21 +1371,45 @@ app.post('/api/explain-move-llm', async (req, res) => {
     if (result.callError || result.parseError || !result.mechanism) {
       if (supabase) {
         try {
-          await supabase.from('deep_reveal_failures').insert({
-            position_hash: positionHash,
+          await supabase.from('deep_reveal_failures').insert(buildTerminalFailureRow({
+            positionHash,
             movestring,
             col,
             endpoint: '/api/explain-move-llm',
-            llm_prompt: result.prompt,
-            raw_llm_output: result.raw,
-            failure_reason: result.callError ?? result.parseError ?? 'empty mechanism',
-            created_at: new Date().toISOString(),
-          });
+            prompt: result.prompt,
+            raw: result.raw,
+            failureReason: result.callError ?? result.parseError ?? 'empty mechanism',
+          }));
         } catch (insertErr) {
           console.error('[deep_reveal_failures insert]', insertErr.message);
         }
       }
       return res.status(500).json({ error: 'Internal server error' });
+    }
+
+    // ── Two-attempt logging: retry still omitted a required square (spec 058, US2, FR-010) ──────
+    // Kept in its own region, away from the TTS handler (GET /api/user/tts/deep-reveal, cross-lane
+    // constraint 2). This never blocks or changes the response — FR-009 always serves the
+    // (already-retried) result.mechanism regardless of whether it still misses a required square;
+    // this insert only records the incident (both attempts + what was missing) for later review.
+    // Mirrors the terminal-failure insert above: awaited, wrapped in its own try/catch, logged on
+    // failure rather than fire-and-forgotten.
+    if (supabase && result.missingHandles?.length > 0) {
+      try {
+        await supabase.from('deep_reveal_failures').insert(buildMissingRequiredSquaresRow({
+          positionHash,
+          movestring,
+          col,
+          endpoint: '/api/explain-move-llm',
+          prompt: result.prompt,
+          raw: result.raw,
+          mechanism: result.mechanism,
+          attempt1: result.attempt1,
+          missingHandles: result.missingHandles,
+        }));
+      } catch (insertErr) {
+        console.error('[deep_reveal_failures insert — missing_required_squares]', insertErr.message);
+      }
     }
 
     // `mechanism` is coach-voice text carrying inline [zone:…] tags (→ board highlights via
@@ -1421,7 +1456,13 @@ app.post('/api/explain-move-llm', async (req, res) => {
     // `[term:z_threat]`, or a `[zone:...]` annotation that fails P1/P2/P3/P5/P6 — is caught before
     // it ever reaches a client, in addition to what gets written into `explanation_cache` for a
     // future cache hit.
-    res.json(guardExplainMoveLlmPayload({ explanation, prompt, terms: termsMap, locale, board }));
+    // allowedSet (spec 058, US3, OI-143): this is the ONLY guardExplainMoveLlmPayload call site
+    // with a renderDecision.zones.aliases in scope (research.md D11) — computeMechanism just ran
+    // and returned it. Threading it here turns on checkP5Strong for freshly-generated
+    // explanations; the cache-hit and not-a-blunder call sites above stay allowedSet: null (see
+    // their own comments).
+    const allowedSet = toAllowedSet(result.renderDecision?.zones?.aliases ?? []);
+    res.json(guardExplainMoveLlmPayload({ explanation, prompt, terms: termsMap, locale, board, allowedSet }));
 
   } catch (err) {
     console.error('[explain-move-llm] error:', err.message);

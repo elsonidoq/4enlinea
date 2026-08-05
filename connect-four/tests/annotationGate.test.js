@@ -431,6 +431,110 @@ describe('checkP5Strong', () => {
     // col8 is not in allowed set (abstract col=3 only)
     assert.ok(failures.some(f => f.startsWith('P5strong:col_not_allowed:col8')));
   });
+
+  // -------------------------------------------------------------------------
+  // T025 (spec 058, US3) — the three checkP5Strong coverage gaps, shipped together.
+  // -------------------------------------------------------------------------
+
+  // Gap 1: a windows: spec is now checked (not silently admitted). A `windowOnly` allowedSet entry
+  // (data-model.md §3 / Decision A) is satisfiable ONLY by an exact signature match — a highlight
+  // naming a strict subset, superset, or unrelated window must be rejected.
+  const windowOnlyAllowed = [
+    { cells: ['c1r1', 'c2r2'], windowOnly: true },
+  ];
+
+  test('T025.1a: windows:c1r1,c2r2 spec matching an offered windowOnly entry exactly → no failures', () => {
+    const failures = checkP5Strong([{ spec: 'windows:c1r1,c2r2', innerText: 'the line' }], windowOnlyAllowed);
+    assert.deepEqual(failures, []);
+  });
+
+  test('T025.1b: windows: spec that does not match any offered window signature → rejected (previously silently admitted)', () => {
+    const failures = checkP5Strong([{ spec: 'windows:c3r3,c4r4', innerText: 'a different line' }], windowOnlyAllowed);
+    assert.ok(
+      failures.some(f => f.startsWith('P5strong:cell_not_allowed:windows:c3r3,c4r4')),
+      `expected the unoffered windows: spec to be rejected, got ${JSON.stringify(failures)}`
+    );
+  });
+
+  test('T025.1c: windows: spec naming a strict SUBSET of an offered window is rejected (per-cell membership does not satisfy Decision A)', () => {
+    // c1r1 alone is a member of the offered window but was never offered as its own window.
+    const failures = checkP5Strong([{ spec: 'windows:c1r1', innerText: 'just one cell of it' }], windowOnlyAllowed);
+    assert.ok(
+      failures.some(f => f.startsWith('P5strong:cell_not_allowed:windows:c1r1')),
+      `expected the subset windows: spec to be rejected, got ${JSON.stringify(failures)}`
+    );
+  });
+
+  // Gap 2: future: and future:windows: specs are checked identically to their unprefixed form.
+  test('T025.2a: future:c4r3 is checked identically to c4r3 (passes when offered)', () => {
+    const failures = checkP5Strong([{ spec: 'future:c4r3', innerText: 'later' }], concreteAllowed);
+    assert.deepEqual(failures, []);
+  });
+
+  test('T025.2b: future:c9r9 (never offered) is rejected, referencing the ORIGINAL future:-prefixed spec', () => {
+    const failures = checkP5Strong([{ spec: 'future:c9r9', innerText: 'later' }], concreteAllowed);
+    assert.ok(
+      failures.includes('P5strong:cell_not_allowed:future:c9r9'),
+      `expected the failure to name the original future:-prefixed spec, got ${JSON.stringify(failures)}`
+    );
+  });
+
+  test('T025.2c: future:windows:c1r1,c2r2 matches an offered windowOnly entry exactly', () => {
+    const failures = checkP5Strong([{ spec: 'future:windows:c1r1,c2r2', innerText: 'later' }], windowOnlyAllowed);
+    assert.deepEqual(failures, []);
+  });
+
+  test('T025.2d: future:windows: spec naming an unoffered window is rejected, referencing the original future:windows: spec', () => {
+    const failures = checkP5Strong([{ spec: 'future:windows:c3r3,c4r4', innerText: 'later' }], windowOnlyAllowed);
+    assert.ok(
+      failures.includes('P5strong:cell_not_allowed:future:windows:c3r3,c4r4'),
+      `expected the failure to name the original future:windows: spec, got ${JSON.stringify(failures)}`
+    );
+  });
+});
+
+// -------------------------------------------------------------------------
+// T025 (spec 058, US3) gap 3 — a checkP5Strong rejection actually strips its [zone:...] span, once
+// 'P5strong' is added to SPAN_CARRYING_CODES, through the full guardExplainMoveLlmPayload pipeline.
+// Also pins the deliberately-carried-forward gap: a P5strong:tg rejection's span is still NOT
+// stripped (its failure-code shape has no third `:`-segment for the span extraction to find).
+// -------------------------------------------------------------------------
+
+describe('T025 gap 3 — P5strong span stripping through guardExplainMoveLlmPayload', () => {
+  test('a P5strong:cell_not_allowed rejection has its [zone:...] span actually stripped from the served text', async () => {
+    const { guardExplainMoveLlmPayload } = await import('../server/reasonRenderGuard.mjs');
+    const board = new Board('');
+    const allowedSet = [{ cells: ['c1r1'] }]; // c4r3 is NOT offered
+    const out = guardExplainMoveLlmPayload({
+      explanation: 'Watch [zone:c4r3]that square[/zone:c4r3] closely.',
+      prompt: '',
+      terms: {},
+      board,
+      allowedSet,
+    });
+    assert.ok(!out.explanation.includes('[zone:c4r3]'), `zone tag should be stripped: ${out.explanation}`);
+    assert.ok(out.explanation.includes('that square'), `inner text should survive: ${out.explanation}`);
+  });
+
+  test('documented-gap regression guard: a P5strong:tg rejection is flagged but its span is NOT stripped', async () => {
+    const { guardExplainMoveLlmPayload } = await import('../server/reasonRenderGuard.mjs');
+    const board = new Board('');
+    const allowedSet = [{ cells: ['c1r1'] }];
+    const out = guardExplainMoveLlmPayload({
+      explanation: 'There is a threat here. [zone:tg]a major threat[/zone:tg]',
+      prompt: '',
+      terms: {},
+      board,
+      allowedSet,
+    });
+    // tg's failure code ('P5strong:tg') has no third ':'-segment, so stripFailingZoneSpans never
+    // extracts a spec for it — the wrapper survives even though the rejection is real and logged.
+    // This is a known, tracked, out-of-scope gap (data-model.md §3 item 3) — not fixed here.
+    assert.ok(
+      out.explanation.includes('[zone:tg]') || out.explanation.includes('a major threat'),
+      `expected the tg wrapper (or at least its inner text) to survive unstripped: ${out.explanation}`
+    );
+  });
 });
 
 // ---------------------------------------------------------------------------

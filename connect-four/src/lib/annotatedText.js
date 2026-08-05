@@ -16,13 +16,25 @@ export const ZONE_COLORS = [
 ];
 
 /**
+ * Reserved color for a `future:`-prefixed zone spec (deep-reveal-grounding spec 058, US1/FR-002).
+ * A future square is visually distinguished from a present one, so it is intentionally NOT part of
+ * the ZONE_COLORS hash pool — appending it there would silently reassign the color of every
+ * existing non-future highlight (getZoneColor hashes spec mod ZONE_COLORS.length). Amber, chosen
+ * for contrast against the 4 existing pool colors (blue/red/green/purple) and against Board.jsx's
+ * inline semantic colors.
+ */
+export const FUTURE_ZONE_COLOR = '#D97706'; // amber — reserved, not in ZONE_COLORS
+
+/**
  * Deterministic color assignment for a zone spec string.
- * Same spec always returns the same color from ZONE_COLORS.
+ * Same spec always returns the same color from ZONE_COLORS, except a `future:`-prefixed spec,
+ * which always returns the reserved FUTURE_ZONE_COLOR (never one of the ZONE_COLORS pool).
  *
- * @param {string} spec  Zone spec (e.g. "col4", "c3r2", "tg").
- * @returns {string}  Hex color from ZONE_COLORS.
+ * @param {string} spec  Zone spec (e.g. "col4", "c3r2", "tg", "future:c2r6").
+ * @returns {string}  Hex color.
  */
 export function getZoneColor(spec) {
+  if (spec.startsWith('future:')) return FUTURE_ZONE_COLOR;
   let hash = 0;
   for (let i = 0; i < spec.length; i++) {
     hash = ((hash << 5) - hash) + spec.charCodeAt(i);
@@ -34,8 +46,11 @@ export function getZoneColor(spec) {
 /**
  * Returns true if spec matches a known zone pattern.
  * Unknown specs are treated as plain text to avoid interactive spans that highlight nothing.
+ * A leading `future:` prefix (US1, deep-reveal-grounding spec 058) is stripped before the shape
+ * check — a future square/line uses the same grammar as a present one, just wrapped.
  */
-function isValidSpec(spec) {
+export function isValidSpec(spec) {
+  if (spec.startsWith('future:')) spec = spec.slice('future:'.length);
   return /^col\d+$/.test(spec)
     || /^c\d+r\d+$/.test(spec)
     || /^cells:/.test(spec)
@@ -144,11 +159,15 @@ export function parseAnnotatedText(text) {
  *   rowN       → all 7 cells in row N-1
  *   tg         → userMajorThreats (passed-in array)
  *
- * @param {string} spec  Zone spec string (e.g. "col4", "c3r2", "tg").
+ * @param {string} spec  Zone spec string (e.g. "col4", "c3r2", "tg", "future:c2r6").
  * @param {Array<{c: number, r: number}>} userMajorThreats  For "tg" resolution.
  * @returns {Array<{c: number, r: number}>}
  */
 export function zoneToOverlays(spec, userMajorThreats = []) {
+  // future: prefix (US1, deep-reveal-grounding spec 058) — strip before resolution so cell
+  // resolution stays byte-identical to the unprefixed form.
+  if (spec.startsWith('future:')) spec = spec.slice('future:'.length);
+
   // colN → entire column
   const colMatch = spec.match(/^col(\d+)$/);
   if (colMatch) {
@@ -243,6 +262,8 @@ export function zoneToOverlays(spec, userMajorThreats = []) {
  * @returns {Array<Array<{c,r}>>|null}
  */
 export function zoneToWindowGroups(spec) {
+  // future: prefix (US1, deep-reveal-grounding spec 058) — strip before resolution.
+  if (spec.startsWith('future:')) spec = spec.slice('future:'.length);
   const windowsMatch = spec.match(/^windows:(.+)$/);
   if (!windowsMatch) return null;
   return windowsMatch[1].split('|').map(windowStr =>
