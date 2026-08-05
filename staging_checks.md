@@ -1984,3 +1984,59 @@ direct DB/API measurement — not from screenshots alone.
 - [ ] **Paddle "Default payment link" dashboard setting** (spec 053). **BLOCKED** — owner-only
   dashboard action. Unchanged by this deploy.
 - [ ] **Magic-link email round-trip.** Not exercised; the app now uses Google sign-in on this build.
+
+---
+
+## Epic 11 — Deep-Reveal Grounding (spec 058) — added 2026-08-05
+
+Everything in spec 058 was verified locally against the **offline** pipeline
+(`specs/058-deep-reveal-grounding/t040-e2e-script.mjs` drives `computeMechanism` → `toAllowedSet` →
+`guardExplainMoveLlmPayload` directly) plus a local browser pass. Three acceptance items are
+structurally not confirmable that way, because they depend on the deployed HTTP path, a real cache
+state, or the audio artifact store.
+
+- [ ] **`checkP5Strong` actually rejects on live staging traffic (SC-006).**
+  - **What**: after the spec 058 code deploy **and** the `explanation_cache` TRUNCATE (see
+    `docs/deployment_steps.md` § "Spec 058 — Deep-Reveal Grounding"), generate a fresh deep reveal on
+    staging and confirm the server logs a `P5strong:*` decision path at least once across a handful
+    of positions — i.e. the predicate is running with a **non-null** `allowedSet`, not silently
+    skipped. Then query `deep_reveal_failures` for rows with
+    `failure_reason = 'missing_required_squares'`.
+  - **Why staging**: local verification exercised `guardExplainMoveLlmPayload` directly. The live
+    `allowedSet` is threaded in `server/index.js` at the **fresh-generation call site only**; a
+    cache hit passes `allowedSet: null` and skips the predicate entirely. Only a real request against
+    a real (post-TRUNCATE) cache proves the live path takes the branch that was wired.
+  - **Expected**: at least one fresh (non-`cached: true`) deep reveal per test position; `P5strong`
+    evaluated rather than skipped; no 5xx from the new two-attempt insert path. Zero
+    `missing_required_squares` rows is a valid pass — it means the coach complied.
+  - **Source**: spec 058 SC-006, FR-012; OI-143 (closed by T030); decision D42 (partial coverage is
+    deliberate — the cache-hit site staying `null` is **not** a failure of this check).
+
+- [ ] **The spoken (TTS) deep reveal reads no raw coordinate.**
+  - **What**: on staging, play the audio for a deep reveal whose text contains a coordinate
+    reference, and confirm it says "column 5", never "c5" (and never "c1r3").
+  - **Why staging**: this was the first of the four staging feedback complaints
+    (*"Te coach says 'c5' instead of 'column 5' when speaking"*). The fix belongs to the Plan A lane
+    (`GET /api/user/tts/deep-reveal` routed through the same sanitizer, plus the en-dash `RANGE_RE`
+    widening), now merged into this branch but never exercised on a deployed environment. TTS
+    artifacts are **cached by text hash** in storage, so staging can serve pre-fix audio for text
+    that has not changed — a local pass does not predict staging behaviour here.
+  - **Expected**: spoken text matches the sanitized on-screen text; no raw `cNrM`/`cN` token audible.
+  - **Source**: spec 058 spec.md Assumptions (the TTS half is explicitly out of 058's scope and
+    owned by Plan A); staging `llm_feedback` case `3154`.
+
+- [ ] **The four fed-back positions, re-run through the deployed HTTP path.**
+  - **What**: after the deploy + TRUNCATE, request a deep reveal for each of `3154`,
+    `315444233213`, `315444233213134122`, `3154442332131341225551` through staging's real
+    `/api/explain-move-llm`, and compare the served text against the AFTER column of
+    `/admin/grounding-diff`.
+  - **Why staging**: the recorded AFTER texts come from the offline script, which bypasses the
+    endpoint, the cache, rate limiting, and the response boundary. The LLM is also nondeterministic,
+    so this is a spot-check for *shape* (grounded cell-level tags present, no raw coordinates), not a
+    diff for exact wording.
+  - **Expected**: each response carries at least one real `[zone:]` tag; no raw `cNrM` in the served
+    text; the cell-level references the feedback asked about are present as tags rather than prose.
+    Note the two known, accepted gaps before judging this a failure: OI-171 (a `future:` handle is
+    offered but never *required*) and OI-172 (whole-window-only admission strips a single member cell
+    of an offered window — measured to cost 2 real highlights on `3154442332131341225551`).
+  - **Source**: spec 058 SC-001, SC-002; the four staging `llm_feedback` rows.

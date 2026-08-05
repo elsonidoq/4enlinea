@@ -828,6 +828,53 @@ This is a frontend-only convenience gate (a non-localhost visitor never even req
 the server-side `requireLocalhost` on every `/api/admin/*` route (server-conventions.md /
 api-conventions.md) is the actual security boundary and must not be treated as redundant with this one.
 
+### Adding an admin sub-route
+
+Add a `pathname.startsWith('/admin/<slug>')` branch inside the same guarded block, above the
+`AdminCuratePage` fallback, with a `lazy()` import. Current sub-routes: `/admin/audio`,
+`/admin/lessons`, `/admin/deep-reveal-eval`, `/admin/fv-suff`, `/admin/grounding-diff`; anything else
+under `/admin` falls through to `AdminCuratePage`.
+
+**`#root` is capped at `max-width: 480px`** (`src/index.css`) — the mobile app shell. Admin pages
+render inside it, so a wide analyst layout is squeezed into 480px unless it opts out. The established
+pattern is a mount effect that widens and restores (`AdminFvSuffPage.jsx`, `AdminGroundingDiffPage.jsx`):
+
+```js
+useEffect(() => {
+  const root = document.getElementById('root');
+  if (!root) return;
+  const prev = { maxWidth: root.style.maxWidth, width: root.style.width };
+  root.style.maxWidth = 'none';
+  root.style.width = '100%';
+  return () => { root.style.maxWidth = prev.maxWidth; root.style.width = prev.width; };
+}, []);
+```
+
+Restoring on unmount is not optional — the cap is global, and leaking `none` breaks every normal
+screen for the rest of the session.
+
+**Admin pages render OUTSIDE the app's providers.** The `/admin` branch returns before
+`DebugProvider`/`ProfileStoreProvider` are mounted, so `useStore()` returns the bare context default.
+Components that call it must tolerate that — `AnnotatedExplanation` does (it guards with `store?.`),
+which is why admin pages can reuse it and `Board` directly. A component that dereferences the store
+unguarded will throw only on the admin route.
+
+## Board coordinate display (`showCoordinates`)
+
+`Board.jsx` takes an **opt-in** `showCoordinates` prop (default `false`, added by spec 058 US4). When
+`true` it renders column numbers `1–7` above the grid and row numbers `1–6` (row 1 = bottom) down the
+left, using the same `pad`/`gap`/`flex: '1 1 0'` recipe as the column divs so labels align by
+construction rather than by pixel math. When `false` it early-returns the identical element, so the
+prop is inert for every caller that omits it.
+
+Labels are **1-indexed for display**, per the project-wide rule that internal coordinates are
+0-indexed and only the display layer converts.
+
+Live callers: `MistakeDetailScreen.jsx`'s deep-reveal branch, and `AdminGroundingDiffPage.jsx`. The
+structurally identical `<Board>` in `MistakeDetailScreen`'s non-deep-reveal branch deliberately does
+**not** pass it. Rolling numbering out to the other ~24 `<Board>` call sites (game, challenge,
+lessons, admin) was explicitly deferred — it is additive, but it is a product decision, not a cleanup.
+
 ## Saga Lock Reasons (`sagaLock.js`, spec 046 US1/US2)
 
 `src/screens/sagaLock.js` is a plain `.js` module (not `.jsx`, so `node --test` can import it directly)

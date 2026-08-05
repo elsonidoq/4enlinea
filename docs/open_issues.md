@@ -5775,7 +5775,10 @@ constants that duplicate `server/categories.js` without validating against it.
 
 ## OI-143 — `checkP5Strong` (the only grounding check) never runs live: the allowed set already exists but is dropped before reaching the gate
 
-**Status**: deferred (scoped out of spec 057 — enforcement needs a production strip-rate
+**Status**: RESOLVED (spec 058, Deep-Reveal Grounding, US3, T030, 2026-08-05) — see below.
+Everything from here down is the ORIGINAL report, kept verbatim for context; do not re-derive it.
+
+**Status (original)**: deferred (scoped out of spec 057 — enforcement needs a production strip-rate
 measurement that no environment can supply until this branch deploys; candidate for the post-staging
 deep-reveal epic)
 **Area**: `connect-four/server/reasonRenderGuard.mjs` (`guardExplainMoveLlmPayload`),
@@ -5893,6 +5896,38 @@ its P3 log-and-serve carve-out).
 Fold into the post-staging deep-reveal epic together with **OI-129**. Cross-refs: OI-124 (D3's
 wiring, closed), OI-126 (the token-stripping half, closed), memory
 `project_annotation_gate_and_zones`, `project_prod_llm_call_graph`.
+
+### Resolution (spec 058, US3, T030)
+
+`checkP5Strong` now runs live on the fresh-generation path. `toAllowedSet(aliases)`
+(`connect-four/server/reasonRenderGuard.mjs`) adapts `renderDecision.zones.aliases` into
+`checkP5Strong`'s `AllowedSetEntry[]` shape (the "adapter is where soundness lives" step this report
+flagged as the only real design content) and is threaded into `guardExplainMoveLlmPayload` at
+`server/index.js`'s fresh-generation call site only (`result.renderDecision.zones.aliases` is the
+only call site with a `renderDecision` in scope — the cache-hit and not-a-blunder call sites keep
+`allowedSet: null`, documented in code comments at both, per research.md D11 of spec 058). This
+narrows, but does not fully eliminate, the coverage gap this report described — a stale
+`explanation_cache` row (cached before this deploy) still serves via the cache-hit path with
+`allowedSet: null`, same as before.
+
+**The adapter's admissibility decision** (this report's own flagged open question — "a zone naming a
+single cell inside an offered window"): resolved as **whole-window-only** (Decision A) — a
+`windows:`/multi-cell `cells:` alias is satisfiable only as the exact same window, never per-cell.
+The owner made this call explicitly against the reviewer's own recommendation of per-cell admission,
+accepting the risk of losing real single-cell highlights drawn from inside an offered window.
+Measured evidence (spec 058 T040, `specs/058-deep-reveal-grounding/t040-e2e-results.md`): across the
+4 staging boards that motivated this feature, whole-window-only rejected 2 real single-cell
+highlights (`c2r6`, `c5r5`) on exactly the board whose `forkCells` motivated the report — both
+degraded to vague "column N" prose rather than reaching the player as an ungrounded highlight or a
+raw internal token. 0 rejections on the other 3 boards.
+
+Also landed in the same story: `checkP5Strong` gained a `windows:` branch and `future:`-prefix
+handling (it previously silently admitted both), and `'P5strong'` was added to
+`reasonRenderGuard.mjs`'s `SPAN_CARRYING_CODES` so a `checkP5Strong` rejection actually strips the
+offending `[zone:...]` span instead of only logging a warning. A narrower, pre-existing gap survives
+unresolved by design (out of scope for spec 058, flagged there as a documentation carve-out): a
+`P5strong:tg` rejection's span is still never stripped, since that failure code has no third
+`:`-segment for `stripFailingZoneSpans`'s span extraction to find.
 
 ---
 
@@ -6265,3 +6300,207 @@ same two-part change applied to `ReviewScreen`. Measure at 375×553 and 360×600
 Also fold in one other deferred finding from the whole branch, not otherwise captured anywhere:
 `ReviewScreen.jsx:315` carries `WebkitOverflowScrolling: 'touch'`, which is a no-op on iOS 13+ and can
 be dropped whenever that file is next touched.
+
+## OI-170 — `P5strong:tg` guard-rejection spans are never stripped, even after the spec 058 US3 `SPAN_CARRYING_CODES` fix
+
+**Status:** OPEN (pre-existing, low priority, deliberately out of scope) — opened 2026-08-05.
+
+**What:** `checkP5Strong` (`connect-four/server/annotationGate.js`) can reject a `tg` spec
+(`P5strong:tg`) alongside its other failure codes. Spec 058 US3 added `'P5strong'` to
+`reasonRenderGuard.mjs`'s `SPAN_CARRYING_CODES` specifically so a `checkP5Strong` rejection strips
+the offending `[zone:...]` span from the served text instead of only logging a warning. That fix
+does not cover `P5strong:tg`: `stripFailingZoneSpans` extracts the offending spec via
+`spec = specParts.join(':')`, which assumes the failure code has a third `:`-delimited segment
+(`P5strong:<kind>:<spec>`). `P5strong:tg`'s shape has no third segment — `tg` is the failure code's
+entire second segment, not a spec suffix — so `specParts` never resolves a spec to strip, and a
+model-invented `tg` tag survives in the served text ungrounded.
+
+**Why deferred:** already noted in prose inside OI-143's own "Resolution" section
+(`docs/open_issues.md`, the paragraph beginning "A narrower, pre-existing gap survives unresolved by
+design") when spec 058 US3 landed the `SPAN_CARRYING_CODES` fix; this entry gives it its own
+first-class OI-N so it is discoverable without reading through OI-143 end to end. It is narrower
+than the three gaps the owner named as required for spec 058 to close, and `tg` is essentially never
+offered as an alias `spec` in production traffic (`buildAnnotationOffer` offers `col`/`c`r`/
+`windows:` specs and the client-only `tg` literal is not part of that offer surface in the
+grounded-prompt path) — flagged for completeness, not required for spec 058 to close.
+
+**If picked up:** give `stripFailingZoneSpans` (or its caller) a dedicated branch for a two-segment
+`P5strong:tg` failure code that strips the tag by matching on `tg` directly rather than a derived
+spec suffix, and add a regression test alongside the existing `SPAN_CARRYING_CODES` coverage in
+`server/tests/reasonRenderGuard.test.mjs`.
+
+---
+
+## OI-171 — A `future:` handle is offered but can never enter the required set, so the coach is never obliged to use one
+
+**Status**: deferred (structural consequence of the Derivation Rule, which spec 058 copied verbatim from the epic and is explicitly barred from re-deriving)
+**Area**: `connect-four/server/scripts/renderReasonModel.mjs` (`deriveRequiredSet`), `connect-four/server/scripts/reason_engine/zoneAnnotations.mjs` (`buildAnnotationOffer`)
+**Discovered**: spec 058 (Deep-Reveal Grounding), 2026-08-05
+
+Spec 058 US1 added the `future:` handle class so the coach has a legal way to point at a deep,
+not-yet-playable fork square — the square the epic's evidence says players most often ask "which one
+is it?" about. US2 then makes a derived required set mandatory. The two never meet:
+`deriveRequiredSet` derives a group's spec from `denialCell(h)` (`h.cell ?? h.completingCell`) or
+`h.window`, while a future-fork alias's spec is built from `h.forkCells` — a field the Derivation
+Rule never reads. A `future:` spec therefore cannot be produced by the derivation and cannot be
+required.
+
+Measured against the 29-record coverage corpus
+(`connect-four/server/scripts/fv_suff/reason_evidence_boards_coverage_2026-07-02T11-37-56Z.jsonl`),
+running `buildReasonRenderModel(toNarratorVector(row.evidence))` per row:
+
+```
+rows offering a future: handle = 6
+future: specs OFFERED  = 7
+future: specs REQUIRED = 0
+```
+
+The user-visible consequence is recorded in `specs/058-deep-reveal-grounding/t040-e2e-results.md`:
+on `3154442332131341225551` (the epic's own headline evidence row) the required set is empty, the
+coach was under no obligation to use the offered `future:windows:c2r6,c5r5` handle, it named the two
+fork cells as bare prose instead, and they were flattened to "column 2"/"column 5" — verbatim the
+failure spec.md's problem statement describes.
+
+**Why deferred**: the Derivation Rule is copied verbatim from the epic into spec.md with an explicit
+instruction that it "is not to be re-derived, re-worded, or summarized — a prior paraphrase of this
+rule was itself the defect this section exists to fix." Widening it to read `forkCells` is a
+deliberate product/design change for the owner to make, not an implementation liberty.
+
+**If picked up**: decide whether a half whose story is a fork should contribute
+`'future:' + (forkCells.length === 1 ? forkCells[0] : 'windows:' + forkCells.join(','))` as a fourth
+derivation source, after `cell`, `completingCell`, and `window`. It would still be subject to the
+same match-and-drop against `aliases[].spec` (FR-004) and the 1-3 group cap (FR-005), so the
+invariant is unaffected. Cross-refs: OI-172, `docs/architecture/reason-render-grounded-prompt.md` §11.
+
+---
+
+## OI-172 — Whole-window-only admission (Decision A) rejects real, correct single-cell highlights
+
+**Status**: deferred (owner's explicit decision, taken against the reviewer's recommendation; the owner asked to revisit after seeing evidence — this entry carries that evidence)
+**Area**: `connect-four/server/reasonRenderGuard.mjs` (`toAllowedSet`), `connect-four/server/annotationGate.js` (`checkP5Strong`)
+**Discovered**: spec 058 (Deep-Reveal Grounding), 2026-08-05
+
+Decision A makes an offered `windows:`/multi-cell `cells:` alias satisfiable **only** as the exact
+same whole window. A highlight naming a single cell that is merely a *member* of an offered window,
+and was never itself offered standalone, is rejected. Because spec 058 US3 also added `'P5strong'`
+to `SPAN_CARRYING_CODES`, that rejection now actually strips the span rather than only logging — so
+the failure mode is **losing real, correct highlights**, not admitting wrong ones.
+
+Measured end-to-end through the real pipeline (live LLM call, not a fixture) across the epic's four
+staging boards — full data in `specs/058-deep-reveal-grounding/t040-e2e-results.md`:
+
+| movestring | Decision A rejections |
+|---|---|
+| `3154` | 0 |
+| `315444233213` | 0 |
+| `315444233213134122` | 0 |
+| `3154442332131341225551` | **2** (`c2r6`, `c5r5`) |
+
+Both rejections are on the one board with a genuine deep-fork window alias, and both are real losses:
+the coach named the fork cells, `promoteRawCoordinates` correctly wrapped them as highlights, and
+`checkP5Strong` stripped them because they were offered only as `future:windows:c2r6,c5r5`. The
+served text degraded to "column 2"/"column 5" per the settled FR-011/FR-012 conflict resolution —
+not a raw token and not a confidently-wrong highlight, but also not the highlight the epic exists to
+deliver.
+
+**Why deferred**: this is the owner's explicit call, recorded in the spec's own task text
+("owner's explicit call, against the reviewer's own recommendation of per-cell admission"), with
+T040's measurement named as the required mitigation. The measurement now exists; the decision to
+revisit is the owner's.
+
+**If picked up**: the switch is localized — `toAllowedSet` (`reasonRenderGuard.mjs`) stops setting
+`windowOnly: true` for multi-cell aliases, and `checkP5Strong`'s standalone `cNrM` branch resumes
+consulting the aggregate `concreteCells` Set. Both sites carry a deliberate-divergence comment
+naming this decision, so start there. Note the `colN` special case in `toAllowedSet` is load-bearing
+and unrelated — do not disturb it. Cross-refs: OI-171.
+
+---
+
+## OI-173 — `regexFallbackParse` ships ungrounded column highlights to real users, bypassing every server-side grounding guard
+
+**Status**: deferred (pre-existing behaviour, predates spec 058; surfaced while building the 058 before/after comparison page)
+**Area**: `connect-four/src/lib/annotatedText.js` (`regexFallbackParse`), `connect-four/src/components/AnnotatedExplanation.jsx`
+**Discovered**: spec 058 (Deep-Reveal Grounding), 2026-08-05
+
+`AnnotatedExplanation` falls back to `regexFallbackParse` when a text carries **zero** `[zone:]` and
+`[term:]` tags:
+
+```js
+const primary = parseAnnotatedText(text);
+// Fall back to regex-based detection for old cache entries without [zone:] tags.
+if (primary.zones.length === 0 && primary.terms.length === 0 && text) {
+  return regexFallbackParse(text);
+}
+```
+
+`regexFallbackParse` scrapes `"column N"` / `"col N"` out of prose and synthesises `colN` zones
+**client-side**. Those render as ordinary highlights and light up a whole column on click.
+
+Spec 058 spent an entire epic ensuring that a highlight reaching the player is grounded in the
+reasoning engine — `checkP5Strong` validates every server-emitted highlight against the offered
+alias set, and `SPAN_CARRYING_CODES` now strips the ones that fail. **The client fallback sits
+entirely outside that chain.** It can highlight a column the engine never vouched for, and no
+server-side guard can see it, because the tag never existed server-side. That is a hole in FR-012
+("prevent an unoffered highlight from reaching the player unchallenged") on the client edge.
+
+Severity is bounded by two things: it only fires when there are *zero* tags, and it can only ever
+produce column-level highlights, never a cell. Post-058 most explanations emit real tags, so the
+fallback fires rarely — but it fires on exactly the explanations that are worst-grounded.
+
+Secondary cost, already documented in memory `project_ungrounded_highlights_look_real`: because a
+zero-tag explanation still *looks* highlighted, browser-based or screenshot-based QA of grounding
+reads as a pass when nothing is grounded.
+
+**Why deferred**: it is pre-existing, not introduced by 058, and removing it is a product decision —
+the fallback was presumably added so pre-tag cached explanations were not left with bare prose. With
+`explanation_cache` scheduled for TRUNCATE at the 058 deploy, its original justification may already
+be gone.
+
+**If picked up**: first check whether the fallback still has any live population to serve (post-
+TRUNCATE, likely not). If not, delete it and let a zero-tag explanation render as plain prose —
+honest, and it makes the "model emitted nothing" case visible in QA instead of disguised. If it must
+stay, gate it behind a server-provided flag so the client never invents a highlight for a freshly
+generated explanation. Cross-refs: OI-171, OI-172, memory `project_ungrounded_highlights_look_real`.
+
+---
+
+## OI-174 — Admin-page bundles (and any data hardcoded into them) are publicly fetchable in production; the localhost guard does not cover the static asset
+
+**Status**: deferred (low sensitivity today, but the property is general and will not stay low-sensitivity by itself)
+**Area**: `connect-four/src/App.jsx` (admin guard), `connect-four/src/pages/Admin*.jsx`, Vite build output
+**Discovered**: spec 058 (Deep-Reveal Grounding), 2026-08-05
+
+`App.jsx`'s admin guard is explicitly documented as defense-in-depth:
+
+> Checked BEFORE any lazy() admin-page import so a non-localhost origin never even fetches an admin
+> bundle chunk (defense-in-depth).
+
+That is accurate about **the app's own behaviour** — a non-localhost visitor's browser never requests
+the chunk. It does **not** mean the chunk is absent from the deployed site. Vite emits each
+`lazy(() => import('./pages/Admin*.jsx'))` as an ordinary asset under `dist/assets/`, and there is no
+admin exclusion in `vite.config.js`. Anyone who guesses or reads the asset filename can fetch it
+directly from production and read its contents. The real security boundary remains the server-side
+`requireLocalhost` on `/api/admin/*` (correctly noted in `frontend-conventions.md`), which protects
+the *data endpoints* — not anything baked into the client chunk.
+
+Concrete instance introduced by spec 058: `src/pages/groundingDiffCases.js` hardcodes the four
+verbatim human feedback notes from staging `llm_feedback`, together with the pre- and post-fix coach
+explanations, and is imported by `AdminGroundingDiffPage.jsx`. That is internal QA commentary about
+coaching quality shipping inside a public asset.
+
+**What was verified vs reasoned**: verified that `vite.config.js` contains no admin-specific
+exclusion and that the guard runs before the import. **Not** verified against a real production
+build — there is no local `dist/`, and no attempt was made to fetch an asset from a deployed
+environment. Confirm with a build (`npm run build && ls dist/assets | grep -i admin`) before acting.
+
+**Why deferred**: the exposed content today is the owner's own quality notes on an unlaunched
+product, so impact is negligible. It is filed because the *property* is easy to forget and the next
+admin page may hardcode something that matters — a fixture containing user data, an internal
+threshold, a staging identifier.
+
+**If picked up**: either (a) keep admin data out of the bundle entirely — fetch it from a
+`requireLocalhost`-guarded `/api/admin/*` endpoint at runtime, which is the pattern the other admin
+pages already use for their data; or (b) exclude admin chunks from the production build via a Vite
+`build.rollupOptions` filter or an env-gated dynamic import, so they exist only in dev. (a) is
+cheaper and matches existing convention. Cross-refs: `docs/architecture/frontend-conventions.md`
+§"Admin Localhost Guard (FR-028)", memory `project_admin_localhost_directive`.

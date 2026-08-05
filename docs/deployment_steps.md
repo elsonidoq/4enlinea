@@ -1697,6 +1697,102 @@ cache invalidation. It ships with the code deploy and needs nothing around it.
 
 **Rollback:** revert the frontend commit and redeploy. No data or schema to undo.
 
+---
+
+## Spec 058 — Deep-Reveal Grounding
+
+**Status**: PENDING
+**When**: migration **before** the code deploy; `explanation_cache` TRUNCATE any time before real
+traffic resumes post-deploy
+**Blocks**: the two-attempt `deep_reveal_failures` INSERT (US2) writes six columns that do not exist
+on the pre-058 schema — without the migration that insert errors on every occurrence. A stale
+`explanation_cache` row keeps serving pre-058, ungrounded content indefinitely without the TRUNCATE.
+**Applies to**: staging / production
+
+### What's wrong (or: what this sets up)
+
+Spec 058 widens `deep_reveal_failures` to record **both** LLM attempts plus the required handles the
+first attempt missed; the pre-058 schema only logs a single terminal failure via `raw_llm_output`.
+Migration `065_deep_reveal_failures_two_attempts.sql` adds six nullable columns
+(`attempt1_raw_llm_output text`, `attempt1_mechanism text`, `attempt2_raw_llm_output text`,
+`attempt2_mechanism text`, `missing_handles jsonb`, `served_attempt smallint`). It is additive and
+uses `ADD COLUMN IF NOT EXISTS`, so it is safe to re-run and does not disturb the existing insert
+path. The new `failure_reason` value `'missing_required_squares'` needs **no** migration —
+`failure_reason` is plain `text` with no CHECK constraint (verified against
+`031_deep_reveal_failures.sql`'s body).
+
+Separately, every `explanation_cache` row written before this deploy was produced under the old,
+non-mandatory-highlight rules and is not retroactively compliant. A cache hit **bypasses
+`computeMechanism` entirely and passes `allowedSet: null`**, so `checkP5Strong` never runs against a
+cached row — a pre-058 cached explanation with an ungrounded highlight will keep being served,
+unchecked, after this deploys. Per the pre-launch disposability rule the fix is TRUNCATE, not
+migrate.
+
+**Measured 2026-08-05** (read-only, service-role count queries — not estimated):
+
+| environment | project ref | `explanation_cache` | `deep_reveal_failures` |
+|---|---|---|---|
+| staging | `jkqilynpshutqcceopdn` | **5 rows** | 0 rows |
+| production | `kxtqwsumojtexokrtlfp` | **36 rows** | 22 rows |
+
+So 41 cached explanations across the two environments are pre-058 and will be discarded by the
+TRUNCATE. The 22 production `deep_reveal_failures` rows simply keep NULL in the six new columns —
+no backfill, per the pre-launch disposability rule.
+
+### Run it — exact commands
+
+1. Apply the migration (**before** the code deploy):
+   ```
+   # Staging
+   node --env-file=server/.env.staging server/migrate.js
+   # Production
+   node --env-file=server/.env.production server/migrate.js
+   ```
+   Applies `065_deep_reveal_failures_two_attempts.sql` plus any other still-unapplied migrations in
+   that environment; `migrate.js` is idempotent per-migration via the ledger table. Staging pooler
+   drift note: see Standing Checklist item 1 in this file.
+
+2. Clear the pre-058 cache (any time before real traffic resumes post-deploy):
+   ```sql
+   TRUNCATE TABLE explanation_cache;
+   ```
+   Run directly against the target environment's DB.
+
+### Verify — the command and the success condition
+
+- `\d deep_reveal_failures` lists all six new columns. Success condition: `attempt1_raw_llm_output`,
+  `attempt1_mechanism`, `attempt2_raw_llm_output`, `attempt2_mechanism`, `missing_handles`,
+  `served_attempt` all present and nullable.
+- `SELECT count(*) FROM explanation_cache;` → success condition: **0** immediately after the
+  TRUNCATE.
+- A fresh `POST /api/explain-move-llm` call after deploy returns a freshly-generated response
+  (**not** `cached: true`). Success condition: the response is uncached and its `explanation`
+  contains no raw `cNrM` token.
+
+### Roll back
+
+**Not reversible in a data sense** (TRUNCATE discards the 41 cached rows). No backup is taken and
+none is needed: pre-launch disposability rule, owner directive 2026-08-03, recorded in `CLAUDE.md`.
+The migration itself is additive — rolling back the code does not require dropping the columns, and
+the pre-058 insert path ignores them.
+
+### Ordering note
+
+**Plan A merges first** — this epic's code depends on the post-Plan-A `reasonRenderGuard.mjs`
+(en-dash `RANGE_RE`, TTS sanitizer routing). Plan A and Plan B were both merged into
+`worktree-deep-reveal-grounding` on 2026-08-05, so a deploy of *this* branch already carries them;
+the constraint matters only if 058 is cherry-picked apart from that merge. This entry's own
+migration/TRUNCATE steps are independent of Plan A's changes.
+
+### No script needed (T039 — verified, not assumed)
+
+Neither step warrants a new script. The migration is a standard `migrate.js` run — the house tool
+for every numbered migration in this file, with no per-migration script existing for any other spec.
+The TRUNCATE is a single documented SQL statement the owner runs directly, matching the precedent of
+every other TRUNCATE step in this file (e.g. the `blunders` TRUNCATE above), none of which is
+wrapped in a script. No drift check is required because there is nothing to reconcile — TRUNCATE is
+unconditional.
+
 ## Template for new entries
 
 ```markdown

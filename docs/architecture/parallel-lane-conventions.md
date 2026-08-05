@@ -61,6 +61,19 @@ If a collision has already happened, the cheaper side to renumber is the lane wh
 are referenced by *fewer* other entries — check before choosing, because renumbering a lane
 whose entries are cross-referenced by its own later entries cascades.
 
+**The heading level is part of the contract.** Entries must use `## OI-N — <title>`. On 2026-08-05 a
+lane wrote its three entries as `### OI-N`, which merged cleanly and read fine — but the duplicate
+detector everyone relies on is
+
+```bash
+grep -ao '^## OI-[0-9]*' docs/open_issues.md | sort -V | uniq -d   # must be empty
+```
+
+and an `### OI-N` entry is **invisible to it**. The check reported "clean" while three entries sat
+outside the numbering audit entirely; had they collided with another lane's block, nothing would have
+caught it. Normalize the heading level during the merge, and re-run the check afterwards rather than
+before. The same applies to any scripted scan of the file that anchors on `^## `.
+
 ### 2. Land shared test/build infrastructure on the base branch *before* forking
 
 Both 2026-08-02 lanes independently discovered the same two gaps in
