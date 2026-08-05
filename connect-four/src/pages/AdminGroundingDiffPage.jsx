@@ -141,6 +141,12 @@ function RevealSide({ label, sublabel, accent, text, boardObj, overlays }) {
 function CaseCard({ c, i }) {
   const boardObj = useMemo(() => buildBoard(c.movestring), [c.movestring]);
 
+  // Default to the LATEST attempt; the selector lets you walk back through earlier ones, which is
+  // the whole point of keeping attempts[] rather than overwriting a single `after`.
+  const latestN = c.attempts[c.attempts.length - 1].n;
+  const [selectedN, setSelectedN] = useState(latestN);
+  const attempt = c.attempts.find(a => a.n === selectedN) ?? c.attempts[c.attempts.length - 1];
+
   // Mark the square the player actually dropped into — the blunder itself. `tr` is the same
   // overlay type MistakeDetailScreen/AdminDeepRevealEvalPage use for "your move".
   const overlays = useMemo(
@@ -177,27 +183,84 @@ function CaseCard({ c, i }) {
           </div>
         </div>
 
-        <div style={{ marginTop: 12, fontSize: 12 }}>
+        {/* Attempt selector — the spec arrays below and the right-hand panel all follow it. */}
+        <div style={{ marginTop: 12, display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+          <span style={{ fontSize: 12, color: '#64748b' }}>attempt:</span>
+          {c.attempts.map(a => {
+            const on = a.n === selectedN;
+            return (
+              <button
+                key={a.n}
+                type="button"
+                onClick={() => setSelectedN(a.n)}
+                style={{
+                  fontFamily: MONO, fontSize: 12, padding: '3px 10px', borderRadius: 6,
+                  cursor: 'pointer',
+                  border: `1px solid ${on ? '#047857' : '#cbd5e1'}`,
+                  background: on ? '#ecfdf5' : '#fff',
+                  color: on ? '#047857' : '#475569',
+                  fontWeight: on ? 700 : 400,
+                }}
+              >
+                #{a.n}{a.n === latestN ? ' (latest)' : ''}
+              </button>
+            );
+          })}
+          <span style={{ fontSize: 11, color: '#94a3b8' }}>{attempt.note}</span>
+        </div>
+
+        <div style={{ marginTop: 10, fontSize: 12 }}>
           <div style={{ marginBottom: 4 }}>
             <span style={{ color: '#64748b', marginRight: 6 }}>offered to the coach:</span>
-            {c.offeredSpecs.map(s => <SpecChip key={s} spec={s} tone="offered" />)}
+            {attempt.offeredSpecs.map(s => <SpecChip key={s} spec={s} tone="offered" />)}
           </div>
           <div style={{ marginBottom: 4 }}>
             <span style={{ color: '#64748b', marginRight: 6 }}>required (must be highlighted):</span>
-            {c.requiredSpecs.length
-              ? c.requiredSpecs.map(s => <SpecChip key={s} spec={s} tone="required" />)
+            {attempt.requiredSpecs.length
+              ? attempt.requiredSpecs.map(s => <SpecChip key={s} spec={s} tone="required" />)
               : <span style={{ fontFamily: MONO, fontSize: 11, color: '#94a3b8' }}>
                   none — the rule abstains rather than inventing one (FR-006)
                 </span>}
           </div>
           <div style={{ marginBottom: 4 }}>
-            <span style={{ color: '#64748b', marginRight: 6 }}>actually emitted (after):</span>
-            {c.emittedSpecs.map(s => <SpecChip key={s} spec={s} tone="emitted" />)}
+            <span style={{ color: '#64748b', marginRight: 6 }}>actually emitted (attempt #{attempt.n}):</span>
+            {attempt.emittedSpecs.length
+              ? attempt.emittedSpecs.map(s => <SpecChip key={s} spec={s} tone="emitted" />)
+              : <span style={{ fontFamily: MONO, fontSize: 11, color: '#b91c1c' }}>none</span>}
           </div>
-          {c.decisionARejectedSpecs.length > 0 && (
+          {attempt.requiredSpecs.length > 0 && (
+            <div style={{ marginBottom: 4, fontSize: 12 }}>
+              <span style={{ color: '#64748b', marginRight: 6 }}>every required spec emitted?</span>
+              {attempt.requiredSpecs.every(s => attempt.emittedSpecs.includes(s))
+                ? <strong style={{ color: '#047857' }}>yes</strong>
+                : <strong style={{ color: '#b91c1c' }}>
+                    no — missing {attempt.requiredSpecs.filter(s => !attempt.emittedSpecs.includes(s)).join(', ')}
+                  </strong>}
+            </div>
+          )}
+          {attempt.rawMechanism && attempt.rawMechanism !== attempt.text && (
+            <details style={{ marginTop: 6 }}>
+              <summary style={{ cursor: 'pointer', color: '#b45309', fontSize: 12 }}>
+                the guard changed this text — show the pre-guard <code style={{ fontFamily: MONO }}>rawMechanism</code>
+              </summary>
+              <div style={{
+                marginTop: 6, fontFamily: MONO, fontSize: 11, lineHeight: 1.6, color: '#78350f',
+                background: '#fffbeb', border: '1px solid #fcd34d', borderRadius: 6, padding: '8px 10px',
+                whiteSpace: 'pre-wrap',
+              }}>{attempt.rawMechanism}</div>
+              <div style={{ fontSize: 11, color: '#7f1d1d', marginTop: 4, lineHeight: 1.5 }}>
+                A tag present here but absent on the right was emitted by the model and then
+                stripped by the annotation gate — the usual cause is{' '}
+                <code style={{ fontFamily: MONO }}>P6:raw_coordinate</code>, which forbids the
+                visible anchor text from containing <code style={{ fontFamily: MONO }}>cNrM</code>{' '}
+                or <code style={{ fontFamily: MONO }}>colN</code>.
+              </div>
+            </details>
+          )}
+          {attempt.decisionARejectedSpecs.length > 0 && (
             <div style={{ marginTop: 8, color: '#b91c1c' }}>
               <span style={{ marginRight: 6 }}>rejected by whole-window-only admission (OI-172):</span>
-              {c.decisionARejectedSpecs.map(s => <SpecChip key={s} spec={s} tone="rejected" />)}
+              {attempt.decisionARejectedSpecs.map(s => <SpecChip key={s} spec={s} tone="rejected" />)}
               <div style={{ fontSize: 11, color: '#7f1d1d', marginTop: 4, lineHeight: 1.5 }}>
                 The coach named these two cells; they were promoted to real highlights and then
                 stripped, because the engine offered them only as the single unit{' '}
@@ -220,10 +283,11 @@ function CaseCard({ c, i }) {
           overlays={overlays}
         />
         <RevealSide
-          label="AFTER — current code"
-          sublabel="T040 real-pipeline re-run (post-058, post-guard)"
-          accent="#047857"
-          text={c.after}
+          key={`attempt-${attempt.n}`}
+          label={`ATTEMPT #${attempt.n}${attempt.n === latestN ? ' — LATEST' : ''}`}
+          sublabel={`${attempt.note} · ${attempt.at}`}
+          accent={attempt.n === latestN ? '#047857' : '#7c3aed'}
+          text={attempt.text}
           boardObj={boardObj}
           overlays={overlays}
         />
@@ -248,9 +312,11 @@ export default function AdminGroundingDiffPage() {
     };
   }, []);
 
+  // Headline totals track the LATEST attempt of each case (per-case selection is local to the
+  // CaseCard; these stay pinned to the newest run so the header always states the current position).
   const totals = useMemo(() => GROUNDING_DIFF_CASES.reduce((a, c) => {
     const b = countGroundedZones(c.before);
-    const f = countGroundedZones(c.after);
+    const f = countGroundedZones(c.attempts[c.attempts.length - 1].text);
     return {
       before: a.before + b.total,
       after: a.after + f.total,
@@ -267,8 +333,12 @@ export default function AdminGroundingDiffPage() {
         <h1 style={{ fontSize: 24, marginBottom: 4 }}>Deep-Reveal Grounding — before / after</h1>
         <p style={{ color: '#475569', fontSize: 14, lineHeight: 1.6, marginTop: 0 }}>
           The four real staging positions that received human feedback, each rendered twice: the
-          text that actually shipped on staging under the pre-058 code, and the text the current
-          code produces for the same position. Both sides use the real{' '}
+          text that actually shipped on staging under the pre-058 code, and{' '}
+          <strong>one selectable regeneration attempt</strong> — attempt #0 is the T040 baseline,
+          #1–#3 are three re-runs of the same pipeline at commit d4e948c (D43). The right panel
+          defaults to the latest. The engine half is deterministic (offered/required specs are
+          identical across #1–#3); the LLM half is not, which is why more than one run is kept.
+          Both sides use the real{' '}
           <code style={{ fontFamily: MONO }}>Board</code> and{' '}
           <code style={{ fontFamily: MONO }}>AnnotatedExplanation</code> components, so{' '}
           <strong>the highlights are live on both sides</strong> — click an underlined phrase to

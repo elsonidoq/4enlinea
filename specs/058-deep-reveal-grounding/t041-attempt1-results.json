@@ -1,0 +1,118 @@
+[
+  {
+    "movestring": "3154",
+    "col": 4,
+    "offeredSpecs": [
+      "col6",
+      "col5",
+      "future:c7r3",
+      "future:windows:c4r3,c5r3,c6r3,c7r3",
+      "future:c6r4",
+      "future:windows:c3r4,c4r4,c5r4,c6r4"
+    ],
+    "requiredSpecs": [
+      "future:c7r3",
+      "future:c6r4"
+    ],
+    "emittedSpecs": [
+      "col5",
+      "col6"
+    ],
+    "requiredSubsetOfEmitted": false,
+    "missingHandlesFromRetry": [],
+    "decisionARejectionCount": 0,
+    "decisionARejectedSpecs": [],
+    "servedExplanation": "You needed to keep the deep parity fight on the side that works for you. By playing [zone:col5]column 5[/zone:col5], you give up that balance and let your opponent steer to the stronger reply; instead, [zone:col6]column 6[/zone:col6] keeps the tougher defense alive and preserves the later line through column 6 rather than handing control to column 6.",
+    "rawMechanism": "You needed to keep the deep parity fight on the side that works for you. By playing [zone:col5]column 5[/zone:col5], you give up that balance and let your opponent steer to the stronger reply; instead, [zone:col6]column 6[/zone:col6] keeps the tougher defense alive and preserves the later line through [zone:future:c7r3]c6r3[/zone:future:c7r3] rather than handing control to [zone:future:c6r4]c6r4[/zone:future:c6r4]."
+  },
+  {
+    "movestring": "315444233213",
+    "col": 1,
+    "offeredSpecs": [
+      "col4",
+      "col2",
+      "c3r4",
+      "windows:c6r1,c5r2,c4r3,c3r4",
+      "future:windows:c3r5,c7r1",
+      "future:c5r5",
+      "future:windows:c2r5,c3r5,c4r5,c5r5",
+      "future:c3r5",
+      "future:windows:c6r2,c5r3,c4r4,c3r5",
+      "future:windows:c6r2,c5r3,c4r4,c3r5|c7r1,c6r2,c5r3,c4r4",
+      "future:c7r1"
+    ],
+    "requiredSpecs": [
+      "future:c5r5",
+      "future:c3r5"
+    ],
+    "emittedSpecs": [
+      "future:c5r5",
+      "future:c3r5"
+    ],
+    "requiredSubsetOfEmitted": true,
+    "missingHandlesFromRetry": [],
+    "decisionARejectionCount": 0,
+    "decisionARejectedSpecs": [],
+    "servedExplanation": "Your move on column 2 gives your opponent the first clean [term:double_threat]double threat[/term:double_threat] in the later fight, so they can force the key reply sequence and break your parity plan. The stronger move is column 4, because it keeps your [zone:future:c5r5]key square[/zone:future:c5r5] alive and prevents the opponent from turning their [zone:future:c3r5]later key square[/zone:future:c3r5] into the decisive fork.",
+    "rawMechanism": "Your move on column 2 gives your opponent the first clean [term:double_threat]double threat[/term:double_threat] in the later fight, so they can force the key reply sequence and break your parity plan. The stronger move is column 4, because it keeps your [zone:future:c5r5]key square[/zone:future:c5r5] alive and prevents the opponent from turning their [zone:future:c3r5]later key square[/zone:future:c3r5] into the decisive fork."
+  },
+  {
+    "movestring": "315444233213134122",
+    "col": 5,
+    "offeredSpecs": [
+      "col3",
+      "col6",
+      "c1r3",
+      "windows:c1r3,c2r3,c3r3,c4r3",
+      "c1r4",
+      "windows:c1r4,c2r4,c3r4,c4r4"
+    ],
+    "requiredSpecs": [
+      "c1r3"
+    ],
+    "emittedSpecs": [
+      "col3"
+    ],
+    "requiredSubsetOfEmitted": false,
+    "missingHandlesFromRetry": [],
+    "decisionARejectionCount": 0,
+    "decisionARejectedSpecs": [],
+    "servedExplanation": "You needed to keep the move at column 1 alive, because that is the square that lets your four-in-a-row line finish later. By playing in column 6 instead, you gave your opponent the chance to take that key square and stop your winning line, so your best defense was the move in [zone:col3]column 3[/zone:col3] that preserves the threat.",
+    "rawMechanism": "You needed to keep the move at [zone:c1r3]c1r3[/zone:c1r3] alive, because that is the square that lets your four-in-a-row line finish later. By playing in column 6 instead, you gave your opponent the chance to take that key square and stop your winning line, so your best defense was the move in [zone:col3]column 3[/zone:col3] that preserves the threat."
+  },
+  {
+    "movestring": "3154442332131341225551",
+    "col": 5,
+    "offeredSpecs": [
+      "col3",
+      "col6",
+      "c1r3",
+      "windows:c1r3,c2r3,c3r3,c4r3",
+      "c1r4",
+      "windows:c1r4,c2r4,c3r4,c4r4",
+      "windows:c1r3,c7r6",
+      "c7r6",
+      "windows:c4r3,c5r4,c6r5,c7r6",
+      "future:windows:c2r6,c5r5",
+      "future:c7r3",
+      "future:windows:c7r3,c6r4,c5r5,c4r6",
+      "future:c2r6",
+      "future:windows:c5r3,c4r4,c3r5,c2r6",
+      "future:windows:c5r3,c4r4,c3r5,c2r6|c2r5,c3r5,c4r5,c5r5",
+      "future:c5r5"
+    ],
+    "requiredSpecs": [
+      "future:c7r3",
+      "future:c2r6"
+    ],
+    "emittedSpecs": [
+      "col6"
+    ],
+    "requiredSubsetOfEmitted": false,
+    "missingHandlesFromRetry": [],
+    "decisionARejectionCount": 0,
+    "decisionARejectedSpecs": [],
+    "servedExplanation": "You needed to keep the deep parity fight alive with the key square on column 7; that was the line that gave you the win. By playing [zone:col6]column 6[/zone:col6], you instead let your opponent answer with the key square on column 2 and finish a [term:double_threat]double threat[/term:double_threat] that you cannot cover in time.",
+    "rawMechanism": "You needed to keep the deep parity fight alive with [zone:future:c7r3]the key square on c7r3[/zone:future:c7r3]; that was the line that gave you the win. By playing [zone:col6]c6[/zone:col6], you instead let your opponent answer with [zone:future:c2r6]the key square on c2r6[/zone:future:c2r6] and finish a [term:double_threat]double threat[/term:double_threat] that you cannot cover in time."
+  }
+]

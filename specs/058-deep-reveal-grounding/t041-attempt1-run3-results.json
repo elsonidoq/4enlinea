@@ -1,0 +1,123 @@
+[
+  {
+    "movestring": "3154",
+    "col": 4,
+    "offeredSpecs": [
+      "col6",
+      "col5",
+      "future:c7r3",
+      "future:windows:c4r3,c5r3,c6r3,c7r3",
+      "future:c6r4",
+      "future:windows:c3r4,c4r4,c5r4,c6r4"
+    ],
+    "requiredSpecs": [
+      "future:c7r3",
+      "future:c6r4"
+    ],
+    "emittedSpecs": [
+      "col6",
+      "future:c7r3",
+      "col5",
+      "future:c6r4"
+    ],
+    "requiredSubsetOfEmitted": true,
+    "missingHandlesFromRetry": [],
+    "decisionARejectionCount": 0,
+    "decisionARejectedSpecs": [],
+    "servedExplanation": "By playing [zone:col6]column 6[/zone:col6], you keep the deep parity fight on your side and preserve the later [zone:future:c7r3]square that matters for your four-in-a-row route[/zone:future:c7r3]. Playing [zone:col5]column 5[/zone:col5] hands your opponent the reply that turns the position around, because the later [zone:future:c6r4]square that matters for your opponent’s winning line[/zone:future:c6r4] becomes the one they can use to finish the race.",
+    "rawMechanism": "By playing [zone:col6]column 6[/zone:col6], you keep the deep parity fight on your side and preserve the later [zone:future:c7r3]square that matters for your four-in-a-row route[/zone:future:c7r3]. Playing [zone:col5]column 5[/zone:col5] hands your opponent the reply that turns the position around, because the later [zone:future:c6r4]square that matters for your opponent’s winning line[/zone:future:c6r4] becomes the one they can use to finish the race."
+  },
+  {
+    "movestring": "315444233213",
+    "col": 1,
+    "offeredSpecs": [
+      "col4",
+      "col2",
+      "c3r4",
+      "windows:c6r1,c5r2,c4r3,c3r4",
+      "future:windows:c3r5,c7r1",
+      "future:c5r5",
+      "future:windows:c2r5,c3r5,c4r5,c5r5",
+      "future:c3r5",
+      "future:windows:c6r2,c5r3,c4r4,c3r5",
+      "future:windows:c6r2,c5r3,c4r4,c3r5|c7r1,c6r2,c5r3,c4r4",
+      "future:c7r1"
+    ],
+    "requiredSpecs": [
+      "future:c5r5",
+      "future:c3r5"
+    ],
+    "emittedSpecs": [
+      "future:c5r5",
+      "future:c3r5"
+    ],
+    "requiredSubsetOfEmitted": true,
+    "missingHandlesFromRetry": [
+      "future:c3r5"
+    ],
+    "decisionARejectionCount": 0,
+    "decisionARejectedSpecs": [],
+    "servedExplanation": "Your better defense is [zone:future:c5r5]the square that keeps your later four-in-a-row line alive[/zone:future:c5r5] on the winning side of the parity fight, while your played move let your opponent steer the game into [zone:future:c3r5]the square that matters later for their forced line[/zone:future:c3r5]. That hands them a [term:double_threat]double threat[/term:double_threat] idea in the deeper sequence, so they can press harder than you can cover.",
+    "rawMechanism": "Your better defense is [zone:future:c5r5]the square that keeps your later four-in-a-row line alive[/zone:future:c5r5] on the winning side of the parity fight, while your played move let your opponent steer the game into [zone:future:c3r5]the square that matters later for their forced line[/zone:future:c3r5]. That hands them a [term:double_threat]double threat[/term:double_threat] idea in the deeper sequence, so they can press harder than you can cover."
+  },
+  {
+    "movestring": "315444233213134122",
+    "col": 5,
+    "offeredSpecs": [
+      "col3",
+      "col6",
+      "c1r3",
+      "windows:c1r3,c2r3,c3r3,c4r3",
+      "c1r4",
+      "windows:c1r4,c2r4,c3r4,c4r4"
+    ],
+    "requiredSpecs": [
+      "c1r3"
+    ],
+    "emittedSpecs": [],
+    "requiredSubsetOfEmitted": false,
+    "missingHandlesFromRetry": [],
+    "decisionARejectionCount": 0,
+    "decisionARejectedSpecs": [],
+    "servedExplanation": "You needed to keep the column 1 square that completes your four-in-a-row line alive, because that is the deep line that makes your attack work. By playing column 6 instead, you let your opponent take that square and shut down your forcing path, so you only get a draw instead of the win your better move preserves.",
+    "rawMechanism": "You needed to keep [zone:c1r3]the c1r3 square that completes your four-in-a-row line[/zone:c1r3] alive, because that is the deep line that makes your attack work. By playing column 6 instead, you let your opponent take that square and shut down your forcing path, so you only get a draw instead of the win your better move preserves."
+  },
+  {
+    "movestring": "3154442332131341225551",
+    "col": 5,
+    "offeredSpecs": [
+      "col3",
+      "col6",
+      "c1r3",
+      "windows:c1r3,c2r3,c3r3,c4r3",
+      "c1r4",
+      "windows:c1r4,c2r4,c3r4,c4r4",
+      "windows:c1r3,c7r6",
+      "c7r6",
+      "windows:c4r3,c5r4,c6r5,c7r6",
+      "future:windows:c2r6,c5r5",
+      "future:c7r3",
+      "future:windows:c7r3,c6r4,c5r5,c4r6",
+      "future:c2r6",
+      "future:windows:c5r3,c4r4,c3r5,c2r6",
+      "future:windows:c5r3,c4r4,c3r5,c2r6|c2r5,c3r5,c4r5,c5r5",
+      "future:c5r5"
+    ],
+    "requiredSpecs": [
+      "future:c7r3",
+      "future:c2r6"
+    ],
+    "emittedSpecs": [
+      "future:c7r3",
+      "c7r3",
+      "col6",
+      "future:c2r6"
+    ],
+    "requiredSubsetOfEmitted": true,
+    "missingHandlesFromRetry": [],
+    "decisionARejectionCount": 0,
+    "decisionARejectedSpecs": [],
+    "servedExplanation": "You needed to keep the deep [zone:future:c7r3]key square[/zone:future:c7r3] alive: it leads to your winning line on [zone:c7r3]column 7[/zone:c7r3] and wins by force if you stay on that track. By playing [zone:col6]column 6[/zone:col6] instead, you let your opponent answer with [zone:future:c2r6]their key square[/zone:future:c2r6] and create a [term:double_threat]double threat[/term:double_threat] that you cannot cover both sides of.",
+    "rawMechanism": "You needed to keep the deep [zone:future:c7r3]key square[/zone:future:c7r3] alive: it leads to your winning line on c7r3 and wins by force if you stay on that track. By playing [zone:col6]column 6[/zone:col6] instead, you let your opponent answer with [zone:future:c2r6]their key square[/zone:future:c2r6] and create a [term:double_threat]double threat[/term:double_threat] that you cannot cover both sides of."
+  }
+]

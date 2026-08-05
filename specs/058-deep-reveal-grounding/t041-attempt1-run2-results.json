@@ -1,0 +1,114 @@
+[
+  {
+    "movestring": "3154",
+    "col": 4,
+    "offeredSpecs": [
+      "col6",
+      "col5",
+      "future:c7r3",
+      "future:windows:c4r3,c5r3,c6r3,c7r3",
+      "future:c6r4",
+      "future:windows:c3r4,c4r4,c5r4,c6r4"
+    ],
+    "requiredSpecs": [
+      "future:c7r3",
+      "future:c6r4"
+    ],
+    "emittedSpecs": [
+      "future:c7r3",
+      "future:c6r4"
+    ],
+    "requiredSubsetOfEmitted": true,
+    "missingHandlesFromRetry": [
+      "future:c7r3",
+      "future:c6r4"
+    ],
+    "decisionARejectionCount": 0,
+    "decisionARejectedSpecs": [],
+    "servedExplanation": "You need the tougher defense that keeps your deep parity line alive: [zone:future:c7r3]this square matters later, once the forced sequence reaches it[/zone:future:c7r3] is part of the line you want to preserve, while [zone:future:c6r4]this square matters later, once the forced sequence reaches it[/zone:future:c6r4] is where your opponent can cash in after the played move. By choosing column 5 instead of column 6, you let them take over the later four-in-a-row race and convert that deep edge into the win.",
+    "rawMechanism": "You need the tougher defense that keeps your deep parity line alive: [zone:future:c7r3]this square matters later, once the forced sequence reaches it[/zone:future:c7r3] is part of the line you want to preserve, while [zone:future:c6r4]this square matters later, once the forced sequence reaches it[/zone:future:c6r4] is where your opponent can cash in after the played move. By choosing column 5 instead of column 6, you let them take over the later four-in-a-row race and convert that deep edge into the win."
+  },
+  {
+    "movestring": "315444233213",
+    "col": 1,
+    "offeredSpecs": [
+      "col4",
+      "col2",
+      "c3r4",
+      "windows:c6r1,c5r2,c4r3,c3r4",
+      "future:windows:c3r5,c7r1",
+      "future:c5r5",
+      "future:windows:c2r5,c3r5,c4r5,c5r5",
+      "future:c3r5",
+      "future:windows:c6r2,c5r3,c4r4,c3r5",
+      "future:windows:c6r2,c5r3,c4r4,c3r5|c7r1,c6r2,c5r3,c4r4",
+      "future:c7r1"
+    ],
+    "requiredSpecs": [
+      "future:c5r5",
+      "future:c3r5"
+    ],
+    "emittedSpecs": [],
+    "requiredSubsetOfEmitted": false,
+    "missingHandlesFromRetry": [],
+    "decisionARejectionCount": 0,
+    "decisionARejectedSpecs": [],
+    "servedExplanation": "You needed to keep the [term:double_threat]double threat[/term:double_threat] alive on the later columns 2 through 3-columns 4 through 5 line, with column 4 as the key support square and column 3 as the opponent's later counter-square. By playing in column 2, you gave up the toughest defense and let your opponent force through the later four-in-a-row line instead of making them answer your threat.",
+    "rawMechanism": "You needed to keep the [term:double_threat]double threat[/term:double_threat] alive on the later c2-c3-c4-c5 line, with [zone:future:c5r5]c4r5[/zone:future:c5r5] as the key support square and [zone:future:c3r5]c3r5[/zone:future:c3r5] as the opponent's later counter-square. By playing in column 2, you gave up the toughest defense and let your opponent force through the later four-in-a-row line instead of making them answer your threat."
+  },
+  {
+    "movestring": "315444233213134122",
+    "col": 5,
+    "offeredSpecs": [
+      "col3",
+      "col6",
+      "c1r3",
+      "windows:c1r3,c2r3,c3r3,c4r3",
+      "c1r4",
+      "windows:c1r4,c2r4,c3r4,c4r4"
+    ],
+    "requiredSpecs": [
+      "c1r3"
+    ],
+    "emittedSpecs": [],
+    "requiredSubsetOfEmitted": false,
+    "missingHandlesFromRetry": [],
+    "decisionARejectionCount": 0,
+    "decisionARejectedSpecs": [],
+    "servedExplanation": "You should keep the column 1 threat alive, because that is the square that completes your four-in-a-row line and forces the long fight in your favor. Playing in column 6 lets your opponent take that square away, so you lose the deep parity fight and only hold the draw instead of the win.",
+    "rawMechanism": "You should keep the [zone:c1r3]c1r3[/zone:c1r3] threat alive, because that is the square that completes your four-in-a-row line and forces the long fight in your favor. Playing in column 6 lets your opponent take that square away, so you lose the deep parity fight and only hold the draw instead of the win."
+  },
+  {
+    "movestring": "3154442332131341225551",
+    "col": 5,
+    "offeredSpecs": [
+      "col3",
+      "col6",
+      "c1r3",
+      "windows:c1r3,c2r3,c3r3,c4r3",
+      "c1r4",
+      "windows:c1r4,c2r4,c3r4,c4r4",
+      "windows:c1r3,c7r6",
+      "c7r6",
+      "windows:c4r3,c5r4,c6r5,c7r6",
+      "future:windows:c2r6,c5r5",
+      "future:c7r3",
+      "future:windows:c7r3,c6r4,c5r5,c4r6",
+      "future:c2r6",
+      "future:windows:c5r3,c4r4,c3r5,c2r6",
+      "future:windows:c5r3,c4r4,c3r5,c2r6|c2r5,c3r5,c4r5,c5r5",
+      "future:c5r5"
+    ],
+    "requiredSpecs": [
+      "future:c7r3",
+      "future:c2r6"
+    ],
+    "emittedSpecs": [],
+    "requiredSubsetOfEmitted": false,
+    "missingHandlesFromRetry": [],
+    "decisionARejectionCount": 0,
+    "decisionARejectedSpecs": [],
+    "servedExplanation": "You should keep the deep forcing line alive with column 3; that preserves your future winning move on column 7. By playing column 6 instead, you hand your opponent the forcing reply at column 2, which creates a [term:double_threat]double threat[/term:double_threat] they cannot cover in time, so they take over the game.",
+    "rawMechanism": "You should keep the deep forcing line alive with column 3; that preserves your future winning move on [zone:future:c7r3]c7r3[/zone:future:c7r3]. By playing column 6 instead, you hand your opponent the forcing reply at [zone:future:c2r6]c2r6[/zone:future:c2r6], which creates a [term:double_threat]double threat[/term:double_threat] they cannot cover in time, so they take over the game."
+  }
+]
