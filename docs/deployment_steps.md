@@ -1123,6 +1123,13 @@ cache invalidation. It ships with the code deploy and needs nothing around it.
    below the fold at a 390×664 visible viewport.
 4. Also check `/saga` and `/pastGames` still scroll to their last row — a wrongly-pinned list would
    make the tail unreachable.
+5. Isolate the **unit** half specifically (step 3 exercises `ReviewScreen`, which changed both the
+   unit and the pinned-root property — a pass or fail there cannot tell you which half is responsible).
+   Open `/play-online` (or `/stats`) on the same real device with the address bar visible. Success
+   condition: **the page does not scroll at all.** Before this change, `/play-online`'s idle branch has
+   only ~128px of content but was forced onto a full `100vh` root, so with the address bar visible it
+   scrolled roughly 180px of empty background — a pure `100vh`-floor symptom with no pinned-root
+   involvement.
 
 **Rollback:** revert the frontend commit and redeploy. No data or schema to undo.
 

@@ -85,6 +85,14 @@ there; those screens are `minHeight: 100dvh` and stay that way.
 
 Pinned today: `ConceptScreen`, `ReviewScreen`, `GameScreen`, `SocraticScreen`, `ChallengeScreen`.
 
+**Three screens render a `<Toolbar>` but are deliberately NOT pinned — "has a `Toolbar`" does not
+imply "should be pinned":** `PlayOnlineScreen` (`phase === 'playing'` branch, `PlayOnlineScreen.jsx:435`)
+was left unit-only because verifying a pin would require a live online game — unmeasured, not
+overlooked. `OnboardingMissionScreen` (`OnboardingMissionScreen.jsx:72`) has content short enough to
+fit every tested viewport, so unit-only is sufficient. `MistakeDetailScreen`
+(`MistakeDetailScreen.jsx:314`) is a pre-existing untreated instance of this exact shape — see
+OI-162 — not a decision made by this plan.
+
 **Verification caveat.** Chrome DevTools emulation has no browser chrome, so
 `100vh === 100dvh === 100svh` in `emulate`. A screenshot can never prove the *unit* half landed —
 that is what the source-scan test is for. The *property* half is fully visible at a fixed emulated

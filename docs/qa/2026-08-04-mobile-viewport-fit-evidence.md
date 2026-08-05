@@ -746,3 +746,25 @@ Naming what this plan did **not** reach, so it does not silently read as full co
   8-puzzle challenge set, which changes which conditional cards `HomeScreen` renders relative to a
   fresh-profile baseline (e.g. resume-game / recent-activity cards). Recorded here so nobody spends
   time hunting a phantom cross-worktree cause.
+
+## Final review fix wave
+
+FIX 1 of the final whole-branch review added `overflowY: 'auto'` to `GameScreen.jsx`'s `flex: 1`
+board-area child (was `flex: 1, minHeight: 0` with no scroller — the lone pinned screen missing it).
+Re-verified GameScreen at all four required viewports via the harness above, at
+`/game?devBoard=3233333556&devSide=first&devDifficulty=easy`:
+
+| Viewport | innerH | `P4_screenRootH` | `P1_hOverflow` | `controlsBelowFold` | Result |
+|---|---|---|---|---|---|
+| 390×844×3,mobile,touch | 844 | 844 | 0 | `[]` | PASS — Hints on / Resign visible |
+| 390×664×3,mobile,touch | 664 | 664 | 0 | `[]` | PASS — Hints on / Resign visible |
+| 375×553×3,mobile,touch | 553 | 553 | 0 | `[]` | PASS — Hints on / Resign visible |
+| 360×600×3,mobile,touch | 600 | 600 | 0 | `[]` | PASS — Hints on / Resign visible |
+
+At every size the screen root height equals `innerH` (pinned, no clip), horizontal overflow is 0,
+and the board-area child (the `kids[2]` entry, heights 579/399/288/335 across the four sizes) sits
+inside the new scroller — Hint/Resign stayed on screen without needing to scroll at the current
+(pre-row/column-labels) board height. The `overflowY: 'auto'` addition is inert today (no overflow
+to scroll) and exists to absorb the taller board the parallel row/column-label lane is about to add.
+
+Suite after the fix wave: `npm run test:fast` → `ℹ pass 1764`, `ℹ fail 0`.

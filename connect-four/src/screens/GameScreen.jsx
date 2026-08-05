@@ -198,6 +198,7 @@ export function GameScreen({ go, goReplace, difficulty, side, initialMoves = '',
         style={{
           flex: 1,
           minHeight: 0,
+          overflowY: 'auto',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',

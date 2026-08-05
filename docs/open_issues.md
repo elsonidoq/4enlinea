@@ -5939,3 +5939,28 @@ The control IS reachable today via page scroll — this is a polish wart, not a 
 **If picked up:** the fix is either to pin the root (`height: '100dvh'`) so the existing
 `overflowY: 'auto'` child becomes a real scroller, or to drop the misleading `overflowY` from that
 child. Do not do both.
+
+### OI-162 — `MistakeDetailScreen` is an untreated sixth pinned-root instance
+
+**Status:** OPEN (pre-existing, low priority) — opened 2026-08-04.
+
+**What:** `MistakeDetailScreen.jsx:314` has a `minHeight: '100dvh'` root, a `flex: 1, overflowY: 'auto'`
+child at `MistakeDetailScreen.jsx:416` that is missing `minHeight: 0`, and a `<Toolbar>` (Prev/Next
+mistake) at `MistakeDetailScreen.jsx:609`. That is exactly the shape this plan fixed on five other
+screens: without `minHeight: 0` the flex child cannot shrink below its content, so the root grows and
+the Toolbar can leave the fold on a short viewport.
+
+**Why it was missed:** the plan's decision D3 counted this screen as "already correct" because it was
+already on `dvh`. That conflated the **unit** decision (which token) with the **property** decision
+(whether the root is pinned) — the exact conflation the plan exists to separate. Being on `dvh` says
+nothing about whether a root should be pinned.
+
+**Why deferred:** pre-existing, not a regression from this branch, and it was never measured, so the
+fix would need its own verification pass.
+
+**If picked up:** pin the root (`height: '100dvh'`) and add `minHeight: 0` to the `flex: 1` child — the
+same two-part change applied to `ReviewScreen`. Measure at 375×553 and 360×600 before and after.
+
+Also fold in one other deferred finding from the whole branch, not otherwise captured anywhere:
+`ReviewScreen.jsx:315` carries `WebkitOverflowScrolling: 'touch'`, which is a no-op on iOS 13+ and can
+be dropped whenever that file is next touched.
