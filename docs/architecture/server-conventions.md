@@ -1554,6 +1554,19 @@ It currently stamps `slides[].windowCounts` (recomputed from each slide's `moves
 
 `server/migrate.js` is the database migration runner. It reads `.sql` files from `server/migrations/`, compares against a `schema_migrations` ledger table, and applies pending migrations inside transactions. It runs as the first step of the Railway start command (`node server/migrate.js && node server/index.js`); a non-zero exit blocks the server from starting.
 
+### When migrations apply relative to the code deploy — and what that forbids
+
+**Every Railway deploy applies all pending migrations automatically, at container start, before the new server process boots — and while the previous instance is still serving traffic.** Two consequences that are properties of the system, not of any one migration:
+
+- **A migration cannot run "after" its own code deploy.** A `.sql` file present on the deployed branch is applied at the *beginning* of that deploy. Hand-running `migrate.js` afterwards does not change the ordering: if the file is on the branch the deploy already applied it; if it is not, the hand-run desynchronises the branch from the schema and the next deploy re-attempts it.
+- **A migration that removes or narrows something the outgoing code still reads is unsafe in a single deploy.** `DROP COLUMN`, `DROP TABLE`, a narrowed `CHECK`/`NOT NULL`, and column renames all fall here. During rollover the old instance queries the new schema; because PostgREST **errors** on a selected column that does not exist rather than omitting it, a single `.select('… <column> …')` string in the outgoing code turns those endpoints into hard failures for the length of the rollover. Worse, if the new build then fails to boot, the environment is left on old code against a schema it cannot query.
+
+  Such a migration must be **split across two deploys**: ship the code with the migration file held off the branch, verify the new instance is healthy, then restore the file in a second deploy. The executable procedure is `docs/deploy-runbook.md` §1a; it was used for `064_drop_correct_col.sql` on staging on 2026-08-04.
+
+**Migrations that only widen or add are safe in one deploy**, including a *narrowing* one whose new values only the incoming code writes — `migrate.js` completes before `index.js` starts, so the new code never runs against the old constraint (this is why `063_puzzle_attempts_outcome_narrow.sql` needed no split). The residual exposure is only what the *outgoing* instance writes during rollover.
+
+**`ADD COLUMN` does not populate.** A migration that adds a column leaves every existing row NULL, so if the deploying code reads that column as its sole source of truth, the deploy is a live functional break on all pre-existing rows until a backfill runs. The backfill is a separate, separately-queued step — see `docs/deployment_steps.md`.
+
 ### DATABASE_URL requirement
 
 `DATABASE_URL` **MUST** use the Supabase **session-mode pooler** (port **5432**) with `sslmode=no-verify` appended to the connection string. The connection is still SSL-encrypted; `no-verify` skips certificate chain validation which is necessary because Supabase's pooler uses self-signed certificates. (`sslmode=require` triggers strict certificate verification in the `pg` driver v8.21+, which fails against Supabase poolers.)

@@ -244,9 +244,23 @@ This verifies that staging and production databases are fully isolated (FR-010, 
 
 `DATABASE_URL` **MUST** use the Supabase **session-mode pooler** (port **5432**) with `sslmode=no-verify`. The connection is still SSL-encrypted; `no-verify` skips certificate chain validation which is necessary because Supabase's pooler uses self-signed certificates. (`sslmode=require` triggers strict certificate verification in the `pg` driver v8.21+, which fails against Supabase poolers.)
 
-The **transaction-mode pooler** (port **6543**) is **forbidden** because:
-- It breaks multi-statement transactions (each statement may run on a different connection)
-- `pg_dump` does not work with it
+The **transaction-mode pooler** (port **6543**) is **convention drift to converge away from, not a
+deploy blocker** (corrected 2026-08-04 — this previously read "**forbidden**" and gave a rationale
+that has been disproven; see OI-31, closed as a documentation-sync 2026-08-04):
+
+- The stated reason — "each statement may run on a different connection" — describes pgBouncer
+  **statement** mode. In **transaction** mode a backend is pinned for the duration of an explicit
+  `BEGIN…COMMIT`, which is exactly what `migrate.js` issues (`connect-four/server/migrate.js:82-92`).
+- **Staging has been on 6543 for months and applies migrations through it successfully.** Its
+  `schema_migrations` ledger records `060_paddle_rename_and_payment_events.sql` (2026-07-18) and
+  `061_security_lints.sql` (2026-07-30) applied that way — re-confirmed read-only 2026-08-04 — plus
+  `061_correct_cols.sql`/`062`/`063` applied through the same 6543 connection during the 2026-08-04
+  staging deploy.
+- **`pg_dump` genuinely does not work through 6543.** That limitation is real and is the reason the
+  Puzzle Data Import section above requires the session-mode pooler.
+
+Never report a 6543 `DATABASE_URL` as "this deploy will fail" without checking the ledger first.
+Production is on 5432 and should stay there.
 
 Example correct format:
 ```
@@ -309,6 +323,78 @@ the new build and the new server starting, while the previous instance may still
 migration that drops or narrows something the outgoing code still reads is unsafe in a single deploy
 and must be split across two.
 
+### 1a. The two-deploy pattern — for any migration that must run AFTER its code deploy
+
+**Executed for real on staging 2026-08-04 (`064_drop_correct_col.sql`); this is the tested
+procedure, not a sketch.** Use it whenever a migration removes or narrows something the *outgoing*
+code still reads: `DROP COLUMN`, `DROP TABLE`, a narrowed `CHECK`/`NOT NULL`, a renamed column.
+
+Why a single deploy cannot express it: the start command applies migrations **at container start**,
+before the new server boots and while the old instance is still serving. So a migration sitting on
+the deployed branch runs at the *beginning* of that deploy — the opposite of "after the code deploy".
+Hand-running `migrate.js` afterwards does not fix this: if the file is on the branch, the deploy
+already applied it; if it is not, you desynchronise the branch from the schema.
+
+**Deploy A — everything except the destructive migration:**
+
+```bash
+git checkout stagging                       # or `main` for production
+git merge <feature-branch>
+git rm connect-four/server/migrations/<NNN>_<destructive>.sql
+git commit -m "deploy: hold back <NNN>_<destructive>.sql for Deploy A"
+git push origin stagging
+```
+
+Verify Deploy A is SUCCESS and the app is healthy. **This is the last safe revert point** — once the
+column is dropped, reverting the code is no longer safe, because the old code would `SELECT` a column
+that no longer exists.
+
+**Deploy B — restore it:**
+
+```bash
+git revert --no-edit <sha of the hold-back commit>
+git push origin stagging
+```
+
+Then re-run the migration's own verification *and* smoke-test the product paths the drop would break.
+
+**Confirm the "outgoing code still reads it" premise at source before deciding** — this is what makes
+the split necessary rather than cautious. Read the *deployed* commit, not the working tree:
+
+```bash
+# the deployed commit hash comes from Railway's deployment metadata
+git show <deployed-sha>:connect-four/server/index.js | /usr/bin/grep -c "<column_name>"
+```
+
+PostgREST **errors** on a selected column that does not exist — it does not silently omit it — so a
+single `.select('… <column> …')` string in the deployed code is enough to hard-fail those endpoints
+for the length of the rollover.
+
+### 1b. Adding a column is not populating it
+
+A migration that only does `ADD COLUMN … DEFAULT NULL` leaves every existing row NULL. If the code
+being deployed reads that column as its **sole** source of truth, the deploy is a live functional
+break the moment it lands, on every pre-existing row.
+
+**Always ask, per migration: does anything populate this, and is that step queued?** On staging
+2026-08-04, `061_correct_cols.sql` added `puzzles.correct_cols` and nothing backfilled it — all 122
+active puzzles served `"correct_cols":null` to code that reads only that field. The backfill existed
+(`server/scripts/backfill-correct-cols.mjs`) but had never been added to `docs/deployment_steps.md`.
+
+### 1c. Running the operational scripts non-interactively
+
+`backfill-correct-cols.mjs`, `fill-candidate-pools.mjs` and
+`repair-overcut-highlight-metadata.js` all prompt for a typed `Yes` on **stdin** (twice for
+production). With stdin closed — a background shell, CI, `nohup` — the read gets EOF and the script
+**aborts but still exits 0**. It looks like a successful run and writes nothing.
+
+```bash
+printf 'Yes\n' | node server/scripts/backfill-correct-cols.mjs --env staging
+```
+
+**Never judge these scripts by their exit code. Re-measure the database afterwards.** Tracked as
+OI-146.
+
 ### 2. Smoke Test Staging
 
 Run the smoke test checklist against the staging URL:
@@ -318,6 +404,27 @@ Run the smoke test checklist against the staging URL:
 4. Confirm no errors
 
 If any step fails, fix the issue and redeploy to staging before proceeding to production.
+
+**A 200 is not "working".** The checklist above passes on a deploy whose puzzle answers are all NULL.
+Use this fuller pass — every item was exercised on staging 2026-08-04 and each has a definite
+success condition. Record the outcome in `staging_checks.md`.
+
+| Check | How | Success condition |
+|---|---|---|
+| Renders, no errors | `list_console_messages` + `list_network_requests` (not a screenshot) | No unexpected console entries; every request 2xx/304. A `401` on `GET /api/auth/session` is the **expected** signed-out probe |
+| CSP on a production build | Load `/pricing`, then `/pricing?_ptxn=<any id>` | **Zero** `Refused to …` lines. `cdn.paddle.com/paddle/v2/paddle.js` 200 on mount. An invalid `_ptxn` must degrade to the normal pricing page — Paddle rejects it *inside its own iframe* (`transaction-checkout` 400), which is after all CSP-governed loads and is a PASS |
+| Pools serve | `GET /api/puzzles/counts` | Every category ≥ 20. Cross-check the set-picker's "N positions" |
+| Grading | Draw a puzzle, `POST /api/puzzles/:id/check` with `{"candidateCol": <correct_cols[0]>}` | `"result":"correct"`; a different column gives `"result":"wrong"`. **The body field is `candidateCol`, not `column`** |
+| Attempts actually persist | `SELECT outcome, count(*) FROM puzzle_attempts GROUP BY outcome` | An `incorrect` row appears after a wrong answer. All four writers are fire-and-forget, so a rejected insert is otherwise invisible |
+| Explanation text integrity | Open a deep reveal; regex the rendered text | Zero matches for `\bc\d+(-c\d+)?\b`, `\bc\d+r\d+\b`, `[zone:…]`. Prose column references carry `data-zone="N"` and the board shows the matching highlight |
+| Severity consistency | Open a red Review chip and an amber one | Red → `Blunder` badge `rgb(232,84,62)`; amber → `Suboptimal` badge `rgb(245,166,35)`. Note the adjacent teal heading is a *pattern tag*, not the severity (OI-145) |
+| Locked-lesson CTA | Signed out, click a PRO lesson on `/saga` | AuthModal "Sign in to continue this lesson". The signed-in-free-tier → UpgradeModal half needs real OAuth and is owner-gated |
+| Mobile | `emulate` at `390x844x3,mobile,touch` | `document.documentElement.scrollWidth === clientWidth`. **`resize_page` is dead — use `emulate`** |
+
+**Onboarding intercepts deep links.** On a browser profile with no onboarding state, the first-run
+auto-route redirects `/pricing`, `/challenge` and friends to `/`. Complete or dismiss onboarding
+before testing any deep-linked route, or you will measure the redirect instead of the page
+(OI-144).
 
 ### 3. Deploy to Production
 

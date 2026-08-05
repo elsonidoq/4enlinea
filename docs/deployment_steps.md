@@ -74,9 +74,137 @@ mutating live data is the owner's call.
 
 ---
 
+## RESOLVED DEPLOY SEQUENCE for this queue (written 2026-08-04 by the deploy agent)
+
+Read this before running any individual entry. The entries below were each written by a producer
+session in isolation; several of their `When` fields describe an ordering that **the deploy mechanism
+cannot actually produce**, and two of them prescribe conflicting remedies for the same rows. This
+section is the reconciliation. Where it disagrees with an entry below, **this section wins** and the
+entry has been annotated in place.
+
+### The fact every `When` field has to be reconciled against
+
+`connect-four/railpack.json:11` — verbatim:
+
+```json
+    "startCommand": "node server/migrate.js && node server/index.js"
+```
+
+**Migrations are applied automatically by every Railway deploy**, inside the new container, *after*
+the new image is built and *before* the new server process starts — while the **outgoing instance may
+still be serving traffic**. There is no deploy in which a migration on the deployed branch runs
+"after the code deploy". A migration file present on the branch runs at the *start* of that deploy.
+
+Consequences for the two hard ordering constraints in this queue:
+
+| Migration | Documented constraint | Satisfiable in one deploy? |
+|---|---|---|
+| `063_puzzle_attempts_outcome_narrow.sql` | must run **before** its code deploy (FR-023a) | **YES.** `migrate.js` completes before `index.js` starts, so the new code that emits `outcome:'incorrect'` never runs against the un-narrowed CHECK. Residual: during rollover the *outgoing* instance can still write `'correct_retry'`/`'revealed'`, which the narrowed CHECK now rejects and the fire-and-forget `.catch` swallows. Measured on staging 2026-08-04: `puzzle_attempts` holds **0 rows** and nobody is using the environment, so the lost-write window is empty. On production, re-measure. |
+| `064_drop_correct_col.sql` | must run **after** its code deploy | **NO — this is the conflict.** It would run at the start of the same deploy, while the outgoing instance still reads the column. Verified at source: `git show 44c33573:connect-four/server/index.js \| /usr/bin/grep -c "correct_col"` → **22**, including PostgREST selects such as `.select('id, category, move_string, …, highlight_metadata, correct_col, user_player, created_at')` (line 969). PostgREST **errors** on a selected column that does not exist, so the puzzle-detail, `/api/puzzles/draw` and admin-list endpoints hard-fail for the length of the rollover. Worse: if the new build then fails to boot, the environment is left running old code against a schema that no longer has the column. |
+
+**Resolution: `064` gets its own, second deploy.** It is held off the deploy branch for Deploy A and
+added back for Deploy B. Do not attempt to satisfy it by running `migrate.js` by hand after Deploy A
+— if the file is on the deployed branch, Deploy A's own automatic runner has already applied it, and
+the hand-run is both redundant and too late.
+
+### The ordered sequence
+
+Staging deploys from branch **`stagging`** (doubled `g` — verified 2026-08-04 against Railway:
+service `4enlinea-staging`, `source.branch = "stagging"`, `rootDirectory = /connect-four`, custom
+domain `staging.decodec4.xyz`). Production deploys from `main`. **Pushing to that branch is the
+deploy trigger** — see `docs/deploy-runbook.md` §0.
+
+1. **Deploy A — code + migrations `061_correct_cols` / `062` / `063`.**
+   Merge the feature branch into the deploy branch, then, **in a separate commit on the deploy branch
+   only**, remove `connect-four/server/migrations/064_drop_correct_col.sql`. Push. Railway's automatic
+   runner applies `061_correct_cols`, `062` and `063`; the new server then starts.
+   *Nothing else in this queue may run before this step* — every remaining entry depends either on the
+   new code being live or on `correct_cols` existing.
+2. **Verify Deploy A healthy** — Railway deploy status SUCCESS, the site loads, and the ledger shows
+   the three filenames. This is the last safe revert point before `064`.
+3. **`backfill-correct-cols.mjs --env <env>`** — **MISSING ENTRY, added 2026-08-04 by the deploy
+   agent.** `061_correct_cols.sql` only `ADD COLUMN`s `correct_cols`; it does **not** populate it.
+   Nothing else in this queue did either, so Deploy A leaves every pre-existing row with
+   `correct_cols IS NULL` while the newly deployed code reads `correct_cols` **exclusively**. This is
+   a live functional break, not just a `064` pre-flight problem — see the new entry
+   "## Spec 051 backfill — populate `correct_cols` on pre-existing rows" below. Run this **before**
+   step 4, because it deactivates rows whose recomputed answer set is empty and therefore changes the
+   per-category active counts step 4 is trying to top up.
+4. **Content pools** — `fill-candidate-pools.mjs --env <env> --apply` (one run; it is the *same*
+   invocation for both the "retire-and-refill" and the "content pools" entries below).
+   Requires step 1 for `puzzles.correct_cols`; the script hard-stops (exit 1) naming
+   `061_correct_cols.sql` otherwise.
+4. **`TRUNCATE explanation_cache`** — requires the US2 response-seam fix from step 1 to be live.
+5. **`TRUNCATE blunders`** — requires the US4 single-criterion grader from step 1 to be live.
+6. **`064` pre-flight** — the at-risk query (Spec 056 entry). **It can only run after step 1**, because
+   it references `correct_cols`, which does not exist until `061_correct_cols` applies. Before step 1
+   it fails with `column "correct_cols" does not exist` (measured on staging, 2026-08-04) — an error
+   the Spec 056 entry did not anticipate; it only anticipated the mirror-image `correct_col does not
+   exist`.
+7. **Deploy B — restore `064_drop_correct_col.sql` on the deploy branch and push.** Railway's runner
+   drops the column at container start. By now the only code that has ever served against this schema
+   is the post-056 code from Deploy A, which never reads `correct_col`.
+8. **Smoke-test after Deploy B** — per the Spec 056 entry's item 4 (an `undercut`/`overcut` puzzle
+   grades a correct answer *correct*, and a lesson inline challenge does the same).
+
+Steps 3–6 may be done in any order among themselves; they are ordered here only for reporting.
+
+### Running this queue against PRODUCTION — what differs from the staging run
+
+The whole queue was executed against **staging on 2026-08-04** and every entry below is marked
+`DONE … (staging)` / `PENDING (production)`. The sequence above is the tested one; reuse it. What
+changes for production:
+
+| | staging (executed) | production (pending) |
+|---|---|---|
+| Deploy branch | `stagging` (doubled `g`) | **`main`** |
+| `DATABASE_URL` pooler | 6543 (transaction) — worked | 5432 (session) — no pooler question arises |
+| `063`'s `correct_retry` remap | **0 rows** — proven no-op | **2 rows** — real, lossless (the retry signal lives in `first_attempt_correct`) |
+| Rollover write-loss window for `063` | empty (`puzzle_attempts` had 0 rows) | **re-measure** before deploying |
+| Spec 051 backfill | 122 rows → 69 updated, 53 deactivated | **will also be needed** — production gets `061_correct_cols` for the first time on this deploy, so every pre-existing row starts NULL. `--dry-run` first; production's pool is older and larger (~279 active), so expect a different deactivation count |
+| `TRUNCATE blunders` | already 0 rows — confirmed no-op | **a real discard.** Re-derived from stored games, but say so before running |
+| `TRUNCATE explanation_cache` | 13 rows discarded | a real discard; regenerates on next request |
+| Pool fill | 171 generated, 0 promoted | 4 categories below floor per the table below — **but re-measure**, the backfill's deactivations will change it, likely substantially |
+| `064` pre-flight | active puzzles 0, pending candidates 0 → proceeded | use the **corrected** gates (see the Spec 056 entry); the shipped query cannot clear |
+| `forced_win` | ~16 invocations to reach 20 | budget the same loop |
+
+Two things to do **before** starting, both of which the staging run showed matter:
+
+1. **Confirm `ADMIN_EMAILS` holds the intended list.** Per the Spec 054 entry §2, `requireAdmin`
+   starts actually working in production on this deploy (`req.user.email` was always `undefined`
+   before, so admin routes failed closed for everyone). This was never exercised — it is reasoned
+   from the code, not measured.
+2. **Re-measure everything.** Every count in this file is dated. The staging run invalidated several
+   of them within the same session.
+
+Note also that `CLAUDE.md` §"Staging and production databases are disposable (pre-launch)" — which
+justifies every truncate and retire-rather-than-repair decision in this queue — **expires at launch**.
+Re-confirm it still holds before running the destructive steps against production.
+
+### Do NOT run: `repair-overcut-highlight-metadata.js`
+
+The **Spec 052 (Epic 2) — overcut pool repair** entry below and the **Spec 057 — retire-and-refill**
+entry prescribe **conflicting remedies for the same rows**: Spec 052 *repairs* drifted `overcut`
+`highlight_metadata` in place, Spec 057's D1 (resolved 2026-08-03) *retires* those same rows and
+refills the category. D1 supersedes. Running the repair script first would rewrite rows that
+`fill-candidate-pools.mjs` is about to retire — wasted work at best, and it re-activates the
+ambiguous-row problem D1 closed. The Spec 052 entry is marked SUPERSEDED in place below.
+
+---
+
 ## Spec 052 (Epic 2) — overcut pool repair
 
-**Status**: PENDING — not yet run in any environment (added 2026-07-30)
+> **SUPERSEDED 2026-08-04 — DO NOT RUN.** Replaced by the **Spec 057 — retire-and-refill** entry
+> below, per Decision D1 (resolved 2026-08-03): drifted `overcut` rows are **retired and the category
+> refilled**, not repaired in place. `fill-candidate-pools.mjs` is D1's single mechanism and covers
+> `overcut`, `undercut` and `z_threat` together. Running
+> `repair-overcut-highlight-metadata.js` would rewrite `highlight_metadata` on rows that
+> `fill-candidate-pools.mjs` then retires, and would leave the ambiguous rows in the state D1
+> retires them out of. The entry is retained below as the historical record of *why* the drift
+> exists and what was measured — its **Run it** section is dead. OI-92's data half closes via the
+> Spec 057 entry.
+
+**Status**: SUPERSEDED by "Spec 057 — retire-and-refill" (was: PENDING, added 2026-07-30)
 **When**: **After** the spec-052 code deploy, per environment. The repair re-derives metadata using
 the new detector, so the new code must already be present. The rows are wrong either way; running it
 before the deploy would write values the old code disagrees with.
@@ -328,7 +456,7 @@ Paddle.js at all — see OI-98).
 
 ## Spec 054 (Epic 4) — Server/API data integrity & environment correctness
 
-**Status**: PENDING (nothing has been applied beyond local)
+**Status**: **DONE 2026-08-04 (staging)** — `061_correct_cols.sql`, `062` and `063` applied automatically by Deploy A's `migrate.js`; verified in the ledger and against the live schema. **PENDING (production).** (Was: PENDING — nothing has been applied beyond local)
 **When**: migrations run BEFORE the code deploy — one of them is a hard ordering constraint, see below
 **Blocks**: every wrong-answer puzzle write; the candidate-insert retry fix
 **Applies to**: staging and production (local is already fully applied)
@@ -407,6 +535,8 @@ attempt until the migration lands.
 
 ### Run it
 
+**CORRECTED 2026-08-04 — there is nothing to run by hand.** This section previously read:
+
 ```bash
 # Staging — ONLY after step 0 is fixed.
 cd connect-four
@@ -416,13 +546,47 @@ node --env-file=server/.env.staging server/migrate.js
 node --env-file=server/.env.production server/migrate.js
 ```
 
+That duplicates what the deploy already does. `connect-four/railpack.json:11`'s start command is
+`node server/migrate.js && node server/index.js`, so **`061_correct_cols`, `062` and `063` are applied
+automatically by Deploy A**, inside the new container, before the new server starts. Running the
+command above by hand before the deploy is harmless but pointless (the deploy's own runner then finds
+0 pending); running it *after* the deploy is a no-op for the same reason. The one thing it is useful
+for is a **dry read of what is still pending** — `migrate.js` prints the pending list before applying.
+
+The FR-023a "063 before the code deploy" constraint is **satisfied by that automatic ordering**, not
+by a manual pre-step — see the RESOLVED DEPLOY SEQUENCE section at the top of this file for the
+rollover caveat (the outgoing instance can still emit `'correct_retry'`/`'revealed'` for the length of
+the rollover; measured 0 rows on staging 2026-08-04, re-measure for production).
+
+The **only** action for this entry is therefore: push Deploy A, then run the Verify block below.
+
 ### Verify
 
+Runnable form (2026-08-04): these are SQL, and the file previously did not say how to execute them.
+`DATABASE_URL` is **not** exported in your shell — it lives in `connect-four/server/.env.<env>`. Run
+each query as:
+
+```bash
+cd connect-four
+# staging (substitute .env.production for production)
+node --env-file=server/.env.staging -e 'process.stdout.write(process.env.DATABASE_URL)' \
+  | xargs -0 -I{} psql "{}" -c "<the SQL below>"
+```
+
+or paste the SQL into the target project's Supabase SQL editor. Staging's `DATABASE_URL` is on the
+transaction pooler (6543); every query below is single-statement, so the pooler is irrelevant to
+them.
+
 ```sql
--- 1. Both migrations recorded:
+-- 1. All three migrations recorded (corrected 2026-08-04 — 061_correct_cols.sql was missing from
+--    this success condition even though the same entry's table lists it as unapplied):
 SELECT filename FROM schema_migrations WHERE filename LIKE '06%' ORDER BY filename;
---    success: includes 062_candidates_generation_run_unique.sql AND
+--    success: includes 061_correct_cols.sql AND
+--             062_candidates_generation_run_unique.sql AND
 --             063_puzzle_attempts_outcome_narrow.sql
+--    (061_security_lints.sql and 060_* are already present from earlier deploys — their presence
+--     is expected and is NOT evidence that 061_correct_cols.sql applied; migrate.js keys on the
+--     full filename, so the two 061s are independent rows.)
 
 -- 2. The narrowed constraint is live (name confirmed as puzzle_attempts_outcome_check
 --    on BOTH staging and production on 2026-08-02):
@@ -533,7 +697,7 @@ OI-58. Nothing was written to staging or production.
 
 ## Spec 056 — Legacy `correct_col` scalar retirement (Epic 9)
 
-**Status**: PENDING (applied to local only)
+**Status**: **DONE 2026-08-04 (staging)** — code shipped in Deploy A; `064_drop_correct_col.sql` applied by Deploy B. **PENDING (production).** (Was: PENDING — applied to local only)
 **When**: **AFTER the code deploy** — this is a hard ordering constraint (see below), not a
 preference. Running it first takes production down.
 **Blocks**: nothing — but it is blocked BY the code deploy, and the code deploy is itself blocked by
@@ -583,6 +747,24 @@ The safe order therefore is:
    code never reads `correct_col`, and the column still being present is harmless to it.
 3. **Run the migration** to drop the now-unread column.
 
+**CORRECTED 2026-08-04 — steps 2 and 3 are TWO SEPARATE DEPLOYS, and step 1 moves after step 2.**
+This entry as originally written is not executable as stated, for two independent reasons:
+
+- **"Run the migration after the code deploy" is not something a single deploy can do.**
+  `connect-four/railpack.json:11` — `"startCommand": "node server/migrate.js && node server/index.js"`
+  — means any migration file *on the deployed branch* is applied at the **start** of that same deploy,
+  while the outgoing instance is still serving. So if `064_drop_correct_col.sql` is on the branch for
+  step 2's deploy, step 3 has already happened, in the wrong order, before the new server booted.
+  **The file must be held off the branch for the code deploy and added in a second deploy.** See the
+  RESOLVED DEPLOY SEQUENCE section at the top of this file (Deploy A / Deploy B).
+- **The pre-flight in step 1 cannot run before the code deploy.** Its query references
+  `correct_cols`, which is created by `061_correct_cols.sql` — a migration that is itself unapplied on
+  staging and production and that lands *with* Deploy A. Run against staging on 2026-08-04 in the
+  pre-deploy state, it fails: `column "correct_cols" does not exist`. The "Gotchas" note below
+  anticipates only the mirror-image failure (`column correct_col does not exist`, meaning 064 already
+  ran) and would lead a reader to misdiagnose this one. **Run the pre-flight after Deploy A and
+  before Deploy B.**
+
 Note the consequence for rollback: once step 3 has run, **reverting the code deploy is no longer
 safe** — the old code would again `SELECT` a column that no longer exists. If you need a revert
 window, leave a gap between steps 2 and 3 and confirm the new code is healthy first.
@@ -612,6 +794,50 @@ SELECT 'candidates', count(*)
 **Non-zero**: STOP. Do not deploy and do not migrate. Run spec 051's backfill
 (`connect-four/server/scripts/backfill-correct-cols.mjs`) against that environment, re-run this
 query, and proceed only once it returns 0.
+
+**CORRECTED 2026-08-04 — the `candidates` half of this success condition is UNSATISFIABLE by its own
+prescribed remedy, and must not be read as a hard gate.** The query above scans **every**
+`candidates` row regardless of status, but `backfill-correct-cols.mjs` processes only
+`candidates.status = 'pending'` (its `--help` states this: *"Active per table: puzzles.is_active =
+true; candidates.status = 'pending'"*). On any environment carrying historical non-pending
+candidates, the remedy cannot move the number and the gate can never clear. Measured on staging
+after Deploy A and the backfill, 2026-08-04:
+
+| table | at_risk | after the backfill |
+|---|---|---|
+| `puzzles` | 102 | **0** ✅ |
+| `candidates` | 102 | **102** — all 122 rows are `status='approved'`, **0 pending** |
+
+**AND the `puzzles` half needs an `is_active` filter it does not have.** Measured on staging
+immediately before Deploy B, after the backfill: raw `puzzles.at_risk` = **48**, but
+`puzzles WHERE is_active AND correct_cols IS NULL` = **0**. All 48 are rows the backfill
+**deactivated** for failing their category predicate — retired content, which D1 says is the correct
+end state. Dropping their legacy scalar discards nothing anyone wants.
+
+Read the gate this way instead — the query that actually matters is:
+
+```sql
+SELECT count(*) AS active_at_risk FROM public.puzzles
+ WHERE is_active AND correct_cols IS NULL;          -- must be 0
+SELECT count(*) AS pending_at_risk  FROM public.candidates
+ WHERE status = 'pending' AND correct_cols IS NULL AND correct_col IS NOT NULL;  -- must be 0
+```
+
+- **`puzzles` where `is_active` — must be 0. That is the genuine hard gate** — those rows are served
+  to players, and dropping `correct_col` while `correct_cols` is NULL destroys the only answer a live
+  puzzle has. Inactive rows are retired content and do not gate anything.
+- **`candidates.at_risk` is advisory.** `candidates` is the generation/promotion staging table; it is
+  never served to a player, and a non-`pending` row is a terminal historical artifact whose content
+  has already been promoted into `puzzles` (which now carries `correct_cols`). Losing its legacy
+  `correct_col` scalar costs nothing recoverable or wanted. Pre-launch this data is explicitly
+  disposable (`CLAUDE.md` §"Staging and production databases are disposable"). Record the number and
+  proceed.
+- If an environment ever has **pending** candidates with `correct_cols IS NULL AND correct_col IS NOT
+  NULL`, that *is* a real stop — run the backfill, which will pick them up.
+
+Staging proceeded to Deploy B on 2026-08-04 under exactly this reading: **active** `puzzles` 0,
+**pending** `candidates` 0; advisory-only counts were inactive `puzzles` 48 and non-pending
+`candidates` 102.
 
 How to run it — either the Supabase SQL editor for the target project, or from the repo:
 
@@ -649,17 +875,39 @@ above). Merge the branch and deploy per the standing procedure in `docs/deploy-r
 entry does not restate it. Confirm the deployed app is healthy before step 3 — this is your last
 safe revert point.
 
-**Step 3 — run the migration** (only after step 2 is deployed and healthy):
+**Step 3 — run the migration** (only after step 2 is deployed and healthy).
+
+**CORRECTED 2026-08-04.** This step previously read:
 
 ```bash
 cd connect-four
-
 # Staging first.
 node --env-file=server/.env.staging server/migrate.js
-
 # Then production — only after staging is verified below.
 node --env-file=server/.env.production server/migrate.js
 ```
+
+That is wrong in both directions. If `064_drop_correct_col.sql` is **on** the deployed branch, step
+2's own deploy already applied it (at container start, in the unsafe order) and this hand-run finds
+0 pending — it looks like it worked and proves nothing. If the file is **held off** the branch, as
+the corrected sequence requires, then hand-running `migrate.js` from a local checkout that *does*
+have the file would drop the column while the deployed branch has no record of it — leaving the
+branch and the schema permanently out of step, and the next deploy's runner would try to apply it
+again (harmless only because of `DROP COLUMN IF EXISTS`).
+
+**Do this instead — Deploy B:**
+
+```bash
+# On the deploy branch (`stagging` for staging, `main` for production), restore the migration file
+# that Deploy A held back, and push. The push is the deploy trigger; Railway's own
+# `node server/migrate.js` applies 064 at container start, with only post-056 code ever having
+# served against the resulting schema.
+git checkout stagging
+git revert --no-edit <sha of Deploy A's "hold back 064" commit>
+git push origin stagging
+```
+
+Verify Deploy B reached SUCCESS in Railway before running the Verify block below.
 
 ### Verify
 
@@ -703,9 +951,97 @@ Story 2), the dropped values are redundant with `correct_cols[0]` at drop time f
 been backfilled — but any row's exact pre-drop `correct_col` value (e.g. for an unbackfilled row) is
 only recoverable from a backup, not from `correct_cols`.
 
+## Spec 051 backfill — populate `correct_cols` on pre-existing rows
+
+**Status**: **DONE 2026-08-04 (staging)** — 69 rows updated, 53 deactivated; verified `active AND correct_cols IS NULL` = 0. **PENDING (production).** (Added 2026-08-04 by the deploy agent — this entry did not exist and should have)
+**When**: **After** the deploy that applies `061_correct_cols.sql` (Deploy A), and **before**
+`fill-candidate-pools.mjs` and before `064`. It deactivates rows, so it must precede any step that
+measures or tops up per-category active counts.
+**Blocks**: puzzle grading working at all on the target environment, for every category whose answer
+is a column set rather than stored `highlight_metadata`; and the `064` pre-flight, which cannot
+return 0 until this runs.
+**Applies to**: staging, production. (Local was backfilled when spec 051 shipped.)
+
+### What's wrong
+
+**This is a gap in this queue, not in the code.** `061_correct_cols.sql` is *only*
+`ALTER TABLE … ADD COLUMN IF NOT EXISTS correct_cols integer[] DEFAULT NULL` — it adds the column
+and populates nothing. No entry in this file ever queued the population step. Spec 056 then made
+`correct_cols` the **sole** storage contract every reader uses. The result, measured on staging
+immediately after Deploy A on 2026-08-04:
+
+| measure | staging, post-Deploy-A |
+|---|---|
+| active `puzzles` | 122 |
+| active `puzzles` with `correct_cols IS NULL` | **122 (all of them)** |
+| …of which `correct_col IS NOT NULL` (the `064` at-risk set) | 102 |
+| …of which both are NULL (metadata-graded `overcut`/`undercut`) | 20 |
+
+Confirmed live rather than inferred — `curl https://staging.decodec4.xyz/api/puzzles/draw?category=immediate_threat`
+returned `"correct_cols":null` on every row served by the newly deployed code.
+
+The remedy was documented only as a footnote inside the Spec 056 pre-flight ("Non-zero: STOP … Run
+spec 051's backfill"), where it reads as an unlikely contingency. It is not a contingency: it is
+**guaranteed** on any environment that receives `061_correct_cols.sql` for the first time, because
+the migration cannot populate the column and nothing else does.
+
+`backfill-correct-cols.mjs` recomputes the answer set with the same `checkPredicate` generation uses,
+and per FR-016b **deactivates** (rather than storing an empty array on) any row whose recomputed set
+is empty — i.e. content that no longer matches its category's current predicate. Expect that to
+remove a substantial fraction of a legacy pool; on staging the dry-run planned **69 updates and 53
+deactivations** out of 122 rows. That is the intended outcome, and `fill-candidate-pools.mjs`
+regenerates back to the floor afterwards.
+
+### Run it
+
+```bash
+cd connect-four
+
+# 1. Dry run first — always. Prints the per-category before/deactivated/after plan, writes nothing.
+node server/scripts/backfill-correct-cols.mjs --env staging --dry-run
+
+# 2. Apply. The script prompts for a typed `Yes` on stdin before any write.
+node server/scripts/backfill-correct-cols.mjs --env staging
+```
+
+**Trap — do not run this backgrounded or with stdin closed.** The confirmation prompt
+(`server/scripts/backfill-correct-cols.mjs:330`) reads from `process.stdin`; with no TTY it gets EOF,
+aborts, **and still exits 0**. It looks like a successful run and writes nothing. Hit this on staging
+2026-08-04. Either run it interactively or pipe the confirmation: `printf 'Yes\n' | node
+server/scripts/backfill-correct-cols.mjs --env staging`. Never judge this script by its exit code —
+judge it by re-measuring `correct_cols IS NULL` afterwards.
+
+### Verify
+
+```bash
+cd connect-four
+node --env-file=server/.env.staging -e '
+  const pg = require("pg");
+  const c = new pg.Client({ connectionString: process.env.DATABASE_URL, ssl: { rejectUnauthorized: false } });
+  c.connect().then(() => c.query(`SELECT count(*) FILTER (WHERE is_active) AS active,
+      count(*) FILTER (WHERE is_active AND correct_cols IS NULL) AS active_cols_null
+    FROM public.puzzles`))
+   .then(r => { console.log(r.rows[0]); return c.end(); });
+'
+```
+
+**Success**: `active_cols_null` = **0**. (`active` will have dropped by the number of deactivations —
+that is expected, and `fill-candidate-pools.mjs` restores it to the N=20 floor.)
+
+### Roll back
+
+**Not reversible in the useful direction, and not needed.** The `correct_cols` writes are
+recomputations from the current predicates, so re-running the script reproduces them exactly; there
+is no prior value worth restoring. The deactivations are reversible by hand (`is_active = true`) but
+the row will fail its predicate again — deactivation is the correct end state, matching D1's
+retire-rather-than-repair policy. Pre-launch, this data is disposable
+(`CLAUDE.md` §"Staging and production databases are disposable").
+
+---
+
 ## Spec 057 — retire-and-refill for stale overcut/undercut/z_threat rows (D1)
 
-**Status**: PENDING — not yet run in any environment (added 2026-08-04)
+**Status**: **DONE 2026-08-04 (staging)** — `fill-candidate-pools.mjs --env staging --apply` run; its post-run audit reports `identical` only, `stale=0 ambiguous=0 no_longer_matches=0` for all three of `overcut`/`undercut`/`z_threat`, and 0 rows needed retiring at that point (the spec-051 backfill had already deactivated the drifted rows — see the new Spec 051 entry above). **PENDING (production).**
 **When**: **After** the spec 057 code deploy (T005's `evalOvercut`/`evalUndercut`/`evalZThreat`
 `correctCols` cross-check must be live first — re-deriving against the current detector requires the
 current detector to be deployed). Also depends on `061_correct_cols.sql` — see the ordering note
@@ -792,7 +1128,18 @@ you'd rather retire than delete outright (data on staging/production is disposab
 
 ## Spec 057 — content pools: below-floor categories, all environments (FR-003, FR-004)
 
-**Status**: PENDING — mechanism shipped, not yet run against staging or production (added 2026-08-04)
+**Status**: **DONE 2026-08-04 (staging)** — all 12 categories at the N=20 floor. Verified by this entry's own success condition: `fill-candidate-pools.mjs --env staging` exits **0** with `✅ Every category is at/above the N=20 floor and overcut/undercut/z_threat show no drift.` **PENDING (production).**
+
+**Operational note for the production run — `forced_win` needs repeated invocations.** Its generator hits the 400-solver-attempt cap on almost every run and yields only **0–4 accepted boards per invocation** (observed on staging: 3→4→5→6→6→10→14→15→15→20 across ~16 runs, several of which returned 0). A single `--apply` will **not** bring it to floor, and the script reports this honestly rather than failing — `WARNING: only generated N/M for forced_win (solver attempt cap reached)`. Budget a loop:
+
+```bash
+for i in $(seq 1 16); do
+  printf 'Yes\n' | node server/scripts/fill-candidate-pools.mjs \
+    --env production --apply --i-understand-this-is-production --category forced_win
+done
+```
+
+Every other category reached floor in one or two runs. This is the practical face of OI-83.
 **Amendment (2026-08-04, same day)**: `checkForcedWinPredicate` was widened from
 `passes: correctCols.length === 1` to `>= 1`, so multi-initiator boards are no longer discarded at
 generation time. **This does NOT add a prerequisite and does NOT invalidate any existing row** —
@@ -840,8 +1187,35 @@ all 12)**:
 | figure_7 | 10 | 10 | generate |
 | j_shape | 10 | 10 | generate |
 
-**Production — 3/12 categories below floor after retire-and-refill (`odd_even_threat`, `claimeven`,
-`overcut`, `figure_7` — see below), zero promotable candidates for any of them**:
+**Re-measured directly against staging 2026-08-04 (deploy agent).** The table above is **confirmed
+accurate**, with one number corrected. Two independent measurements, which read differently and must
+not be confused:
+
+- **Raw, read-only, service-role client counting `puzzles WHERE is_active = true`** — the pool as it
+  stands *before* any retirement: `immediate_threat` 15, `forced_win` 7, **`overcut` 10**, and 10 for
+  each of the other nine. Total **122** active. **0** pending `candidates`.
+- **`fill-candidate-pools.mjs --env staging` dry-run** — reports `overcut active=6 shortfall=14`,
+  because its `active` column is *net of the rows it is about to retire*: `10 − 4 retired = 6`. Every
+  other category matches the raw count exactly.
+
+So the table's `overcut` figure of **6 is correct as a post-retire number** — but its parenthetical
+"(after retiring **8** drifted rows)" is wrong for staging: the script's own dry-run reports
+**4** drifted `overcut`/`undercut`/`z_threat` rows across `puzzles`+`candidates`, not 8. (The 8 came
+from the Spec 052 entry's 2026-07-30 measurement of `4 stale + 4 ambiguous`; the retire-and-refill
+table above still carries those older per-disposition numbers.)
+
+Treat `fill-candidate-pools.mjs`'s own dry-run output at run time as the authoritative count, and
+note which of the two senses of "active" it is reporting — these tables go stale the moment anything
+runs.
+
+**The script's `061_correct_cols` guard was exercised and works as documented** (staging, 2026-08-04,
+before Deploy A): it printed `ABORT: staging puzzles.correct_cols does not exist
+(061_correct_cols.sql not applied on this target)` and refused, having planned `0 promote + 122
+generate row(s)`. The clean refusal described in this entry's `When` field is real, not aspirational.
+
+**Production — 4/12 categories below floor after retire-and-refill (`odd_even_threat`, `claimeven`,
+`overcut`, `figure_7`), zero promotable candidates for any of them** (corrected 2026-08-04: this said
+"3/12" while naming four categories and listing four table rows):
 
 | category | active | shortfall | remedy |
 |---|---|---|---|
@@ -899,7 +1273,7 @@ If a run over-generates or a category should be pulled back, retire the surplus 
 
 ## Spec 057 (Epic 10) — Schema migration backlog closeout (061_correct_cols / 062 / 063 / 064)
 
-**Status**: PENDING (staging and production; local already fully applied)
+**Status**: **DONE 2026-08-04 (staging)** — all four filenames present in staging's `schema_migrations`. **PENDING (production).**
 **When**: per the existing ordering constraints already documented in the entries this cross-references
 — `063_puzzle_attempts_outcome_narrow.sql` must run **before** its code deploy (Spec 054 entry, item 1,
 FR-023a); `064_drop_correct_col.sql` must run **after** its code deploy (Spec 056 entry, "Ordering
@@ -943,10 +1317,23 @@ pending) coexist without conflict.
 
 ### Run it
 
-No new commands. Run the Spec 054 entry's "Run it" (applies `061_correct_cols.sql`, `062`, `063`
-together via `node --env-file=server/.env.<env> server/migrate.js` — staging then production) **before**
-that entry's code deploy, then the Spec 056 entry's "Run it" (`064`) **after** its code deploy, following
-each entry's own pre-flight and ordering constraint.
+No new commands.
+
+**CORRECTED 2026-08-04.** This section previously read: *"Run the Spec 054 entry's 'Run it' (applies
+`061_correct_cols.sql`, `062`, `063` together via `node --env-file=server/.env.<env> server/migrate.js`
+— staging then production) **before** that entry's code deploy, then the Spec 056 entry's 'Run it'
+(`064`) **after** its code deploy, following each entry's own pre-flight and ordering constraint."*
+
+Both halves are wrong against the actual deploy mechanism (`connect-four/railpack.json:11`,
+`"startCommand": "node server/migrate.js && node server/index.js"`):
+
+- `061_correct_cols`/`062`/`063` need **no hand-run at all** — Deploy A's automatic runner applies
+  them before the new server starts, which is exactly what FR-023a asks for.
+- `064` **cannot** be run "after its code deploy" while it sits on that deploy's branch; it needs its
+  own Deploy B.
+
+See the **RESOLVED DEPLOY SEQUENCE** section at the top of this file for the executable ordering.
+This entry contributes no commands of its own — only the single ledger query in Verify below.
 
 ### Verify
 
@@ -969,7 +1356,7 @@ and the column drop runs — the pre-flight check itself is the safety gate).
 
 ## Spec 057 (Epic 10) US2 — `explanation_cache` truncate after the response-seam text-integrity fix (OI-126/OI-124)
 
-**Status**: PENDING — not yet run in any environment (added 2026-08-04)
+**Status**: **DONE 2026-08-04 (staging)** — `TRUNCATE TABLE explanation_cache;` run; 13 rows → 0, verified by `SELECT count(*)`. **PENDING (production).**
 **When**: **After** this story's code deploy (T024-T026/T028), per environment — same ordering logic
 as the "Spec 052 — overcut pool repair" entry above (re-derive/repair only makes sense once the code
 that changes the output is already live; running it before would truncate a cache the old code is
@@ -1003,13 +1390,30 @@ strictly cheaper than auditing every existing row for which of the two failure m
 
 ### Run it
 
+**CORRECTED 2026-08-04 — `$STAGING_DATABASE_URL` / `$PRODUCTION_DATABASE_URL` do not exist.** Neither
+name is set anywhere in this repo or in the shell environment (checked: no definition in any `.sh`,
+`.js`, `.mjs` or `.json` outside `node_modules`). As written, `psql "$STAGING_DATABASE_URL" -c …`
+expands to `psql "" -c …`, which connects to the **local default database** — i.e. it silently
+truncates the wrong table on the wrong machine rather than erroring. Use the env file, which is the
+only place these URLs live:
+
 ```bash
+cd connect-four
+
 # staging
-psql "$STAGING_DATABASE_URL" -c "TRUNCATE TABLE explanation_cache;"
+node --env-file=server/.env.staging -e 'process.stdout.write(process.env.DATABASE_URL)' \
+  | xargs -0 -I{} psql "{}" -c "TRUNCATE TABLE explanation_cache;"
 
 # production (after staging is verified clean)
-psql "$PRODUCTION_DATABASE_URL" -c "TRUNCATE TABLE explanation_cache;"
+node --env-file=server/.env.production -e 'process.stdout.write(process.env.DATABASE_URL)' \
+  | xargs -0 -I{} psql "{}" -c "TRUNCATE TABLE explanation_cache;"
 ```
+
+Confirm the target before running: `server/.env.staging` must contain the staging project ref
+`jkqilynpshutqcceopdn` and **not** the production ref `kxtqwsumojtexokrtlfp` (the constants are at
+`connect-four/server/scripts/repair-overcut-highlight-metadata.js:54-55`). Check with
+`/usr/bin/grep -o "jkqilynpshutqcceopdn\|kxtqwsumojtexokrtlfp" server/.env.staging | sort -u` — this
+prints only the ref, never a credential.
 
 A full `TRUNCATE`, not selective repair — per the owner directive (`CLAUDE.md` §"Staging and
 production databases are disposable"), regenerate-from-scratch is preferred over surgically
@@ -1021,8 +1425,25 @@ identifying which rows carry which of the two stale shapes.
 SELECT count(*) FROM explanation_cache;
 ```
 Success: `0`. Then exercise one real `/api/explain-move-llm` request against a known blunder in that
-environment and confirm a fresh row is written with `template_version: 'v3'` and no raw `c\d+`
-token in `deep_reveal_json.explanation`.
+environment and confirm a fresh row is written with `template_version = 'v3'` and no raw `c\d+`
+token in `deep_reveal_json->>'explanation'`.
+
+**CORRECTED 2026-08-04 — `template_version` is a top-level COLUMN on `explanation_cache`, not a key
+inside `deep_reveal_json`.** Checking `deep_reveal_json->>'template_version'` returns `null` and
+reads as a failure when the row is in fact correct. The table's columns are `position_hash`,
+`one_liner`, `deep_reveal_json`, `created_at`, `template_version`, `audio_path`,
+`audio_generated_at`, `locale`. The runnable check:
+
+```sql
+SELECT template_version,
+       (deep_reveal_json->>'explanation') ~ '\mc[0-9]+' AS has_raw_coord
+  FROM explanation_cache ORDER BY created_at DESC LIMIT 1;
+```
+
+**Result on staging 2026-08-04**: after the truncate (13 → 0), one real deep-reveal request through
+the deployed app repopulated the table — 1 row, `template_version = 'v3'`, `has_raw_coord = false`,
+explanation beginning "You should have played the center move in column 4 because, in the opening,
+…". Regeneration under the new code confirmed end-to-end.
 
 ### Roll back
 
@@ -1032,7 +1453,7 @@ the truncated rows (and none is needed — they are re-derived content, not user
 
 ## Spec 057 (Epic 10) US4 — `blunders.quality` regenerate after making `scoreMove` the sole grader (T035/FR-019a)
 
-**Status**: PENDING — not yet run in any environment (added 2026-08-04)
+**Status**: **DONE 2026-08-04 (staging)** — `TRUNCATE TABLE blunders;` run; verified `count(*) = 0`. (The table was already empty at 0 rows pre-truncate, so this was a confirmed no-op on staging, not a discard.) **PENDING (production).**
 **When**: **After** this story's code deploy (T035), per environment — the regenerate only makes
 sense once the code that grades correctly (the single-criterion `scoreMove` write path) is already
 live; running it before would repopulate rows using the code about to be replaced.
@@ -1066,12 +1487,20 @@ engineering for a database nobody is using.
 
 ### Run it
 
+**CORRECTED 2026-08-04 — same undefined-variable defect as the `explanation_cache` entry above**
+(`$STAGING_DATABASE_URL` is set nowhere; the unquoted expansion silently targets the local default
+database instead of erroring). Use the env file:
+
 ```bash
+cd connect-four
+
 # staging
-psql "$STAGING_DATABASE_URL" -c "TRUNCATE TABLE blunders;"
+node --env-file=server/.env.staging -e 'process.stdout.write(process.env.DATABASE_URL)' \
+  | xargs -0 -I{} psql "{}" -c "TRUNCATE TABLE blunders;"
 
 # production (after staging is verified clean)
-psql "$PRODUCTION_DATABASE_URL" -c "TRUNCATE TABLE blunders;"
+node --env-file=server/.env.production -e 'process.stdout.write(process.env.DATABASE_URL)' \
+  | xargs -0 -I{} psql "{}" -c "TRUNCATE TABLE blunders;"
 ```
 
 A full `TRUNCATE`, not selective repair — identifying exactly which existing rows disagree between

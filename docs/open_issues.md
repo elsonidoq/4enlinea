@@ -5893,3 +5893,167 @@ its P3 log-and-serve carve-out).
 Fold into the post-staging deep-reveal epic together with **OI-129**. Cross-refs: OI-124 (D3's
 wiring, closed), OI-126 (the token-stripping half, closed), memory
 `project_annotation_gate_and_zones`, `project_prod_llm_call_graph`.
+
+---
+
+## OI-144 — A first-run visitor's onboarding auto-route hijacks `/pricing?_ptxn=…`, redirecting the Paddle payment-method-update link to `/`
+
+**Status**: open (found during the 2026-08-04 staging deploy verification; not fixed)
+**Area**: the first-run onboarding auto-route (`OnboardingMissionScreen` routing / `useOnboardingRouting`),
+`connect-four/src/screens/PricingScreen.jsx`, spec 057 US3 (FR-013/FR-016), spec 053's
+"Default payment link" setting
+**Discovered**: staging deploy verification, 2026-08-04, real browser against
+`https://staging.decodec4.xyz/`
+
+### What is wrong
+
+Measured on staging, in a clean browser profile with no onboarding state:
+
+1. Navigate to `https://staging.decodec4.xyz/pricing?_ptxn=<any id>`.
+2. `PricingScreen` **does** mount — `GET /api/paddle/config`, `GET /api/limits` and
+   `cdn.paddle.com/paddle/v2/paddle.js` all fire.
+3. The first-run onboarding auto-route then redirects to `/`. Final `location.href` is
+   `https://staging.decodec4.xyz/` — the pricing page, and the `_ptxn` checkout it was about to
+   auto-open, are both gone.
+
+The same redirect happens for bare `/pricing` and for `/challenge` while onboarding is incomplete,
+so it is the general first-run auto-route, not something specific to the pricing page.
+
+After completing onboarding, `/pricing?_ptxn=…` works exactly as spec 057 US3 intends: Paddle.js
+initializes on mount and `paddle.Checkout.open({ transactionId })` fires — verified on the same
+environment (`sandbox-buy.paddle.com/paddlejs/v2` 200 with the transaction id in the payload).
+
+### Why it matters
+
+This is the real-world shape of the FR-016 flow. Paddle's **Default payment link** setting points at
+`/pricing`, and Paddle appends `?_ptxn=<txn>` when it emails an existing subscriber a
+payment-method-update link. A subscriber who opens that email **on a device or browser profile that
+has no onboarding state** — a phone, a work laptop, a cleared profile, an incognito window — lands on
+the onboarding screen instead of a checkout, with no error and no path back to the transaction. The
+existing OI-98 note reads as if the client half is now fully closed; on a fresh browser it is not.
+
+Spec 057's T041 fix is correct as far as it goes — the defect is upstream of it, in route priority.
+
+### What to do
+
+Decide whether a `_ptxn` (or any deep-linked billing route) should **outrank** the first-run
+onboarding auto-route, and make that ordering explicit rather than emergent. The narrow fix is to
+exempt `/pricing` when `_ptxn` is present; the more principled one is a general "explicit deep link
+beats first-run redirect" rule, since `/challenge` and the lesson routes have the same shape.
+
+Not fixed during the deploy — it is a product/routing decision, not a deploy step.
+
+---
+
+## OI-145 — A pattern tag named "Suboptimal move" renders directly beneath, and contradicts, the severity badge on a blunder detail
+
+**Status**: open (found during the 2026-08-04 staging deploy verification; not fixed)
+**Area**: mistake-detail screen (severity badge + pattern-tag heading),
+`classifyPattern` tag vocabulary
+**Discovered**: staging deploy verification, 2026-08-04, real browser against
+`https://staging.decodec4.xyz/blunder/<id>`
+
+### What is wrong
+
+On a mistake whose severity is **Blunder**, the detail screen renders two stacked labels:
+
+- a pill badge reading `BLUNDER` — red `rgb(232, 84, 62)` on `rgb(251, 228, 223)` — the **severity**;
+- immediately below it, a teal `rgb(13, 148, 136)` heading reading `SUBOPTIMAL MOVE` — the
+  **pattern tag**.
+
+Both are uppercase, both sit in the same visual stack, and they say opposite things. Confirmed the
+second is a pattern tag and not a mislabelled severity by opening a genuinely *suboptimal* mistake in
+the same session: there the badge reads `Suboptimal` (amber `rgb(245, 166, 35)`) and the teal heading
+reads `MINOR THREAT`. So the teal slot is content-derived, and one of the values it can take reuses
+the severity vocabulary.
+
+### Why it matters
+
+This is **not** the chip↔detail severity mismatch that spec 057 removed — that one is fixed and was
+verified in the same session (red chip → `Blunder` badge; amber chip → `Suboptimal` badge, matching
+counts 2/2). This is a second, adjacent label that reintroduces the same *reader-facing* confusion by
+a different route: a learner looking at a blunder sees the word "SUBOPTIMAL" on the screen.
+
+### What to do
+
+Rename the pattern tag so it does not collide with the severity vocabulary (e.g. "no better line" /
+"quiet move"), or visually separate the pattern-tag slot from the severity badge so the two are not
+read as one stack. Cosmetic, but it undercuts the single-criterion severity work FR-019a just landed.
+
+---
+
+## OI-146 — `backfill-correct-cols.mjs` aborts on a closed stdin but still exits 0, so a scripted run silently writes nothing
+
+**Status**: open (found during the 2026-08-04 staging deploy verification; worked around, not fixed)
+**Area**: `connect-four/server/scripts/backfill-correct-cols.mjs:330` (the `Type "Yes"` prompt)
+**Discovered**: staging deploy verification, 2026-08-04
+
+### What is wrong
+
+The confirmation prompt reads from `process.stdin` via `readline`. Run non-interactively (a
+background shell, CI, `nohup`, a wrapper that closes stdin), the read resolves to EOF, the script
+prints `Aborted (confirmation not "Yes").` — and **exits 0**.
+
+Hit live during the staging deploy: the first backfill run reported exit 0 and appeared to succeed;
+re-measuring the database showed `active AND correct_cols IS NULL` still at 122, i.e. nothing had
+been written. Only `printf 'Yes\n' | node …` actually applied it.
+
+An abort is not a success. Any caller that gates on the exit code — a deploy script, a CI check, an
+agent — records a completed backfill that never happened, and the next step then runs against
+unpopulated data.
+
+### What to do
+
+Exit non-zero (e.g. 3) when the confirmation is not an affirmative `Yes`, and distinguish "declined"
+from "no TTY". Consider an explicit `--yes` flag for scripted use, matching the
+`--i-understand-this-is-production` pattern the sibling scripts already use.
+
+The same prompt shape exists in `fill-candidate-pools.mjs` and
+`repair-overcut-highlight-metadata.js` — check whether they share the defect before fixing one.
+
+---
+
+## OI-147 — The `064` pre-flight query counts inactive puzzles and non-pending candidates, so its "must be 0" gate is unsatisfiable by its own prescribed remedy
+
+**Status**: open — the runbook text is corrected in `docs/deployment_steps.md`, but the underlying
+query shipped in that entry is still the one people will copy
+**Area**: `docs/deployment_steps.md` § "Spec 056 — Legacy `correct_col` scalar retirement", Pre-flight
+**Discovered**: staging deploy verification, 2026-08-04
+
+### What is wrong
+
+The documented pre-flight is:
+
+```sql
+SELECT 'puzzles' AS tbl, count(*) AS at_risk
+  FROM public.puzzles     WHERE correct_cols IS NULL AND correct_col IS NOT NULL
+UNION ALL
+SELECT 'candidates', count(*)
+  FROM public.candidates  WHERE correct_cols IS NULL AND correct_col IS NOT NULL;
+```
+
+with "Success: `at_risk` = 0 for BOTH rows" and, on non-zero, "run spec 051's backfill … proceed only
+once it returns 0." Two reasons that gate can never clear:
+
+- It does not filter `puzzles` on `is_active`. Measured on staging after the backfill: raw
+  `puzzles.at_risk` = **48**, but `is_active AND correct_cols IS NULL` = **0**. All 48 are rows the
+  backfill deliberately **deactivated** for failing their predicate — the correct end state per D1.
+- It does not filter `candidates` on `status`. `backfill-correct-cols.mjs` only processes
+  `status = 'pending'` (stated in its own `--help`). Staging has 122 candidates, **all `approved`,
+  0 pending**, of which 102 are "at risk" — a number the prescribed remedy cannot move.
+
+So a literal reading of the entry stops the deploy permanently, on rows that are retired content and
+generation artifacts rather than anything a player can reach.
+
+### What to do
+
+Replace the shipped query with the two gates that actually matter (already written into the
+`deployment_steps.md` entry as the correction, but the original block is still above it):
+
+```sql
+SELECT count(*) FROM public.puzzles    WHERE is_active AND correct_cols IS NULL;                 -- 0
+SELECT count(*) FROM public.candidates WHERE status='pending'
+   AND correct_cols IS NULL AND correct_col IS NOT NULL;                                          -- 0
+```
+
+Production will hit this too — it has its own legacy `candidates` rows.
