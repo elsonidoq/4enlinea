@@ -211,6 +211,10 @@ function App() {
       const AdminFvSuffPage = lazy(() => import('./pages/AdminFvSuffPage.jsx'));
       return <Suspense fallback={null}><AdminFvSuffPage /></Suspense>;
     }
+    if (window.location.pathname.startsWith('/admin/grounding-diff')) {
+      const AdminGroundingDiffPage = lazy(() => import('./pages/AdminGroundingDiffPage.jsx'));
+      return <Suspense fallback={null}><AdminGroundingDiffPage /></Suspense>;
+    }
     return <Suspense fallback={null}><AdminCuratePage /></Suspense>;
   }
 
