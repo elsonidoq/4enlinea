@@ -820,25 +820,47 @@ condition-D grounded path only.
 
 ### 11a. The required-set Derivation Rule
 
-`deriveRequiredSet(pruned, zones)` (`server/scripts/renderReasonModel.mjs:109`) narrows the
-*offered* alias set (§10) to the subset the explanation cannot be honest without. Verbatim from
-the epic (spec.md's Derivation Rule, do not re-derive):
+`deriveRequiredSet(pruned, zones)` (`server/scripts/renderReasonModel.mjs`, locate by symbol)
+narrows the *offered* alias set (§10) to the subset the explanation cannot be honest without.
+**As amended by D45** — the epic's original wording made the line a *fallback* for a half with no
+cell, which was dead code in practice; the line is now REQUIRED alongside the cell:
 
 ```js
+// A double_threat half's POINT geometry is its TWO fork squares, not one of them.
+function halfForkCellsSpec(h) {
+  if (!h || h.tacticTag !== 'double_threat' || (h.forkCells?.length ?? 0) < 2) return null;
+  return 'windows:' + h.forkCells.join(',');
+}
+// A double_threat half's LINE geometry is BOTH fork lines; every other half's is its own window.
+function halfLineSpec(h) {
+  if (!h) return null;
+  if (h.tacticTag === 'double_threat' && (h.forkWindows?.length ?? 0) >= 2) {
+    return 'windows:' + h.forkWindows.map((w) => w.join(',')).join('|');
+  }
+  if (Array.isArray(h.window) && h.window.length) return 'windows:' + h.window.join(',');
+  return null;
+}
+
 export function deriveRequiredSet(pruned, zones) {
   const unprefix = (s) => (s.startsWith('future:') ? s.slice('future:'.length) : s);   // D43
   const aliasBySpec = new Map((zones?.aliases ?? []).map((a) => [unprefix(a.spec), a]));
   const groups = [];
-  for (const half of ['lostResource', 'opponentPunishment']) {
-    const h = pruned?.[half];
-    if (!h) continue;
-    const cell = denialCell(h);
-    const spec = cell ?? (Array.isArray(h.window) && h.window.length ? 'windows:' + h.window.join(',') : null);
-    if (!spec) continue; // neither a cell nor a window — abstain, do not invent (FR-006)
+  const push = (half, spec) => {
+    if (!spec) return false;                    // abstain, do not invent (FR-006)
     const alias = aliasBySpec.get(spec);
-    if (!alias) continue; // match failure — drop, required ⊆ offered (FR-004)
-    if (groups.some((g) => g.spec === alias.spec)) continue;
+    if (!alias) return false;                   // match failure — drop, required ⊆ offered (FR-004)
+    if (groups.some((g) => g.spec === alias.spec)) return false;   // a subset has no duplicates
     groups.push({ half, spec: alias.spec, handle: alias.handle, role: alias.role });
+    return true;
+  };
+  const HALVES = ['lostResource', 'opponentPunishment'];
+  for (const half of HALVES) {                  // one POINT group per half
+    const h = pruned?.[half];
+    if (!push(half, halfForkCellsSpec(h))) push(half, denialCell(h));
+  }
+  for (const half of HALVES) {                  // plus EXACTLY ONE line/window group
+    if (groups.length >= 3) break;
+    if (push(half, halfLineSpec(pruned?.[half]))) break;
   }
   return groups.slice(0, 3);
 }
@@ -846,11 +868,20 @@ export function deriveRequiredSet(pruned, zones) {
 
 Mechanics:
 
-- **Per-half load-bearing cell**: for each of `pruned.lostResource` / `pruned.opponentPunishment`,
+- **Per-half point group**: for each of `pruned.lostResource` / `pruned.opponentPunishment`,
   the cell is `denialCell(h)` — the same `h?.cell ?? h?.completingCell ?? null` precedence
-  `causalLinks.mjs`'s own `denialCell()` uses. If the half has no resolvable cell but does have a
-  `window` array, the whole window becomes the spec (`'windows:' + h.window.join(',')`) — "the
-  half's story is a line, not a single square."
+  `causalLinks.mjs`'s own `denialCell()` uses. **D45 exception:** a `double_threat` half with ≥2
+  `forkCells` uses BOTH fork squares as one group (`<owner>-future-fork`) instead, falling back to
+  `denialCell(h)` if that alias is not offered — a double threat's load-bearing geometry is two
+  squares, and `[term:double_threat]` highlights nothing on its own.
+- **One line group (D45)**: after the point groups, ONE line/window slot is filled, trying
+  `lostResource` first and stopping at the first half whose line matches an offered alias. A half's
+  line is its `forkWindows` (both lines, `windows:A|B`) when it is a `double_threat` with ≥2 of
+  them, otherwise its own `window`. **Before D45 the line was only a fallback for a half with no
+  cell — dead code in practice, since virtually every half carries a `completingCell`, so the line
+  was offered but never required and the coach never used it (0 `windows:` specs emitted across 12
+  real board-runs under prompt steering alone).** `lostResource` wins the single slot because it is
+  the resource the player gave up — what "what is the key four-in-a-row line?" is asking about.
 - **Abstain, never invent (FR-006)**: a half with neither a cell nor a window contributes nothing.
   Measured over the 29-record coverage corpus: 16 non-empty `requiredSet`s, 13 correctly empty.
 - **Required ⊆ offered (FR-004)**: the derived spec is matched against `zones.aliases[].spec` by
@@ -859,13 +890,17 @@ Mechanics:
 - **Dedup**: both halves routinely resolve to the same offered alias (measured: 9 of the 16
   non-empty cases, e.g. `eval-4 -> c5r4` from both halves) — the required set is a genuine *subset*
   of the offered handles, so a duplicate spec is dropped before the cap.
-- **Cap at 3**: `.slice(0, 3)`. With exactly two halves, at most one group per half is possible in
-  practice, so the cap is a defensive ceiling, not something the two-half shape normally reaches.
+- **Cap at 3**: `.slice(0, 3)`, in FR-005's own stated composition — one point group per half PLUS
+  at most one line/window. Since D45 the two-half shape reaches the cap routinely (3 of the 4
+  spec-058 feedback boards do), so the line-slot priority above is load-bearing, not defensive.
 
 `assembleGroundedPrompt` (`renderReasonModel.mjs:333`) turns `model.requiredSet` into a
 `# You MUST build the explanation around these` block, one line per group
 (`` `- [zone:${g.handle}] = ${g.role}` ``), or an explicit `(none for this explanation — do not
 invent one)` when the set is empty (FR-006 must be visible in the prompt, not silently omitted).
+
+**Amended 2026-08-05 (D45).** See `reason-DECISIONS.md` D45 for the measurement, the rejected
+alternative (fork-lines-first), and the one-step reversal recipe.
 
 **Resolved 2026-08-05 (D43).** The gap was not that the Rule refuses to read `forkCells` — it was
 that `aliasBySpec` keyed on the RAW alias spec, so a deep half's derived plain `cNrM` never matched

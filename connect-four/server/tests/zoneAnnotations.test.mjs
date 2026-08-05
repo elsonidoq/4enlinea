@@ -105,6 +105,19 @@ test('future: alias role text is distinct from the present-tense structural role
   assert.doesNotMatch(future.role, /^the fork square where/); // the present-tense 'double' phrasing
 });
 
+test('a MULTI-cell future fork alias is described as more than one square (D45 — it is now required)', () => {
+  // Under D45 the `<owner>-future-fork` alias is a REQUIRED group whenever a half is a
+  // double_threat with >= 2 forkCells, so its role text is read and paraphrased every time. The
+  // singular 'this single square matters later' wording mis-describes a two-cell spec, and the
+  // model paraphrased it back as "the later fork square" (measured, t043 run 1).
+  const { aliases } = buildAnnotationOffer(deepForkPruned, deepForkBoards);
+  const fork = aliases.find((a) => a.handle.endsWith('-future-fork'));
+  assert.ok(fork.spec.startsWith('future:windows:'), 'fixture must give a multi-cell fork spec');
+  assert.doesNotMatch(fork.role, /single square/);
+  assert.match(fork.role, /squares/);
+  assert.match(fork.role, /later|once|not.*right now/i);   // FR-002 still holds
+});
+
 test('future: alias does not shadow or duplicate the near-term structural aliases', () => {
   const { aliases } = buildAnnotationOffer(deepForkPruned, deepForkBoards);
   // the genuinely near-term fork (c1r3/c7r6, board-true on afterPlayed) is still offered normally

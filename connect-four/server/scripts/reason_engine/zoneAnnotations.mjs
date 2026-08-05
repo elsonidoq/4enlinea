@@ -50,9 +50,13 @@ function roleText(owner, kind) {
   const who = owner === 'you' ? 'you' : 'your opponent';
   if (kind === 'immediate') return `the single square where ${who} can make four next move`;
   if (kind === 'double') return `the single fork square where ${who} gets two winning squares at once`;
-  if (kind === 'line') return `the whole four-in-a-row line ${who} is playing for (${LINE_STEER})`;
+  if (kind === 'line') return `the whole four-in-a-row line ${who} ${owner === 'you' ? 'are' : 'is'} playing for (${LINE_STEER})`;
   if (kind === 'future-line') return `the whole four-in-a-row line that decides this later, once the forced sequence reaches it — not a threat right now (${LINE_STEER})`;
   if (kind === 'future') return `this single square matters later, once the forced sequence reaches it — not a threat right now`;
+  // D45: the multi-cell fork alias is now a REQUIRED group, so its role text is paraphrased on every
+  // run — the singular 'future' wording made the model call a two-square fork "the later fork
+  // square" (measured, t043 run 1).
+  if (kind === 'future-fork') return `BOTH of the two squares ${who} can finish on — this is the fork itself, and it matters later, once the forced sequence reaches it, not right now`;
   return `a single square completing ${who}'s four-in-a-row line`; // major
 }
 
@@ -128,7 +132,8 @@ export function buildAnnotationOffer(pruned, boardDecisions, opts = {}) {
     if (seen.has(spec)) continue;
     seen.add(spec);
     const handle = mkHandle(`${owner}-future-fork`);
-    aliases.push({ handle, spec, role: roleText(owner, 'future'), truthBoard: 'projectedDeep',
+    const forkKind = half.forkCells.length === 1 ? 'future' : 'future-fork';
+    aliases.push({ handle, spec, role: roleText(owner, forkKind), truthBoard: 'projectedDeep',
                    kbId: TERM_KB.double_threat ? 'double_threat' : null });
     zoneAliasMap[handle] = spec;
   }

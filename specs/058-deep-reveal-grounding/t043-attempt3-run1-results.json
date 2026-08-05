@@ -1,0 +1,132 @@
+[
+  {
+    "movestring": "3154",
+    "col": 4,
+    "offeredSpecs": [
+      "col6",
+      "col5",
+      "future:c7r3",
+      "future:windows:c4r3,c5r3,c6r3,c7r3",
+      "future:c6r4",
+      "future:windows:c3r4,c4r4,c5r4,c6r4"
+    ],
+    "requiredSpecs": [
+      "future:c7r3",
+      "future:c6r4",
+      "future:windows:c4r3,c5r3,c6r3,c7r3"
+    ],
+    "emittedSpecs": [
+      "future:windows:c4r3,c5r3,c6r3,c7r3",
+      "future:c6r4"
+    ],
+    "requiredSubsetOfEmitted": false,
+    "missingHandlesFromRetry": [],
+    "decisionARejectionCount": 0,
+    "decisionARejectedSpecs": [],
+    "guardFailures": [
+      "P6:raw_coordinate:future:c7r3"
+    ],
+    "servedExplanation": "You should play column 6 because it keeps your deep parity win alive and leaves the harder defense in place. By playing column 5, you let your opponent switch the race and gain the better reply in the later four-in-a-row fight, so the line through [zone:future:windows:c4r3,c5r3,c6r3,c7r3]your four-in-a-row line on row 3[/zone:future:windows:c4r3,c5r3,c6r3,c7r3] no longer holds up the same way. The key squares are column 6 for your plan and [zone:future:c6r4]column 6, row 4[/zone:future:c6r4] for the opponent's counterplay once the sequence reaches them.",
+    "rawMechanism": "You should play column 6 because it keeps your deep parity win alive and leaves the harder defense in place. By playing column 5, you let your opponent switch the race and gain the better reply in the later four-in-a-row fight, so the line through [zone:future:windows:c4r3,c5r3,c6r3,c7r3]your four-in-a-row line on row 3[/zone:future:windows:c4r3,c5r3,c6r3,c7r3] no longer holds up the same way. The key squares are [zone:future:c7r3]c6r3[/zone:future:c7r3] for your plan and [zone:future:c6r4]c6r4[/zone:future:c6r4] for the opponent's counterplay once the sequence reaches them."
+  },
+  {
+    "movestring": "315444233213",
+    "col": 1,
+    "offeredSpecs": [
+      "col4",
+      "col2",
+      "c3r4",
+      "windows:c6r1,c5r2,c4r3,c3r4",
+      "future:windows:c3r5,c7r1",
+      "future:c5r5",
+      "future:windows:c2r5,c3r5,c4r5,c5r5",
+      "future:c3r5",
+      "future:windows:c6r2,c5r3,c4r4,c3r5",
+      "future:windows:c6r2,c5r3,c4r4,c3r5|c7r1,c6r2,c5r3,c4r4",
+      "future:c7r1"
+    ],
+    "requiredSpecs": [
+      "future:c5r5",
+      "future:windows:c3r5,c7r1",
+      "future:windows:c2r5,c3r5,c4r5,c5r5"
+    ],
+    "emittedSpecs": [
+      "future:windows:c2r5,c3r5,c4r5,c5r5",
+      "future:windows:c3r5,c7r1",
+      "future:c5r5"
+    ],
+    "requiredSubsetOfEmitted": true,
+    "missingHandlesFromRetry": [],
+    "decisionARejectionCount": 0,
+    "decisionARejectedSpecs": [],
+    "guardFailures": [],
+    "servedExplanation": "You should have kept the [term:double_threat]double threat[/term:double_threat] alive by playing the move that preserves your [zone:future:windows:c2r5,c3r5,c4r5,c5r5]four-in-a-row line[/zone:future:windows:c2r5,c3r5,c4r5,c5r5] instead of drifting into the forced reply that gives your opponent the two finishing squares in [zone:future:windows:c3r5,c7r1]their fork[/zone:future:windows:c3r5,c7r1]. The better move is the tougher defense because it keeps [zone:future:c5r5]the key square[/zone:future:c5r5] in play and makes your opponent work through the deep parity fight instead of handing them a clean follow-up.",
+    "rawMechanism": "You should have kept the [term:double_threat]double threat[/term:double_threat] alive by playing the move that preserves your [zone:future:windows:c2r5,c3r5,c4r5,c5r5]four-in-a-row line[/zone:future:windows:c2r5,c3r5,c4r5,c5r5] instead of drifting into the forced reply that gives your opponent the two finishing squares in [zone:future:windows:c3r5,c7r1]their fork[/zone:future:windows:c3r5,c7r1]. The better move is the tougher defense because it keeps [zone:future:c5r5]the key square[/zone:future:c5r5] in play and makes your opponent work through the deep parity fight instead of handing them a clean follow-up."
+  },
+  {
+    "movestring": "315444233213134122",
+    "col": 5,
+    "offeredSpecs": [
+      "col3",
+      "col6",
+      "c1r3",
+      "windows:c1r3,c2r3,c3r3,c4r3",
+      "c1r4",
+      "windows:c1r4,c2r4,c3r4,c4r4"
+    ],
+    "requiredSpecs": [
+      "c1r3",
+      "windows:c1r3,c2r3,c3r3,c4r3"
+    ],
+    "emittedSpecs": [
+      "windows:c1r3,c2r3,c3r3,c4r3",
+      "c1r3"
+    ],
+    "requiredSubsetOfEmitted": true,
+    "missingHandlesFromRetry": [],
+    "decisionARejectionCount": 0,
+    "decisionARejectedSpecs": [],
+    "guardFailures": [],
+    "servedExplanation": "You needed to keep the [zone:windows:c1r3,c2r3,c3r3,c4r3]four-in-a-row line[/zone:windows:c1r3,c2r3,c3r3,c4r3] alive and the [zone:c1r3]key square on column 1, row 3[/zone:c1r3] as your deep winning resource. By playing elsewhere, you let your opponent take that square and shut down the long parity fight, so your move only holds a draw instead of the tougher winning continuation.",
+    "rawMechanism": "You needed to keep the [zone:windows:c1r3,c2r3,c3r3,c4r3]four-in-a-row line[/zone:windows:c1r3,c2r3,c3r3,c4r3] alive and the [zone:c1r3]key square on c1r3[/zone:c1r3] as your deep winning resource. By playing elsewhere, you let your opponent take that square and shut down the long parity fight, so your move only holds a draw instead of the tougher winning continuation."
+  },
+  {
+    "movestring": "3154442332131341225551",
+    "col": 5,
+    "offeredSpecs": [
+      "col3",
+      "col6",
+      "c1r3",
+      "windows:c1r3,c2r3,c3r3,c4r3",
+      "c1r4",
+      "windows:c1r4,c2r4,c3r4,c4r4",
+      "windows:c1r3,c7r6",
+      "c7r6",
+      "windows:c4r3,c5r4,c6r5,c7r6",
+      "future:windows:c2r6,c5r5",
+      "future:c7r3",
+      "future:windows:c7r3,c6r4,c5r5,c4r6",
+      "future:c2r6",
+      "future:windows:c5r3,c4r4,c3r5,c2r6",
+      "future:windows:c5r3,c4r4,c3r5,c2r6|c2r5,c3r5,c4r5,c5r5",
+      "future:c5r5"
+    ],
+    "requiredSpecs": [
+      "future:c7r3",
+      "future:windows:c2r6,c5r5",
+      "future:windows:c7r3,c6r4,c5r5,c4r6"
+    ],
+    "emittedSpecs": [
+      "future:c7r3",
+      "future:windows:c7r3,c6r4,c5r5,c4r6",
+      "future:windows:c2r6,c5r5"
+    ],
+    "requiredSubsetOfEmitted": true,
+    "missingHandlesFromRetry": [],
+    "decisionARejectionCount": 0,
+    "decisionARejectedSpecs": [],
+    "guardFailures": [],
+    "servedExplanation": "You should have kept the deep [term:double_threat]double threat[/term:double_threat] alive by playing [zone:future:c7r3]the key square on column 7, row 3[/zone:future:c7r3], because that preserves your [zone:future:windows:c7r3,c6r4,c5r5,c4r6]four-in-a-row line from column 7, row 3 through column 4, row 6[/zone:future:windows:c7r3,c6r4,c5r5,c4r6] and makes the opponent work. Instead, by dropping in column 6 you handed them [zone:future:windows:c2r6,c5r5]both finishing squares they can use later[/zone:future:windows:c2r6,c5r5], so they can force their own win while your original deep win disappears.",
+    "rawMechanism": "You should have kept the deep [term:double_threat]double threat[/term:double_threat] alive by playing [zone:future:c7r3]the key square on c7r3[/zone:future:c7r3], because that preserves your [zone:future:windows:c7r3,c6r4,c5r5,c4r6]four-in-a-row line from c7r3 through c4r6[/zone:future:windows:c7r3,c6r4,c5r5,c4r6] and makes the opponent work. Instead, by dropping in column 6 you handed them [zone:future:windows:c2r6,c5r5]both finishing squares they can use later[/zone:future:windows:c2r6,c5r5], so they can force their own win while your original deep win disappears."
+  }
+]

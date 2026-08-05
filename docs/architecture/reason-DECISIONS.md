@@ -1325,3 +1325,114 @@ serves "column 1, row 3" in all three runs.
 `server/scripts/renderReasonModel.mjs` (`assembleGroundedPrompt`). Tests:
 `server/tests/reasonRenderGuard.test.mjs`, `server/tests/renderReasonModel.test.mjs`.
 Evidence: `specs/058-deep-reveal-grounding/t042-attempt2-run{1,2,3}-results.json`.
+
+---
+
+### D45 — The LINE becomes REQUIRED, not merely offered: `deriveRequiredSet` derives a cell group per half PLUS one line group; a `double_threat` half's groups are its two fork squares and its two fork lines
+
+**Supersedes** the Derivation Rule's cell/line precedence as recorded in
+`specs/058-deep-reveal-grounding/spec.md` §"Derivation Rule — Required Set" (copied verbatim from
+`docs/epics/deep-reveal-grounding-epic.md`, Settled decision 2) and restated in
+`docs/architecture/reason-render-grounded-prompt.md` §11a. **FR-004 (required ⊆ offered), FR-005
+(cap 1–3, composed as "one per half that resolves to a cell, plus at most one line/window"), FR-006
+(abstain, never invent) and FR-002 (`future:` framing) are all unchanged and still hold.** Only the
+*precedence* changes.
+
+**The defect.** The Rule said the derived spec is the half's load-bearing cell, "or the full
+`half.window` array when the half's story is a line". Implemented as
+`denialCell(h) ?? (h.window ? 'windows:'+… : null)`, the `windows:` branch was **effectively dead**:
+virtually every half carries a `completingCell`, so the line was never reached. The engine offered
+the correct line handle and the coach never used it — a human asks "what is the key four-in-a-row
+line?" and the board lights one endpoint square.
+
+**The measurement that justified it.** Attempt 2 (2026-08-05) added prompt steering for exactly
+this — `roleText` marking every line role "a LINE of four squares, not a single square", plus a
+worked bad/good pair in `assembleGroundedPrompt`. Measured over **12 real board-runs (3 runs × 4
+spec-058 feedback boards, real LLM)**: **ZERO `windows:` specs emitted.**
+Evidence: `specs/058-deep-reveal-grounding/t042-attempt2-run{1,2,3}-results.json`.
+**Prompt steering alone is refuted for this behaviour. Requiring it is the only lever that moves
+it.** (Re-confirmed independently in attempt 3: a *new*, handle-specific term→zone binding line was
+added to the prompt for `[term:double_threat]` and the model ignored it in 3/3 runs; the same
+pairing appeared in 6/6 runs only once the fork became a required group.)
+
+**Decision.** `deriveRequiredSet` (`server/scripts/renderReasonModel.mjs`) now derives in two
+passes, matching FR-005's own stated composition:
+
+1. **A point group per half.** Normally `denialCell(h)`. **Exception:** a half with
+   `tacticTag === 'double_threat'` and ≥2 `forkCells` derives `'windows:' + forkCells.join(',')`
+   instead — a double threat's load-bearing geometry is *two* squares, and requiring one of them
+   leaves the other dark while `[term:double_threat]` (which highlights nothing at all) points into
+   the void. This is `buildAnnotationOffer`'s existing `<owner>-future-fork` alias; on match failure
+   it falls back to `denialCell(h)`.
+2. **Exactly ONE line group** (FR-005's "plus at most one line/window"), tried
+   `lostResource` first, then `opponentPunishment`; the first half that produces a *matching*
+   offered line fills the slot and the loop stops. A half's line geometry is
+   `'windows:' + forkWindows.map(w => w.join(',')).join('|')` when it is a `double_threat` with ≥2
+   `forkWindows` (its story is two lines, and only the combined `<owner>-fork-lines` alias shows
+   both), otherwise `'windows:' + h.window.join(',')`.
+
+**Why `lostResource` wins the single line slot.** It is the resource the *player* gave up, which is
+what every "what is the key/long four-in-a-row line?" piece of staging feedback was asking about
+(asks 1c, 2a, 2b); it is also the half the Derivation Rule names first. The alternative
+(fork-lines-first) was evaluated and rejected: it would have satisfied 2 asks instead of 3.5, and
+the fork's *squares* now reach the player through the point group anyway.
+
+**Measured after, same harness, 3 runs × 4 boards** (`specs/058-deep-reveal-grounding/t043-attempt3-run{1,2,3}-results.json`):
+
+```
+windows: line spec emitted                       12 / 12 board-runs   (was 0 / 12)
+every required spec emitted                      10 / 12 board-runs
+guard failures                                    2 / 12, both the SAME pre-existing
+                                                  model mis-anchor on board 3154 (D44 point 2:
+                                                  [zone:future:c7r3] wrapping words that name
+                                                  c6r3/c6r4 -> correctly stripped)
+[term:double_threat] adjacent to a fork zone      6 /  6 fork board-runs (was 0)
+```
+
+Required sets on the four feedback boards after D45:
+
+```
+3154                    future:c7r3, future:c6r4, future:windows:c4r3,c5r3,c6r3,c7r3
+315444233213            future:c5r5, future:windows:c3r5,c7r1, future:windows:c2r5,c3r5,c4r5,c5r5
+315444233213134122      c1r3, windows:c1r3,c2r3,c3r3,c4r3
+3154442332131341225551  future:c7r3, future:windows:c2r6,c5r5, future:windows:c7r3,c6r4,c5r5,c4r6
+```
+
+**FR-002 is preserved.** Every group carries the *alias's own* prefixed spec and the alias's own
+future-tense role text, so a deep line still reads "matters later, once the forced sequence reaches
+it — not a threat right now" and still renders in `FUTURE_ZONE_COLOR`.
+
+**Opening records still abstain.** `buildAnnotationOffer`'s `opts.openingHorizon` suppresses the
+half-resource family entirely, so no deep line is offered and therefore none can be required —
+pinned by `renderReasonModel.test.mjs`'s
+`'opening records never offer or require a deep half cell (guardrail + pruneOpeningResidue)'`.
+
+**Also in this batch (no invariant change):**
+- `roleText` (`zoneAnnotations.mjs`) gains a `future-fork` kind for a **multi-cell** fork alias. The
+  old singular "this single square matters later" mis-described a two-square spec and the model
+  paraphrased it back as "the later fork square" (measured, t043 run 1). The single-cell fork case
+  still uses `future`.
+- `roleText`'s `line` branch: `"the whole four-in-a-row line you is playing for"` → `"… you are …"`.
+- `assembleGroundedPrompt` binds each KB term to the offered aliases carrying `kbId === slug`
+  ("if you use this term you MUST also point at it, with `[zone:<handle>]` wrapping ADJACENT
+  words"). **Measured ineffective on its own** (0/3 runs) — kept because it is free and correct, but
+  it is the required-group change that actually produced the pairing.
+
+**To reverse this in one step** (if the owner disagrees): in
+`server/scripts/renderReasonModel.mjs`, symbol `deriveRequiredSet`, replace the two derivation
+passes with the single original loop body
+`const spec = denialCell(h) ?? (Array.isArray(h.window) && h.window.length ? 'windows:' + h.window.join(',') : null);`
+and delete the `halfForkCellsSpec` / `halfLineSpec` helpers directly above it. Nothing downstream
+inspects group *kind*: `mechanismExplainer`'s `missingRequiredGroups` compares `g.spec` against
+`processAnnotations`' `usedSpecs` either way. The seven `D45:`-prefixed tests in
+`server/tests/renderReasonModel.test.mjs`, the `D45` test in `server/tests/zoneAnnotations.test.mjs`,
+and the three-group `okAnswer`/`missingHandles` fixtures in
+`server/tests/mechanismExplainer.test.mjs` would need to be reverted alongside it.
+
+**Source:** spec 058 feedback remediation attempt 3, 2026-08-05. Modules:
+`server/scripts/renderReasonModel.mjs` (`deriveRequiredSet`, `halfForkCellsSpec`, `halfLineSpec`,
+`assembleGroundedPrompt`), `server/scripts/reason_engine/zoneAnnotations.mjs` (`roleText`,
+deep-fork family). Tests: `server/tests/renderReasonModel.test.mjs`,
+`server/tests/zoneAnnotations.test.mjs`, `server/tests/mechanismExplainer.test.mjs`.
+Evidence: `specs/058-deep-reveal-grounding/t043-attempt3-run{1,2,3}-results.json`,
+`t043-attempt3-script.mjs`. Related: D43, D44, OI-172.

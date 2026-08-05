@@ -6583,3 +6583,40 @@ needs it: the same geometry now reaches the coach through the half-resource offe
 `namedPatternOpts`), then decide what `renderThreatList` should print for a tag whose truth board is
 `projectedDeep`, and re-run the corpus gate (`server/tests/renderCoverageUniverse.test.mjs`,
 `renderCoverageCorpus.test.mjs`) — every board's tactic list changes. Cross-refs: D43, OI-171.
+
+---
+
+## OI-176 — `checkP2`'s column regex can never match Spanish `columna N`, so the P2 column-consistency check is dead on the `es` locale
+
+**Status**: open (out of scope for spec-058 attempt 3 — reported, not fixed)
+**Area**: `connect-four/server/annotationGate.js` (`checkP2`)
+**Discovered**: spec-058 feedback remediation attempt 3, 2026-08-05
+
+`checkP2` scans each zone's inner text for an explicit column reference and fails the zone when the
+number named in prose is not one the zone's own spec covers. Verbatim (`annotationGate.js`, locate
+by symbol `checkP2`):
+
+```js
+const refRegex = /col(?:umn)?\s*([1-7])/gi;
+```
+
+`\s*` matches whitespace only, so after `col` it cannot consume the `umna` of `columna` — nor the
+`a` of `columna` after the optional `umn` group. Verified at source:
+
+```
+"columna 1"          -> null
+"columna 5, fila 3"  -> null
+"column 1"           -> ['column 1', '1']
+"col 1"              -> ['col 1', '1']
+```
+
+The check is therefore a **no-op on every Spanish explanation**: a mis-anchored highlight whose
+words say `columna 4` inside a `c2r3` zone passes P2 silently. Worse, the server's own Spanish
+output is exactly the string the regex cannot see — `serverT('es','column')` is
+`` (n) => `columna ${n}` `` and `serverT('es','cell')` is `` (c,r) => `columna ${c}, fila ${r}` ``
+(`server/locale.mjs`), and both `stripInternalTokens` and `humanizeGroundedCoordinates` emit them.
+
+**If picked up**: widen to something like `/col(?:umn|umna)?\s*([1-7])/gi` (or drive it off the
+locale's own `column`/`cell` renderers so it can never drift from them again), then re-measure —
+turning a dead check on will surface real P2 failures on `es` that have never been counted, and P2
+is span-carrying, so newly-firing failures will start stripping Spanish highlights.

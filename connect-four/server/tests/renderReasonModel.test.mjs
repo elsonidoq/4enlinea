@@ -301,6 +301,108 @@ test('deriveRequiredSet matches a future:-prefixed alias against a plain derived
   assert.match(groups[0].role, /matters later/);
 });
 
+// ── D45: the line is REQUIRED, not merely offered ───────────────────────────────────────────────
+// Before D45 the derived spec was `denialCell(h) ?? window`, so the `windows:` branch was dead
+// whenever a half had a completingCell (i.e. almost always) and the line was never required.
+// Measured: ZERO `windows:` specs emitted across 12 real board-runs under prompt steering alone.
+
+const LINE_ALIASES = [
+  { handle: 'you-key-square', spec: 'future:c5r5', role: 'this single square matters later', truthBoard: 'projectedDeep', kbId: null },
+  { handle: 'you-key-line', spec: 'future:windows:c2r5,c3r5,c4r5,c5r5', role: 'the whole four-in-a-row line (a LINE of four squares)', truthBoard: 'projectedDeep', kbId: null },
+  { handle: 'opp-key-square', spec: 'future:c3r5', role: 'this single square matters later', truthBoard: 'projectedDeep', kbId: null },
+  { handle: 'opp-key-line', spec: 'future:windows:c6r2,c5r3,c4r4,c3r5', role: 'the whole opponent line', truthBoard: 'projectedDeep', kbId: null },
+];
+
+test('D45: a half whose story is a LINE contributes its line handle IN ADDITION to its completing cell', () => {
+  const pruned = {
+    lostResource: { completingCell: 'c5r5', window: ['c2r5', 'c3r5', 'c4r5', 'c5r5'] },
+    opponentPunishment: { completingCell: 'c3r5' },
+  };
+  const req = deriveRequiredSet(pruned, { aliases: LINE_ALIASES });
+  assert.deepEqual(req.map((g) => g.handle), ['you-key-square', 'opp-key-square', 'you-key-line']);
+  assert.equal(req.find((g) => g.handle === 'you-key-line').spec,
+    'future:windows:c2r5,c3r5,c4r5,c5r5');
+});
+
+test('D45: exactly ONE line slot (FR-005 cap of 3), and lostResource wins it over opponentPunishment', () => {
+  const pruned = {
+    lostResource: { completingCell: 'c5r5', window: ['c2r5', 'c3r5', 'c4r5', 'c5r5'] },
+    opponentPunishment: { completingCell: 'c3r5', window: ['c6r2', 'c5r3', 'c4r4', 'c3r5'] },
+  };
+  const req = deriveRequiredSet(pruned, { aliases: LINE_ALIASES });
+  assert.equal(req.length, 3);
+  assert.deepEqual(req.map((g) => g.handle), ['you-key-square', 'opp-key-square', 'you-key-line']);
+});
+
+test('D45: the line slot falls through to opponentPunishment when lostResource offers no line', () => {
+  const pruned = {
+    lostResource: { completingCell: 'c5r5' },
+    opponentPunishment: { completingCell: 'c3r5', window: ['c6r2', 'c5r3', 'c4r4', 'c3r5'] },
+  };
+  const req = deriveRequiredSet(pruned, { aliases: LINE_ALIASES });
+  assert.deepEqual(req.map((g) => g.handle), ['you-key-square', 'opp-key-square', 'opp-key-line']);
+});
+
+test('D45: a double_threat half\'s line geometry is its forkWindows (both lines), not its single window', () => {
+  const pruned = {
+    lostResource: { completingCell: 'c5r5' },
+    opponentPunishment: { completingCell: 'c3r5', tacticTag: 'double_threat',
+                          window: ['c6r2', 'c5r3', 'c4r4', 'c3r5'],
+                          forkWindows: [['c6r2', 'c5r3', 'c4r4', 'c3r5'], ['c7r1', 'c6r2', 'c5r3', 'c4r4']] },
+  };
+  const zones = { aliases: [...LINE_ALIASES,
+    { handle: 'opp-fork-lines', spec: 'future:windows:c6r2,c5r3,c4r4,c3r5|c7r1,c6r2,c5r3,c4r4',
+      role: 'both lines of the fork', truthBoard: 'projectedDeep', kbId: null }] };
+  const req = deriveRequiredSet(pruned, zones);
+  assert.deepEqual(req.map((g) => g.handle), ['you-key-square', 'opp-key-square', 'opp-fork-lines']);
+});
+
+test('D45: a line with no offered alias is DROPPED, not invented (FR-004 required ⊆ offered)', () => {
+  const pruned = {
+    lostResource: { completingCell: 'c5r5', window: ['c1r1', 'c2r2', 'c3r3', 'c4r4'] },
+    opponentPunishment: { completingCell: 'c3r5' },
+  };
+  const req = deriveRequiredSet(pruned, { aliases: LINE_ALIASES });
+  assert.deepEqual(req.map((g) => g.handle), ['you-key-square', 'opp-key-square']);
+});
+
+test('D45: a double_threat half\'s CELL group is its two fork squares, not one of them (ask 2c/4b)', () => {
+  // A double threat's load-bearing geometry is TWO squares — requiring only completingCell leaves
+  // the other fork square dark and the [term:double_threat] pointing at nothing.
+  const pruned = {
+    lostResource: { completingCell: 'c5r5' },
+    opponentPunishment: { completingCell: 'c3r5', tacticTag: 'double_threat',
+                          forkCells: ['c3r5', 'c7r1'] },
+  };
+  const zones = { aliases: [...LINE_ALIASES,
+    { handle: 'opp-future-fork', spec: 'future:windows:c3r5,c7r1', role: 'the two fork squares',
+      truthBoard: 'projectedDeep', kbId: 'double_threat' }] };
+  const req = deriveRequiredSet(pruned, zones);
+  assert.deepEqual(req.map((g) => g.handle), ['you-key-square', 'opp-future-fork']);
+});
+
+test('D45: a double_threat half falls back to its completing cell when the fork-squares handle is not offered (FR-004)', () => {
+  const pruned = {
+    lostResource: { completingCell: 'c5r5' },
+    opponentPunishment: { completingCell: 'c3r5', tacticTag: 'double_threat',
+                          forkCells: ['c3r5', 'c7r1'] },
+  };
+  const req = deriveRequiredSet(pruned, { aliases: LINE_ALIASES }); // no fork-squares alias
+  assert.deepEqual(req.map((g) => g.handle), ['you-key-square', 'opp-key-square']);
+});
+
+test('D45: a term whose idea has an offered pointing handle is bound to it in the prompt (ask 2c)', () => {
+  const model = buildReasonRenderModel(NV);
+  model.zones = {
+    aliases: [{ handle: 'opp-future-fork', spec: 'future:windows:c3r5,c7r1', role: 'the two fork squares',
+                truthBoard: 'projectedDeep', kbId: 'double_threat' }],
+    terms: [{ slug: 'double_threat', kbId: 'double_threat', canonicalPhrase: 'double threat',
+              description: 'two winning squares at once' }],
+  };
+  const prompt = assembleGroundedPrompt(model);
+  assert.match(prompt, /\[term:double_threat\][\s\S]*?\[zone:opp-future-fork\]/);
+});
+
 test('deriveRequiredSet still drops a derived cell with no offered alias at all (FR-004)', () => {
   const pruned = { lostResource: { completingCell: 'c7r3' }, opponentPunishment: {} };
   const zones = { aliases: [{ handle: 'better-col', spec: 'col4', role: 'x', truthBoard: 'decision', kbId: null }] };

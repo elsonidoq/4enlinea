@@ -1784,6 +1784,14 @@ the pre-058 insert path ignores them.
 the constraint matters only if 058 is cherry-picked apart from that merge. This entry's own
 migration/TRUNCATE steps are independent of Plan A's changes.
 
+### Attempt-3 (D45) addendum — no new prerequisite
+
+The 2026-08-05 attempt-3 remediation (`reason-DECISIONS.md` **D45** — the required set now includes
+the four-in-a-row LINE, and a `double_threat` half's two fork squares) is **code-only**: no schema
+change, no new migration, no content regeneration. It changes what a *freshly generated* deep
+reveal highlights, so the `TRUNCATE TABLE explanation_cache` in step 2 above is what makes it
+visible — that step was already mandatory and is unchanged. Nothing to add to this queue.
+
 ### No script needed (T039 — verified, not assumed)
 
 Neither step warrants a new script. The migration is a standard `migrate.js` run — the house tool

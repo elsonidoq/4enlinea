@@ -95,17 +95,47 @@ function pruneOpeningResidue(rendered) {
   return out;
 }
 
-// The required set (spec 058, US2 — Derivation Rule, spec.md, copied verbatim from the epic). For
-// each of pruned.lostResource / pruned.opponentPunishment, the load-bearing cell (if any) is
+// A half's POINT geometry (D45). Normally the load-bearing cell, `denialCell(h)`. But a
+// double_threat half's load-bearing geometry is TWO squares, not one — requiring only its
+// completingCell leaves the other fork square dark and a `[term:double_threat]` (which highlights
+// nothing at all) pointing into the void. `buildAnnotationOffer`'s deep-fork family already offers
+// exactly this spec as `<owner>-future-fork`; on match failure the caller falls back to the cell.
+function halfForkCellsSpec(h) {
+  if (!h || h.tacticTag !== 'double_threat' || (h.forkCells?.length ?? 0) < 2) return null;
+  return 'windows:' + h.forkCells.join(',');
+}
+
+// A half's LINE geometry (D45). A double_threat half's story is TWO lines, and the combined
+// `windows:A|B` fork-lines alias is the only offered handle that shows both — its single `window`
+// is just one of them. Everything else uses the half's own `window`.
+function halfLineSpec(h) {
+  if (!h) return null;
+  if (h.tacticTag === 'double_threat' && (h.forkWindows?.length ?? 0) >= 2) {
+    return 'windows:' + h.forkWindows.map((w) => w.join(',')).join('|');
+  }
+  if (Array.isArray(h.window) && h.window.length) return 'windows:' + h.window.join(',');
+  return null;
+}
+
+// The required set (spec 058, US2 — Derivation Rule, spec.md, as amended by D45). For each of
+// pruned.lostResource / pruned.opponentPunishment, the load-bearing cell (if any) is
 // denialCell(half) — the same `h?.cell ?? h?.completingCell ?? null` precedence causalLinks.mjs's
-// own denialCell() uses — or, when the half has no resolvable cell, the full half.window array
-// (the half's story is a line, not a single square; the T-parity worked example, covers:
-// ['route', 'lostResource.terminal', 'opponentPunishment.terminal']). A half with neither field
-// yields NO required cell — it is not forced into one (FR-006). Each derived cell/window is then
-// matched to an offered handle by EXACT spec-string equality against zones.aliases[].spec (D2) —
-// never a freshly-derived spec format. On match failure the group is dropped (FR-004) rather than
-// left unenforceable. Capped at 1-3 groups (one per half that resolves to a cell, plus at most one
-// line/window) — with exactly two halves, at most one group per half is possible in practice.
+// own denialCell() uses. A half with neither a cell nor a line yields NO required group — it is not
+// forced into one (FR-006). Each derived cell/window is then matched to an offered handle by EXACT
+// spec-string equality against zones.aliases[].spec (D2, normalized for the `future:` decorator per
+// D43) — never a freshly-derived spec format. On match failure the group is dropped (FR-004) rather
+// than left unenforceable. Capped at 1-3 groups, in FR-005's own composition: one per half that
+// resolves to a cell, PLUS at most one line/window.
+//
+// D45 changes ONE thing: the line is no longer only a fallback for a half with no cell. Before, the
+// derived spec was `denialCell(h) ?? window`, and because virtually every half carries a
+// completingCell the `windows:` branch was effectively dead — the line was offered but never
+// required. Measured: ZERO `windows:` specs emitted across 12 real board-runs (3 runs x 4 boards)
+// while the correct line handle sat unused in the offer set, under prompt steering alone. Now the
+// cells are derived first (both halves), then ONE line slot is filled, preferring lostResource —
+// the resource the player gave up, which is what every "what is the key/long four-in-a-row line?"
+// piece of feedback was asking about — and falling through to opponentPunishment when lostResource
+// offers no matching line. See reason-DECISIONS.md D45 for the reversal recipe.
 export function deriveRequiredSet(pruned, zones) {
   // Index by the UNPREFIXED spec (D43). `future:` is a render-framing decorator, not part of the
   // geometry: zoneParser's isValidSpec/expandSpec, annotationGate's checkP5Strong, reasonRenderGuard's
@@ -117,22 +147,28 @@ export function deriveRequiredSet(pruned, zones) {
   const unprefix = (s) => (s.startsWith('future:') ? s.slice('future:'.length) : s);
   const aliasBySpec = new Map((zones?.aliases ?? []).map((a) => [unprefix(a.spec), a]));
   const groups = [];
-  for (const half of ['lostResource', 'opponentPunishment']) {
-    const h = pruned?.[half];
-    if (!h) continue;
-    const cell = denialCell(h);
-    const spec = cell ?? (Array.isArray(h.window) && h.window.length ? 'windows:' + h.window.join(',') : null);
-    if (!spec) continue; // neither a cell nor a window — abstain, do not invent (FR-006)
+  // Both halves routinely resolve to the SAME offered alias (measured: 9 of the 16 non-empty
+  // requiredSets over the 29-record coverage corpus, e.g. eval-4 -> c5r4 from both halves). The
+  // required set is "the subset of the offered handle set" (spec.md, Key Entities) — a subset has
+  // no duplicates. Emitting the group twice would print the identical `- [zone:h] = role` line
+  // twice in assembleGroundedPrompt's required block and burn one of FR-005's slots on nothing.
+  const push = (half, spec) => {
+    if (!spec) return false;                          // abstain, do not invent (FR-006)
     const alias = aliasBySpec.get(spec);
-    if (!alias) continue; // match failure — drop, required ⊆ offered (FR-004)
-    // Both halves routinely resolve to the SAME offered alias (measured: 9 of the 16 non-empty
-    // requiredSets over the 29-record coverage corpus, e.g. eval-4 -> c5r4 from both halves).
-    // The required set is "the subset of the offered handle set" (spec.md, Key Entities) — a
-    // subset has no duplicates. Emitting the group twice would print the identical
-    // `- [zone:h] = role` line twice in assembleGroundedPrompt's required block and burn one of
-    // FR-005's three capped slots on nothing.
-    if (groups.some((g) => g.spec === alias.spec)) continue;
+    if (!alias) return false;                         // match failure — drop, required ⊆ offered (FR-004)
+    if (groups.some((g) => g.spec === alias.spec)) return false;
     groups.push({ half, spec: alias.spec, handle: alias.handle, role: alias.role });
+    return true;
+  };
+  const HALVES = ['lostResource', 'opponentPunishment'];
+  for (const half of HALVES) {
+    const h = pruned?.[half];
+    if (!push(half, halfForkCellsSpec(h))) push(half, denialCell(h));
+  }
+  // The single line/window slot (FR-005: "plus at most one line/window"), lostResource first.
+  for (const half of HALVES) {
+    if (groups.length >= 3) break;
+    if (push(half, halfLineSpec(pruned?.[half]))) break;
   }
   return groups.slice(0, 3);
 }
@@ -336,8 +372,22 @@ export function assembleGroundedPrompt(model) {
   const regions = model.zones.aliases.length
     ? model.zones.aliases.map((a) => `- [zone:${a.handle}] = ${a.role} (on the ${a.truthBoard} board)`).join('\n')
     : '(no highlightable squares — describe the idea in words)';
+  // Ask 2c (spec 058 feedback, attempt 3). The generic adjacency rule below was added in attempt 2
+  // and measurably did not fire: the model named `[term:double_threat]` and pointed at nothing, so
+  // the reader was told about a fork with no way to see it. Bind the obligation to the TERM'S OWN
+  // LINE, naming the exact handle that points at that idea's geometry (the aliases carrying
+  // `kbId === slug`, which is how buildAnnotationOffer already links the two). A conditional
+  // pairing, not a required-set group — it costs none of FR-005's three capped slots.
+  const pointersFor = (slug) => model.zones.aliases.filter((a) => a.kbId === slug).map((a) => a.handle);
   const termLines = model.zones.terms.length
-    ? model.zones.terms.map((t) => `- [term:${t.slug}] = ${t.canonicalPhrase}: ${t.description}`).join('\n')
+    ? model.zones.terms.map((t) => {
+      const pointers = pointersFor(t.slug);
+      const bind = pointers.length
+        ? ` — if you use this term you MUST also point at it, with ${pointers.map((h) => `[zone:${h}]`).join(' or ')} `
+          + 'wrapping ADJACENT words (never the same words: the two tags cannot nest).'
+        : '';
+      return `- [term:${t.slug}] = ${t.canonicalPhrase}: ${t.description}${bind}`;
+    }).join('\n')
     : '(no named terms apply here)';
   // Required-set block (spec 058, US2, FR-007): every group deriveRequiredSet produced is a square
   // or line the explanation cannot be honest without — the model MUST wrap it in a [zone:...] tag
