@@ -30,7 +30,19 @@ const CXRY_RE = /\bc(\d+)r\d+\b/gi;
 // Matches a RANGED internal-coordinate token, e.g. "c3-c6" (OI-126: this shape reached the
 // player because the original guard only had CXRY_RE). Must run before BARE_COL_RE, or the bare
 // pass would consume each endpoint separately and this rule would never see the pair.
-const RANGE_RE = /\bc(\d+)-c(\d+)\b/gi;
+//
+// The dash class covers every separator the model actually emits, not just ASCII hyphen-minus:
+// U+002D hyphen-minus, U+2013 en-dash, U+2014 em-dash, U+2212 minus sign. Harvested from staging
+// (Epic 11 evidence, board `315444233213`): the raw mechanism reads "the c2–c5 strip" with an
+// EN-DASH, so the ASCII-only rule missed it and BARE_COL_RE rewrote each endpoint separately —
+// the player was served "column 2–column 5 strip". Optional surrounding whitespace is allowed
+// because a spaced en-dash ("c2 – c5") is ordinary typography for the same range.
+//
+// Known, accepted trade-off: including the em-dash means prose that uses it as a clause break
+// between two independent column mentions — e.g. "the threat at c4 — c6 stays open" — is also
+// rewritten as a range, changing the meaning. This is deliberate: ranges are far more common than
+// that construction in this model's output, so the wider match wins on net correctness.
+const RANGE_RE = /\bc(\d+)\s*[-–—−]\s*c(\d+)\b/gi;
 
 // Matches a BARE internal column token, e.g. "c3" (OI-126, same report). Word-bounded on both
 // sides so it never matches inside an unrelated alphanumeric string, and requires the digit to
@@ -222,4 +234,53 @@ export function guardExplainMoveLlmPayload({ explanation, prompt, terms, locale 
     prompt,
     terms: sanitizeTermsMap(terms),
   };
+}
+
+/**
+ * Strip annotation markers from LLM explanation text for TTS speech.
+ * Removes [zone:X]...[/zone:X] and [term:X]...[/term:X] tag wrappers,
+ * keeping only the inner text. Also strips any leftover unmatched bracket tokens.
+ *
+ * Moved here from `server/index.js` (where it was a private function with one caller) so that
+ * the audio seam and the HTTP response seam are provably the same code. See
+ * `buildTtsSpeechText` below.
+ *
+ * @param {string} raw - Raw LLM explanation from deep_reveal_json.explanation
+ * @returns {string} Clean prose suitable for TTS synthesis
+ */
+export function stripAnnotationsForTTS(raw) {
+  if (!raw) return '';
+  return raw
+    // Remove opening zone/term tags: [zone:col3], [zone:tg], [term:kbId], etc.
+    .replace(/\[zone:[^\]]+\]/gi, '')
+    .replace(/\[term:[^\]]+\]/gi, '')
+    // Remove closing tags: [/zone:col3], [/term:kbId], etc.
+    .replace(/\[\/zone:[^\]]+\]/gi, '')
+    .replace(/\[\/term:[^\]]+\]/gi, '')
+    // Collapse multiple spaces and trim
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+/**
+ * The ONE function `GET /api/user/tts/deep-reveal` may use to turn a raw cached explanation into
+ * speakable text.
+ *
+ * Both the HTTP response seam (`guardExplainMoveLlmPayload`) and the audio seam read the SAME
+ * `explanation_cache` row. Until 2026-08-04 only the HTTP seam ran `stripInternalTokens`, so the
+ * coach SPOKE "c5" / "c1r3" while the screen showed "column 5" / "column 1" (verified on staging;
+ * see docs/epics/deep-reveal-grounding-epic.md's evidence table). Routing the audio seam through
+ * this composed function is what makes the two surfaces derive from one sanitized string.
+ *
+ * ORDER IS PART OF THE CONTRACT: `stripInternalTokens` runs FIRST, exactly as it does at the
+ * response seam. It is zone-tag-aware (see ZONE_TAG_RE above) precisely so a transform can run
+ * while `[zone:...]` delimiters are still present without mangling their machine-readable specs.
+ * Annotation removal is the last step. Do not swap these.
+ *
+ * @param {string} raw - `deep_reveal_json.explanation` (or the legacy `fullText`)
+ * @param {string} [locale='en']
+ * @returns {string}
+ */
+export function buildTtsSpeechText(raw, locale = 'en') {
+  return stripAnnotationsForTTS(stripInternalTokens(raw, locale));
 }

@@ -1527,6 +1527,139 @@ games already stored in `games`/`papergames_games`, not primary user data. A use
 game outcomes are unaffected — only the mistake-review annotations are cleared and will repopulate as
 that user's games are next reviewed or new games are analyzed.
 
+## Plan A small fixes — deep-reveal TTS sanitization (fix 7 / fix 8)
+
+**Status**: PENDING
+**When**: after the code deploy (either is safe; the app self-heals, this just avoids a silent stale window)
+**Blocks**: nothing hard — but until it runs, previously-cached deep reveals keep serving their OLD audio
+**Applies to**: staging / production
+
+### What's wrong
+
+`GET /api/user/tts/deep-reveal` now runs `stripInternalTokens` before `stripAnnotationsForTTS`
+(`buildTtsSpeechText`, `server/reasonRenderGuard.mjs`), so the coach speaks "column 5" where it used
+to speak "c5". The stored audio path is derived from that text:
+
+```js
+const textHash = createHash('sha256').update(cleanText).digest('hex');
+const audioPath = `tts/deep-reveal/${textHash}.mp3`;
+```
+
+compared against `explanation_cache.audio_path`. Every existing row's `audio_path` was computed from
+the **unsanitized** string, so it no longer matches and each affected reveal re-synthesizes once —
+correct, but it means the old clips linger as dead objects in the `coach-tts` bucket.
+
+Separately, `RANGE_RE` now matches en/em-dash ranges, so cached *text* generated before this deploy
+can still contain `c2–c5` renders that the guard would now fix. The guard runs at the response seam
+on every read, so served text self-corrects; the **cached raw mechanism** does not change.
+
+### Run it
+
+Pre-launch, staging and production are disposable — this is a truncate, not a migration or a
+backfill:
+
+```sql
+TRUNCATE explanation_cache;
+```
+
+Optionally clear the stale audio objects under `coach-tts/tts/deep-reveal/` in Supabase Storage.
+Not required for correctness — orphaned objects are only wasted bytes.
+
+### Verify
+
+```sql
+SELECT count(*) FROM explanation_cache;
+```
+
+Success: `0`. Then open one past mistake, tap the deep reveal, and play the audio. The **spoken**
+text must match the **rendered** text: no "c5", no "c1r3", and a dash range must be spoken as
+"columns 2 through 5" (en) / "columnas 2 a 5" (es). Check both locales — `buildTtsSpeechText`
+takes the locale the route already resolved via `resolveTtsLocale(lang, req.locale)`.
+
+### Roll back
+
+**Not reversible, and does not need to be.** `explanation_cache` is a derived cache: every row
+regenerates on the next reveal of that position. No user data is stored in it.
+
+## Plan A small fixes — synthesize + approve the onboarding review tip audio
+
+**Status**: PENDING
+**When**: either, relative to the code deploy
+**Blocks**: nothing hard — the app is unaffected; the tip renders on screen with no voice until this runs
+**Applies to**: local (this is a content-generation step performed by a human on localhost, then committed)
+
+### What's wrong
+
+`coach.spoken.sparring.review.onboarding.0` was added in both `en.json` and `es.json` and registered
+in both `server/tts-registry.json` / `.es.json` as `needs_audio`, but **deliberately not synthesized or
+approved** in this branch — synthesizing without approving would have created orphan mp3s and turned
+`tests/unit/coachSpokenNamespace.test.js` red. So the onboarding review tip currently **renders on
+screen and is silently unspoken**: `speakCoachMessage` no-ops on any slug that isn't `approved`, by
+design.
+
+### Run it
+
+From `connect-four/`:
+
+```bash
+node --env-file=server/.env scripts/generate-tts.js --key coach.spoken.sparring.review.onboarding.0 --lang all
+```
+
+Then approve at `/admin/audio` in **both** `en` and `es`.
+
+**A load-bearing warning that must be followed in this same pass:** `/admin/audio`'s approve route
+calls `writeTtsManifest`, which **rebuilds the manifest from `status === 'approved'`** rather than
+remapping in place (see OI-149). Five English slugs are currently in the manifest but only
+`awaiting_approval`, so approving anything without also approving them **silently drops them**,
+orphaning their mp3s (turns the parity suite red) and silencing clips that play today. The five:
+`coach--spoken--figure--7--blunder--2`, `coach--spoken--immediate--threat--hint--0`,
+`coach--spoken--sparring--outcome--loss`, `coach--spoken--sparring--outcome--win`,
+`coach--spoken--undercut--optimal--2`. **Two of those are the sparring outcome clips that this same
+branch just made audible**, so dropping them would partially undo the branch. Instruct the human to
+listen to and approve those five in the same pass. Cross-reference `docs/open_issues.md` OI-149.
+
+### Verify
+
+A parity check over both languages: no orphan mp3, no manifest slug lacking a file, and the new slug
+present and approved in both registries.
+
+```bash
+node -e "
+const fs = require('fs');
+const LANGS = [
+  { lang: 'en', registry: 'server/tts-registry.json', dir: 'public/audio/coach' },
+  { lang: 'es', registry: 'server/tts-registry.es.json', dir: 'public/audio/coach/es' },
+];
+const KEY = 'coach.spoken.sparring.review.onboarding.0';
+let ok = true;
+for (const { lang, registry, dir } of LANGS) {
+  const entries = JSON.parse(fs.readFileSync(registry, 'utf8'));
+  const manifest = JSON.parse(fs.readFileSync(\`\${dir}/coach-audio-manifest.json\`, 'utf8'));
+  const onDisk = new Set(fs.readdirSync(dir).filter(f => f.endsWith('.mp3')).map(f => f.slice(0, -4)));
+  const missingMp3 = manifest.filter(s => !onDisk.has(s));
+  const orphanMp3 = [...onDisk].filter(s => !manifest.includes(s));
+  const entry = entries.find(e => e.key === KEY);
+  console.log(lang, {
+    entryStatus: entry && entry.status,
+    inManifest: entry && manifest.includes(entry.slug),
+    missingMp3,
+    orphanMp3,
+  });
+  if (!entry || entry.status !== 'approved' || !manifest.includes(entry.slug) || missingMp3.length || orphanMp3.length) ok = false;
+}
+console.log(ok ? 'PASS' : 'FAIL');
+"
+```
+
+Success: both `en` and `es` print `entryStatus: 'approved'`, `inManifest: true`, empty `missingMp3` /
+`orphanMp3` arrays, and the script prints `PASS`. Then run `npm run test:fast` and confirm
+`coachSpokenNamespace.test.js` is green.
+
+### Roll back
+
+`git checkout` the new mp3s, the two manifests, and the two registries. Nothing is deployed until
+these are committed, so an aborted pass leaves no trace.
+
 ## Template for new entries
 
 ```markdown

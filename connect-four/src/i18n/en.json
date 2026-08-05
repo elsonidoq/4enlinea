@@ -218,11 +218,6 @@
   },
   "coach": {
     "spoken": {
-      "home": {
-        "welcome": {
-          "0": "Let's sharpen your Connect Four tactics."
-        }
-      },
       "onboardingMission": {
         "greeting": "Hi, I'm your coach. Here's how we'll make you dangerous at Connect Four."
       },
@@ -580,6 +575,9 @@
             "1": "A few moments to learn from — let's look.",
             "2": "You played well. Let's find the edge.",
             "3": "Some tactical moments worth revisiting."
+          },
+          "onboarding": {
+            "0": "Tap any red or orange move to see what went wrong."
           }
         },
         "outcome": {
@@ -669,7 +667,8 @@
       "queueCount_other": "{{count}} positions to review",
       "startReview": "Start review",
       "emptyQueue": "No positions in queue — keep training to build your personal curriculum.",
-      "missRate": "miss rate"
+      "missRate": "miss rate",
+      "homeWelcome": "Let's sharpen your Connect Four tactics."
     }
   },
   "stats": {
@@ -1095,7 +1094,6 @@
   },
   "onboarding": {
     "skip": "Skip",
-    "replayIntro": "Replay intro",
     "importOffer": {
       "title": "Bring your real games in",
       "subtitle": "Import your Papergames history to get move-by-move analysis and mistake tracking on the games you actually play.",

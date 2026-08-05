@@ -218,11 +218,6 @@
   },
   "coach": {
     "spoken": {
-      "home": {
-        "welcome": {
-          "0": "Vamos a afilar tus tácticas de Cuatro en línea."
-        }
-      },
       "onboardingMission": {
         "greeting": "Hola, soy tu entrenador. Así es como te volveremos peligroso en el Cuatro en línea."
       },
@@ -580,6 +575,9 @@
             "1": "Algunos momentos para aprender — vamos a verlos.",
             "2": "Jugaste bien. Busquemos el margen.",
             "3": "Algunos momentos tácticos que vale la pena repasar."
+          },
+          "onboarding": {
+            "0": "Tocá cualquier jugada roja o naranja para ver qué salió mal."
           }
         },
         "outcome": {
@@ -669,7 +667,8 @@
       "queueCount_other": "{{count}} posiciones para repasar",
       "startReview": "Iniciar repaso",
       "emptyQueue": "No hay posiciones en la cola — seguí entrenando para construir tu plan de estudio personal.",
-      "missRate": "tasa de error"
+      "missRate": "tasa de error",
+      "homeWelcome": "Vamos a afilar tus tácticas de Cuatro en línea."
     }
   },
   "stats": {
@@ -1095,7 +1094,6 @@
   },
   "onboarding": {
     "skip": "Saltar",
-    "replayIntro": "Repetir introducción",
     "importOffer": {
       "title": "Traé tus partidas reales",
       "subtitle": "Importá tu historial de Papergames para obtener análisis jugada a jugada y seguimiento de errores en las partidas que realmente jugás.",

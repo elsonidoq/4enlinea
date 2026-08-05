@@ -1266,6 +1266,29 @@ Cache hits (served before the LLM is called) do not consume quota. Note the inte
 - `server/reasonRenderGuard.mjs` — `guardExplainMoveLlmPayload` (the live wiring point, T028), `stripFailingZoneSpans`
 - `server/migrations/031_deep_reveal_failures.sql` — failure log table DDL (offline eval path only; the live strip-and-log path does not write here)
 
+### Deep-reveal text and audio derive from one sanitized string
+
+`GET /api/user/tts/deep-reveal` and `POST /api/explain-move-llm` read the **same**
+`explanation_cache` row. Until 2026-08-04 only the HTTP seam ran `stripInternalTokens`
+(via `guardExplainMoveLlmPayload`), so the coach *spoke* raw internal coordinates — "c5",
+"c1r3" — while the screen rendered "column 5", "column 1".
+
+The audio seam now calls exactly one function, `buildTtsSpeechText(raw, locale)` in
+`server/reasonRenderGuard.mjs` — `stripAnnotationsForTTS(stripInternalTokens(raw, locale))`.
+**Do not reintroduce a second sanitization path in `server/index.js`.** If a future change needs
+different speech text, change `buildTtsSpeechText`, so both surfaces move together.
+
+Two things that follow from this:
+
+- **Order is part of the contract.** `stripInternalTokens` runs first, matching the response seam.
+  It skips `[zone:…]` delimiters on purpose: rewriting inside a spec turns
+  `[zone:cells:c4r1,c4r2]` into `[zone:cells:column 4,column 4]`, which the client's `isValidSpec`
+  rejects — the highlight then disappears with no error at any layer.
+- **The audio cache key is derived from the text.** `textHash = sha256(cleanText)` →
+  `tts/deep-reveal/${textHash}.mp3`, compared against `explanation_cache.audio_path`. Any change
+  to what `buildTtsSpeechText` returns invalidates every stored clip; see
+  `docs/deployment_steps.md`.
+
 ## Deep Reveal Quota
 
 The `/api/explain-move-llm` endpoint enforces a weekly quota for free-tier users.

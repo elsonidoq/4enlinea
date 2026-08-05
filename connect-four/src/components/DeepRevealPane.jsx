@@ -14,6 +14,7 @@ import { canRevealAnon, markRevealedAnon } from '../lib/anonDeepReveal.js';
 import { langHeaders } from '../lib/apiLang.js';
 import { describeQuota } from '../lib/deepRevealQuota.js';
 import { getEntitlement } from '../lib/entitlement.js';
+import { stashReturnTo } from '../lib/postLoginReturn.js';
 import i18n from '../i18n/index.js';
 
 const API = import.meta.env.VITE_API_BASE_URL || '';
@@ -55,6 +56,11 @@ export function DeepRevealPane({
   closeLabel,
   navigate,
   noSpeech = false,
+  // Fix 3 (2026-08-04): where to send the user back to after sign-in. Google OAuth is a
+  // full-page redirect that lands on the site root, so the destination must survive via
+  // sessionStorage (src/lib/postLoginReturn.js), not React state. Optional and null by default:
+  // a host that omits it (AdminDeepRevealEvalPage) keeps the pre-fix behaviour exactly.
+  returnTo = null,
 }) {
   const { t } = useTranslation();
   const { store, session } = useStore();
@@ -198,7 +204,12 @@ export function DeepRevealPane({
     })
       .then(res => {
         clearTimeout(softId); clearTimeout(hardId);
-        if (res.status === 401) { setLoading(false); setAuthOpen(true); return null; }
+        if (res.status === 401) {
+          setLoading(false);
+          if (returnTo?.screenKey) stashReturnTo(returnTo.screenKey, returnTo.params ?? {});
+          setAuthOpen(true);
+          return null;
+        }
         if (res.status === 429) {
           setLoading(false);
           setQuotaExceeded(true);

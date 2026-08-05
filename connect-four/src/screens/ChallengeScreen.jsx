@@ -822,6 +822,7 @@ export function ChallengeScreen({
           onReveal={d => track('deep_reveal_viewed', { puzzleId: puzzles[currentIdx]?.id, cached: d.cached ?? false })}
           onZhCellsChange={setZhCells}
           userMajorThreats={userMajorThreats}
+          returnTo={!lessonMode && category ? { screenKey: 'challenge', params: { category } } : null}
           headerContent={evaluation?.badge && (
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 12 }}>
               {evaluation?.patternTag && (

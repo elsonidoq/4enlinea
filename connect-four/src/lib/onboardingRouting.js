@@ -15,8 +15,10 @@ export const ONBOARDING_GAME_PARAMS = { difficulty: 'easy', side: 'first', onboa
  *
  * Settled decision (B3/D1, spec.md Assumptions): anonymous-only. A signed-in
  * user (truthy `session`) is NEVER auto-routed, even if their account's
- * onboarding_status is 'not_encountered' — they reach onboarding only via
- * Settings "Replay intro" (FR-010).
+ * onboarding_status is 'not_encountered'.
+ *
+ * Since 2026-08-04 there is NO manual re-entry point: Settings' "Replay intro" (FR-010) was
+ * removed at the owner's request, so this auto-route is the only path into onboarding.
  *
  * `onboardingStatus` of `null`/`undefined` is treated identically to
  * `'not_encountered'` at every read site (spec.md Assumptions).

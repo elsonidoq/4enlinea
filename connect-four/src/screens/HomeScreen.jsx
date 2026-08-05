@@ -9,25 +9,11 @@ import { Icon } from '../components/Icon.jsx';
 import { useStore } from '../store/ProfileStore.jsx';
 import { stashReturnTo } from '../lib/postLoginReturn.js';
 import { isOfferShownMarkerSet, shouldShowHomeFallbackOffer } from '../lib/onboardingOfferMarker.js';
-import { useCoachSpeech } from '../lib/useCoachSpeech.js';
 
 export function HomeScreen({ go }) {
   const { t } = useTranslation();
   const { store, session } = useStore();
   const [authOpen, setAuthOpen] = useState(false);
-  const { speakCoachMessage } = useCoachSpeech();
-
-  // `coach.spoken.home.welcome.0` declares intent to be voiced (see
-  // docs/architecture/coach-audio-conventions.md) but had no play site — the text was rendered
-  // via t() only, so the clip never played. Mirrors OnboardingMissionScreen's startedRef guard
-  // against React 18 StrictMode's double-mount.
-  const spokeRef = useRef(false);
-  useEffect(() => {
-    if (spokeRef.current) return;
-    spokeRef.current = true;
-    speakCoachMessage('coach.spoken.home.welcome.0');
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
 
   // Epic 8 — Onboarding Experience, US3 (T036, FR-007 Scenario 5, research.md R5).
   // READ-ONLY fallback check: a user who engaged (onboarding_status === 'seen') but left before
@@ -70,12 +56,14 @@ export function HomeScreen({ go }) {
       <TopBar
         onLogoClick={() => go('home')}
         right2="gear"
-        // Epic 8 — Onboarding Experience, US4 (T043/FR-010, SC-004): navigate to Settings
-        // regardless of auth state — SettingsScreen already renders a graceful unauthenticated
-        // view, and "Replay intro" must be reachable from Home in <=2 nav actions for anonymous
-        // users too (onboarding's auto-route is anonymous-only, so skipped users are frequently
-        // anonymous). Previously this gated anonymous taps behind AuthModal, which made Settings
-        // (and therefore Replay intro) unreachable without signing in first.
+        // Navigate to Settings regardless of auth state — SettingsScreen renders a graceful
+        // unauthenticated view (language switcher, sign-in prompt), so gating the gear behind
+        // AuthModal would make Settings unreachable for anonymous users for no benefit.
+        //
+        // HISTORY (do not "restore" the button): this was originally justified by Epic 8 US4 /
+        // SC-004, "'Replay intro' must be reachable from Home in <=2 nav actions for anonymous
+        // users". That button was REMOVED on 2026-08-04 at the owner's request. The unconditional
+        // navigation is kept on its own merits, not as a leftover of the removed requirement.
         onRight2={() => go('settings')}
         rightIcon="user"
         onRight={handleProfile}
@@ -138,7 +126,9 @@ export function HomeScreen({ go }) {
           }}
         />
 
-        <CoachDialog messages={[{ text: t('coach.spoken.home.welcome.0'), mood: 'happy' }]} />
+        {/* Home's welcome line is deliberately UNVOICED (2026-08-04) — hence `coach.ui.*`, not
+            `coach.spoken.*`. See docs/architecture/coach-audio-conventions.md. */}
+        <CoachDialog messages={[{ text: t('coach.ui.homeWelcome'), mood: 'happy' }]} />
 
         <div style={{ display: 'flex', gap: 8, justifyContent: 'center' }}>
           <button

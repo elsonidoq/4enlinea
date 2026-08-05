@@ -51,7 +51,7 @@ import { shapeKeyForPuzzle } from './shapeDescriptor.js';
 import { buildGoogleAuthorizeUrl, resolveAuthToken } from './authUtils.js';
 import { logError } from './logger.js';
 import { computeThreatCells, computePatternCells, buildBlunderDetailResponse, fetchBlunderDetailContext } from './blunderDetailResponse.js';
-import { guardExplainMovePayload, guardExplainMoveLlmPayload } from './reasonRenderGuard.mjs';
+import { guardExplainMovePayload, guardExplainMoveLlmPayload, buildTtsSpeechText } from './reasonRenderGuard.mjs';
 import { localeMiddleware, serverT, resolveTtsLocale } from './locale.mjs';
 import { resolveAdminLang } from './adminAudioLang.mjs';
 import { buildTtsInstructions } from './ttsInstructions.mjs';
@@ -3526,28 +3526,6 @@ function resolveCoachText(key, lang) {
   }
 }
 
-/**
- * Strip annotation markers from LLM explanation text for TTS speech.
- * Removes [zone:X]...[/zone:X] and [term:X]...[/term:X] tag wrappers,
- * keeping only the inner text. Also strips any leftover unmatched bracket tokens.
- *
- * @param {string} raw - Raw LLM explanation from deep_reveal_json.explanation
- * @returns {string} Clean prose suitable for TTS synthesis
- */
-function stripAnnotationsForTTS(raw) {
-  if (!raw) return '';
-  return raw
-    // Remove opening zone/term tags: [zone:col3], [zone:tg], [term:kbId], etc.
-    .replace(/\[zone:[^\]]+\]/gi, '')
-    .replace(/\[term:[^\]]+\]/gi, '')
-    // Remove closing tags: [/zone:col3], [/term:kbId], etc.
-    .replace(/\[\/zone:[^\]]+\]/gi, '')
-    .replace(/\[\/term:[^\]]+\]/gi, '')
-    // Collapse multiple spaces and trim
-    .replace(/\s+/g, ' ')
-    .trim();
-}
-
 function readTtsRegistry(lang = 'en') {
   try {
     return JSON.parse(readFileSync(registryPathForLang(lang), 'utf8'));
@@ -3896,8 +3874,10 @@ app.get('/api/user/tts/deep-reveal', async (req, res) => {
       || '';
     if (!rawText) return res.status(404).json({ error: 'no explanation text available' });
 
-    // Strip annotations for clean TTS speech
-    const cleanText = stripAnnotationsForTTS(rawText);
+    // Sanitize + strip annotations through the SAME seam the HTTP response uses, so the coach
+    // never speaks a coordinate the screen renders as "column N" (fix 7). `locale` is already
+    // resolved above via resolveTtsLocale(lang, req.locale).
+    const cleanText = buildTtsSpeechText(rawText, locale);
     if (!cleanText) return res.status(404).json({ error: 'explanation text is empty after stripping annotations' });
 
     // Compute deterministic audio path from the cleaned text

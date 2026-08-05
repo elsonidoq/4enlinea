@@ -50,6 +50,11 @@ function getQualityColor(quality) {
   return 'var(--eval-bad)';
 }
 
+// Fix 2 (2026-08-04): during onboarding the Move Timeline's coloured chips are the affordance the
+// user is meant to discover, so the coach names it explicitly. `coach.spoken.*` because it is
+// voiced — see docs/architecture/coach-audio-conventions.md.
+const ONBOARDING_TIMELINE_TIP_KEY = 'coach.spoken.sparring.review.onboarding.0';
+
 
 export function ReviewScreen({ go, goBack, id, onboarding, result, outcome }) {
   const { t } = useTranslation();
@@ -84,9 +89,13 @@ export function ReviewScreen({ go, goBack, id, onboarding, result, outcome }) {
   useEffect(() => {
     if (analysis?.summaryPhraseKey) {
       speakCoachMessage(analysis.summaryPhraseKey);
+      if (onboarding && analysis.moves && analysis.moves.length > 0) {
+        // The module-level speech queue in useCoachSpeech.js plays these strictly in order.
+        speakCoachMessage(ONBOARDING_TIMELINE_TIP_KEY);
+      }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [analysis?.summaryPhraseKey]);
+  }, [analysis?.summaryPhraseKey, onboarding]);
 
   function handleShare() {
     const url = window.location.href;
@@ -288,6 +297,11 @@ export function ReviewScreen({ go, goBack, id, onboarding, result, outcome }) {
       ? t('review.cleanButLost')
       : t(analysis.summaryPhraseKey);
     coachMessages = [{ text: summaryText, mood: 'happy', disc, discLabel }];
+    // CoachDialog stacks bubbles inside one scrolling box and auto-scrolls to the last one, so
+    // the tip is what the user actually sees. Only when there is a timeline to tap.
+    if (onboarding && analysis.moves && analysis.moves.length > 0) {
+      coachMessages.push({ text: t(ONBOARDING_TIMELINE_TIP_KEY), mood: 'think' });
+    }
   }
 
   // Accuracy display
