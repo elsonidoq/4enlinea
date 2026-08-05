@@ -1780,8 +1780,11 @@ constraints). This item exists so the epic cannot close as "launch-ready" while 
 below the N=20 floor on a live environment; SC-001 requires the count measured **directly against**
 staging/production, not inferred from the mechanism shipping.
 
-- [ ] **Owner runs `fill-candidate-pools.mjs --apply` against STAGING and PRODUCTION, and records the
-  post-fill per-category active counts.**
+- [x] **STAGING DONE 2026-08-04 (deploy agent, owner-authorized). PRODUCTION still pending.**
+  ~~Owner runs `fill-candidate-pools.mjs --apply` against STAGING and PRODUCTION, and records the
+  post-fill per-category active counts.~~ **Note on the "owner-run only" premise below**: that
+  constraint was written for the spec-057 *implementation* sessions. The owner explicitly authorized
+  this deploy agent to write to staging on 2026-08-04; production remains untouched and owner-gated.
   - **What**: after the spec 057 code deploy AND the `061_correct_cols.sql` migration (see
     `docs/deployment_steps.md` § "Spec 057 — retire-and-refill" and § "Spec 057 — content pools" for
     the exact commands and ordering — `correct_cols` must exist on the target's `puzzles` table before
@@ -1803,11 +1806,32 @@ staging/production, not inferred from the mechanism shipping.
     `docs/deployment_steps.md` § "Spec 057 — content pools" for the full per-category table): staging
     12/12 below floor (total active 122); production 4/12 below floor (`odd_even_threat` 0,
     `overcut` 6 after retire-and-refill, `claimeven` 18, `figure_7` 17; total active 279 pre-refill).
-  - **Post-fill counts (fill in after the owner's run)**:
+  - **Post-fill counts**:
     ```
-    staging:    <paste the 12-category table here>
-    production: <paste the 12-category table here>
+    staging (2026-08-04, deploy agent — VERIFIED, all 12 at floor):
+      immediate_threat  20    odd_even_threat  20
+      forced_block      20    z_threat         20
+      double_threat     20    claimeven        20
+      forced_win        20    undercut         20
+      forbidden_columns 20    overcut          20
+      figure_7          20    j_shape          20
+      `fill-candidate-pools.mjs --env staging` exit 0:
+      "Every category is at/above the N=20 floor and overcut/undercut/z_threat show no drift."
+      Cross-checked independently against the live app: GET /api/puzzles/counts returns 20 for
+      all 12 categories, and the Challenges set-picker shows "20 positions" on every set.
+
+    production: <pending — not run; this deploy was staging-only>
     ```
+  - **What it actually took on staging** (matters for the production run):
+    1. `backfill-correct-cols.mjs --env staging` had to run FIRST — `061_correct_cols.sql` only adds
+       the column, so all 122 pre-existing rows had `correct_cols IS NULL` and the new code reads
+       that field exclusively. 69 updated, 53 deactivated. This step was missing from the queue;
+       it is now a new entry in `docs/deployment_steps.md`.
+    2. `fill-candidate-pools.mjs --env staging --apply` then generated 171 boards (0 promoted —
+       staging had 0 pending candidates, confirming the "generate, not promote" finding).
+    3. `forced_win` required ~16 separate invocations to reach 20; it yields 0–4 boards per run
+       against the 400-solver-attempt cap (OI-83).
+  - [x] Signed off: deploy agent, 2026-08-04 (staging only; production still pending).
   - **Source**: spec 057 FR-003, FR-004, Decision D-b; T009–T011, T015.
 
 - [ ] **Owner runs the OI-5 refresh-token-rotation probe against a real account and records the
@@ -1840,8 +1864,31 @@ browser; a live Paddle sandbox transaction requires `VITE_PADDLE_CLIENT_TOKEN`, 
 locally (owner-confirmed: Paddle does not work locally). See `docs/open_issues.md` OI-98 (now
 partially-fixed — client half ships, this is the owner half) and OI-41.
 
-- [ ] **FR-014 — CSP verified against a real production build in a real browser, specifically for the
-  new `?_ptxn=` mount-time path.**
+- [x] **FR-014 — CSP verified against a real production build in a real browser, specifically for the
+  new `?_ptxn=` mount-time path.** — **PASS, 2026-08-04, deploy agent, against the deployed staging
+  build at `https://staging.decodec4.xyz/` (commit `62f71c8`), Chrome DevTools.**
+  Evidence, from `list_console_messages` and `list_network_requests` (not from a screenshot):
+  - `/pricing` — **zero** console messages of any kind, and **zero `Refused to …` lines**.
+    `cdn.paddle.com/paddle/v2/paddle.js` **200** and
+    `sandbox-cdn.paddle.com/paddle/v2/assets/css/paddle.css` **200** on **page load, before any
+    click** — i.e. the T041 unconditional-mount `getPaddle()` path, which OI-96's click-only pass did
+    not cover.
+  - `/pricing?_ptxn=txn_01invalid000000000000000000` — the auto-open **fires**:
+    `sandbox-buy.paddle.com/paddlejs/v2?...#payload=…` **200**, and the decoded payload carries
+    `"transaction_id":"txn_01invalid000000000000000000"`. Paddle then rejects the invalid id **inside
+    its own iframe** (`POST sandbox-checkout-service.paddle.com/transaction-checkout` → **400**),
+    which is *after* every CSP-governed load has already succeeded — exactly the boundary this check
+    needs, and the same boundary the 2026-08-01 local pass relied on.
+  - **Graceful degradation confirmed**: the pricing page rendered fully underneath the failed
+    auto-open (Monthly/Annual toggle, `$2.99/mo`, `$21.99/yr`, Free and Pro tiers, the
+    merchant-of-record link). No error state, no blank page.
+  - Only console output on the run: `[store] checkSession hash= (empty)` and one `401` for
+    `GET /api/auth/session` — the expected signed-out session probe, not a CSP violation.
+  - **Caveat, recorded rather than glossed**: on a browser profile with **no onboarding state**, the
+    first-run auto-route redirects `/pricing?_ptxn=…` to `/` before any of this is reachable. The
+    result above was obtained after completing onboarding. Filed as **OI-144** — it does not weaken
+    the CSP result, but it does mean the end-to-end email flow has a separate defect.
+  - Signed off: deploy agent, 2026-08-04.
   - **What**: from the repo root, `eval "$(./worktree-ports.sh)"`, then `cd connect-four && npm run
     build && node server/index.js` (serves the built `dist/` on `$API_PORT` — restart after any
     rebuild, the server resolves `dist/index.html` at boot). In a real browser with DevTools open,
@@ -1872,3 +1919,68 @@ partially-fixed — client half ships, this is the owner half) and OI-41.
     subscriber-facing gap, not just the code-level `getPaddle()`/`_ptxn` plumbing.
   - **Source**: spec 057 FR-016, T049; `docs/open_issues.md` OI-98.
   - [ ] Signed off (tester + date): _pending owner run_.
+
+---
+
+## 2026-08-04 — Staging deploy verification (deploy agent, real browser against a real production build)
+
+Deployed `stagging` → `https://staging.decodec4.xyz/` in two deploys: **Deploy A** `62f71c8`
+(code + migrations `061_correct_cols`/`062`/`063`, with `064` held off the branch) and **Deploy B**
+`0c37c90` (restores and applies `064_drop_correct_col.sql`). Both reached Railway status SUCCESS.
+Rationale for the split is in `docs/deployment_steps.md` § "RESOLVED DEPLOY SEQUENCE".
+
+All evidence below is from Chrome DevTools `list_console_messages` / `list_network_requests` and
+direct DB/API measurement — not from screenshots alone.
+
+- [x] **Site loads and renders** — home, `/pricing`, `/pricing-legal`, `/saga`, `/setpicker`,
+  `/challenge/<cat>`, `/game`, `/blunder/<id>` all render. **Zero console messages** on the home
+  page; on authenticated-probe pages the only entries are `[store] checkSession hash= (empty)` and a
+  single `401` for `GET /api/auth/session`, which is the expected signed-out session probe. No failed
+  network requests: every resource returned 200/204/206/304.
+- [x] **CSP clean on a production build** — zero `Refused to …` lines anywhere, including `/pricing`
+  and `/pricing?_ptxn=…`. Full evidence under the FR-014 sign-off item above.
+- [x] **Play a game → move evaluation → deep reveal** — played a sparring game to a loss; live
+  per-move coaching fired ("Hmm, not the strongest move there.", "You're close — try to find the
+  stronger option."); `POST /api/games/analyze` produced a Review with 0 optimal / 2 suboptimal /
+  2 blunder; the deep reveal rendered on demand.
+- [x] **No raw internal coordinates in explanation text, and zone highlights survive** — regex over
+  the rendered explanation for `\bc\d+(-c\d+)?\b`, `\bc\d+r\d+\b` and leaked `[zone:…]` specs
+  returned **zero** matches. The prose reads "…played the center move in **column 4** … Your move in
+  **column 1** …", and those two references are `<span data-zone="0">` / `<span data-zone="1">`, with
+  the board rendering the matching highlights (pale-green col 4, pink col 1). This is the specific
+  zone-preservation behaviour the release was meant to keep, confirmed on the deployed build.
+- [x] **Mistake severity consistency (chip ↔ detail)** — the four Review chips are 2 red
+  `rgb(232, 84, 62)` + 2 amber `rgb(245, 166, 35)`, matching the 2-blunder/2-suboptimal counts.
+  Opening a red chip gives a `Blunder` badge in red on `rgb(251, 228, 223)`; opening an amber chip
+  gives a `Suboptimal` badge in amber on `rgb(253, 240, 217)`. **No red chip opened a SUBOPTIMAL
+  detail.** Caveat filed separately as **OI-145**: a *pattern tag* named "Suboptimal move" renders
+  directly under the `BLUNDER` badge, which is a different label reintroducing similar confusion.
+- [x] **Puzzles serve and grade** — all 12 categories serve (set-picker shows "20 positions" on each;
+  `GET /api/puzzles/counts` returns 20 for all 12). A freshly generated `claimeven` puzzle answered
+  in the UI graded **"✓ Optimal — That's the Claimeven column that secures Gray's draw."** Via API,
+  `POST /api/puzzles/:id/check` returns `"result":"correct"` for the stored `correct_cols[0]` and
+  `"result":"wrong"` otherwise. Verified again *after* `064` dropped `correct_col`.
+- [x] **Migration 063 proven on live data** — `puzzle_attempts` now holds `correct_first: 1` and
+  **`incorrect: 1`**. The `'incorrect'` value is what the pre-063 five-value CHECK rejected into a
+  silently swallowed `.catch`; its presence is direct evidence the narrowed constraint is live and
+  wrong-answer attempts are no longer lost.
+- [x] **Locked-lesson CTA, signed out** — clicking a PRO lesson on `/saga` opens the **AuthModal**:
+  heading "Sign in", body "Sign in to continue this lesson.", button "Sign in with Google". Also
+  confirmed server-side gating: `GET /api/puzzles/draw?category=undercut` returns
+  `{"error":"Pro subscription required"}` for a signed-out caller.
+- [x] **Mobile viewport** — `emulate` at 390×844×3 (mobile, touch). Set-picker renders correctly with
+  no horizontal overflow (`scrollWidth` 390 = `clientWidth` 390). `resize_page` not used.
+
+### Not verified here — and why
+
+- [ ] **Locked-lesson CTA for a signed-in FREE-tier user should show "Upgrade" (UpgradeModal).**
+  **BLOCKED** — reaching a signed-in free-tier state requires completing Google OAuth, which cannot
+  be driven headlessly from this session. Only the signed-out ("Sign in") half is confirmed.
+- [ ] **FR-016 — a real Paddle sandbox transaction end-to-end.** **BLOCKED** — needs a valid sandbox
+  transaction id and Paddle dashboard access (owner). What *is* confirmed is the mechanism: with an
+  arbitrary `_ptxn`, the page initializes Paddle.js on mount and calls
+  `Checkout.open({ transactionId })`, and Paddle's own service rejects the invalid id inside its
+  iframe. See the FR-014 item.
+- [ ] **Paddle "Default payment link" dashboard setting** (spec 053). **BLOCKED** — owner-only
+  dashboard action. Unchanged by this deploy.
+- [ ] **Magic-link email round-trip.** Not exercised; the app now uses Google sign-in on this build.
