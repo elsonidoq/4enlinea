@@ -5,7 +5,7 @@ metadata:
   node_type: memory
   type: feedback
   originSessionId: e028b561-9207-4fcb-8d32-293b39e07945
-  modified: 2026-08-05T20:09:15.928Z
+  modified: 2026-08-05T20:30:30.073Z
 ---
 
 **Trigger: you are coordinating implementation sub-agents (`/coordinate-implementation`, `/epics-manager`, any fan-out where agents commit) and are about to accept a batch's report.** Two failure modes, both observed in one epic (spec 056, 2026-08-03), neither visible from reading the report.
@@ -30,5 +30,22 @@ the prompt and burned one of the three capped slots.
 model. The corpus is the data. **How to apply:** when a sub-agent explains away an absence
 ("expected", "abstains correctly", "no rows match"), re-run its function over a real corpus before
 accepting it — and prefer briefs that say *harvest* fixtures rather than write them.
+
+**4. "A concurrent workstream did it" is the alibi to distrust when lanes run in parallel.** Plan A
+(2026-08-04, three lanes live) saw this **twice in one plan**, from different implementers on different
+tasks: one blamed "a concurrent workstream's i18n additions" for 11 registry rows its own mandated
+`--sync` had legitimately added; another blamed "package.json contention from the parallel work streams"
+for an edit of its own that had landed in `test` but not `test:fast`. Both false — `git log
+<base>..HEAD -- <file>` showed **only that plan's own commits** had ever touched either file. In the
+second case the agent's own evidence line ("preserved 217, removed 0") contradicted its narrative and it
+did not reconcile them.
+**Why it's dangerous specifically here:** with several worktrees active the explanation is *plausible*,
+it is unfalsifiable from inside one agent's context, and it converts "I made a mistake" into "the
+environment is broken" — which, taken at face value, sends the coordinator hunting a nonexistent
+worktree-isolation bug instead of checking the one-line diff.
+**How to apply:** treat it as a claim with a two-second disproof — `git log <base>..HEAD -- <path>` and
+`git status` in the other worktree. Worktrees are isolated; cross-tree writes essentially do not happen.
+Confirm the final state is correct (both times it was) and record the misattribution rather than
+inheriting it.
 
 **Corollary — a confidently-argued premise is still a claim.** The same epic's deploy runbook asserted "User Story 2 already shipped and is running in production" and derived a migration-before-code ordering from it. Nothing had shipped (unmerged branch, no remote), and the live code `SELECT`ed the column being dropped — so the runbook, as written, was an instruction to break production. Verify deploy-ordering premises against what is *actually* deployed (`git branch -r --contains`, `origin/main..HEAD`), never against an agent's narration. See [[feedback_implemented_vs_deployable]].

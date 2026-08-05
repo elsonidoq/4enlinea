@@ -5,7 +5,7 @@ metadata:
   node_type: memory
   type: project
   originSessionId: 8ed43e4a-f425-4b94-a1c8-c8ecaef77223
-  modified: 2026-08-03T17:40:44.335Z
+  modified: 2026-08-05T20:30:10.711Z
 ---
 
 In Claude Code Bash sessions on this repo the shell locale is not UTF-8, so **`grep` treats any file
@@ -49,6 +49,24 @@ end a command whose output backs a negative claim with `head`** — use `| wc -l
 print. If you must cap it, say "showing first N" in your own reasoning and re-run uncapped before writing
 the conclusion anywhere. Same rule as CLAUDE.md's "all N instances, not a sample of 3", applied to your
 own shell pipeline rather than to the code.
+
+**Two more, found 2026-08-04 while verifying a three-lane merge. Both produce a confident WRONG answer,
+not an empty one — which is worse:**
+
+- **`diff` also treats multibyte files as binary.** `diff /tmp/a.md docs/open_issues.md` printed
+  `Binary files … differ` — one line, no hunks. A wrapper counting `^>` / `^<` therefore reported
+  **"+0 / +0"**, i.e. "effectively identical", when the true answer (`diff -a`) was **448 differing
+  lines**. On that false reading I nearly merged a stale doc over a newer one. Use `diff -a` for
+  anything under `docs/` or `src/i18n/`, and never trust a zero from a line-counting wrapper until you
+  have seen actual hunks.
+- **zsh eats the `:c` in `git show "$VAR:connect-four/…"`.** `"$M:connect-four/x.js"` becomes
+  `ea66538onnect-four/x.js` and git errors `ambiguous argument`. Harmless *if you see the error* — but
+  inside a probe loop with `2>/dev/null` it is a silent **false negative**: I printed `*** MISSING ***`
+  for all seven symbols of a merge I had already verified was complete, and briefly told the user
+  content was lost. **Always brace `"${VAR}:path"`**, and never `2>/dev/null` a command whose empty
+  output you are about to read as evidence of absence. The `merging-parallel-lanes` skill documents the
+  brace rule; I had read it minutes earlier and still hit it, because the failure surfaced as a
+  *finding* rather than as a syntax error.
 
 Related: [[feedback_verify_at_the_source_layer]] — this is that rule's failure mode at the *tool* layer:
 the grep output is a representation of the file, and it lied. Same family:

@@ -24,7 +24,7 @@
 - [Lesson board sourcing traps](project_lesson_answer_set_invariant.md) — undercut boards are valid for ONE side only; lesson-11 MUST fail detectUndercutVictim; JSONB key-order false drift
 - [Lesson fields NOT rendered](project_lesson_json_fields_not_rendered.md) — socratic.goalPrompt/overlays/userPerspective dead, but challenge goalPrompt now RENDERS+narrates; color = movestring parity
 - [Lesson/coach audio traps](project_lesson_progression_audio_traps.md) — CoachDialog never speaks; only coach.spoken.* synthesized; /admin/audio has TWO players on different paths — test both
-- [Lesson audio generation traps](project_lesson_audio_generation_traps.md) — no `locator` = re-synthesizes ALL (142-file churn); back-to-back en/es silently loses a write; generate-tts.js is broken
+- [Lesson+coach audio generation traps](project_lesson_audio_generation_traps.md) — no `locator` = re-synthesizes ALL; generate-tts.js is FIXED not broken; approving 1 clip DROPS un-approved slugs
 - [Lesson write lands elsewhere](project_lesson_disk_edit_cache_clobber.md) — a 200 ≠ it saw your file, or wrote the one you watch (slug≠id forks it)
 - [odd_even_threat split life](project_detect_odd_even_threat_yellow.md) — still a classifyPattern tag + puzzle category, but OFF the coach prompt & blunder vocab
 - [New lesson slide field wiring](project_lesson_slide_field_wiring.md) — 6 wiring points; the SlideEditor control is forgotten EVERY time (OI-67, then showWindowCounts)
@@ -111,13 +111,13 @@
 ## Workflow, agents & process
 
 - [File mtime is never evidence](project_file_mtime_is_never_evidence.md) — mtime = the checkout, not the write; all 565 mp3s share one stamp. Date from `generated_at` or `git log --diff-filter=A`
-- [Bare grep silently finds nothing](project_grep_silent_zero_matches.md) — multibyte ⇒ binary, ZERO matches, no error; grep is ugrep (use /usr/bin/grep); `node --test` counts start with `ℹ` not `#`
+- [Shell tools lie silently](project_grep_silent_zero_matches.md) — multibyte ⇒ grep AND diff go "binary" (diff -a); ugrep; `ℹ` not `#`; zsh eats `:c` in `git show "$V:path"` — brace it
 - [Verify at the source layer](feedback_verify_at_the_source_layer.md) — signature NOT doc comment, diff NOT agent report, real output NOT your fixture; ALSO your own estimates — cite file:line in options tables or mark UNVERIFIED
 - [Measurements expire](feedback_measurement_expires.md) — re-measure against FINAL code; an UNCHANGED line ≠ an unfixed bug (the fix may have landed in another file) — git log --grep first
 - [Live envs have NO real users (pre-launch)](project_live_envs_have_no_real_users.md) — staging/prod DBs are DISPOSABLE until the owner says released; regenerate > surgically repair; prod work = docs not tooling. Now in CLAUDE.md
 - [Implemented ≠ deployable](feedback_implemented_vs_deployable.md) — answer both; per-change prereqs → `docs/deployment_steps.md` = a WORK QUEUE (producers append only; reset only after all-DONE-in-prod; non-empty = not shipped); standing procedure → `deploy-runbook.md`; `staging_checks.md` is at the REPO ROOT, not `docs/`
 - [A wrong test is part of the bug](feedback_wrong_test_is_part_of_the_bug.md) — never keep a test green over a fix; read the fixture not its name; a test can be VACUOUS: f(a)===f(a) reads as coverage
-- [Sub-agent reports are scoped claims](feedback_subagent_reports_are_scoped_claims.md) — green run may be its WORKING TREE not its commit; reports only what the schema asked; re-measure "expected" absences
+- [Sub-agent reports are scoped claims](feedback_subagent_reports_are_scoped_claims.md) — green run may be its WORKING TREE; re-measure "expected" absences; "a concurrent lane did it" is an alibi
 - [Concurrent agents clobber](feedback_concurrent_agents_clobber.md) — the user runs agents in parallel; two in one tree overwrite SILENTLY; line numbers stale within the hour
 - [External auto-backup commits](project_external_auto_backup_commits.md) — a background process auto-commits STAGED work unpredictably (once broke HEAD); stage explicit paths only, never git add -A, git status --short before commit
 - [Isolated review misses seams](feedback_isolated_review_misses_seams.md) — the JOIN of two correct halves; 1-instance tests miss N-instance clashes

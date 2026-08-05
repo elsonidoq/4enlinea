@@ -1,11 +1,11 @@
 ---
 name: project_lesson_audio_generation_traps
-description: "generate-audio without a locator re-synthesizes EVERY clip in the lesson (binary churn), back-to-back en/es calls silently lose one write, and generate-tts.js is outright broken"
+description: "generate-audio without a locator re-synthesizes EVERY lesson clip; back-to-back en/es loses a write; generate-tts.js is FIXED (not broken); approving one coach clip can drop others from the manifest"
 metadata: 
   node_type: memory
   type: project
   originSessionId: 7db608a0-3785-4c8f-94aa-9d6fe6577d1e
-  modified: 2026-07-31T19:37:00.932Z
+  modified: 2026-08-05T20:29:39.500Z
 ---
 
 **Trigger: before scripting or bulk-running `POST /api/admin/lessons/:id/generate-audio` (or reaching
@@ -27,10 +27,35 @@ ten. **Do not parallelise per-lesson generate calls, and do not trust the respon
 lesson JSON (or re-run `lessonAudioCoverage`) to confirm the field landed. Same family as
 [[project_lesson_disk_edit_cache_clobber]].
 
-**3. `scripts/generate-tts.js --key` / `--all-new` is BROKEN and throws.** `synthesizeAndWrite` calls
-`synthesize(value)` without the required `lang` arg → `synthesize: invalid lang 'undefined'`. Verified
-by running it. Its registry/manifest/sync subcommands still work. **Coach audio is currently only
-generatable through `/admin/audio`.** Tracked as an open issue; don't rediscover it.
+**3. ~~`scripts/generate-tts.js --key` / `--all-new` is BROKEN~~ — FIXED 2026-08-01. Do not believe
+this entry.** It was real on 2026-07-31 (`synthesizeAndWrite` called `synthesize(value)` with no
+`lang` → `invalid lang 'undefined'`). Commit **`608ae4c` "OI-91: pass lang through to synthesize()"**
+fixed it: `generate-tts.js:371` now reads `await synthesize(value, lang)` with a comment naming OI-91,
+and `--help` exits 0 with full usage. **Re-verified 2026-08-04.** The CLI is the normal path again;
+`/admin/audio` is not the only way to generate coach audio.
+*Why this entry is left standing rather than deleted:* it cost a later session real time by making a
+working tool look broken. "X is broken" is a **measurement**, and measurements expire — run
+`git log -- <file>` / `--grep` before trusting one. See [[feedback_measurement_expires]].
+
+**3b. `generate-tts.js` specifics, verified 2026-08-04** (this is the coach CLI, NOT the lesson endpoint —
+traps 1/2/4/5 above are the lesson pipeline and do not transfer):
+
+- **`--lang all` is ONE process, so trap 2 does not apply to it.** `for (const lang of langs) await
+  generateSingle(key, lang, …)` runs sequentially and each language reads/writes its **own** registry
+  file. A single `--key <k> --lang all` invocation is the safe form; two back-to-back single-lang
+  invocations are the risky shape.
+- **Synthesizing without approving turns `test:fast` RED.** `tests/unit/coachSpokenNamespace.test.js`
+  fails on any mp3 on disk that is absent from the manifest ("orphan"), and **only the `/admin/audio`
+  approve flow adds a slug to the manifest**. So "generate now, approve later" is not a valid split.
+  Registering with `--sync` alone (status `needs_audio`, no mp3, no manifest change) IS a safe
+  intermediate: suite stays green and the key silently no-ops at the play site until approved.
+- **Approving ONE clip can silently delete other clips from the manifest.** `server/index.js`'s
+  `writeTtsManifest` **rebuilds** from `entries.filter(e => e.status === 'approved')` instead of
+  remapping in place — contradicting `coach-audio-conventions.md`'s own written rule. Any slug in the
+  manifest but not `approved` is dropped by the next approve of *anything*, orphaning its mp3 (red
+  suite) and silencing a clip that plays today. Measured 2026-08-04: 5 such `en` slugs, including
+  `coach--spoken--sparring--outcome--{loss,win}`. **List the at-risk set and approve it in the same
+  pass.** Tracked as OI-149.
 
 **4. Adding a field to `collectMessages` is all-or-nothing.** `tests/lessons/lessonAudioCoverage.test.js`
 walks the same function, so the moment a field is yielded the suite demands an on-disk clip for **every
