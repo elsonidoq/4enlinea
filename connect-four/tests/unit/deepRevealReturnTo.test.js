@@ -64,6 +64,14 @@ test('the single named consumption point is still single', () => {
   assert.equal((app.match(/consumeReturnTo\(\)/g) ?? []).length, 1);
 });
 
+test('ChallengeScreen passes a returnTo to DeepRevealPane, gated on not-lesson-mode', () => {
+  const src = code(read('src/screens/ChallengeScreen.jsx'));
+  assert.match(
+    src,
+    /returnTo=\{!lessonMode\s*&&\s*category\s*\?\s*\{\s*screenKey:\s*'challenge'/,
+  );
+});
+
 test('every stashed screen key is a real URL_MAP key', () => {
   const map = code(read('src/lib/urlMapping.js'));
   for (const key of ['blunderDetail', 'challenge']) {

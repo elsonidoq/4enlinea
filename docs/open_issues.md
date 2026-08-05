@@ -5930,14 +5930,20 @@ itself a test failure.
 
 ## OI-150 — `useCoachSpeech`'s pending-key buffer holds only one key
 
-**Status**: deferred (latent)
+**Status**: RESOLVED 2026-08-04
 
 `src/lib/useCoachSpeech.js`: `pendingKeyRef.current = key;` — when `speakCoachMessage` is called
-before the language manifest has loaded, the key is buffered in a single-slot ref, so a second call
-overwrites the first and that clip is lost. Not on any path fix 1 touches (the only pre-load speech is
-a screen's single mount message; the batched double-update happens at game end, long after the
-manifest resolves), which is why it was left alone. Fix: make it a small array and drain it in
-`ensureManifest`'s `.then`.
+before the language manifest has loaded, the key was buffered in a single-slot ref, so a second call
+overwrote the first and that clip was lost. Originally deferred with the rationale *"Not on any path
+fix 1 touches (the only pre-load speech is a screen's single mount message…)"* — that rationale was
+**invalidated by this same branch's onboarding-tip change**: `src/screens/ReviewScreen.jsx:89-98` now
+calls `speakCoachMessage` twice in the same effect body (`analysis.summaryPhraseKey`, then
+`ONBOARDING_TIMELINE_TIP_KEY` when `onboarding` is set), so the single-slot overwrite became reachable
+in the pre-manifest window — and worse than losing a line: the winning key was the onboarding tip,
+which is `needs_audio` and enqueues nothing, so the **summary was dropped and nothing played at all**.
+Fixed in the final fix-wave: `pendingKeyRef` is now `pendingKeysRef`, an array capped at 8 entries,
+drained in order (and cleared before draining) in `ensureManifest`'s `.then`. See
+`src/lib/useCoachSpeech.js`.
 
 ## OI-151 — "Replay intro" was removed, retiring Epic 8 US4 / FR-010 / SC-004
 
@@ -5977,3 +5983,46 @@ Decide deliberately whether those 11 keys should be voiced (they are under `coac
 convention *declares intent to be voiced* — see `docs/architecture/coach-audio-conventions.md`
 §"Intent, not reachability") or whether the keys belong under `coach.ui.*` instead. Until then, prefer
 `--key <k>` over `--all-new`.
+
+## OI-153 — `test:fast` registers `tests/unit/detectClaimodd.test.js`, which does not exist
+
+**Status**: open (pre-existing, latent)
+
+`connect-four/package.json`'s `test:fast` script lists `tests/unit/detectClaimodd.test.js` in its
+`node --test ... ` argument list, but no file at that path exists anywhere in the repo (confirmed with
+`find . -iname "detectClaimodd*" -not -path "*/node_modules/*"` — zero hits). This is **pre-existing**:
+the entry is present at the branch base too, so it is not a defect this branch introduced, and per the
+final-fix-wave brief for this branch it must **not** be removed here — that line is contended by three
+concurrent work streams and removing the registration is a separate decision for whoever owns it.
+
+**Why it matters beyond the missing file itself:** `node --test` given a list of paths where one entry
+does not exist does **not** error and does **not** fail the run. It silently skips the missing path,
+the process still exits `0`, and the summary still prints `fail 0` — a fully green `test:fast` run is
+consistent with this file having never existed, having been deleted, or having been renamed out from
+under the registration. This is live proof of a general rule: a test's registration in `test:fast` must
+be verified by confirming the test's **name** appears in the run's output (e.g. `✔ <test name>` or the
+suite's own `# pass` count going up by the expected amount), never by the absence of a `node --test`
+error. "The script didn't complain" is not evidence a registered file exists or ran.
+
+Fix (not done here, out of this branch's scope): either write `tests/unit/detectClaimodd.test.js` (if
+a `claimodd` detector/test was intended and never landed) or remove the dead registration from
+`package.json` — whichever the line's owning work stream decides.
+
+## OI-154 — rendered vs. spoken game-outcome copy diverge, and the divergence looks intentional
+
+**Status**: open (believed intentional, needs a product ruling)
+
+`connect-four/src/lib/useGameBoard.js` renders `t('sparring.draw')` = *"It's a draw."* on screen while
+speaking `coach.spoken.sparring.outcome.draw` = *"It's a draw — well played."* through the coach voice —
+the same pattern holds for the win and loss outcome bubbles (rendered copy is plain; spoken copy is
+warmer/more elaborated). This branch only made the user-move **draw** case consistent with its win/loss
+siblings (they already diverged the same way); it did not introduce or resolve the divergence itself.
+
+This is **believed deliberate** — spoken copy reads better with warmer, more conversational phrasing
+than the terser on-screen bubble text — but that belief has never been recorded as a conscious ruling.
+It deserves one: either confirm the divergence is intentional product policy (and document it, e.g. in
+`docs/architecture/coach-audio-conventions.md`), or unify the two surfaces. Note this is **structurally
+the same class of defect** that this branch's deep-reveal TTS fix (see the "Plan A small fixes —
+deep-reveal TTS sanitization" entry in `docs/deployment_steps.md`) exists to eliminate on that other
+surface: spoken text silently disagreeing with rendered text. Here it is believed benign; there it was
+not — which is exactly why it needs a deliberate ruling rather than staying inherited.

@@ -1152,6 +1152,85 @@ takes the locale the route already resolved via `resolveTtsLocale(lang, req.loca
 **Not reversible, and does not need to be.** `explanation_cache` is a derived cache: every row
 regenerates on the next reveal of that position. No user data is stored in it.
 
+## Plan A small fixes — synthesize + approve the onboarding review tip audio
+
+**Status**: PENDING
+**When**: either, relative to the code deploy
+**Blocks**: nothing hard — the app is unaffected; the tip renders on screen with no voice until this runs
+**Applies to**: local (this is a content-generation step performed by a human on localhost, then committed)
+
+### What's wrong
+
+`coach.spoken.sparring.review.onboarding.0` was added in both `en.json` and `es.json` and registered
+in both `server/tts-registry.json` / `.es.json` as `needs_audio`, but **deliberately not synthesized or
+approved** in this branch — synthesizing without approving would have created orphan mp3s and turned
+`tests/unit/coachSpokenNamespace.test.js` red. So the onboarding review tip currently **renders on
+screen and is silently unspoken**: `speakCoachMessage` no-ops on any slug that isn't `approved`, by
+design.
+
+### Run it
+
+From `connect-four/`:
+
+```bash
+node --env-file=server/.env scripts/generate-tts.js --key coach.spoken.sparring.review.onboarding.0 --lang all
+```
+
+Then approve at `/admin/audio` in **both** `en` and `es`.
+
+**A load-bearing warning that must be followed in this same pass:** `/admin/audio`'s approve route
+calls `writeTtsManifest`, which **rebuilds the manifest from `status === 'approved'`** rather than
+remapping in place (see OI-149). Five English slugs are currently in the manifest but only
+`awaiting_approval`, so approving anything without also approving them **silently drops them**,
+orphaning their mp3s (turns the parity suite red) and silencing clips that play today. The five:
+`coach--spoken--figure--7--blunder--2`, `coach--spoken--immediate--threat--hint--0`,
+`coach--spoken--sparring--outcome--loss`, `coach--spoken--sparring--outcome--win`,
+`coach--spoken--undercut--optimal--2`. **Two of those are the sparring outcome clips that this same
+branch just made audible**, so dropping them would partially undo the branch. Instruct the human to
+listen to and approve those five in the same pass. Cross-reference `docs/open_issues.md` OI-149.
+
+### Verify
+
+A parity check over both languages: no orphan mp3, no manifest slug lacking a file, and the new slug
+present and approved in both registries.
+
+```bash
+node -e "
+const fs = require('fs');
+const LANGS = [
+  { lang: 'en', registry: 'server/tts-registry.json', dir: 'public/audio/coach' },
+  { lang: 'es', registry: 'server/tts-registry.es.json', dir: 'public/audio/coach/es' },
+];
+const KEY = 'coach.spoken.sparring.review.onboarding.0';
+let ok = true;
+for (const { lang, registry, dir } of LANGS) {
+  const entries = JSON.parse(fs.readFileSync(registry, 'utf8'));
+  const manifest = JSON.parse(fs.readFileSync(\`\${dir}/coach-audio-manifest.json\`, 'utf8'));
+  const onDisk = new Set(fs.readdirSync(dir).filter(f => f.endsWith('.mp3')).map(f => f.slice(0, -4)));
+  const missingMp3 = manifest.filter(s => !onDisk.has(s));
+  const orphanMp3 = [...onDisk].filter(s => !manifest.includes(s));
+  const entry = entries.find(e => e.key === KEY);
+  console.log(lang, {
+    entryStatus: entry && entry.status,
+    inManifest: entry && manifest.includes(entry.slug),
+    missingMp3,
+    orphanMp3,
+  });
+  if (!entry || entry.status !== 'approved' || !manifest.includes(entry.slug) || missingMp3.length || orphanMp3.length) ok = false;
+}
+console.log(ok ? 'PASS' : 'FAIL');
+"
+```
+
+Success: both `en` and `es` print `entryStatus: 'approved'`, `inManifest: true`, empty `missingMp3` /
+`orphanMp3` arrays, and the script prints `PASS`. Then run `npm run test:fast` and confirm
+`coachSpokenNamespace.test.js` is green.
+
+### Roll back
+
+`git checkout` the new mp3s, the two manifests, and the two registries. Nothing is deployed until
+these are committed, so an aborted pass leaves no trace.
+
 ## Template for new entries
 
 ```markdown

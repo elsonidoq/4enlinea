@@ -37,6 +37,11 @@ const CXRY_RE = /\bc(\d+)r\d+\b/gi;
 // EN-DASH, so the ASCII-only rule missed it and BARE_COL_RE rewrote each endpoint separately —
 // the player was served "column 2–column 5 strip". Optional surrounding whitespace is allowed
 // because a spaced en-dash ("c2 – c5") is ordinary typography for the same range.
+//
+// Known, accepted trade-off: including the em-dash means prose that uses it as a clause break
+// between two independent column mentions — e.g. "the threat at c4 — c6 stays open" — is also
+// rewritten as a range, changing the meaning. This is deliberate: ranges are far more common than
+// that construction in this model's output, so the wider match wins on net correctness.
 const RANGE_RE = /\bc(\d+)\s*[-–—−]\s*c(\d+)\b/gi;
 
 // Matches a BARE internal column token, e.g. "c3" (OI-126, same report). Word-bounded on both

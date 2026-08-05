@@ -190,7 +190,13 @@ export function useCoachSpeech() {
   // manifestsRef.current: { [lang]: Set<string> | null } — null = not yet fetched.
   const manifestsRef = useRef(/** @type {Record<string, Set<string>|null>} */ ({}));
   const fetchingRef = useRef(/** @type {Record<string, boolean>} */ ({}));
-  const pendingKeyRef = useRef(null);
+  // Buffer of keys queued before the language manifest resolves. An array,
+  // not a single slot: a caller may enqueue more than one key in the same
+  // pre-manifest window (e.g. two speakCoachMessage calls in one effect
+  // body), and a single-slot ref would silently drop all but the last.
+  // Capped so a pathological caller can't grow it without bound.
+  const pendingKeysRef = useRef(/** @type {string[]} */ ([]));
+  const PENDING_KEYS_MAX = 8;
   const speechEnabledRef = useRef(speechEnabled);
   speechEnabledRef.current = speechEnabled;
 
@@ -200,10 +206,12 @@ export function useCoachSpeech() {
     fetchManifest(lang).then((set) => {
       manifestsRef.current[lang] = set;
       fetchingRef.current[lang] = false;
-      if (pendingKeyRef.current && speechEnabledRef.current && lang === i18n.language) {
-        const key = pendingKeyRef.current;
-        pendingKeyRef.current = null;
-        enqueueIfApproved(key, lang);
+      if (pendingKeysRef.current.length && speechEnabledRef.current && lang === i18n.language) {
+        const keys = pendingKeysRef.current;
+        pendingKeysRef.current = []; // clear before draining so a later resolution can't replay
+        for (const key of keys) {
+          enqueueIfApproved(key, lang);
+        }
       }
     });
   }, []);
@@ -254,7 +262,10 @@ export function useCoachSpeech() {
       const lang = i18n.language || 'en';
       const manifest = manifestsRef.current[lang];
       if (!manifest) {
-        pendingKeyRef.current = key; // manifest still loading — queue it
+        // Manifest still loading — buffer it (bounded) for ensureManifest's drain.
+        if (pendingKeysRef.current.length < PENDING_KEYS_MAX) {
+          pendingKeysRef.current.push(key);
+        }
         ensureManifest(lang);
         return;
       }

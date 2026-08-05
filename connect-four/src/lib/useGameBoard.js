@@ -68,7 +68,7 @@ export function useGameBoard({ initialMoves = '', side, difficulty, onGameEnd, i
    * bubble that genuinely has no clip (there are none today in this hook).
    */
   function updateCoach(text, mood, key, replace = false) {
-    if (import.meta.env.DEV && key === undefined) {
+    if (import.meta.env?.DEV && key === undefined) {
       throw new Error('updateCoach: `key` is required — pass an explicit null for an unspoken bubble');
     }
     const stamped = { text, mood, key: key ?? null, seq: ++coachSeqRef.current };
