@@ -6620,3 +6620,34 @@ output is exactly the string the regex cannot see — `serverT('es','column')` i
 locale's own `column`/`cell` renderers so it can never drift from them again), then re-measure —
 turning a dead check on will surface real P2 failures on `es` that have never been counted, and P2
 is span-carrying, so newly-firing failures will start stripping Spanish highlights.
+
+---
+
+## OI-177 — the required-set retry reads the RAW mechanism, so a required spec the guard later strips never triggers a retry
+
+**Status**: open (discovered while closing spec-058 feedback attempt 3; reported, not fixed)
+**Area**: `connect-four/server/mechanismExplainer.mjs` (`missingRequiredGroups` and the FR-008 retry call)
+**Discovered**: spec-058 feedback remediation attempt 3, 2026-08-05
+
+FR-008 gives the coach one compliance retry when it fails to use a required handle. The retry's
+decision input is `usedSpecs`, computed from the **raw** model output — before
+`guardExplainMoveLlmPayload` runs. So the retry fires only for "the model never mentioned the
+handle", and is blind to the other way a required handle can fail to reach the user: the model
+emitted it correctly and the **guard then stripped the span**.
+
+Measured across the 12 post-D45 board-runs (`specs/058-deep-reveal-grounding/t043-attempt3-run{1,2,3}-results.json`):
+10 of 12 emitted every required spec; the 2 misses were both board `3154` writing a mis-anchored
+span — `[zone:future:c7r3]c6r3[/zone:future:c7r3]` (run 1) and `[zone:future:c7r3]the square that
+matters later on c6r4[/zone:future:c7r3]` (run 3). D44's mismatch policy correctly refused to
+humanize them and P6 stripped the spans, so the served text lost a required highlight. Because
+`usedSpecs` saw `future:c7r3` in the raw text, `missingRequiredGroups` was empty and **no retry was
+attempted** — the one mechanism designed to recover exactly this outcome never engaged.
+
+This is a seam bug, not a policy bug: D44's mismatch policy and FR-008's retry are each correct in
+isolation, and neither is wired to the other.
+
+**If picked up**: compute the retry's `usedSpecs` from the POST-guard text (or intersect the raw
+`usedSpecs` with the surviving spans), so a stripped required handle counts as missing and earns its
+retry. Note the retry prompt should then say the handle was *mis-anchored*, not *unused* — telling a
+model to "use `future:c7r3`" when it already did is unlikely to fix the anchoring. Cross-refs: D44
+(mismatch policy), FR-008, `docs/architecture/reason-render-grounded-prompt.md` §11d.
