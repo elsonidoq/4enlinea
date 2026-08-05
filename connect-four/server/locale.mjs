@@ -59,11 +59,20 @@ const STRINGS = {
     // Ranged internal-coordinate connector (e.g. raw "c3-c6" -> "columns 3 through 6") — added for
     // T026 (OI-126), which widens stripInternalTokens to cover bare/ranged cXrY forms, not just paired.
     columnRange: (a, b) => `columns ${a} through ${b}`,
+    // A FULL cell reference — column AND row. Used by `reasonRenderGuard.mjs`'s
+    // `humanizeGroundedCoordinates` / `promoteRawCoordinates` wherever a raw `cNrM` sits inside a
+    // zone whose own spec vouches for it, so the highlight survives the gate with its precision
+    // intact. Deliberately distinct from `column` above: that one is the LAST-RESORT flattening for
+    // an UNVOUCHED coordinate and drops the row on purpose (Decision A). Staging feedback on board
+    // `315444233213134122` was explicitly about the lost row ("the text says 'column 1' but the
+    // coach speaks c1r3 which is much more precise").
+    cell: (c, r) => `column ${c}, row ${r}`,
   },
   es: {
     notABlunder: 'Esta jugada mantiene la partida en su mejor camino — no hay una alternativa mejor para destacar acá.',
     column: (n) => `columna ${n}`,
     columnRange: (a, b) => `columnas ${a} a ${b}`,
+    cell: (c, r) => `columna ${c}, fila ${r}`,
   },
 };
 

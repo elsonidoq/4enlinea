@@ -344,3 +344,54 @@ test('the required-set prompt block states explicitly when there is nothing requ
   assert.match(prompt, /# You MUST build the explanation around these/);
   assert.match(prompt, /none for this explanation/i);
 });
+
+// ── Spec 058 feedback remediation, attempt 2 — prompt fixes 2 & 3 ───────────────────────────────
+//
+// Fix 2 (asks 1c / 2b): the engine now OFFERS the real line (`windows:c2r5,c3r5,c4r5,c5r5` — the
+// "column 2 to column 5 strip" the human asked for), but the model wrote "the square that keeps
+// your later four-in-a-row line alive" and grounded it on the single endpoint cell. Words that name
+// a LINE must use the `windows:`-backed handle; a single-cell handle is reserved for words naming a
+// SQUARE. This repo's experience is that an abstract prompt rule gets ignored while a worked
+// example lands, so both the rule and a good/bad pair are asserted.
+//
+// Fix 3 (ask 2c): `[term:double_threat]` renders a glossary popup and never highlights the board,
+// and a term and a zone can NEVER wrap the SAME phrase (`parseAnnotatedText`'s `combinedRegex` is
+// single-pass and non-nesting — the inner tag survives as literal visible text). The only way to
+// both name the idea and point at it is ADJACENCY: the term on one phrase, a separate zone on the
+// neighbouring words. The pre-existing "do not overlap" instruction is necessary but not
+// sufficient — it forbids the wrong shape without ever asking for the right one.
+
+test('fix 2: the prompt states the line-vs-square handle rule with a worked good/bad example', () => {
+  const prompt = assembleGroundedPrompt(buildReasonRenderModel(NV));
+  assert.match(prompt, /line, strip, or row of four/i, 'the rule must name the words that demand a line handle');
+  assert.match(prompt, /whole-line handle|line handle/i);
+  const ruleBlock = prompt.split('# Highlightable regions')[1].split('# You MUST build')[0];
+  assert.match(ruleBlock, /Bad:[\s\S]*four-in-a-row line/i, 'a BAD example must show a line named but grounded on one square');
+  assert.match(ruleBlock, /Good:[\s\S]*\[zone:[^\]]*line/i, 'a GOOD example must show the line words wrapped in a line handle');
+});
+
+test('fix 2: a line-kind role tells the model to prefer it over a single-square handle', () => {
+  const nv = {
+    movestring: '341330613', playedCol: 4, bestCol: 3, player: 2, opponent: 1,
+    case: 'win_to_lose', route: 'sign',
+    lostResource: { kind: 'winning_line', register: 'forced_sequence', completingCell: 'c6r5',
+                    window: ['c4r5', 'c5r5', 'c6r5', 'c7r5'] },
+    opponentPunishment: { kind: 'winning_line', register: 'forced_sequence', completingCell: 'c3r3' },
+    replyHistogram: { afterBest: 0, afterPlayed: 1 },
+  };
+  const model = buildReasonRenderModel(nv);
+  const lineAlias = model.zones.aliases.find((a) => a.spec.endsWith('windows:c4r5,c5r5,c6r5,c7r5'));
+  assert.ok(lineAlias, 'fixture must offer the half window as a windows: alias');
+  assert.match(lineAlias.role, /line of four squares|whole four-in-a-row line/i);
+  assert.match(lineAlias.role, /not a single square|rather than one square|not one square/i,
+    `a line role must steer the model off the endpoint cell: ${lineAlias.role}`);
+});
+
+test('fix 3: the prompt requires a term to be PAIRED with an adjacent zone, with a worked example', () => {
+  const prompt = assembleGroundedPrompt(buildReasonRenderModel(NV));
+  const termBlock = prompt.split('# KB terms you may name')[1];
+  assert.match(termBlock, /never highlight|does not highlight|no highlight/i,
+    'the prompt must say a term alone points at nothing on the board');
+  assert.match(termBlock, /next to|adjacent|alongside/i, 'the prompt must ask for adjacency');
+  assert.match(termBlock, /Bad:[\s\S]*Good:/i, 'a worked bad/good example must accompany the rule');
+});

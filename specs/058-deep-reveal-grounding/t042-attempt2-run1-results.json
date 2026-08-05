@@ -1,0 +1,127 @@
+[
+  {
+    "movestring": "3154",
+    "col": 4,
+    "offeredSpecs": [
+      "col6",
+      "col5",
+      "future:c7r3",
+      "future:windows:c4r3,c5r3,c6r3,c7r3",
+      "future:c6r4",
+      "future:windows:c3r4,c4r4,c5r4,c6r4"
+    ],
+    "requiredSpecs": [
+      "future:c7r3",
+      "future:c6r4"
+    ],
+    "emittedSpecs": [
+      "future:c6r4"
+    ],
+    "requiredSubsetOfEmitted": false,
+    "missingHandlesFromRetry": [
+      "future:c7r3",
+      "future:c6r4"
+    ],
+    "decisionARejectionCount": 0,
+    "decisionARejectedSpecs": [],
+    "guardFailures": [
+      "P6:raw_coordinate:future:c7r3"
+    ],
+    "servedExplanation": "You should play the tougher defense in column 6, because it keeps the later fight centered on column 6 and avoids handing your opponent the reply that turns into [zone:future:c6r4]column 6, row 4[/zone:future:c6r4]. Your played move in column 5 let them steer the game into their later four-in-a-row line instead of yours, so you lost the parity battle that was deciding this position.",
+    "rawMechanism": "You should play the tougher defense in column 6, because it keeps the later fight centered on [zone:future:c7r3]c6r3[/zone:future:c7r3] and avoids handing your opponent the reply that turns into [zone:future:c6r4]c6r4[/zone:future:c6r4]. Your played move in column 5 let them steer the game into their later four-in-a-row line instead of yours, so you lost the parity battle that was deciding this position."
+  },
+  {
+    "movestring": "315444233213",
+    "col": 1,
+    "offeredSpecs": [
+      "col4",
+      "col2",
+      "c3r4",
+      "windows:c6r1,c5r2,c4r3,c3r4",
+      "future:windows:c3r5,c7r1",
+      "future:c5r5",
+      "future:windows:c2r5,c3r5,c4r5,c5r5",
+      "future:c3r5",
+      "future:windows:c6r2,c5r3,c4r4,c3r5",
+      "future:windows:c6r2,c5r3,c4r4,c3r5|c7r1,c6r2,c5r3,c4r4",
+      "future:c7r1"
+    ],
+    "requiredSpecs": [
+      "future:c5r5",
+      "future:c3r5"
+    ],
+    "emittedSpecs": [
+      "future:c5r5",
+      "future:c3r5"
+    ],
+    "requiredSubsetOfEmitted": true,
+    "missingHandlesFromRetry": [],
+    "decisionARejectionCount": 0,
+    "decisionARejectedSpecs": [],
+    "guardFailures": [],
+    "servedExplanation": "You should have taken the move that keeps your [term:double_threat]double threat[/term:double_threat] alive; instead, the played move lets your opponent answer with a [term:double_threat]double threat[/term:double_threat] that you can't cover in time. The safer move is the one that preserves your [zone:future:c5r5]later key square[/zone:future:c5r5] and keeps pressure on [zone:future:c3r5]the opponent's later key square[/zone:future:c3r5], so the deep fight still goes your way.",
+    "rawMechanism": "You should have taken the move that keeps your [term:double_threat]double threat[/term:double_threat] alive; instead, the played move lets your opponent answer with a [term:double_threat]double threat[/term:double_threat] that you can't cover in time. The safer move is the one that preserves your [zone:future:c5r5]later key square[/zone:future:c5r5] and keeps pressure on [zone:future:c3r5]the opponent's later key square[/zone:future:c3r5], so the deep fight still goes your way."
+  },
+  {
+    "movestring": "315444233213134122",
+    "col": 5,
+    "offeredSpecs": [
+      "col3",
+      "col6",
+      "c1r3",
+      "windows:c1r3,c2r3,c3r3,c4r3",
+      "c1r4",
+      "windows:c1r4,c2r4,c3r4,c4r4"
+    ],
+    "requiredSpecs": [
+      "c1r3"
+    ],
+    "emittedSpecs": [
+      "c1r3"
+    ],
+    "requiredSubsetOfEmitted": true,
+    "missingHandlesFromRetry": [],
+    "decisionARejectionCount": 0,
+    "decisionARejectedSpecs": [],
+    "guardFailures": [],
+    "servedExplanation": "You should have kept the [zone:c1r3]winning square at column 1, row 3[/zone:c1r3] alive, because that is the deep four-in-a-row line you were playing for. By dropping in column 6 instead, you let your opponent take away that same square and turn your forced win into only a draw.",
+    "rawMechanism": "You should have kept the [zone:c1r3]winning square at c1r3[/zone:c1r3] alive, because that is the deep four-in-a-row line you were playing for. By dropping in column 6 instead, you let your opponent take away that same square and turn your forced win into only a draw."
+  },
+  {
+    "movestring": "3154442332131341225551",
+    "col": 5,
+    "offeredSpecs": [
+      "col3",
+      "col6",
+      "c1r3",
+      "windows:c1r3,c2r3,c3r3,c4r3",
+      "c1r4",
+      "windows:c1r4,c2r4,c3r4,c4r4",
+      "windows:c1r3,c7r6",
+      "c7r6",
+      "windows:c4r3,c5r4,c6r5,c7r6",
+      "future:windows:c2r6,c5r5",
+      "future:c7r3",
+      "future:windows:c7r3,c6r4,c5r5,c4r6",
+      "future:c2r6",
+      "future:windows:c5r3,c4r4,c3r5,c2r6",
+      "future:windows:c5r3,c4r4,c3r5,c2r6|c2r5,c3r5,c4r5,c5r5",
+      "future:c5r5"
+    ],
+    "requiredSpecs": [
+      "future:c7r3",
+      "future:c2r6"
+    ],
+    "emittedSpecs": [
+      "future:c7r3",
+      "future:c2r6"
+    ],
+    "requiredSubsetOfEmitted": true,
+    "missingHandlesFromRetry": [],
+    "decisionARejectionCount": 0,
+    "decisionARejectedSpecs": [],
+    "guardFailures": [],
+    "servedExplanation": "You needed to keep the deep forcing line alive with [zone:future:c7r3]the square that matters later when the forced sequence reaches it[/zone:future:c7r3]; instead, your played move stepped away from it and let your opponent answer with [zone:future:c2r6]the square that matters later when the forced sequence reaches it[/zone:future:c2r6]. That gives them a [term:double_threat]double threat[/term:double_threat] and turns your move into a losing concession, while the better move keeps the tougher central fight and the forcing line alive.",
+    "rawMechanism": "You needed to keep the deep forcing line alive with [zone:future:c7r3]the square that matters later when the forced sequence reaches it[/zone:future:c7r3]; instead, your played move stepped away from it and let your opponent answer with [zone:future:c2r6]the square that matters later when the forced sequence reaches it[/zone:future:c2r6]. That gives them a [term:double_threat]double threat[/term:double_threat] and turns your move into a losing concession, while the better move keeps the tougher central fight and the forcing line alive."
+  }
+]

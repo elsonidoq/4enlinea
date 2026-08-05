@@ -11,7 +11,7 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { stripInternalTokens, sanitizeTermsMap, guardExplainMoveLlmPayload, buildTtsSpeechText, promoteRawCoordinates, toAllowedSet } from '../reasonRenderGuard.mjs';
+import { stripInternalTokens, sanitizeTermsMap, guardExplainMoveLlmPayload, buildTtsSpeechText, promoteRawCoordinates, humanizeGroundedCoordinates, toAllowedSet } from '../reasonRenderGuard.mjs';
 import { Board } from '../classifier.js';
 
 // T024 fixture: the REAL served explanation string that reproduced OI-126, harvested from
@@ -332,18 +332,20 @@ describe('RANGE_RE dash widening (fix 8)', () => {
 describe('promoteRawCoordinates', () => {
   it('promotes a bare cXrY token to a real, flattened-inner-text highlight', () => {
     const result = promoteRawCoordinates('Watch c4r3 closely.', 'en');
-    assert.equal(result, 'Watch [zone:c4r3]column 4[/zone:c4r3] closely.');
+    // RC-H (attempt 2): the inner text is the FULL cell wording. It used to be the row-dropping
+    // "column 4"; staging feedback on board 315444233213134122 was explicitly about the lost row.
+    assert.equal(result, 'Watch [zone:c4r3]column 4, row 3[/zone:c4r3] closely.');
   });
 
   it('the wrapped inner text is the flattened word, never the raw token (load-bearing per checkP6)', () => {
     const result = promoteRawCoordinates('The fork is at c1r4.', 'en');
-    assert.ok(result.includes('[zone:c1r4]column 1[/zone:c1r4]'), result);
+    assert.ok(result.includes('[zone:c1r4]column 1, row 4[/zone:c1r4]'), result);
     assert.ok(!result.includes('[zone:c1r4]c1r4[/zone:c1r4]'), result);
   });
 
   it('is locale-aware, matching stripInternalTokens\' column word', () => {
     const result = promoteRawCoordinates('Mirá c2r5 con cuidado.', 'es');
-    assert.equal(result, 'Mirá [zone:c2r5]columna 2[/zone:c2r5] con cuidado.');
+    assert.equal(result, 'Mirá [zone:c2r5]columna 2, fila 5[/zone:c2r5] con cuidado.');
   });
 
   it('Decision B: a cXrY token already inside an existing zone tag\'s own spec (the delimiter) is left alone', () => {
@@ -361,14 +363,14 @@ describe('promoteRawCoordinates', () => {
     const result = promoteRawCoordinates(text, 'en');
     assert.equal(
       result,
-      '[zone:col4]note c4r3[/zone:col4] and also [zone:c5r2]column 5[/zone:c5r2].',
+      '[zone:col4]note c4r3[/zone:col4] and also [zone:c5r2]column 5, row 2[/zone:c5r2].',
       'the coordinate INSIDE the zone (depth>0) must stay untouched; the one AFTER it (depth 0) must be promoted'
     );
   });
 
   it('promotes multiple independent bare coordinates in the same string', () => {
     const result = promoteRawCoordinates('You missed c1r4 and c4r3.', 'en');
-    assert.equal(result, 'You missed [zone:c1r4]column 1[/zone:c1r4] and [zone:c4r3]column 4[/zone:c4r3].');
+    assert.equal(result, 'You missed [zone:c1r4]column 1, row 4[/zone:c1r4] and [zone:c4r3]column 4, row 3[/zone:c4r3].');
   });
 
   it('is a no-op on text with no bare coordinates', () => {
@@ -428,7 +430,7 @@ describe('guardExplainMoveLlmPayload — allowedSet + promoteRawCoordinates end 
       board: EMPTY_BOARD,
       allowedSet,
     });
-    assert.equal(out.explanation, 'The key square is [zone:c4r3]column 4[/zone:c4r3], watch it.');
+    assert.equal(out.explanation, 'The key square is [zone:c4r3]column 4, row 3[/zone:c4r3], watch it.');
   });
 
   it('2: a bare cXrY that is NOT offered falls back to flattened "column N" prose, with no residual [zone:...] tag', () => {
@@ -441,25 +443,23 @@ describe('guardExplainMoveLlmPayload — allowedSet + promoteRawCoordinates end 
       allowedSet,
     });
     assert.ok(!out.explanation.includes('[zone:'), `no residual zone tag expected: ${out.explanation}`);
-    assert.equal(out.explanation, 'The key square is column 4, watch it.');
+    // The wrapper is dropped but the promoted inner text survives — and since RC-H it carries the
+    // row, so even the rejected path serves the precise wording rather than "column 4".
+    assert.equal(out.explanation, 'The key square is column 4, row 3, watch it.');
   });
 
-  it('3: Decision B — a cXrY already inside the LLM\'s own zone is left unpromoted by promoteRawCoordinates, then handled by the existing pipeline (checkP6 flags the raw text, the wrapper is dropped, stripInternalTokens flattens the leftover prose)', () => {
+  it('3: RC-H — a cXrY already inside the LLM\'s own OFFERED zone is now humanized in place, so checkP6 passes and the grounded highlight survives (this test previously pinned the RC-H regression)', () => {
     const allowedSet = toAllowedSet([{ handle: 'h', spec: 'c4r1' }]);
     const out = guardExplainMoveLlmPayload({
       explanation: '[zone:c4r1]watch c4r1 closely[/zone:c4r1]',
-      prompt: '',
-      terms: {},
-      board: EMPTY_BOARD,
-      allowedSet,
+      prompt: '', terms: {}, board: EMPTY_BOARD, allowedSet,
     });
-    // promoteRawCoordinates leaves the already-wrapped "c4r1" untouched (Decision B), so it never
-    // becomes the flattened word — its own inner text then trips checkP6's raw-coordinate check
-    // (c4r1 is offered, so checkP5Strong alone would have passed it), the wrapper is stripped, and
-    // the leftover raw "c4r1" prose is caught by the final stripInternalTokens pass exactly as it
-    // would have been pre-feature. No residual [zone:...] tag either way.
-    assert.ok(!out.explanation.includes('[zone:'), out.explanation);
-    assert.equal(out.explanation, 'watch column 4 closely');
+    // BEFORE RC-H this asserted `'watch column 4 closely'` with the wrapper stripped: promoteRaw-
+    // Coordinates left the already-wrapped token alone (Decision B), checkP6 then flagged the raw
+    // inner text, and the span-strip destroyed a CORRECT, offered highlight. Confirmed in
+    // production on board 315444233213134122 (3 of 3 runs). humanizeGroundedCoordinates now
+    // rewrites the token — the zone vouches for exactly that cell — so P6 sees clean text.
+    assert.equal(out.explanation, '[zone:c4r1]watch column 4, row 1 closely[/zone:c4r1]');
   });
 
   it('4: SPAN_CARRYING_CODES including P5strong strips an unoffered, EXPLICIT (non-promoted) zone end to end', () => {
@@ -529,5 +529,119 @@ describe('buildTtsSpeechText (fix 7)', () => {
   it('buildTtsSpeechText handles empty input the way the route expects', () => {
     assert.equal(buildTtsSpeechText('', 'en'), '');
     assert.equal(buildTtsSpeechText(null, 'en'), '');
+  });
+});
+
+// ────────────────────────────────────────────────────────────────────────────────────────────────
+// Spec 058 feedback remediation, attempt 2 — RC-H: "rewrite-then-check" instead of "check-then-strip".
+//
+// Confirmed on three real-pipeline runs of board `315444233213134122`: the model emitted a CORRECT,
+// engine-vouched zone anchored on a literal coordinate —
+//   "keep [zone:c1r3]the c1r3 square that completes your four-in-a-row line[/zone:c1r3] alive"
+// — `checkP6` flagged `P6:raw_coordinate:c1r3` on the inner text, and the span-strip destroyed the
+// whole highlight. The served text read "the column 1 square", losing both the highlight AND the
+// row, which is exactly what that board's human feedback complained about.
+//
+// P6's real invariant is "no raw internal coordinate reaches the user" — not "a zone whose prose
+// names its own square must be destroyed". So a coordinate that the enclosing zone's own spec
+// VOUCHES FOR is rewritten in place into precise human wording BEFORE the gate runs; P6 then sees
+// clean text and passes, and keeps its role as the last line of defence for everything else.
+//
+// MISMATCH POLICY (deliberate, tested below): a coordinate inside a zone whose spec does NOT cover
+// it gets NO free pass. It is left raw, so `checkP6` still fires and the span is still stripped —
+// a zone that points at one square while its words name another is not a grounded highlight.
+// ────────────────────────────────────────────────────────────────────────────────────────────────
+describe('humanizeGroundedCoordinates (RC-H)', () => {
+  it('rewrites a coordinate its own zone vouches for into PRECISE wording, keeping the row', () => {
+    const text = 'keep [zone:c1r3]the c1r3 square[/zone:c1r3] alive';
+    assert.equal(
+      humanizeGroundedCoordinates(text, 'en'),
+      'keep [zone:c1r3]the column 1, row 3 square[/zone:c1r3] alive',
+    );
+  });
+
+  it('is localized — a new user-facing string must not ship English-only', () => {
+    assert.equal(
+      humanizeGroundedCoordinates('[zone:c1r3]el cuadro c1r3[/zone:c1r3]', 'es'),
+      '[zone:c1r3]el cuadro columna 1, fila 3[/zone:c1r3]',
+    );
+  });
+
+  it('rewrites a coordinate vouched for by a multi-cell windows: spec', () => {
+    assert.equal(
+      humanizeGroundedCoordinates('[zone:windows:c4r3,c5r3,c6r3,c7r3]the c5r3 link[/zone:windows:c4r3,c5r3,c6r3,c7r3]', 'en'),
+      '[zone:windows:c4r3,c5r3,c6r3,c7r3]the column 5, row 3 link[/zone:windows:c4r3,c5r3,c6r3,c7r3]',
+    );
+  });
+
+  it('rewrites a `colN` token its own zone vouches for', () => {
+    assert.equal(
+      humanizeGroundedCoordinates('[zone:col4]col4 is the pivot[/zone:col4]', 'en'),
+      '[zone:col4]column 4 is the pivot[/zone:col4]',
+    );
+  });
+
+  it('strips the future: decorator before matching (geometry, not framing)', () => {
+    assert.equal(
+      humanizeGroundedCoordinates('[zone:future:c7r3]the c7r3 square[/zone:future:c7r3]', 'en'),
+      '[zone:future:c7r3]the column 7, row 3 square[/zone:future:c7r3]',
+    );
+  });
+
+  it('MISMATCH POLICY: a coordinate its zone does NOT cover is left raw (no free pass)', () => {
+    const text = '[zone:c1r3]the c5r5 square[/zone:c1r3]';
+    assert.equal(humanizeGroundedCoordinates(text, 'en'), text);
+  });
+
+  it('leaves a coordinate OUTSIDE any zone alone (that is stripInternalTokens\' floor, not this)', () => {
+    const text = 'The fork is at c4r3.';
+    assert.equal(humanizeGroundedCoordinates(text, 'en'), text);
+  });
+
+  it('is a no-op on non-string / empty input', () => {
+    assert.equal(humanizeGroundedCoordinates(''), '');
+    assert.equal(humanizeGroundedCoordinates(undefined), undefined);
+    assert.equal(humanizeGroundedCoordinates(null), null);
+  });
+});
+
+describe('guardExplainMoveLlmPayload — RC-H end to end', () => {
+  const EMPTY_BOARD = new Board('');
+  // What the PLAYER actually reads: zone/term markup is consumed by the client renderer
+  // (`src/lib/annotatedText.js`), so a coordinate inside a `[zone:...]` SPEC is not a user-facing
+  // leak — only the inner/plain prose is.
+  const visible = (s) => s.replace(/\[\/?(?:zone|term):[^\]]*\]/gi, '');
+
+  it('the confirmed RC-H regression: an offered zone whose prose names its own square SURVIVES, with the row preserved', () => {
+    const allowedSet = toAllowedSet([{ handle: 'you-major', spec: 'c1r3' }]);
+    const out = guardExplainMoveLlmPayload({
+      explanation: 'You needed to keep [zone:c1r3]the c1r3 square that completes your four-in-a-row line[/zone:c1r3] alive.',
+      prompt: '', terms: {}, board: EMPTY_BOARD, allowedSet,
+    });
+    assert.ok(out.explanation.includes('[zone:c1r3]'), `the grounded highlight must survive: ${out.explanation}`);
+    assert.ok(out.explanation.includes('column 1, row 3'), `the row must be preserved: ${out.explanation}`);
+    // Assert on the VISIBLE text: `[zone:c1r3]` is machine-readable markup the client consumes and
+    // never renders, so the spec's own coordinate is not a leak (annotatedText.js strips it).
+    assert.ok(!/\bc\d+r\d+\b/i.test(visible(out.explanation)), `no raw coordinate may reach the user: ${out.explanation}`);
+  });
+
+  it('the invariant is NOT weakened: a mismatched coordinate inside an offered zone still loses its span', () => {
+    const allowedSet = toAllowedSet([{ handle: 'a', spec: 'c1r3' }, { handle: 'b', spec: 'c5r5' }]);
+    const out = guardExplainMoveLlmPayload({
+      explanation: 'Watch [zone:c1r3]the c5r5 square[/zone:c1r3] here.',
+      prompt: '', terms: {}, board: EMPTY_BOARD, allowedSet,
+    });
+    assert.ok(!out.explanation.includes('[zone:'), `the mismatched span must be stripped: ${out.explanation}`);
+    assert.ok(!/\bc\d+r\d+\b/i.test(visible(out.explanation)), `no raw coordinate may reach the user: ${out.explanation}`);
+  });
+
+  it('the invariant is NOT weakened: an UNGROUNDED raw coordinate is still never served raw', () => {
+    const allowedSet = toAllowedSet([{ handle: 'h', spec: 'c1r1' }]); // c4r3 is NOT offered
+    const out = guardExplainMoveLlmPayload({
+      explanation: 'The key square is c4r3, watch it.',
+      prompt: '', terms: {}, board: EMPTY_BOARD, allowedSet,
+    });
+    assert.ok(!out.explanation.includes('[zone:'), `no ungrounded highlight may survive: ${out.explanation}`);
+    assert.ok(!/\bc\d+r\d+\b/i.test(visible(out.explanation)), `no raw coordinate may reach the user: ${out.explanation}`);
   });
 });

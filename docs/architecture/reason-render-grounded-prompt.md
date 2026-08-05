@@ -946,3 +946,25 @@ stays identical (research.md D1).
 splits on `|` then `,` and dedupes; `checkP5Strong`'s signature does the same since 2026-08-05.
 Before that fix it split on `,` alone, so a two-window spec was offered and then rejected by its own
 allowed set.
+
+### 11d. Rewrite-then-check at the P6 seam, and two prompt steers (attempt 2, 2026-08-05)
+
+Three fixes from the spec-058 staging-feedback remediation. The full rationale, the measured
+evidence and the mismatch policy live in `reason-DECISIONS.md` **D44**; this section is the
+implementation map.
+
+1. **`humanizeGroundedCoordinates`** (`server/reasonRenderGuard.mjs`). Runs inside
+   `guardExplainMoveLlmPayload`, between `promoteRawCoordinates` and `validateAnnotation`. Splits on
+   `ZONE_TAG_RE`, tracks the open-zone stack, and for text at depth > 0 rewrites any `cNrM`/`colN`
+   token that `expandSpec(spec)` actually covers into `serverT(locale, 'cell')` /
+   `serverT(locale, 'column')`. Coordinates the zone does **not** cover stay raw so `checkP6` still
+   strips the span. Text outside any zone is untouched.
+2. **The `cell` locale key** (`server/locale.mjs`) — `en: "column N, row M"`,
+   `es: "columna N, fila M"`. Used by `humanizeGroundedCoordinates` and by
+   `promoteRawCoordinates`' wrapper inner text. `stripInternalTokens`' `column` stays row-dropping
+   by design (last-resort floor for an unvouched coordinate).
+3. **Prompt steers** (`renderReasonModel.mjs` `assembleGroundedPrompt`, `zoneAnnotations.mjs`
+   `roleText`): line roles now say "a LINE of four squares, not a single square", cell roles say
+   "single", the Highlightable-regions block carries a worked bad/good pair for shape-matching, and
+   the KB-terms block positively requires a `[term:...]` to be paired with an **adjacent** (never
+   overlapping — the client parser cannot nest) `[zone:...]`.

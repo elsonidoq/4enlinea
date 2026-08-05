@@ -113,6 +113,74 @@ export function stripInternalTokens(text, locale = 'en') {
   return text.split(ZONE_TAG_RE).map((seg, i) => (i % 2 === 1 ? seg : rewrite(seg))).join('');
 }
 
+// Non-global, capture-bearing twins of CXRY_RE / BARE_COL_RE, for the per-occurrence *conditional*
+// rewrite in `humanizeGroundedCoordinates` below. Declared separately (not reused with a
+// `lastIndex` reset) because those two carry the `g` flag and are shared across calls.
+const CELL_TOKEN_RE = /\bc(\d+)r(\d+)\b/gi;
+const COL_TOKEN_RE = /\bcol(\d+)\b/gi;
+
+/**
+ * Rewrites a raw internal coordinate that sits inside a `[zone:...]` span **whose own spec vouches
+ * for it** into precise, localized human wording — `c1r3` -> "column 1, row 3", `col4` -> "column 4"
+ * — leaving every other coordinate byte-identical.
+ *
+ * WHY THIS EXISTS (RC-H, spec 058 feedback remediation attempt 2). `checkP6` (`annotationGate.js`)
+ * flags ANY zone whose inner text matches `cNrM`/`colN`, and P6 is span-carrying, so
+ * `stripFailingZoneSpans` then destroys the whole highlight. Measured on three real-pipeline runs of
+ * board `315444233213134122`: the model emitted a CORRECT, engine-vouched zone —
+ * `keep [zone:c1r3]the c1r3 square that completes your four-in-a-row line[/zone:c1r3] alive` — and
+ * the guard served `keep the column 1 square ... alive`: no highlight at all (a regression against
+ * the previous attempt, which did emit `c1r3`) and no row.
+ *
+ * P6's real invariant is **"no raw internal coordinate reaches the user"**, not "a zone whose prose
+ * names its own square must be destroyed". Running this rewrite BEFORE `validateAnnotation` turns
+ * check-then-strip into rewrite-then-check: P6 sees clean text on the vouched case and passes, and
+ * keeps its full force everywhere else.
+ *
+ * MISMATCH POLICY (deliberate). A coordinate whose enclosing zone does NOT cover it is left RAW, so
+ * `checkP6` still fires and the span is still stripped. `[zone:c1r3]the c5r5 square[/zone:c1r3]`
+ * gets no free pass — a zone that points at one square while its words name another is not a
+ * grounded highlight, and silently humanizing it would launder exactly the kind of mis-anchored
+ * annotation the gate exists to catch. (`checkP2` independently catches the mismatched-COLUMN
+ * subset of this; the cell-level mismatch is P6's alone.)
+ *
+ * Scope: only text at zone depth > 0. A coordinate in ordinary prose is untouched here — that is
+ * `promoteRawCoordinates`' job (promote it to a real highlight) with `stripInternalTokens` as the
+ * final floor. The `future:` decorator is stripped before matching, the same normalization
+ * `zoneParser`, `checkP5Strong`, `toAllowedSet` and the client's `annotatedText` all apply (D43).
+ *
+ * @param {string} text
+ * @param {string} [locale='en']
+ * @returns {string}
+ */
+export function humanizeGroundedCoordinates(text, locale = 'en') {
+  if (typeof text !== 'string' || text.length === 0) return text;
+  const cellWord = serverT(locale, 'cell');       // (c, r) => "column c, row r" | "columna c, fila r"
+  const columnWord = serverT(locale, 'column');
+
+  const parts = text.split(ZONE_TAG_RE);
+  const open = [];   // stack of currently-open zone specs
+  const out = parts.map((seg, i) => {
+    if (i % 2 === 1) {
+      if (seg.startsWith('[/zone:')) open.pop();
+      else open.push(seg.slice('[zone:'.length, -1));
+      return seg;
+    }
+    if (open.length === 0) return seg;            // ordinary prose — not this function's business
+    const spec = open[open.length - 1];
+    const cells = expandSpec(spec);               // 0-indexed {col,row}; [] for 'tg'/unresolvable
+    if (cells.length === 0) return seg;
+    const vouchedCells = new Set(cells.map(rcToCellStr));      // 1-indexed 'cNrM' strings
+    const vouchedCols = new Set(cells.map(({ col }) => col + 1));
+    return seg
+      .replace(CELL_TOKEN_RE, (match, c, r) =>
+        (vouchedCells.has(`c${c}r${r}`.toLowerCase()) ? cellWord(c, r) : match))
+      .replace(COL_TOKEN_RE, (match, c) =>
+        (vouchedCols.has(parseInt(c, 10)) ? columnWord(c) : match));
+  });
+  return out.join('');
+}
+
 /**
  * Promotes a bare, un-highlighted `cXrY` board-coordinate token in prose into a real,
  * player-findable `[zone:...]` highlight (spec 058, US3, FR-011; data-model.md §5).
@@ -148,7 +216,11 @@ export function stripInternalTokens(text, locale = 'en') {
  */
 export function promoteRawCoordinates(text, locale = 'en') {
   if (typeof text !== 'string' || text.length === 0) return text;
-  const columnWord = serverT(locale, 'column');
+  // FULL cell wording, not the row-dropping `column` (RC-H, attempt 2): the promoted zone points at
+  // one exact square, so flattening it to "column N" throws away the very precision the promotion
+  // exists to surface — and if `checkP5Strong` later rejects the spec, this flattened inner text is
+  // what the player is left with (see the Ordering note below).
+  const cellWord = serverT(locale, 'cell');
 
   const parts = text.split(ZONE_TAG_RE);
   let depth = 0;
@@ -161,7 +233,10 @@ export function promoteRawCoordinates(text, locale = 'en') {
       return seg;
     }
     if (depth > 0) return seg; // already inside an existing zone's own inner text — leave alone
-    return seg.replace(CXRY_RE, (match) => `[zone:${match}]${columnWord(match.match(/^c(\d+)r\d+$/i)[1])}[/zone:${match}]`);
+    return seg.replace(CXRY_RE, (match) => {
+      const [, col, row] = match.match(/^c(\d+)r(\d+)$/i);
+      return `[zone:${match}]${cellWord(col, row)}[/zone:${match}]`;
+    });
   });
   return out.join('');
 }
@@ -344,6 +419,12 @@ export function guardExplainMoveLlmPayload({ explanation, prompt, terms, locale 
   let sanitizedExplanation = explanation;
   if (board && typeof explanation === 'string' && explanation.length > 0) {
     sanitizedExplanation = promoteRawCoordinates(sanitizedExplanation, locale);
+    // RC-H (attempt 2): rewrite-then-check. A coordinate a zone's own spec vouches for becomes
+    // precise human wording HERE, so `checkP6` sees clean text and the correct, engine-grounded
+    // highlight survives. Everything P6 protects is untouched — an unvouched coordinate is left raw
+    // and still fails. Must run AFTER promoteRawCoordinates (whose new spans are already humanized,
+    // so this is a no-op over them) and BEFORE validateAnnotation.
+    sanitizedExplanation = humanizeGroundedCoordinates(sanitizedExplanation, locale);
     const { valid, failures } = validateAnnotation(sanitizedExplanation, board, allowedSet);
     if (!valid) {
       sanitizedExplanation = stripFailingZoneSpans(sanitizedExplanation, failures);

@@ -1250,3 +1250,78 @@ need to be reverted alongside it.
 `server/scripts/renderReasonModel.mjs` (`deriveRequiredSet`),
 `server/tests/renderReasonModel.test.mjs`. Related: OI-171 (resolved), OI-172 (mitigated),
 `docs/architecture/reason-render-grounded-prompt.md` §11a/§11c.
+
+---
+
+### D44 — P6 becomes rewrite-then-check: a coordinate its own zone VOUCHES FOR is humanized in place (precisely, with the row) instead of destroying the span; a MISMATCHED coordinate still gets no free pass
+
+**Supersedes** nothing in substance — P6's invariant ("no raw internal coordinate reaches the
+user") is unchanged. What changes is the **remedy**, and the row-dropping of the promoted/grounded
+wording.
+
+**The confirmed defect (RC-H).** Spec 058 feedback remediation, attempt 2, 2026-08-05. On board
+`315444233213134122`, three of three real-pipeline runs had the model emit a **correct**,
+engine-vouched highlight anchored on a literal coordinate:
+
+```
+rawMechanism: "You needed to keep [zone:c1r3]the c1r3 square that completes your
+               four-in-a-row line[/zone:c1r3] alive, ..."
+served:       "You needed to keep the column 1 square that completes your ... alive, ..."
+stderr:       [annotation gate] stripped ... [ 'P6:raw_coordinate:c1r3' ]
+```
+
+`checkP6` flagged the inner text, P6 is span-carrying, and `stripFailingZoneSpans` destroyed the
+whole highlight — so the board lit up nothing where the previous attempt had lit up `c1r3`, a
+regression. The flattening then also dropped the row, which is precisely what that board's human
+feedback complained about ("the text says 'column 1' but the coach speaks c1r3 which is much more
+precise").
+
+**Decision.**
+
+1. **A new `humanizeGroundedCoordinates(text, locale)`** (`server/reasonRenderGuard.mjs`) runs in
+   `guardExplainMoveLlmPayload` **after** `promoteRawCoordinates` and **before**
+   `validateAnnotation`. For each `[zone:SPEC]` span it rewrites, *in place*, any `cNrM` / `colN`
+   token that `expandSpec(SPEC)` actually covers into localized human wording. P6 then sees clean
+   text and passes, and the correct highlight survives. Everything outside a zone span is untouched
+   — that remains `promoteRawCoordinates`' job with `stripInternalTokens` as the final floor.
+2. **MISMATCH POLICY (deliberate).** A coordinate its enclosing zone does **not** cover is left
+   **raw**, so `checkP6` still fires and the span is still stripped.
+   `[zone:c1r3]the c5r5 square[/zone:c1r3]` gets no free pass — a zone that points at one square
+   while its words name another is not a grounded highlight, and laundering it would hide exactly
+   the mis-anchoring the gate exists to catch. This fired for real in run 1 of the attempt-2
+   measurement (board `3154`: the model wrote `[zone:future:c7r3]c6r3[/zone:future:c7r3]`), and the
+   span was correctly stripped.
+3. **Precision: a full cell reference keeps the row.** A new `serverT` key **`cell`**
+   (`server/locale.mjs`) renders `en: "column 1, row 3"` / `es: "columna 1, fila 3"`.
+   `humanizeGroundedCoordinates` and `promoteRawCoordinates`' wrapper text both use it.
+   `stripInternalTokens`' `column` remains row-dropping **on purpose**: it is the last-resort
+   flattening for an *unvouched* coordinate in ordinary prose, where naming a row the annotation
+   layer never vouched for would over-claim (Decision A, research.md §5/§9).
+4. **`future:` is stripped before matching**, the same normalization `zoneParser`, `checkP5Strong`,
+   `toAllowedSet` and the client's `annotatedText` already apply (D43).
+
+**Measured, three real-pipeline runs over the four spec-058 feedback boards** (`computeMechanism` ->
+`toAllowedSet` -> `guardExplainMoveLlmPayload`, `specs/058-deep-reveal-grounding/t042-attempt2-*`):
+**11 of 12 board-runs emitted every required spec with zero guard failures**; the twelfth is the
+mis-anchor in point 2 above, correctly rejected. Board `315444233213134122` now emits `c1r3` **and**
+serves "column 1, row 3" in all three runs.
+
+**Also landed in the same batch (prompt-layer, no invariant change):**
+- **Line-vs-square steer.** `roleText` (`zoneAnnotations.mjs`) marks every line role as "a LINE of
+  four squares, not a single square" and every cell role as "single", and
+  `assembleGroundedPrompt`'s Highlightable-regions block carries the rule plus a worked bad/good
+  pair. Attempt 1 had the model name a line in words and ground it on one endpoint cell while the
+  real `windows:` handle sat unused in the offer.
+- **Term/zone adjacency.** A `[term:...]` opens a glossary popup and highlights nothing, and a term
+  and a zone can **never** wrap the same phrase (`src/lib/annotatedText.js`'s `combinedRegex` is
+  single-pass and non-nesting — a nested tag survives as literal visible text). The KB-terms block
+  now *positively requires* the adjacent pairing, with a worked example, instead of only forbidding
+  the overlap.
+
+**Source:** spec 058 feedback remediation attempt 2, 2026-08-05. Modules:
+`server/reasonRenderGuard.mjs` (`humanizeGroundedCoordinates`, `promoteRawCoordinates`,
+`guardExplainMoveLlmPayload`), `server/locale.mjs` (`cell`),
+`server/scripts/reason_engine/zoneAnnotations.mjs` (`roleText`),
+`server/scripts/renderReasonModel.mjs` (`assembleGroundedPrompt`). Tests:
+`server/tests/reasonRenderGuard.test.mjs`, `server/tests/renderReasonModel.test.mjs`.
+Evidence: `specs/058-deep-reveal-grounding/t042-attempt2-run{1,2,3}-results.json`.

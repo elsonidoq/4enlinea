@@ -38,14 +38,22 @@ const TERM_KB = {
 // something that matters LATER, once a forced sequence reaches it, never as a present threat
 // (FR-002; Settled decision 8(b)). This is deliberately distinct wording from the 'double' branch
 // below, which describes a genuinely near-term, right-now fork.
+// The LINE-vs-SQUARE steer (spec 058 feedback remediation, attempt 2 — fix 2). Measured: the engine
+// offered the real line (`future:windows:c2r5,c3r5,c4r5,c5r5` — the "column 2 to column 5 strip" the
+// human asked for) and the model still wrote "the square that keeps your later four-in-a-row line
+// alive", grounding a LINE phrase on a single endpoint cell. The role text is where the model reads
+// what a handle IS, so the disambiguation belongs here, not only in the block-level instructions.
+const LINE_STEER = 'a LINE of four squares, not a single square — use this handle, not a single-square '
+  + 'handle, whenever your words say "line", "strip" or "row of four"';
+
 function roleText(owner, kind) {
   const who = owner === 'you' ? 'you' : 'your opponent';
-  if (kind === 'immediate') return `the square where ${who} can make four next move`;
-  if (kind === 'double') return `the fork square where ${who} gets two winning squares at once`;
-  if (kind === 'line') return `the four-in-a-row line ${who} is playing for`;
-  if (kind === 'future-line') return `the four-in-a-row line that decides this later, once the forced sequence reaches it — not a threat right now`;
-  if (kind === 'future') return `this square matters later, once the forced sequence reaches it — not a threat right now`;
-  return `a square completing ${who}'s four-in-a-row line`; // major
+  if (kind === 'immediate') return `the single square where ${who} can make four next move`;
+  if (kind === 'double') return `the single fork square where ${who} gets two winning squares at once`;
+  if (kind === 'line') return `the whole four-in-a-row line ${who} is playing for (${LINE_STEER})`;
+  if (kind === 'future-line') return `the whole four-in-a-row line that decides this later, once the forced sequence reaches it — not a threat right now (${LINE_STEER})`;
+  if (kind === 'future') return `this single square matters later, once the forced sequence reaches it — not a threat right now`;
+  return `a single square completing ${who}'s four-in-a-row line`; // major
 }
 
 // A window-bearing tag becomes a windows: spec (the whole line); a plain tag becomes its cNrM cell.

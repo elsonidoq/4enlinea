@@ -372,6 +372,20 @@ export function assembleGroundedPrompt(model) {
       + 'or "once the forced sequence reaches it" names a square that is not yet playable — '
       + 'describe it in future or conditional language ("this matters once...", "later, if..."), '
       + 'never as a present threat or as something happening right now.',
+    // Fix 2 (spec 058 feedback remediation, attempt 2). The line handles were offered and ignored:
+    // the model named a LINE in words and grounded it on the one endpoint square, so the board lit
+    // up a single cell where the reader was told to look at a row of four. Match the shape of the
+    // words to the shape of the handle — stated as a rule AND as a worked pair, because in this
+    // repo abstract prompt rules get ignored while worked examples land.
+    'MATCH THE SHAPE OF YOUR WORDS TO THE SHAPE OF THE HANDLE. If your words name a line, strip, '
+      + 'or row of four squares, you MUST use a whole-line handle — one whose role below says it is '
+      + 'a LINE of four squares. A single-square handle is only for words that name one square. '
+      + 'Bad: "[zone:you-key-square]the square that keeps your four-in-a-row line alive'
+      + '[/zone:you-key-square]" — the words name a line but the board lights up one square. '
+      + 'Good: "you gave up [zone:you-key-line]the four-in-a-row line running from column 2 to '
+      + 'column 5[/zone:you-key-line], and [zone:you-key-square]the square that finishes it'
+      + '[/zone:you-key-square] with it" — line words on the line handle, square words on the '
+      + 'square handle.',
     regions,
     '',
     '# You MUST build the explanation around these',
@@ -387,6 +401,22 @@ export function assembleGroundedPrompt(model) {
       + '[term:<slug>]phrase[/term:<slug>], using a slug from this list verbatim. Every opening '
       + 'tag MUST have a matching closing tag — never write a slug on its own as if it were a '
       + 'word. Only these slugs, only when you actually use the idea.',
+    // Fix 3 (spec 058 feedback remediation, attempt 2, ask 2c). A [term:...] opens a glossary popup
+    // and highlights NOTHING, so naming the idea left the player with no way to see where it was.
+    // A term and a zone can never wrap the same phrase — the client's parser is single-pass and
+    // non-nesting, so a nested tag survives as literal visible text on screen. Adjacency is the
+    // only shape that both names the idea and points at it, so ask for it positively rather than
+    // only forbidding the overlap.
+    'A [term:...] tag opens a glossary popup — it never highlights anything on the board, so a '
+      + 'named idea on its own leaves the player with nothing to look at. A term and a highlight '
+      + 'can never wrap the SAME words. To both name an idea AND point at it, put them next to '
+      + 'each other: the term on the words that name the idea, and a separate [zone:...] on the '
+      + 'neighbouring words that say where it is. '
+      + 'Bad: "you handed him [term:double_threat]a double threat[/term:double_threat]" — named, '
+      + 'but the player is never shown where it lives. '
+      + 'Good: "you handed him [term:double_threat]a double threat[/term:double_threat] on '
+      + '[zone:opp-fork-lines]the two squares he can finish on[/zone:opp-fork-lines]" — the term '
+      + 'names it, the adjacent highlight points at it.',
     termLines,
     '',
     '# Internal evidence fields (for your reading only — do NOT name these in `mechanism`; cite paths in `fields_relied_on`)',
