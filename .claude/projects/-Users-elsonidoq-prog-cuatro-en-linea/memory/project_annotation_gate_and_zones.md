@@ -1,14 +1,82 @@
 ---
 name: project_annotation_gate_and_zones
-description: "Coach annotation gate — LIVE again since 2026-08-04 (strip-and-log at the response seam) but P5Strong does NOT run, so ungrounded highlights pass; text transforms must skip [zone:] delimiters or highlights die silently; P3 codes carry no span"
+description: "Coach annotation gate — P5Strong NOW RUNS live since spec 058 (fresh-generation call site only, OI-143 closed); text transforms must skip [zone:] delimiters or highlights die silently; P3 codes carry no span"
 metadata: 
   node_type: memory
   type: project
   originSessionId: 61abbe1a-cb8c-4db3-a79d-d3e4d4378c9a
-  modified: 2026-08-04T15:00:46.528Z
+  modified: 2026-08-05T20:08:28.152Z
 ---
 
 Everything about the coach's **annotation gate** (`server/annotationGate.js` + `server/explainContext.js` + `llmCoachHelpers.js`) and its zone-tag validation.
+
+> ## ✅ CORRECTED 2026-08-05 (spec 058, Epic 11) — four warnings below are now STALE
+>
+> Read this first; acting on the warnings below sends you to fix code that is already correct.
+>
+> 1. **`checkP5Strong` now RUNS live — OI-143 is closed.** `server/index.js` builds a real
+>    `allowedSet` via a new `toAllowedSet(aliases)` export in `reasonRenderGuard.mjs`, from
+>    `result.renderDecision.zones.aliases`. **But only at the fresh-generation call site.** The
+>    cache-hit and not-a-blunder sites still pass `allowedSet: null` deliberately (no `renderDecision`
+>    in scope) and carry comments saying so — partial coverage **by design**, recorded as decision
+>    **D42**. Do not "complete" it without reading that entry.
+> 2. **`SPAN_CARRYING_CODES` now includes `P5strong`**, so a rejection actually strips the span rather
+>    than logging and serving it unchanged. One narrower gap survives: `P5strong:tg` has no third
+>    `:`-segment for `stripFailingZoneSpans`'s `spec = specParts.join(':')` to find — **OI-170**.
+> 3. **`computeMechanism` no longer discards attempt 1.** It returns
+>    `{ ...finalAttempt, attempt1, missingHandles }`, and a second retry trigger (independent of
+>    `isLlmError`) fires when a required square is omitted, re-prompting with an *amended* prompt that
+>    names the miss. Both attempts log to `deep_reveal_failures` via six new columns (migration `065`).
+> 4. **The offer now covers the referents users asked about.** `buildAnnotationOffer` emits a
+>    `future:`-prefixed handle class for deep fork cells, and `deriveRequiredSet`
+>    (`renderReasonModel.mjs`) makes 1–3 groups **mandatory**, not merely offered.
+>
+> **Two NEW traps replace them** — both measured, both filed:
+> - **A `future:` handle can never be *required*** (OI-171). Over the 29-record coverage corpus:
+>   **7 offered, 0 required.** Structural — `deriveRequiredSet` reads `h.cell ?? h.completingCell` or
+>   `h.window`, never `h.forkCells`.
+> - **Whole-window-only admission strips real, correct highlights** (OI-172). An offered
+>   `windows:`/multi-cell alias is satisfiable only as the exact whole window; naming one member cell
+>   is rejected *and now stripped* (because of item 2). Measured on `3154442332131341225551`: the
+>   coach named `c2r6`/`c5r5`, both were promoted to real highlights, both stripped, both degraded to
+>   "column 2"/"column 5" — the very complaint the epic set out to fix.
+>
+> Also see [[project_ungrounded_highlights_look_real]]: the client synthesises column highlights when
+> a text has zero tags, so **the rendered page cannot tell you whether anything is grounded.**
+
+> ## 🛑 READ FIRST 2026-08-04 — "missing highlights" is usually NOT this gate
+>
+> Everything below describes the gate **over**-rejecting, or passing ungrounded highlights. The
+> dominant *live* failure is the opposite, and this file will send you to the wrong layer:
+> **the model emits no annotations at all and the gate strips nothing.**
+>
+> Measured on the 4 staging `llm_feedback` rows (2026-08-04) by diffing served text against the raw
+> `explanation_cache` mechanism: **zero zone tags in 3 of 4 responses**, and 6 raw squares (`c7r3`,
+> `c3r5`, `c2r6`, `c5r5`, `c5`, `c6`) written as plain prose. The gate removed nothing in any of the
+> four. The live condition-D prompt *does* carry a `# Highlightable regions` block with 6 handles and
+> the line *"Never write a raw square"* — the model just ignores it, because nothing requires
+> compliance.
+>
+> Three contributing causes, none in `annotationGate.js`:
+> 1. **The offer doesn't cover the nouns the model reaches for.** Handles are `better-col`,
+>    `played-col`, `you-major`, `opp-major`, `you-double`, `you-major-2`. There is **no handle for the
+>    controlling group / winning line** (`controllingGroup`, `parityAttribution`) and none for the key
+>    square (`entryCell`) — exactly the referents users ask about ("what is the long four-in-a-row
+>    line?", "when you say key square, which is it?"). The model had no legal way to highlight what it
+>    was describing.
+> 2. **`mechanismExplainer.mjs` never calls `buildAnnotationOffer`/`processAnnotations` itself** — it
+>    goes through `buildPromptForCondition(null, nv, 'D', locale)` + `postprocessAnswer`, and
+>    `compute.mjs`'s own comment concedes the transition is unfinished: *"until it is prompted to emit
+>    handles, keep the model's own key_cells"*.
+> 3. **Unoffered tags are documented as dropped but reached the user anyway** — `[zone:col4]` and
+>    `[zone:col2]` are not offered handles and were served verbatim. Characterize that drop path
+>    before relying on it.
+>
+> Diagnose with [[feedback_served_vs_raw_diff]] **first** — two queries tell you whether the gate is
+> even involved. Fix tracked in `docs/epics/deep-reveal-grounding-epic.md` (Epic 11).
+>
+> Also: `computeMechanism` **discards attempt 1 on retry** (`attempt = await runLlmAttempt(...)`
+> overwrites it), so the first response is unrecoverable for logging unless that changes.
 
 > ## ⚠️ RE-CORRECTED 2026-08-04 (spec 057, D3/T028) — the gate IS BACK on the live path, but only 5 of its 6 predicates run
 >

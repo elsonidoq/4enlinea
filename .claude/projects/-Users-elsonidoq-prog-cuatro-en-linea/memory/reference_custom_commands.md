@@ -5,7 +5,7 @@ metadata:
   node_type: memory
   type: reference
   originSessionId: aeabe3f5-0c1c-4ec0-af96-ac552a124e88
-  modified: 2026-07-29T14:05:57.721Z
+  modified: 2026-08-05T20:09:44.857Z
 ---
 
 Project-level custom commands live at `/Users/elsonidoq/prog/cuatro_en_linea/.claude/commands/`.
@@ -27,6 +27,7 @@ Project-level custom commands live at `/Users/elsonidoq/prog/cuatro_en_linea/.cl
   (user-confirmed). Not an env var, so it doesn't belong in an env-var table.
 - Critique stages use AskUserQuestion with ≥2 options — do not bypass this gate or auto-advance without user input.
 - **`/epics-manager` no longer asks every critique item (changed 2026-07-29, owner-directed).** A `## Blocking issues` item **auto-accepts** — apply the recommendation, don't ask — when the critique gives a recommendation AND no clear alternative exists, i.e. the question would have exactly one real option. `## Decisions required` items are ALWAYS asked (owner choices by construction). Two rules that make it safe: never manufacture a second option to keep a question alive, and report auto-applied items in one line each before advancing. **The trap:** `pending_answers` must still be written (non-null, recording auto-accepted items in the same format) even when *no* question was asked — the Interrupted-critique recovery block treats null `pending_answers` as "the Q&A never completed" and would re-run it forever. The owner explicitly declined the broader "ask by blast radius, not by stage" change for now; only the single-viable-option rule is in.
+- **`/code-review` cannot be invoked from the `Skill` tool.** It is marked `disable-model-invocation`; calling it returns *"Skill code-review cannot be used with Skill tool … Ask the user to run /code-review themselves … Do not replicate this skill's workflow by other means."* This matters because **`/coordinate-implementation`'s Step 5 instructs you to invoke it** — that step is unrunnable by the agent, and skipping it silently drops the only static-review pass over the *accumulated* multi-batch diff, which is exactly what browser QA is structurally blind to (correctness bugs on unexercised paths; logic duplicated across batches because each agent saw only a handoff summary, never the prior diffs). When coordinating: **say plainly that Step 5 was skipped and that the user should run `/code-review` themselves.** Same for `/code-review ultra` (user-triggered and billed).
 - Handoff context must be chained verbatim between batches; do not summarize or paraphrase it.
 - Model selection is behavioral, not a suggestion: Opus critiques, Sonnet implements — swapping them breaks the quality/cost balance the pipeline was tuned for.
 

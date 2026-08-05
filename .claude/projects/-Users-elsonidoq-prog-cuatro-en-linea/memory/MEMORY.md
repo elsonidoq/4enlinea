@@ -46,7 +46,8 @@
 - [Supabase envs & poolers](reference_supabase_connection.md) — staging=6543 (DDL works anyway — see ledger); local needs the JWT service key, not sb_secret_*; storage signedUrl
 - [Stripe traps](project_stripe_traps.md) — OBSOLETE 2026-07-18 (Stripe fully removed); historical context only, do not use for current work
 - [Paddle integration](project_paddle_integration.md) — sandbox/live from key prefix NOT NODE_ENV/MODE; CSP=5-round discovery; domain resubmit=remove+re-add; checkout_not_enabled≠domain gate; fulfillment checklist needs 6 events + a REAL delivery
-- [explanation_cache bypasses producers](project_blunder_serving_dual_paths.md) — cache-hit path skips the producer guards; sanitize at the response seam + TRUNCATE on deploy
+- [explanation_cache bypasses producers](project_blunder_serving_dual_paths.md) — TWO response seams read it; TTS didn't sanitize ⇒ voice said "c1r3" while text said "column 1"; sanitizer change orphans audio
+- [Railway staging logs](reference_railway_staging_logs.md) — MCP project/service/env ids; `API total rooms:` is the upstream-vs-our-bug line for a short papergames import
 - [Stats accuracy is PUZZLE accuracy](project_stats_architecture.md) — no game-accuracy aggregate exists; avg_accuracy is a LABEL key; byPattern always empty (open bug)
 - [Deploy: invisible strict npm ci](project_spec031_staging_production_deploy.md) — railpack.json hides the auto-injected npm ci; peer conflicts fail the build; npm ci --dry-run
 - [Deploy EXECUTION traps](project_deploy_execution_traps.md) — auto-runner defeats "after the code deploy"; ADD COLUMN never populates; prompts exit 0 writing NOTHING
@@ -66,7 +67,9 @@
 - [Prod LLM call graph](project_prod_llm_call_graph.md) — deep-reveal = defaultCallLLM; callLLM offline-only; composeExplanation//api/explain-move is DEAD (no frontend caller)
 - [Feature vector design](feedback_feature_vector_design.md) — toFeatureVector: keep grounded cells, drop plumbing/derivations; keep instance counts
 - [Feature vector content traps](project_feature_vector_content_traps.md) — null outcomes on losing_either_way; patternsOpponent snapshot ambiguity; pliesToEnd = |score|
-- [Annotation gate debugging](project_annotation_gate_and_zones.md) — LIVE again (strip-and-log) but P5Strong does NOT run ⇒ ungrounded highlights pass (OI-143); text transforms MUST skip [zone:] specs
+- [Annotation gate debugging](project_annotation_gate_and_zones.md) — P5Strong RUNS since 058 (fresh-gen only, OI-143 closed); 4 old warnings now stale; new: OI-171/OI-172
+- [Ungrounded highlights look real](project_ungrounded_highlights_look_real.md) — zero [zone:] tags ⇒ client SYNTHESISES column highlights; the rendered page cannot tell you what is grounded
+- [Served-vs-raw diff](feedback_served_vs_raw_diff.md) — diff llm_feedback's served text against explanation_cache's raw mechanism FIRST: it separates generation from gate failure in 2 queries
 - [Creation tags aren't score-gated](project_creation_tags_not_score_gated.md) — double_threat/forced_win/figure_7/j_shape fire on a LOSING move too; never key their phrase pool off raw `quality`
 - [Explain system](project_explain_system.md) — LLM prompt invariants; explanation_cache schema; NO KB term injects without its pattern firing
 - [LLM perspective bug](feedback_llm_perspective_bug.md) — the post-move board's "Next:" label hijacks LLM perspective; name the mover explicitly
@@ -114,7 +117,7 @@
 - [Live envs have NO real users (pre-launch)](project_live_envs_have_no_real_users.md) — staging/prod DBs are DISPOSABLE until the owner says released; regenerate > surgically repair; prod work = docs not tooling. Now in CLAUDE.md
 - [Implemented ≠ deployable](feedback_implemented_vs_deployable.md) — answer both; per-change prereqs → `docs/deployment_steps.md` = a WORK QUEUE (producers append only; reset only after all-DONE-in-prod; non-empty = not shipped); standing procedure → `deploy-runbook.md`; `staging_checks.md` is at the REPO ROOT, not `docs/`
 - [A wrong test is part of the bug](feedback_wrong_test_is_part_of_the_bug.md) — never keep a test green over a fix; read the fixture not its name; a test can be VACUOUS: f(a)===f(a) reads as coverage
-- [Sub-agent reports are scoped claims](feedback_subagent_reports_are_scoped_claims.md) — a batch's green test run may be its WORKING TREE not its commit; it reports only what the handoff schema asked for
+- [Sub-agent reports are scoped claims](feedback_subagent_reports_are_scoped_claims.md) — green run may be its WORKING TREE not its commit; reports only what the schema asked; re-measure "expected" absences
 - [Concurrent agents clobber](feedback_concurrent_agents_clobber.md) — the user runs agents in parallel; two in one tree overwrite SILENTLY; line numbers stale within the hour
 - [External auto-backup commits](project_external_auto_backup_commits.md) — a background process auto-commits STAGED work unpredictably (once broke HEAD); stage explicit paths only, never git add -A, git status --short before commit
 - [Isolated review misses seams](feedback_isolated_review_misses_seams.md) — the JOIN of two correct halves; 1-instance tests miss N-instance clashes
