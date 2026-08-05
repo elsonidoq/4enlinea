@@ -310,11 +310,23 @@ export function ReviewScreen({ go, goBack, id, onboarding, result, outcome }) {
     : '--';
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
+    // height (not minHeight) + minHeight:0 on the scroller — same shape as
+    // ConceptScreen.jsx. The root is pinned to the viewport so the content
+    // scrolls INTERNALLY and nothing sits below the fold. Measured 2026-08-04
+    // at 390x664: content was 819px against a 664px viewport, so the Move
+    // Timeline and the Prev/Next mistake row were entirely off screen.
+    // minHeight would let the root grow past the viewport again; a bare pin
+    // without the scroller below would CLIP those 155px instead of hiding
+    // them, which is worse.
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100dvh' }}>
       <TopBar title={t('review.title')} onBack={goBack} onLogoClick={() => go('home')} />
 
       <CoachDialog fixed messages={coachMessages} />
 
+      {/* Everything below the coach scrolls internally. flexShrink on the board
+          wrapper is deliberately left default so the board gives way before the
+          accuracy card and the navigation row do. */}
+      <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', WebkitOverflowScrolling: 'touch' }}>
       {/* Board area */}
       <div
         style={{
@@ -522,9 +534,10 @@ export function ReviewScreen({ go, goBack, id, onboarding, result, outcome }) {
           </div>
         </div>
       )}
+      </div>
 
       {onboarding && (
-        <div style={{ padding: '16px', marginTop: 'auto' }}>
+        <div style={{ padding: '16px', flexShrink: 0 }}>
           <button
             className="btn btn-primary"
             style={{ width: '100%' }}

@@ -6192,3 +6192,76 @@ the same class of defect** that this branch's deep-reveal TTS fix (see the "Plan
 deep-reveal TTS sanitization" entry in `docs/deployment_steps.md`) exists to eliminate on that other
 surface: spoken text silently disagreeing with rendered text. Here it is believed benign; there it was
 not — which is exactly why it needs a deliberate ruling rather than staying inherited.
+
+---
+
+## OI-160 — Admin pages still use `100vh` (5 sites) — deliberately excluded
+
+**Status:** OPEN (deliberate, low priority) — opened 2026-08-04.
+
+**What:** After the Plan B mobile-viewport-fit sweep converted every user-facing screen to `100dvh`,
+five `100vh` sites remain, all under `src/pages/`:
+
+- `AdminFvSuffPage.jsx:280` (`height: '100vh'`, error state) and `:621`
+  (`height: '100vh', overflow: 'hidden'`)
+- `AdminDeepRevealEvalPage.jsx:371` (`height: '100vh'`, error state) and `:378`
+  (`height: '100vh', overflow: 'hidden'`)
+- `AdminAudioPage.jsx:435` (`minHeight: '100vh'`)
+
+Note the two main pages already use the pinned-root shape — only the unit is wrong.
+
+**Number range:** OI-160 was taken from the OI-160…OI-169 block reserved for this lane (highest
+existing entry at the time was OI-147; two other lanes were appending concurrently). If a merge
+produces a duplicate `OI-160`, renumber this one within 161–169 — see the `merging-parallel-lanes`
+skill's duplicate-`OI-N` renumbering step.
+
+**Why deferred:** the entire `/admin` surface is localhost-gated (`src/App.jsx`, `isLocalhostOrigin()`
+checked before any admin bundle is even fetched) and these are desktop analyst tools that are never
+opened on a phone. The change is one word per site with no user-visible benefit, against a non-zero
+chance of disturbing two dense analyst layouts nobody will re-QA.
+
+**If picked up:** `tests/unit/viewportUnits.test.js` scans `src/screens/` + `src/App.jsx` only; extend
+`IN_SCOPE` to `src/pages/Admin*.jsx` at the same time, or the fix will silently regress.
+
+## OI-161 — `PostSetSummaryScreen`'s inner scroller never scrolls; CTA sits below the fold
+
+**Status:** OPEN (pre-existing, low priority) — opened 2026-08-04.
+
+**What:** `PostSetSummaryScreen.jsx:167` has a child styled `flex: 1, overflowY: 'auto'`, but that
+child never actually scrolls, because the screen's root uses `minHeight` and simply grows instead.
+The consequence is that the "Back to Challenges" ghost button sits below the fold at short viewports
+(measured: 375×553 and 360×600) and is reachable only by scrolling the page, not the intended inner
+region.
+
+**Why deferred:** pre-existing, and explicitly out of scope for the mobile-viewport-fit plan, which
+decided this screen unit-only (it has no bottom-anchored `Toolbar`, so it correctly was not pinned).
+The control IS reachable today via page scroll — this is a polish wart, not a broken screen.
+
+**If picked up:** the fix is either to pin the root (`height: '100dvh'`) so the existing
+`overflowY: 'auto'` child becomes a real scroller, or to drop the misleading `overflowY` from that
+child. Do not do both.
+
+## OI-162 — `MistakeDetailScreen` is an untreated sixth pinned-root instance
+
+**Status:** OPEN (pre-existing, low priority) — opened 2026-08-04.
+
+**What:** `MistakeDetailScreen.jsx:314` has a `minHeight: '100dvh'` root, a `flex: 1, overflowY: 'auto'`
+child at `MistakeDetailScreen.jsx:416` that is missing `minHeight: 0`, and a `<Toolbar>` (Prev/Next
+mistake) at `MistakeDetailScreen.jsx:609`. That is exactly the shape this plan fixed on five other
+screens: without `minHeight: 0` the flex child cannot shrink below its content, so the root grows and
+the Toolbar can leave the fold on a short viewport.
+
+**Why it was missed:** the plan's decision D3 counted this screen as "already correct" because it was
+already on `dvh`. That conflated the **unit** decision (which token) with the **property** decision
+(whether the root is pinned) — the exact conflation the plan exists to separate. Being on `dvh` says
+nothing about whether a root should be pinned.
+
+**Why deferred:** pre-existing, not a regression from this branch, and it was never measured, so the
+fix would need its own verification pass.
+
+**If picked up:** pin the root (`height: '100dvh'`) and add `minHeight: 0` to the `flex: 1` child — the
+same two-part change applied to `ReviewScreen`. Measure at 375×553 and 360×600 before and after.
+
+Also fold in one other deferred finding from the whole branch, not otherwise captured anywhere:
+`ReviewScreen.jsx:315` carries `WebkitOverflowScrolling: 'touch'`, which is a no-op on iOS 13+ and can
+be dropped whenever that file is next touched.

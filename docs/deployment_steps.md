@@ -1660,6 +1660,43 @@ Success: both `en` and `es` print `entryStatus: 'approved'`, `inManifest: true`,
 `git checkout` the new mp3s, the two manifests, and the two registries. Nothing is deployed until
 these are committed, so an aborted pass leaves no trace.
 
+---
+
+## 2026-08-04 — Plan B mobile viewport fit (`100vh` → `100dvh`, pinned roots)
+
+**Status:** PENDING
+**Applies to:** staging, production
+**When:** either — this is a frontend-only CSS-value change. No schema, no data, no env var, no
+cache invalidation. It ships with the code deploy and needs nothing around it.
+
+**What changed:** all 24 in-scope `100vh` sites in `connect-four/src/screens/` and
+`connect-four/src/App.jsx` became `100dvh`; five screens (`ReviewScreen`, `GameScreen`,
+`SocraticScreen`, `ChallengeScreen`, and `ConceptScreen` which was already done) use
+`height: 100dvh` + an internal scroller instead of `minHeight`. Admin pages deliberately untouched
+(OI-160).
+
+**Prerequisite:** none.
+
+**Verification after deploy** — on a **real phone**, not an emulator. DevTools emulation resolves
+`vh === dvh === svh`, so it cannot confirm the unit half:
+
+1. Open the deployed URL in mobile Safari **and** mobile Chrome with the address bar visible.
+2. Finish or resign a sparring game to reach the post-game Review screen.
+3. Success condition: the **Prev/Next mistake** buttons are reachable without the page scrolling past
+   its own content, and the page does not scroll horizontally. Before this change they sat ~155px
+   below the fold at a 390×664 visible viewport.
+4. Also check `/saga` and `/pastGames` still scroll to their last row — a wrongly-pinned list would
+   make the tail unreachable.
+5. Isolate the **unit** half specifically (step 3 exercises `ReviewScreen`, which changed both the
+   unit and the pinned-root property — a pass or fail there cannot tell you which half is responsible).
+   Open `/play-online` (or `/stats`) on the same real device with the address bar visible. Success
+   condition: **the page does not scroll at all.** Before this change, `/play-online`'s idle branch has
+   only ~128px of content but was forced onto a full `100vh` root, so with the address bar visible it
+   scrolled roughly 180px of empty background — a pure `100vh`-floor symptom with no pinned-root
+   involvement.
+
+**Rollback:** revert the frontend commit and redeploy. No data or schema to undo.
+
 ## Template for new entries
 
 ```markdown

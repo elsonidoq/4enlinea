@@ -432,7 +432,7 @@ export function PlayOnlineScreen({ go, goBack }) {
     const isGameOver = !!gameOver
       || gameStatus === 'you-win' || gameStatus === 'you-lose' || gameStatus === 'draw';
     return (
-      <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
+      <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100dvh' }}>
         <TopBar
           title={t('playOnline.title')}
           onBack={goBack}
@@ -527,7 +527,7 @@ export function PlayOnlineScreen({ go, goBack }) {
 
   // Non-playing phases wrapped in TopBar chrome
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100dvh' }}>
       <TopBar title={t('playOnline.title')} onBack={goBack} onLogoClick={() => go('home')} />
       <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1rem', textAlign: 'center' }}>
         {phase === 'idle' && (

@@ -178,9 +178,14 @@ export function GameScreen({ go, goReplace, difficulty, side, initialMoves = '',
   return (
     <div
       style={{
+        // height (not minHeight) + minHeight:0 on the board area below: pins the
+        // root so the Toolbar (Hint/Resign) stays reachable at the viewport
+        // bottom. With a min-height in the old fixed-viewport unit the root grew
+        // to the chrome-retracted height (~844) while only ~664 was visible,
+        // pushing the Toolbar below the fold. Same shape as ConceptScreen.jsx.
         display: 'flex',
         flexDirection: 'column',
-        minHeight: '100vh',
+        height: '100dvh',
       }}
     >
       <TopBar
@@ -197,6 +202,8 @@ export function GameScreen({ go, goReplace, difficulty, side, initialMoves = '',
       <div
         style={{
           flex: 1,
+          minHeight: 0,
+          overflowY: 'auto',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',

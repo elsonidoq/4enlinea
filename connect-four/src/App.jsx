@@ -171,11 +171,16 @@ function Navigator() {
   // the real Home screen before the first-run redirect decision (or consumeReturnTo())
   // can run, violating FR-002/SC-001's "zero intermediate screens".
   if (!sessionChecked) {
-    return <div style={{ minHeight: '100vh', background: `var(${SURFACE_BG.home ?? '--bg-home'})` }} />;
+    return <div style={{ minHeight: '100dvh', background: `var(${SURFACE_BG.home ?? '--bg-home'})` }} />;
   }
 
   return (
-    <div style={{ minHeight: '100vh', background: `var(${bgToken})`, transition: 'background 0.2s' }}>
+    // minHeight (not height) + dvh: this wraps EVERY screen, so pinning it with
+    // `height` would clip all of them at once and override each screen's own
+    // scroll behaviour. dvh tracks the mobile dynamic viewport so the floor is
+    // the VISIBLE height, not the chrome-retracted one — the old fixed-viewport
+    // unit made even a 128px screen (PlayOnline) scroll ~180px of empty background.
+    <div style={{ minHeight: '100dvh', background: `var(${bgToken})`, transition: 'background 0.2s' }}>
       <CheckoutReturnBanner />
       {ScreenComponent && <ScreenComponent go={go} goBack={goBack} goReplace={goReplace} {...params} />}
     </div>

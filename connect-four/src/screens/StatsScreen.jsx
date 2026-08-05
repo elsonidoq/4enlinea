@@ -85,7 +85,7 @@ export function StatsScreen({ go, goBack }) {
   }, [isAuthenticated, patternAccuracy]);
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100dvh' }}>
       <TopBar
         title={t('stats.title')}
         onBack={goBack}

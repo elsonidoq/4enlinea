@@ -45,6 +45,63 @@ useEffect(() => {
 
 **Verify CSS class/token names before use.** Before referencing a CSS class or custom property (`var(--token)`) from a mockup or spec, grep `src/styles/tokens.css`, `src/index.css`, `src/App.css` — many mockup names (`.modal-card`, `.btn-primary`) and spec-worded tokens (`--bg-challenges`, actual is `--bg-chal`) do not exist in the app. If absent, use the correct token or inline styles; never assume verbatim.
 
+## Viewport units and pinned roots (mobile fit)
+
+Two independent decisions. Do not bundle them.
+
+**The unit.** Never use `100vh` in a screen. On mobile, CSS `vh` resolves to the *large* viewport
+(browser chrome retracted), so a `minHeight: 100vh` root is taller than the visible area whenever
+chrome is showing — even a 128px screen scrolls ~180px of empty background. Use:
+
+- `dvh` (dynamic viewport) for anything sized to what the user can see *now* — every screen root.
+- `svh` (small viewport, the smallest it ever gets) for a pure background floor that must never
+  overflow. `src/index.css` uses `min-height: 100svh` on `body` and `#root` for exactly this reason.
+  That mix is deliberate; do not converge it.
+
+Enforced by `tests/unit/viewportUnits.test.js` (registered in `test:fast`). Admin pages under
+`src/pages/Admin*` are deliberately exempt — see OI-160.
+
+**The guard is a raw substring scan, so keep the banned token out of comments too.** A code comment
+that spells out the old unit fails the test exactly like real code would. This is deliberate: the scan
+also catches the token inside strings and template literals, which a comment-stripping version would
+have to re-earn. Word comments around it — "the old fixed-viewport unit" reads fine.
+
+**The property.** `minHeight: 100dvh` means *"at least a screenful"* — the root may grow and the page
+scrolls. `height: 100dvh` **pins** the root: nothing can push content past the viewport, so
+bottom-anchored controls stay reachable.
+
+Pin a screen **iff** it has a control that must stay at the viewport bottom (a `Toolbar`, a primary
+CTA). Pinning requires **both** halves — a pinned root without an internal scroller *clips* overflow
+instead of hiding it, which is strictly worse:
+
+1. `height: '100dvh'` on the root.
+2. Exactly one flexible child with `flex: 1, minHeight: 0, overflowY: 'auto'`. The `minHeight: 0` is
+   load-bearing: flex items default to `min-height: auto` and refuse to shrink below content.
+
+**Never pin a legitimately long screen.** `SagaScreen` (1156px), `SetPickerScreen` (1327px),
+`PastGamesListScreen` (2239px), `SettingsScreen`, `MistakesListScreen` are lists whose content
+genuinely exceeds any viewport — pinning them makes the tail unreachable. Body scroll is correct
+there; those screens are `minHeight: 100dvh` and stay that way.
+
+Pinned today: `ConceptScreen`, `ReviewScreen`, `GameScreen`, `SocraticScreen`, `ChallengeScreen`.
+
+**Three screens render a `<Toolbar>` but are deliberately NOT pinned — "has a `Toolbar`" does not
+imply "should be pinned":** `PlayOnlineScreen` (`phase === 'playing'` branch, `PlayOnlineScreen.jsx:435`)
+was left unit-only because verifying a pin would require a live online game — unmeasured, not
+overlooked. `OnboardingMissionScreen` (`OnboardingMissionScreen.jsx:72`) has content short enough to
+fit every tested viewport, so unit-only is sufficient. `MistakeDetailScreen`
+(`MistakeDetailScreen.jsx:314`) is a pre-existing untreated instance of this exact shape — see
+OI-162 — not a decision made by this plan.
+
+**Verification caveat.** Chrome DevTools emulation has no browser chrome, so
+`100vh === 100dvh === 100svh` in `emulate`. A screenshot can never prove the *unit* half landed —
+that is what the source-scan test is for. The *property* half is fully visible at a fixed emulated
+height. Emulating height `H` faithfully simulates a device whose small viewport is `H`.
+
+**Do not add `viewport-fit=cover`** to `index.html`. The app has no `env(safe-area-inset-*)` handling
+anywhere; without `viewport-fit=cover` iOS keeps content inside the safe area automatically. Adding it
+creates a home-indicator overlap on every pinned `Toolbar`.
+
 ## State Management
 
 **MUST**: App-level state lives in `ProfileStore` (React Context, `src/store/ProfileStore.jsx`).

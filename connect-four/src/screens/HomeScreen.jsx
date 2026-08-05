@@ -52,7 +52,7 @@ export function HomeScreen({ go }) {
   }
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100dvh' }}>
       <TopBar
         onLogoClick={() => go('home')}
         right2="gear"

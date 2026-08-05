@@ -152,7 +152,14 @@ export function PostSetSummaryScreen({ go, results: resultsProp = [], category: 
 
   return (
     <div style={{
-      display: 'flex', flexDirection: 'column', minHeight: '100vh',
+      // unit-only change: this screen has no bottom-pinned Toolbar (its CTA
+      // lives inside the existing scroll region below), so a pinned-root +
+      // scroller treatment isn't needed here — the old fixed-viewport unit is
+      // simply swapped for the dynamic one. Characterized 2026-08-04 at
+      // 390x664: naturalContentH 628 fits; at 360x600 the content scrolls
+      // (page-level) to reach the trailing "Back to Challenges" button, same
+      // as before this change.
+      display: 'flex', flexDirection: 'column', minHeight: '100dvh',
       background: 'var(--bg-chal)',
     }}>
       <TopBar onBack={() => go('setpicker')} onLogoClick={() => go('home')} />
