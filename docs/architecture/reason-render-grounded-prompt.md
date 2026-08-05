@@ -826,7 +826,8 @@ the epic (spec.md's Derivation Rule, do not re-derive):
 
 ```js
 export function deriveRequiredSet(pruned, zones) {
-  const aliasBySpec = new Map((zones?.aliases ?? []).map((a) => [a.spec, a]));
+  const unprefix = (s) => (s.startsWith('future:') ? s.slice('future:'.length) : s);   // D43
+  const aliasBySpec = new Map((zones?.aliases ?? []).map((a) => [unprefix(a.spec), a]));
   const groups = [];
   for (const half of ['lostResource', 'opponentPunishment']) {
     const h = pruned?.[half];
@@ -866,12 +867,12 @@ Mechanics:
 (`` `- [zone:${g.handle}] = ${g.role}` ``), or an explicit `(none for this explanation — do not
 invent one)` when the set is empty (FR-006 must be visible in the prompt, not silently omitted).
 
-**Known structural gap (not a defect to fix here):** the Derivation Rule reads
-`h.cell ?? h.completingCell` or `h.window` — it never reads `h.forkCells`, which is what backs
-`future:`-prefixed fork aliases (§11b). Measured over the 29-record corpus: 7 `future:` specs are
-offered and 0 are ever required. This is filed as an open issue (see `docs/open_issues.md`), not a
-bug in `deriveRequiredSet` — the Derivation Rule is copied verbatim from the epic and must not be
-re-derived to "fix" this.
+**Resolved 2026-08-05 (D43).** The gap was not that the Rule refuses to read `forkCells` — it was
+that `aliasBySpec` keyed on the RAW alias spec, so a deep half's derived plain `cNrM` never matched
+the `future:cNrM` alias that carried it. `deriveRequiredSet` now indexes by the unprefixed spec, the
+same normalization `zoneParser`, `checkP5Strong`, `toAllowedSet` and the client's `annotatedText`
+all already apply. The Rule's substance is untouched — same two derivation sources, same cap, same
+`required ⊆ offered`. See `reason-DECISIONS.md` D43 and OI-171 (resolved).
 
 ### 11b. The `future:` spec prefix
 
@@ -904,3 +905,44 @@ prefix itself is special-cased.
 the normal `ZONE_COLORS[hash % length]` lookup. `FUTURE_ZONE_COLOR` is deliberately kept **parallel**
 to `ZONE_COLORS`, never appended into that array — appending would change the array length and
 silently recolor every other existing highlight (the hash is `mod length`).
+
+### 11c. The four offer families (spec 058 remediation, 2026-08-05)
+
+`buildAnnotationOffer(pruned, boardDecisions, opts = {})` emits aliases from four sources, in this
+order (the `seen` set dedupes on the UNPREFIXED spec, so the first family to claim a piece of
+geometry keeps it — a present structural alias is never re-offered under a `future:` framing):
+
+1. **Move columns** — `better-col` / `played-col`, `colN`. Always offered; a column is never the
+   present-threat trap.
+2. **Structural board tags** — `immediate` / `major` / `double` from `NEAR_TERM` boards
+   (`decision` / `afterBest` / `afterPlayed`), via `tagSpec(tag)`. Since 2026-08-05 a `major` /
+   `immediate` tag also carries `lineWindow` (the 4-cell line it completes, from
+   `findMajorThreatWindows`) and therefore ALSO offers a `<owner>-<kind>-line` alias with a
+   `windows:` spec. `lineWindow` is deliberately NOT called `window`: `tagSpec` branches on
+   `tag.window`, and reusing that name would silently convert every major's single-cell alias into a
+   `windows:` spec — which drops it out of `checkP5Strong`'s `concreteCells` (Decision A) and breaks
+   the required-set match.
+3. **Deep fork cells** — a half with `tacticTag === 'double_threat'` and `forkCells`, offered as one
+   combined `future:`-prefixed spec (§11b), PLUS each fork cell individually as its own
+   `future:cNrM` alias (family 4). The individual offers are what mitigated OI-172: Decision A makes
+   a `windows:` alias satisfiable only as the whole window, so a correct single-cell fork highlight
+   was being stripped. Offering the cells standalone admits them without weakening Decision A — a
+   window member that is never offered standalone still fails.
+4. **Half-resource geometry** — each of `lostResource` / `opponentPunishment` offers its own
+   `completingCell` (`<owner>-key-square`), its `window` (`<owner>-key-line`), for a
+   `double_threat` half with ≥2 `forkWindows` all of them as one multi-line
+   `windows:A|B` spec (`<owner>-fork-lines`), and each `forkCell` as its own single-cell alias
+   (`<owner>-fork-square`). **Present vs future** is decided by
+   `horizonForRegister(half.register) !== 'immediate'` — the same register→horizon mapping the
+   prompt's READING_KEY already explains to the model — never by a `pliesToEnd` threshold.
+
+**Opening records suppress family 4 entirely** (`opts.openingHorizon`). Their own guardrail says
+"Do NOT ground a specific deep completing cell; the deep resolution is a horizon, not a teachable
+square", and `pruneOpeningResidue` strips exactly these fields from the prompt residue. Both
+`buildReasonRenderModel`'s opening branch and `buildRenderDecision` pass the flag, so their routing
+stays identical (research.md D1).
+
+**Multi-line `windows:A|B` specs** are produced only by family 4. `expandSpec` (server and client)
+splits on `|` then `,` and dedupes; `checkP5Strong`'s signature does the same since 2026-08-05.
+Before that fix it split on `,` alone, so a two-window spec was offered and then rejected by its own
+allowed set.

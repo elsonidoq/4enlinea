@@ -1176,3 +1176,77 @@ scope never included; see `docs/open_issues.md` for the tracked residual gap thi
 (`checkP5Strong`), `server/index.js` (the three call sites), `server/scripts/reason_engine/
 zoneAnnotations.mjs`, `server/zoneParser.js`, `src/lib/annotatedText.js`. Related: US1/US2/US3 FRs,
 `docs/architecture/data-model.md` "Deep Reveal Failures" section, `docs/open_issues.md`.
+
+---
+
+### D43 — A `future:`-prefixed alias DOES satisfy a derived plain cell in `deriveRequiredSet`; this supersedes spec 058's "never by accident" invariant and resolves OI-171
+
+**Supersedes:** the invariant recorded as
+`server/tests/renderReasonModel.test.mjs`'s test
+`'deriveRequiredSet never matches a future:-prefixed alias against a plain derived cell spec'`
+(spec 058, US1/US2), and the "known structural gap" paragraph in
+`docs/architecture/reason-render-grounded-prompt.md` §11a.
+
+**Decision.** `deriveRequiredSet` indexes `zones.aliases` by the alias spec with any leading
+`future:` stripped. The derived spec (`denialCell(h)` or `'windows:' + h.window.join(',')`) is
+unchanged, the 1–3 cap is unchanged, and required ⊆ offered is unchanged — the alias that matches is
+an offered alias. **The Derivation Rule's SUBSTANCE was not widened: the same specs are derived from
+the same two sources, the same cap applies, and `required ⊆ offered` still holds. Only the alias
+INDEX was normalized.**
+
+**Why.** `future:` is a render-framing decorator, not geometry. Five production functions already
+strip it before matching: `zoneParser.js` `isValidSpec` (:18) and `expandSpec` (:70),
+`annotationGate.js` `checkP5Strong` (:372), `reasonRenderGuard.mjs` `toAllowedSet` (:209), and the
+client's `src/lib/annotatedText.js` (:53, :167, :266). `deriveRequiredSet` was the sole holdout, and
+the consequence was that every causal half whose register is deep derived a plain `cNrM` that only
+existed in the offer set as `future:cNrM` — so the group was dropped.
+
+**Measured, on the four spec-058 staging feedback boards** (`buildReasonRenderModel` over real
+`computeReason` output). Before, with the widened offer set (the new half-geometry family) but the
+un-normalized index — i.e. the offer change ALONE was not enough:
+
+```
+3154                   requiredSet []
+315444233213           requiredSet []
+315444233213134122     requiredSet [c1r3 (you-major)]
+3154442332131341225551 requiredSet []
+```
+
+After:
+
+```
+3154                   [future:c7r3 (you-key-square), future:c6r4 (opp-key-square)]
+315444233213           [future:c5r5 (you-key-square), future:c3r5 (opp-key-square)]
+315444233213134122     [c1r3 (you-major)]                                   <-- unchanged
+3154442332131341225551 [future:c7r3 (you-key-square), future:c2r6 (opp-key-square)]
+```
+
+Board 3 is the natural experiment that isolated the mechanism: its `lostResource.completingCell`
+(`c1r3`) happens to also be a structural major-threat cell, so it was already offered UNPREFIXED —
+and it was the only one of the four boards with a non-empty required set and the only one whose
+feedback asks were largely satisfied.
+
+**Why NOT the alternative the epic contemplated.** OI-171's "if picked up" note proposed widening
+the Derivation Rule to read `forkCells` as a fourth derivation source. That edits the Rule, which
+spec.md copies verbatim from the epic with an explicit instruction not to re-derive it, and would
+have needed an owner override. Normalizing the alias index does not touch the Rule at all.
+
+**FR-002 is preserved.** The group's emitted `spec` is the alias's OWN prefixed spec and its `role`
+is the alias's own future-tense role text, so the `# You MUST build the explanation around these`
+prompt block still frames the square as "matters later, once the forced sequence reaches it — not a
+threat right now", and the client still colours it with `FUTURE_ZONE_COLOR`.
+
+**To reverse this in one step** (if the owner disagrees): in
+`server/scripts/renderReasonModel.mjs`, symbol `deriveRequiredSet`, change
+`new Map(... .map((a) => [unprefix(a.spec), a]))` back to `new Map(... .map((a) => [a.spec, a]))`
+and delete the `unprefix` helper on the line above. Nothing else depends on it: the emitted group
+already carries the alias's own prefixed spec, so `mechanismExplainer`'s `missingRequiredGroups`
+comparison is unaffected either way. Two tests in
+`server/tests/renderReasonModel.test.mjs` pin the new behaviour (the D43 test and the
+`buildReasonRenderModel and buildRenderDecision both expose requiredSet` NV assertions) and would
+need to be reverted alongside it.
+
+**Source:** spec 058 feedback remediation, 2026-08-05. Modules:
+`server/scripts/renderReasonModel.mjs` (`deriveRequiredSet`),
+`server/tests/renderReasonModel.test.mjs`. Related: OI-171 (resolved), OI-172 (mitigated),
+`docs/architecture/reason-render-grounded-prompt.md` §11a/§11c.

@@ -1,12 +1,19 @@
 // connect-four/server/scripts/reasonBoardTags.mjs
 // Curated per-board tactics (major/immediate/double + a vector-named pattern). Reuses classifier detectors.
 // Deliberately EXCLUDES minor threats, scores, move numbers (spec §7 tagging decision).
-import { parseBoardState, getMajorThreatCells } from '../classifier.js';
+import { parseBoardState, getMajorThreatCells, Board } from '../classifier.js';
+import { findMajorThreatWindows } from '../llmCoachHelpers.js';
 import { rcToCell } from './reasonCellGrounding.mjs';
 
 export function tagBoard(movestring, perspectivePlayer, opts = {}) {
   const { board, colHeights } = parseBoardState(movestring);
   const majors = getMajorThreatCells(board); // "r,c" -> {rm,rn,ym,yn}
+  // The 4-cell LINE each major completes. getMajorThreatCells computes the window in its inner loop
+  // and discards it, so a `major` tag could only ever name a square while roleText promised "a
+  // square completing ... four-in-a-row line" (feedback ask 2b). findMajorThreatWindows is the
+  // canonical group-level scanner (docs/architecture/server-conventions.md) — reused here rather
+  // than changing getMajorThreatCells' return shape, which has 8 live call sites.
+  const lineWins = findMajorThreatWindows(new Board(movestring), perspectivePlayer);
   const tags = [];
   const byOwnerCols = { you: new Map(), opp: new Map() }; // owner -> Map<col, cell> for double detection
 
@@ -17,7 +24,12 @@ export function tagBoard(movestring, perspectivePlayer, opts = {}) {
       if (!isMajor) continue;
       const owner = player === perspectivePlayer ? 'you' : 'opp';
       const cell = rcToCell(r, c);
-      tags.push({ cell, kind: r === colHeights[c] ? 'immediate' : 'major', owner });
+      // Deliberately NOT named `window`: tagSpec() converts any window-bearing tag into a
+      // `windows:` spec, which would replace every major's single-cell alias, regress the required
+      // set, and flip the entry to Decision A's windowOnly bucket. `lineWindow` is additive.
+      const w = lineWins.find((x) => (x.owner === 'player' ? 'you' : 'opp') === owner && x.cells.includes(cell));
+      tags.push({ cell, kind: r === colHeights[c] ? 'immediate' : 'major', owner,
+                  ...(w ? { lineWindow: w.cells } : {}) });
       if (!byOwnerCols[owner].has(c)) byOwnerCols[owner].set(c, cell);
     }
   }

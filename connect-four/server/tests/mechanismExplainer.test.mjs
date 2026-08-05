@@ -13,19 +13,19 @@ import { computeMechanism, parseAnswer } from '../mechanismExplainer.mjs';
 const MOVESTRING = '3325';
 const PLAYED_COL = 5;
 
-// This fixture's real requiredSet (verified live for MOVESTRING/PLAYED_COL via
-// buildRenderDecision, spec 058 US2) is a single group: { half: 'lostResource', spec: 'c1r1',
-// handle: 'you-immediate', role: 'the square where you can make four next move' }. `okAnswer`'s
-// mechanism below includes that handle's zone tag so it satisfies the required set on the first
+// This fixture's real requiredSet (harvested live for MOVESTRING/PLAYED_COL via
+// buildRenderDecision) is TWO groups: { half: 'lostResource', spec: 'c1r1', handle:
+// 'you-immediate' } and { half: 'opponentPunishment', spec: 'c2r1', handle: 'opp-key-square' }.
+// `okAnswer` wraps both so it satisfies the required set on the first
 // attempt, keeping every pre-existing test in this file (predating the required-set retry
 // trigger) exercising exactly the retry count its name says. `missingAnswer`, further down, is
 // the deliberate required-set MISS fixture used by the required-set retry tests.
 const okAnswer = JSON.stringify({
   better_move: 4, played_outcome: 'draw', best_outcome: 'win',
-  mechanism: 'You gave up the win at [zone:you-immediate]this square[/zone:you-immediate].',
+  mechanism: 'You gave up the win at [zone:you-immediate]this square[/zone:you-immediate], and left [zone:opp-key-square]the square your opponent needs[/zone:opp-key-square] open.',
   key_cells: [], fields_relied_on: [], unsure_about: '', confidence: 'high',
 });
-const OK_MECHANISM = 'You gave up the win at [zone:c1r1]this square[/zone:c1r1].'; // okAnswer, post processAnnotations (handle -> expanded spec)
+const OK_MECHANISM = 'You gave up the win at [zone:c1r1]this square[/zone:c1r1], and left [zone:c2r1]the square your opponent needs[/zone:c2r1] open.'; // okAnswer, post processAnnotations (handle -> expanded spec)
 
 let solver;
 before(async () => { solver = await createSolverProcess(); });
@@ -120,9 +120,10 @@ test('locale "es" threads the Spanish output directive into the prompt sent to t
 });
 
 // ── Required-set retry (spec 058, US2, FR-007/FR-008/FR-009/FR-010) ──────────────────────────
-// This fixture's real requiredSet (verified live for MOVESTRING/PLAYED_COL via
-// buildRenderDecision) is a single group: { half: 'lostResource', spec: 'c1r1',
-// handle: 'you-immediate', role: 'the square where you can make four next move' }.
+// This fixture's real requiredSet (harvested live for MOVESTRING/PLAYED_COL via
+// buildRenderDecision) is TWO groups: { half: 'lostResource', spec: 'c1r1',
+// handle: 'you-immediate' } and { half: 'opponentPunishment', spec: 'c2r1',
+// handle: 'opp-key-square' }.
 // `missingAnswer`'s mechanism carries no zone tags at all, so it is deliberately a required-set
 // MISS — distinct from `okAnswer` above, which was made to satisfy this fixture's required set so
 // the pre-existing (non-US2) tests in this file keep their original retry-count semantics.
@@ -150,13 +151,16 @@ test('a required-set miss triggers exactly one retry with an amended prompt nami
   // Both attempts are present — attempt1 is never silently dropped (research.md D3).
   assert.equal(res.attempt1.mechanism, 'You gave up the win here.');
   assert.deepEqual(res.attempt1.usedSpecs, []);
-  assert.equal(res.missingHandles.length, 1);
+  assert.equal(res.missingHandles.length, 2);
   assert.equal(res.missingHandles[0].handle, 'you-immediate');
   assert.equal(res.missingHandles[0].spec, 'c1r1');
+  assert.equal(res.missingHandles[1].handle, 'opp-key-square');
+  assert.equal(res.missingHandles[1].spec, 'c2r1');
 
   // The served top-level result is attempt 2 (FR-009: always the retried attempt).
   assert.equal(res.mechanism, OK_MECHANISM);
   assert.ok(res.usedSpecs.includes('c1r1'));
+  assert.ok(res.usedSpecs.includes('c2r1'));
 
   // The compliance check itself, run against the real production shape (data-model.md §2
   // Consumer 2) — pinned to usedSpecs/spec, never a raw [zone:handle] string search.
@@ -170,7 +174,7 @@ test('a required-set miss that is STILL missed on the retry is still served — 
 
   assert.equal(calls, 2, 'still exactly one retry — no third attempt even though the retry also missed');
   assert.equal(res.mechanism, 'You gave up the win here.'); // attempt 2's mechanism is served regardless
-  assert.equal(res.missingHandles.length, 1);
+  assert.equal(res.missingHandles.length, 2);
   assert.equal(res.attempt1.mechanism, 'You gave up the win here.');
 });
 
@@ -184,7 +188,7 @@ test('an empty required set is a clean no-op — no retry triggered solely by th
   });
   assert.equal(calls, 1, 'no retry when attempt 1 already satisfies the required set');
   assert.equal(res.missingHandles.length, 0);
-  assert.deepEqual(res.attempt1.usedSpecs, ['c1r1']);
+  assert.deepEqual(res.attempt1.usedSpecs.sort(), ['c1r1', 'c2r1']);
 });
 
 test('locale "en" (and the default) omit the Spanish output directive — unchanged from current behavior', async () => {

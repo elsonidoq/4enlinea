@@ -6333,7 +6333,7 @@ spec suffix, and add a regression test alongside the existing `SPAN_CARRYING_COD
 
 ## OI-171 — A `future:` handle is offered but can never enter the required set, so the coach is never obliged to use one
 
-**Status**: deferred (structural consequence of the Derivation Rule, which spec 058 copied verbatim from the epic and is explicitly barred from re-deriving)
+**Status**: RESOLVED 2026-08-05 (reason-DECISIONS.md D43)
 **Area**: `connect-four/server/scripts/renderReasonModel.mjs` (`deriveRequiredSet`), `connect-four/server/scripts/reason_engine/zoneAnnotations.mjs` (`buildAnnotationOffer`)
 **Discovered**: spec 058 (Deep-Reveal Grounding), 2026-08-05
 
@@ -6372,11 +6372,31 @@ derivation source, after `cell`, `completingCell`, and `window`. It would still 
 same match-and-drop against `aliases[].spec` (FR-004) and the 1-3 group cap (FR-005), so the
 invariant is unaffected. Cross-refs: OI-172, `docs/architecture/reason-render-grounded-prompt.md` §11.
 
+**Resolution (2026-08-05)**: not by widening the Derivation Rule (which spec.md bars), and the
+"if picked up" paragraph above turned out to describe the wrong fix. **The Derivation Rule's
+SUBSTANCE was not widened** — the same two derivation sources (`denialCell(h)`, `h.window`) are read,
+the same 1–3 cap applies, and `required ⊆ offered` still holds. Only the alias **INDEX** was
+normalized: `deriveRequiredSet`'s `aliasBySpec` keyed on the RAW alias spec, so a deep half's derived
+plain `cNrM` never matched the `future:cNrM` alias that carried it. It now indexes by the unprefixed
+spec — the same normalization `zoneParser`'s `isValidSpec`/`expandSpec`, `annotationGate`'s
+`checkP5Strong`, `reasonRenderGuard`'s `toAllowedSet` and the client's `annotatedText` **all already
+apply**; `deriveRequiredSet` was the sole holdout. Measured after, over real `computeReason` output:
+
+```
+3154                   ["you-key-square=future:c7r3","opp-key-square=future:c6r4"]
+315444233213           ["you-key-square=future:c5r5","opp-key-square=future:c3r5"]
+315444233213134122     ["you-major=c1r3"]                                          <-- unchanged
+3154442332131341225551 ["you-key-square=future:c7r3","opp-key-square=future:c2r6"]
+```
+
+Three of the four boards go from an empty required set to two `future:`-framed groups. See D43,
+which also records how to reverse the change in one step.
+
 ---
 
 ## OI-172 — Whole-window-only admission (Decision A) rejects real, correct single-cell highlights
 
-**Status**: deferred (owner's explicit decision, taken against the reviewer's recommendation; the owner asked to revisit after seeing evidence — this entry carries that evidence)
+**Status**: OPEN — **mitigated 2026-08-05; no longer blocks the epic, but the underlying rule is unchanged** (originally: owner's explicit decision, taken against the reviewer's recommendation; the owner asked to revisit after seeing evidence — this entry carries that evidence)
 **Area**: `connect-four/server/reasonRenderGuard.mjs` (`toAllowedSet`), `connect-four/server/annotationGate.js` (`checkP5Strong`)
 **Discovered**: spec 058 (Deep-Reveal Grounding), 2026-08-05
 
@@ -6408,11 +6428,41 @@ deliver.
 T040's measurement named as the required mitigation. The measurement now exists; the decision to
 revisit is the owner's.
 
-**If picked up**: the switch is localized — `toAllowedSet` (`reasonRenderGuard.mjs`) stops setting
-`windowOnly: true` for multi-cell aliases, and `checkP5Strong`'s standalone `cNrM` branch resumes
-consulting the aggregate `concreteCells` Set. Both sites carry a deliberate-divergence comment
-naming this decision, so start there. Note the `colN` special case in `toAllowedSet` is load-bearing
-and unrelated — do not disturb it. Cross-refs: OI-171.
+**Mitigated 2026-08-05 — the epic no longer DEPENDS on this rule, but the rule itself is unchanged.**
+Whole-window-only admission still rejects a single member cell of a multi-cell alias; that behaviour
+is byte-for-byte what it was. What changed is upstream, in `buildAnnotationOffer`: each `forkCell` of
+a `double_threat` half is now **also offered as its own single-cell `future:cNrM` alias**
+(`<owner>-fork-square`, and `<owner>-key-square` for the half's `completingCell`), which puts those
+cells into `checkP5Strong`'s `concreteCells` via a non-`windowOnly` entry. The two recorded
+rejections on `3154442332131341225551` were `c2r6` and `c5r5` — both offered ONLY inside
+`future:windows:c2r6,c5r5`, a `windowOnly` entry. Measured with `toAllowedSet`/`checkP5Strong`
+**unchanged** and the new per-cell aliases in the offer set
+(`connect-four/tests/annotationGate.test.js`, test `'OI-172 closes via per-fork-cell offers, with
+Decision A untouched'`):
+
+```
+c2r6   []                                        <-- was rejection #1
+c5r5   []                                        <-- was rejection #2
+c7r1   ["P5strong:cell_not_allowed:c7r1"]        <-- ungrounded control: still rejected
+c4r6   ["P5strong:cell_not_allowed:c4r6"]        <-- window member never offered standalone: STILL rejected
+```
+
+That last line is the point: Decision A's semantics hold exactly. This entry stays **open** because
+the general defect — a correct single-cell highlight drawn from a window that was offered only as a
+whole — is still reachable by any alias family that does not also emit per-cell offers.
+
+**If picked up — CORRECTED 2026-08-05.** The recipe previously recorded here was wrong and would
+ship a regression. It said `toAllowedSet` should stop setting `windowOnly: true`. But
+`offeredWindowSignatures` in `checkP5Strong` is populated **only** inside `if (entry.windowOnly)`
+(`annotationGate.js`, the `for (const entry of allowedSet)` loop), so dropping the flag empties that
+Set and then every `windows:…` spec — including the `future:windows:…` handle spec 058 added and the
+`<owner>-fork-lines` multi-window handle added in the 2026-08-05 remediation — is REJECTED as
+un-offered. The correct shape is **both**: keep populating `offeredWindowSignatures` from every
+multi-cell entry (so whole-window specs still match) **and additionally** add that entry's cells to
+`concreteCells`/`concreteRows`/`concreteCols` so a member cell is admissible on its own. In other
+words, widen admission; do not move the entry from one bucket to the other. Both sites carry a
+deliberate-divergence comment naming this decision, so start there. Note the `colN` special case in
+`toAllowedSet` is load-bearing and unrelated — do not disturb it. Cross-refs: OI-171 (resolved), D43.
 
 ---
 
@@ -6504,3 +6554,32 @@ pages already use for their data; or (b) exclude admin chunks from the productio
 `build.rollupOptions` filter or an env-gated dynamic import, so they exist only in dev. (a) is
 cheaper and matches existing convention. Cross-refs: `docs/architecture/frontend-conventions.md`
 §"Admin Localhost Guard (FR-028)", memory `project_admin_localhost_directive`.
+
+---
+
+## OI-175 — `namedPatternOpts` reads `half.tag`, a field that does not exist, so the named-pattern board overlay has never run
+
+**Status**: deferred (deliberate — fixing it would inject a deep, currently-empty square onto the DECISION board's tactic list)
+**Area**: `connect-four/server/scripts/reasonBoardSelect.mjs` (`namedPatternOpts`)
+**Discovered**: spec-058 feedback remediation, 2026-08-05
+
+`namedPatternOpts` gates on `FORK_TAGS.has(half.tag)` (`reasonBoardSelect.mjs`, verbatim:
+`if (half && FORK_TAGS.has(half.tag) && half.completingCell) {`). Halves have never had a `tag`
+field — measured `Object.keys(half)` on real `computeReason` output:
+`kind,register,completingCell,window,pliesToEnd,line,finalMovestring,entryCell,terminal,forkCase,forkCells,forkWindows,tacticTag,tacticCells,tacticFromDiff,tie`.
+The function therefore always returns `null`, `patternOpts` is always falsy, and `tagBoard`'s
+`opts.patternTag` overlay branch (and with it `patternWindow`) has never executed in production.
+The twin bug in `zoneAnnotations.mjs`'s term loop was fixed on 2026-08-05; this one was left alone
+deliberately.
+
+**Why deferred**: reviving it would push a `figure_7`/`double_threat` tag onto the **decision**
+board, where `renderThreatList` prints it as a present tactic even though the resource often
+completes many plies later — the eval-3 present-threat trap that `zoneAnnotations.mjs`'s
+`STRUCTURAL` exclusion comment explicitly names (spec decision #5). None of the seven feedback asks
+needs it: the same geometry now reaches the coach through the half-resource offer family, correctly
+`future:`-framed.
+
+**If picked up**: change `half.tag` → `half.tacticTag` at `reasonBoardSelect.mjs` (locate by symbol
+`namedPatternOpts`), then decide what `renderThreatList` should print for a tag whose truth board is
+`projectedDeep`, and re-run the corpus gate (`server/tests/renderCoverageUniverse.test.mjs`,
+`renderCoverageCorpus.test.mjs`) — every board's tactic list changes. Cross-refs: D43, OI-171.

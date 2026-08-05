@@ -107,7 +107,15 @@ function pruneOpeningResidue(rendered) {
 // left unenforceable. Capped at 1-3 groups (one per half that resolves to a cell, plus at most one
 // line/window) — with exactly two halves, at most one group per half is possible in practice.
 export function deriveRequiredSet(pruned, zones) {
-  const aliasBySpec = new Map((zones?.aliases ?? []).map((a) => [a.spec, a]));
+  // Index by the UNPREFIXED spec (D43). `future:` is a render-framing decorator, not part of the
+  // geometry: zoneParser's isValidSpec/expandSpec, annotationGate's checkP5Strong, reasonRenderGuard's
+  // toAllowedSet and the client's annotatedText all strip it before matching, and so does this index.
+  // The Derivation Rule's substance is untouched — the derived spec is still denialCell(h) or
+  // h.window, and the matched alias is still an OFFERED alias (required ⊆ offered, FR-004). Without
+  // this, every deep half's cell derived to a plain cNrM that only existed as future:cNrM, so three
+  // of the four spec-058 feedback boards had an empty required set (OI-171).
+  const unprefix = (s) => (s.startsWith('future:') ? s.slice('future:'.length) : s);
+  const aliasBySpec = new Map((zones?.aliases ?? []).map((a) => [unprefix(a.spec), a]));
   const groups = [];
   for (const half of ['lostResource', 'opponentPunishment']) {
     const h = pruned?.[half];
@@ -139,7 +147,7 @@ export function buildReasonRenderModel(nv) {
   const openingFrame = composeOpeningFrame(pruned);
   if (openingFrame) {
     const allBoards = boardSelectionDecisions(pruned);
-    const zones = buildAnnotationOffer(pruned, allBoards);
+    const zones = buildAnnotationOffer(pruned, allBoards, { openingHorizon: true });
     const decisionBoard = allBoards.find((b) => b.id === 'decision');
     return {
       perspective: { you: pruned.player, opponent: pruned.opponent },
@@ -222,9 +230,10 @@ export function buildRenderDecision(nv) {
     ? { patternOnAfterBestBoard: patternOnAfterBestBoard(pruned) } : {};
   const link = classifyCausalLink(pruned, ctx);
   assertCoverage(pruned, link.covers);
-  const zones = buildAnnotationOffer(pruned, boardSelectionDecisions(pruned));
-
   const openingFrame = composeOpeningFrame(pruned);
+  const zones = buildAnnotationOffer(pruned, boardSelectionDecisions(pruned),
+                                     { openingHorizon: !!openingFrame });
+
   let openingContext = null;
   if (openingFrame) {
     const oc = pruned.openingContext;

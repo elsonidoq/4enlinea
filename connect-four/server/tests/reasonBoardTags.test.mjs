@@ -32,3 +32,17 @@ test('no minor threats leak into the tag set', () => {
   const tags = tagBoard('0102', 1); // col0: p1 at r0,r1 only (2 discs) -> minor, not major
   assert.equal(tags.filter((t) => t.owner === 'you').length, 0);
 });
+
+test('tagBoard: every major/immediate tag carries the 4-cell line it completes', () => {
+  // 315444233213 (spec-058 feedback board 2), perspective player 1.
+  const tags = tagBoard('315444233213', 1);
+  const majors = tags.filter((t) => t.kind === 'major' || t.kind === 'immediate');
+  assert.ok(majors.length > 0, 'fixture must actually contain a major/immediate tag');
+  for (const t of majors) {
+    assert.ok(Array.isArray(t.lineWindow) && t.lineWindow.length === 4,
+      `${t.owner} ${t.kind} at ${t.cell} has no 4-cell lineWindow`);
+    assert.ok(t.lineWindow.includes(t.cell), 'the completing cell must be a member of its own line');
+  }
+  // `window` must stay absent on major/immediate so tagSpec/renderThreatList are untouched.
+  for (const t of majors) assert.equal(t.window, undefined);
+});

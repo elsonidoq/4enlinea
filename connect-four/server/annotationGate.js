@@ -415,7 +415,11 @@ export function checkP5Strong(zones, allowedSet) {
     // windows:... (comma-separated 1-indexed) — Decision A: exact signature match only.
     const windowsMatch = spec.match(/^windows:(.+)$/);
     if (windowsMatch) {
-      const sig = windowsMatch[1].split(',').map(p => p.trim()).sort().join(',');
+      // Split on BOTH separators and dedupe, mirroring expandSpec (zoneParser.js) — which splits on
+      // '|' then ',' and dedupes — so the signature computed here equals the one toAllowedSet built
+      // from expandSpec's output. Splitting on ',' alone made a multi-line `windows:A|B` spec reject
+      // its OWN offered alias (the last cell of A fused with the first cell of B).
+      const sig = [...new Set(windowsMatch[1].split(/[|,]/).map(p => p.trim()).filter(Boolean))].sort().join(',');
       if (!offeredWindowSignatures.has(sig)) {
         failures.push(`P5strong:cell_not_allowed:${rawSpec}`);
       }

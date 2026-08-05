@@ -36,6 +36,33 @@ completing square — verified against `forkCells` shape in `docs/epics/deep-rev
 Settled decision 8: `forkCells: ["c2r6","c5r5"]`), with `future:windows:...` available for a
 multi-cell case.
 
+**Amendment 2026-08-05 (spec 058 feedback remediation).** `buildAnnotationOffer` gained a third
+optional parameter (`opts = { openingHorizon?: boolean }`) and two further alias sources. The
+per-alias shape above is unchanged; `truthBoard` may now also be `'projectedDeep'`. New handle
+names, added to the existing `better-col` / `played-col` / `<you|opp>-<immediate|major|double>` /
+`<you|opp>-future-fork` set:
+
+- `<you|opp>-<major|immediate>-line` — the 4-cell line a structural major/immediate tag completes,
+  sourced from the tag's new `lineWindow` field (`reasonBoardTags.mjs`, via
+  `findMajorThreatWindows`). Spec is `windows:…`; present-tense, `truthBoard` is the tag's board.
+- `<you|opp>-key-square` — the half's own `completingCell`.
+- `<you|opp>-key-line` — the half's own `window`.
+- `<you|opp>-fork-lines` — all of a `double_threat` half's `forkWindows` as ONE spec.
+- `<you|opp>-fork-square` — each `forkCell` individually.
+
+Two shape consequences:
+
+- **A `spec` may now contain `|`** (multi-window), e.g.
+  `future:windows:c5r3,c4r4,c3r5,c2r6|c2r5,c3r5,c4r5,c5r5` from `<owner>-fork-lines`. `expandSpec`
+  splits on `|` then `,` and dedupes; `checkP5Strong`'s window signature does the same since
+  2026-08-05 (before that it split on `,` alone and rejected such a spec).
+- **The `future:` prefix may appear on a plain `cNrM`**, not only on `windows:…` — e.g.
+  `future:c7r3`. The four half-geometry handles are `future:`-prefixed iff
+  `horizonForRegister(half.register) !== 'immediate'`.
+
+Opening records suppress the half-geometry family entirely (`opts.openingHorizon: true`), so an
+opening record still offers no `future:` handle at all.
+
 ## 2. Required set (`requiredSet[]`) — new, derived (US2)
 
 **Source**: new `deriveRequiredSet(pruned, zones)` in `renderReasonModel.mjs` (research.md D1).

@@ -16,6 +16,7 @@ import {
   isWindowBlocked,
 } from '../server/annotationGate.js';
 import { Board } from '../server/classifier.js';
+import { toAllowedSet } from '../server/reasonRenderGuard.mjs';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -592,3 +593,50 @@ describe('T20 regression: validateAnnotation + allowedSet integration', () => {
   });
 });
 
+
+// ---------------------------------------------------------------------------
+// RC-F — checkP5Strong's windows: signature must mirror expandSpec (split on
+// BOTH '|' and ',', then dedupe), otherwise a multi-line fork spec is offered
+// and then rejected by its own allowed set.
+// ---------------------------------------------------------------------------
+
+describe('checkP5Strong — multi-window signatures (RC-F)', () => {
+  test('a multi-window windows:A|B spec matches its OWN offered alias (RC-F)', () => {
+    // Harvested from board 3154442332131341225551 played col 5 (opponentPunishment.forkWindows).
+    const spec = 'future:windows:c5r3,c4r4,c3r5,c2r6|c2r5,c3r5,c4r5,c5r5';
+    const allowedSet = toAllowedSet([{ spec }]);
+    // toAllowedSet flattens+dedupes via expandSpec (7 cells, c3r5 appears in both windows).
+    assert.deepEqual(allowedSet, [{
+      cells: ['c5r3', 'c4r4', 'c3r5', 'c2r6', 'c2r5', 'c4r5', 'c5r5'], windowOnly: true,
+    }]);
+    assert.deepEqual(checkP5Strong([{ spec, innerText: 'the two lines' }], allowedSet), []);
+  });
+
+  test('a single-window windows: spec still matches exactly (no regression)', () => {
+    const spec = 'future:windows:c2r6,c5r5';
+    const allowedSet = toAllowedSet([{ spec }]);
+    assert.deepEqual(checkP5Strong([{ spec, innerText: 'x' }], allowedSet), []);
+  });
+
+  test('a windows: spec NOT offered is still rejected', () => {
+    const allowedSet = toAllowedSet([{ spec: 'future:windows:c2r6,c5r5' }]);
+    assert.deepEqual(
+      checkP5Strong([{ spec: 'windows:c7r1,c7r2,c7r3,c7r4', innerText: 'x' }], allowedSet),
+      ['P5strong:cell_not_allowed:windows:c7r1,c7r2,c7r3,c7r4']);
+  });
+});
+
+test('OI-172 closes via per-fork-cell offers, with Decision A untouched', () => {
+  const aliases = [
+    { spec: 'col3' }, { spec: 'col6' }, { spec: 'c1r3' }, { spec: 'c1r4' },
+    { spec: 'windows:c1r3,c7r6' }, { spec: 'c7r6' },
+    { spec: 'future:windows:c2r6,c5r5' },
+    { spec: 'future:c2r6' }, { spec: 'future:c5r5' },
+  ];
+  const allowedSet = toAllowedSet(aliases);
+  const check = (s) => checkP5Strong([{ spec: s, innerText: 'x' }], allowedSet);
+  assert.deepEqual(check('c2r6'), []);   // was OI-172's rejection #1
+  assert.deepEqual(check('c5r5'), []);   // was OI-172's rejection #2
+  assert.deepEqual(check('c7r1'), ['P5strong:cell_not_allowed:c7r1']);   // ungrounded
+  assert.deepEqual(check('c4r6'), ['P5strong:cell_not_allowed:c4r6']);   // Decision A still holds
+});

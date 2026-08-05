@@ -16,7 +16,10 @@ const boards = [
       { cell: 'c1r4', kind: 'immediate', owner: 'you' } ] },                     // duplicate of decision -> dedup
   { id: 'projectedDeep', tags: [{ cell: 'c7r1', kind: 'immediate', owner: 'opp' }] }, // deep board -> ignored
 ];
-const pruned = { bestCol: 2, playedCol: 3, lostResource: {}, opponentPunishment: { tag: 'figure_7' } };
+// `tacticTag`, not `tag` — halves have never had a `tag` field. The old spelling here was the same
+// dead-name mistake production carried until 2026-08-05; it is corrected so the fixture describes a
+// half that can actually exist. (This half has no completingCell/window, so it contributes no alias.)
+const pruned = { bestCol: 2, playedCol: 3, lostResource: {}, opponentPunishment: { tacticTag: 'figure_7' } };
 
 test('aliases: structural tags only (overlay excluded), deduped, deep board ignored, + 2 column aliases', () => {
   const { aliases, zoneAliasMap } = buildAnnotationOffer(pruned, boards);
@@ -106,16 +109,18 @@ test('future: alias does not shadow or duplicate the near-term structural aliase
   const { aliases } = buildAnnotationOffer(deepForkPruned, deepForkBoards);
   // the genuinely near-term fork (c1r3/c7r6, board-true on afterPlayed) is still offered normally
   assert.ok(aliases.some((a) => a.spec === 'windows:c1r3,c7r6'));
-  // and the future alias for the deep fork cells is additional, not a replacement
-  assert.equal(aliases.filter((a) => a.spec.startsWith('future:')).length, 1);
+  // and the future alias for the deep fork cells is additional, not a replacement: the near-term
+  // fork's own spec is never future-prefixed, and the deep fork handle is still present.
+  assert.ok(!aliases.some((a) => a.spec === 'future:windows:c1r3,c7r6'));
+  assert.ok(aliases.some((a) => a.handle.endsWith('-future-fork')));
 });
 
 test('terms: KB-backed slugs only, canonicalPhrase from TAG_PHRASE, conditional_swindle never a term', () => {
   const { terms } = buildAnnotationOffer(
-    { bestCol: 2, playedCol: 3, lostResource: { kind: 'conditional_swindle' }, opponentPunishment: { tag: 'figure_7' } },
+    { bestCol: 2, playedCol: 3, lostResource: { kind: 'conditional_swindle' }, opponentPunishment: { tacticTag: 'figure_7' } },
     boards);
   const bySlug = Object.fromEntries(terms.map((t) => [t.slug, t]));
-  assert.ok(bySlug['figure_7'], 'figure_7 fired via opponentPunishment.tag');
+  assert.ok(bySlug['figure_7'], 'figure_7 fired via opponentPunishment.tacticTag (the real field name; `tag` never existed)');
   assert.equal(bySlug['figure_7'].kbId, 'figure_7');
   assert.equal(bySlug['figure_7'].canonicalPhrase, TAG_PHRASE.figure_7); // imported, no local copy
   assert.ok(bySlug['immediate_threat'], 'immediate fired via a structural board tag');
@@ -124,6 +129,19 @@ test('terms: KB-backed slugs only, canonicalPhrase from TAG_PHRASE, conditional_
   // every offered term id is one of the four KB-backed slugs
   const KB_BACKED = new Set(['immediate_threat', 'double_threat', 'figure_7', 'claimeven']);
   for (const t of terms) assert.ok(KB_BACKED.has(t.kbId), `${t.kbId} must be KB-backed`);
+});
+
+test('terms fire from a half tacticTag — measured on the spec-058 feedback board 2 (RC-C)', () => {
+  // Harvested: computeReason('315444233213', 1) -> opponentPunishment.tacticTag === 'double_threat'.
+  // Before this fix the terms list was [] for this board, so [term:double_threat] was never offered
+  // and the coach's "double threat" phrase carried zero markup (feedback ask 2c).
+  const { terms } = buildAnnotationOffer(
+    { bestCol: 3, playedCol: 1,
+      lostResource: { register: 'parity', completingCell: 'c5r5' },
+      opponentPunishment: { register: 'forced_sequence', completingCell: 'c3r5',
+                            tacticTag: 'double_threat' } },
+    []);   // no board decisions: proves the slug comes from the HALF, not a structural board tag
+  assert.deepEqual(terms.map((t) => t.slug), ['double_threat']);
 });
 
 test('no tactical aliases when boards carry no structural tags (columns still offered)', () => {
@@ -222,4 +240,72 @@ test('stripUnclosedTags does not let a bare opener hide behind a LATER, unrelate
   assert.doesNotMatch(mechanism, /\[term:double_threat\] intro/); // the bare opener is gone
   assert.match(mechanism, /\[term:double_threat\]actual phrase\[\/term:double_threat\]/); // the real pair survives untouched
   assert.deepEqual(repairs, ['unclosed_tag:term:double_threat']);
+});
+
+test('a major/immediate tag also offers its four-in-a-row LINE as a separate alias (ask 2b)', () => {
+  // Harvested from board 315444233213 played col 1: the decision board carries a `you` major at
+  // c3r4 whose completing line is the diagonal c6r1-c5r2-c4r3-c3r4. Before this change the ONLY
+  // alias for it was the bare cell, so the coach's phrase "four-in-a-row line" was grounded to a
+  // single square (feedback ask 2b).
+  const boardsFixture = [{ id: 'decision', tags: [
+    { cell: 'c3r4', kind: 'major', owner: 'you', lineWindow: ['c6r1', 'c5r2', 'c4r3', 'c3r4'] },
+  ] }];
+  const { aliases } = buildAnnotationOffer({ bestCol: 3, playedCol: 1 }, boardsFixture);
+  const bySpec = Object.fromEntries(aliases.map((a) => [a.spec, a]));
+  assert.ok(bySpec['c3r4'], 'the single-cell alias is still offered, unchanged');
+  assert.equal(bySpec['c3r4'].handle, 'you-major');
+  const line = bySpec['windows:c6r1,c5r2,c4r3,c3r4'];
+  assert.ok(line, 'the LINE is offered as an additional alias');
+  assert.equal(line.handle, 'you-major-line');
+  assert.match(line.role, /four-in-a-row line/);
+  assert.doesNotMatch(line.role, /matters later/); // present, board-true: NOT future-framed
+});
+
+test('each half offers its own completing cell, line, fork lines and fork squares (RC-B)', () => {
+  // Harvested verbatim from computeReason('3154442332131341225551', 5) -> toNarratorVector.
+  const halfPruned = {
+    bestCol: 2, playedCol: 5,
+    lostResource: { kind: 'winning_line', register: 'parity', completingCell: 'c7r3',
+                    window: ['c7r3', 'c6r4', 'c5r5', 'c4r6'], pliesToEnd: 16 },
+    opponentPunishment: { kind: 'winning_line', register: 'forced_sequence', completingCell: 'c2r6',
+                          window: ['c5r3', 'c4r4', 'c3r5', 'c2r6'], pliesToEnd: 1,
+                          tacticTag: 'double_threat', forkCells: ['c2r6', 'c5r5'],
+                          forkWindows: [['c5r3', 'c4r4', 'c3r5', 'c2r6'],
+                                        ['c2r5', 'c3r5', 'c4r5', 'c5r5']] },
+  };
+  const { aliases } = buildAnnotationOffer(halfPruned, []);
+  const byHandle = Object.fromEntries(aliases.map((a) => [a.handle, a.spec]));
+  assert.equal(byHandle['you-key-square'], 'future:c7r3');
+  assert.equal(byHandle['you-key-line'], 'future:windows:c7r3,c6r4,c5r5,c4r6');
+  assert.equal(byHandle['opp-key-square'], 'future:c2r6');
+  assert.equal(byHandle['opp-key-line'], 'future:windows:c5r3,c4r4,c3r5,c2r6');
+  assert.equal(byHandle['opp-fork-lines'], 'future:windows:c5r3,c4r4,c3r5,c2r6|c2r5,c3r5,c4r5,c5r5');
+  // c2r6 is already offered as opp-key-square, so only the OTHER fork cell gets its own alias.
+  assert.equal(byHandle['opp-fork-square'], 'future:c5r5');
+  // FR-002: every deep handle is future-framed, none reads as a present threat.
+  for (const a of aliases.filter((x) => x.spec.startsWith('future:'))) {
+    assert.match(a.role, /later|once|not.*right now/i);
+    assert.equal(a.truthBoard, 'projectedDeep');
+  }
+});
+
+test('a half with an `immediate` register is offered WITHOUT the future: prefix', () => {
+  const { aliases } = buildAnnotationOffer(
+    { bestCol: 1, playedCol: 5,
+      lostResource: { register: 'immediate', completingCell: 'c1r1' },
+      opponentPunishment: { register: 'immediate', completingCell: 'c2r1' } },
+    []);
+  const byHandle = Object.fromEntries(aliases.map((a) => [a.handle, a.spec]));
+  assert.equal(byHandle['you-key-square'], 'c1r1');
+  assert.equal(byHandle['opp-key-square'], 'c2r1');
+});
+
+test('openingHorizon suppresses the half-geometry family entirely (opening guardrail)', () => {
+  const openingPruned = { bestCol: 3, playedCol: 1,
+    lostResource: { register: 'parity', completingCell: 'c5r5', window: ['c2r5','c3r5','c4r5','c5r5'] },
+    opponentPunishment: { register: 'parity', completingCell: 'c3r3' } };
+  const withHalves = buildAnnotationOffer(openingPruned, []).aliases.map((a) => a.handle);
+  const suppressed = buildAnnotationOffer(openingPruned, [], { openingHorizon: true }).aliases.map((a) => a.handle);
+  assert.ok(withHalves.includes('you-key-square'));
+  assert.deepEqual(suppressed, ['better-col', 'played-col']);
 });

@@ -5,6 +5,7 @@
 
 import { expandSpec } from '../../zoneParser.js';
 import { TAG_PHRASE } from './causalLinks.mjs';   // single source of truth for canonical phrases (M1)
+import { horizonForRegister } from '../reasonCellGrounding.mjs';
 
 // Boards whose tags may become highlights: near-term only (spec decision #5 — the projected-deep board
 // stays horizon prose so an empty deep cell never reads as a present threat).
@@ -41,6 +42,8 @@ function roleText(owner, kind) {
   const who = owner === 'you' ? 'you' : 'your opponent';
   if (kind === 'immediate') return `the square where ${who} can make four next move`;
   if (kind === 'double') return `the fork square where ${who} gets two winning squares at once`;
+  if (kind === 'line') return `the four-in-a-row line ${who} is playing for`;
+  if (kind === 'future-line') return `the four-in-a-row line that decides this later, once the forced sequence reaches it — not a threat right now`;
   if (kind === 'future') return `this square matters later, once the forced sequence reaches it — not a threat right now`;
   return `a square completing ${who}'s four-in-a-row line`; // major
 }
@@ -51,7 +54,7 @@ function tagSpec(tag) {
   return tag.cell; // already cNrM, a valid single-cell spec
 }
 
-export function buildAnnotationOffer(pruned, boardDecisions) {
+export function buildAnnotationOffer(pruned, boardDecisions, opts = {}) {
   const aliases = [];
   const zoneAliasMap = {};
   const seen = new Set();           // dedup key: spec (first board wins => stable, board-true truthBoard)
@@ -87,6 +90,19 @@ export function buildAnnotationOffer(pruned, boardDecisions) {
       aliases.push({ handle, spec, role: roleText(tag.owner, tag.kind), truthBoard: board.id,
                      kbId: KIND_TO_SLUG[tag.kind] ?? null });
       zoneAliasMap[handle] = spec;
+      // Additive line alias (ask 2b): the same board-true major also offers the 4-cell line it
+      // completes, so the phrase "four-in-a-row line" can be grounded to a LINE, not one square.
+      // The cell alias above is untouched — both are offered.
+      if (Array.isArray(tag.lineWindow) && tag.lineWindow.length) {
+        const lineSpec = 'windows:' + tag.lineWindow.join(',');
+        if (!seen.has(lineSpec)) {
+          seen.add(lineSpec);
+          const lh = mkHandle(`${tag.owner}-${tag.kind}-line`);
+          aliases.push({ handle: lh, spec: lineSpec, role: roleText(tag.owner, 'line'),
+                         truthBoard: board.id, kbId: null });
+          zoneAliasMap[lh] = lineSpec;
+        }
+      }
     }
   }
 
@@ -109,6 +125,57 @@ export function buildAnnotationOffer(pruned, boardDecisions) {
     zoneAliasMap[handle] = spec;
   }
 
+  // Half-resource geometry (RC-B): the two causal halves carry the cells and lines the explanation
+  // is actually ABOUT — completingCell, window, forkWindows, forkCells — and none of them was ever
+  // offered. The STRUCTURAL loop above only sees near-term board tags, and the deep-fork loop only
+  // sees forkCells as one combined spec. Without these, prose like "the central threat", "the key
+  // four-in-a-row line", "the column-2-to-column-5 strip" had no legal handle at all.
+  //
+  // Present vs future: a half whose register is not 'immediate' resolves many plies away and its
+  // cells are EMPTY now, so it gets the `future:` prefix + future role text (FR-002, Settled
+  // decision 8(b), the eval-3 present-threat trap). The rule reuses horizonForRegister rather than
+  // a new plies threshold. Opening records suppress this family entirely: their guardrail says
+  // "Do NOT ground a specific deep completing cell", and pruneOpeningResidue strips these very
+  // fields from the prompt residue.
+  const halfPairs = opts.openingHorizon
+    ? []
+    : [[pruned.lostResource, 'you'], [pruned.opponentPunishment, 'opp']];
+  for (const [half, owner] of halfPairs) {
+    if (!half) continue;
+    const isFuture = horizonForRegister(half.register) !== 'immediate';
+    const pre = isFuture ? 'future:' : '';
+    const cellKind = isFuture ? 'future' : 'major';   // 'major' never over-claims immediacy
+    const lineKind = isFuture ? 'future-line' : 'line';
+    const offers = [];
+    if (half.completingCell) offers.push([`${owner}-key-square`, half.completingCell, cellKind]);
+    if (Array.isArray(half.window) && half.window.length) {
+      offers.push([`${owner}-key-line`, 'windows:' + half.window.join(','), lineKind]);
+    }
+    if (half.tacticTag === 'double_threat' && (half.forkWindows?.length ?? 0) >= 2) {
+      offers.push([`${owner}-fork-lines`,
+                   'windows:' + half.forkWindows.map((w) => w.join(',')).join('|'), lineKind]);
+    }
+    // Each fork cell ALSO standalone: Decision A makes a `windows:` alias satisfiable only as the
+    // whole window, so a correct single-cell fork highlight was being stripped (OI-172, measured:
+    // c2r6 and c5r5 on 3154442332131341225551). Offering the cells individually closes that
+    // without weakening Decision A — a window member that is never offered standalone still fails.
+    for (const fc of (half.tacticTag === 'double_threat' ? half.forkCells ?? [] : [])) {
+      offers.push([`${owner}-fork-square`, fc, cellKind]);
+    }
+    for (const [base, rawSpec, kind] of offers) {
+      // Dedup on the UNPREFIXED geometry so a cell already offered as a present structural alias
+      // is never re-offered under a future: framing (and vice versa) — first offer wins.
+      if (seen.has(rawSpec) || seen.has('future:' + rawSpec)) continue;
+      const spec = pre + rawSpec;
+      seen.add(rawSpec);
+      seen.add(spec);
+      const handle = mkHandle(base);
+      aliases.push({ handle, spec, role: roleText(owner, kind),
+                     truthBoard: isFuture ? 'projectedDeep' : 'decision', kbId: null });
+      zoneAliasMap[handle] = spec;
+    }
+  }
+
   // Fired term vocabulary: structural board tags that map to a KB slug + the two halves' tags,
   // intersected with the KB-backed set (TERM_KB).
   const fired = new Set();
@@ -120,7 +187,11 @@ export function buildAnnotationOffer(pruned, boardDecisions) {
     }
   }
   for (const half of [pruned.lostResource, pruned.opponentPunishment]) {
-    if (half?.tag && TERM_KB[half.tag]) fired.add(half.tag);   // figure_7 fires here even though its
+    // `tacticTag`, not `tag` — halves have never had a `tag` field (measured Object.keys(half):
+    // kind,register,completingCell,window,pliesToEnd,line,finalMovestring,entryCell,terminal,
+    // forkCase,forkCells,forkWindows,tacticTag,tacticCells,tacticFromDiff,tie). This read was dead
+    // from the day it was written; a fixture using the same wrong name kept the test green.
+    if (half?.tacticTag && TERM_KB[half.tacticTag]) fired.add(half.tacticTag);   // figure_7 fires here even though its
     // overlay tag is not an alias — terms are independent of zones (design §3c).
   }
   const terms = [...fired].sort().map((slug) => ({

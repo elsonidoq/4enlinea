@@ -163,6 +163,15 @@ test('opening prompt has the opening reading key and no deep board', () => {
   assert.doesNotMatch(prompt, /projectedDeep/);
 });
 
+test('opening records never offer or require a deep half cell (guardrail + pruneOpeningResidue)', () => {
+  for (const kind of ['namedOpening', 'defense', 'centrality']) {
+    const model = buildReasonRenderModel(OPENING[kind]);
+    assert.deepEqual(model.zones.aliases.filter((a) => a.spec.startsWith('future:')), [],
+      `${kind}: opening records must offer no future: handle`);
+    assert.deepEqual(model.requiredSet, [], `${kind}: opening records require nothing`);
+  }
+});
+
 test('opening prompt never leaks a deep completing cell or parityAttribution into Vector facts', () => {
   for (const kind of ['namedOpening', 'defense', 'centrality']) {
     const prompt = assembleGroundedPrompt(buildReasonRenderModel(OPENING[kind]));
@@ -273,13 +282,28 @@ test('deriveRequiredSet falls back to the full half.window array (T-parity worke
   assert.equal(req[0].handle, 'parity-line');
 });
 
-test('deriveRequiredSet never matches a future:-prefixed alias against a plain derived cell spec', () => {
-  // A future: spec is string-distinct from its unprefixed form (US1) — spec equality (D2) means a
-  // deep fork's future:cNrM alias can never satisfy a derived plain cNrM requirement by accident.
+test('deriveRequiredSet matches a future:-prefixed alias against a plain derived cell, and keeps the future framing (D43)', () => {
+  // Supersedes the spec-058 invariant "a future: alias can never satisfy a derived plain cell".
+  // The Derivation Rule matches GEOMETRY; `future:` is a render-framing decorator that
+  // zoneParser.isValidSpec/expandSpec, annotationGate.checkP5Strong, reasonRenderGuard.toAllowedSet
+  // and the client's annotatedText all already strip before matching. Normalizing the alias INDEX
+  // the same way leaves required ⊆ offered intact — the matched alias IS an offered alias.
   const pruned = { lostResource: { completingCell: 'c7r3' }, opponentPunishment: {} };
   const zones = { aliases: [
-    { handle: 'you-future-fork', spec: 'future:c7r3', role: 'this square matters later', truthBoard: 'projectedDeep', kbId: null },
+    { handle: 'you-key-square', spec: 'future:c7r3', role: 'this square matters later', truthBoard: 'projectedDeep', kbId: null },
   ] };
+  const groups = deriveRequiredSet(pruned, zones);
+  assert.equal(groups.length, 1);
+  assert.equal(groups[0].handle, 'you-key-square');
+  // The group carries the alias's OWN (prefixed) spec — that is what mechanismExplainer's
+  // missingRequiredGroups compares against processAnnotations' usedSpecs.
+  assert.equal(groups[0].spec, 'future:c7r3');
+  assert.match(groups[0].role, /matters later/);
+});
+
+test('deriveRequiredSet still drops a derived cell with no offered alias at all (FR-004)', () => {
+  const pruned = { lostResource: { completingCell: 'c7r3' }, opponentPunishment: {} };
+  const zones = { aliases: [{ handle: 'better-col', spec: 'col4', role: 'x', truthBoard: 'decision', kbId: null }] };
   assert.deepEqual(deriveRequiredSet(pruned, zones), []);
 });
 
@@ -288,10 +312,11 @@ test('buildReasonRenderModel and buildRenderDecision both expose requiredSet (re
   const rd = buildRenderDecision(NV);
   assert.ok(Array.isArray(model.requiredSet));
   assert.ok(Array.isArray(rd.requiredSet));
-  // Neither of NV's completingCells (c6r5/c3r3) is offered as a structural alias by this synthetic
-  // fixture's boards, so both correctly abstain rather than invent a requirement (FR-006).
-  assert.deepEqual(model.requiredSet, []);
-  assert.deepEqual(rd.requiredSet, []);
+  // NV's two halves are both deep (register 'forced_sequence'), so each contributes a future:-framed
+  // group (D43). Both builders must agree exactly — research.md D1, identical routing.
+  assert.deepEqual(model.requiredSet.map((g) => g.handle), ['you-key-square', 'opp-key-square']);
+  assert.deepEqual(model.requiredSet.map((g) => g.spec), ['future:c6r5', 'future:c3r3']);
+  assert.deepEqual(rd.requiredSet, model.requiredSet);
 });
 
 test('opening records also compute requiredSet (deriveRequiredSet runs on both buildReasonRenderModel branches)', () => {
@@ -308,7 +333,14 @@ test('assembled prompt includes the "You MUST build the explanation around these
 });
 
 test('the required-set prompt block states explicitly when there is nothing required, without inventing one', () => {
-  const prompt = assembleGroundedPrompt(buildReasonRenderModel(NV)); // NV's requiredSet is [] (see above)
+  // A record whose halves carry neither a cell nor a window abstains (FR-006) — the prompt must SAY
+  // so rather than silently omitting the block.
+  const model = buildReasonRenderModel({ ...NV,
+    lostResource: { kind: 'winning_line', register: 'forced_sequence' },
+    opponentPunishment: { kind: 'winning_line', register: 'forced_sequence',
+                          tie: { kind: 'tied', sharedCells: ['c4r5'] } } });
+  assert.deepEqual(model.requiredSet, []);
+  const prompt = assembleGroundedPrompt(model);
   assert.match(prompt, /# You MUST build the explanation around these/);
   assert.match(prompt, /none for this explanation/i);
 });

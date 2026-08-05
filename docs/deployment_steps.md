@@ -1793,6 +1793,47 @@ every other TRUNCATE step in this file (e.g. the `blunders` TRUNCATE above), non
 wrapped in a script. No drift check is required because there is nothing to reconcile — TRUNCATE is
 unconditional.
 
+## Spec 058 remediation — feedback asks 1b/1c/2a/2b/2c/4a/4b
+
+**Status**: PENDING
+**When**: rides along with the (still PENDING) Spec 058 deploy — no additional prerequisite
+**Blocks**: nothing on its own
+**Applies to**: staging / production
+
+### What's wrong (or: what this sets up)
+
+Generation-side only: `buildAnnotationOffer` offers more handles (each causal half's own
+`completingCell` / `window` / `forkWindows` / individual `forkCells`, plus the 4-cell line a
+structural major/immediate tag completes), `deriveRequiredSet` matches `future:`-prefixed aliases
+against a derived plain cell (D43), and `checkP5Strong` accepts a multi-window `windows:A|B`
+signature it had itself offered. No schema change, no migration.
+
+The one thing to be aware of is that `explanation_cache` bypasses every producer guard — a cache hit
+serves stored text with `allowedSet: null`, so a generation change has NO effect on an
+already-cached row. The `TRUNCATE TABLE explanation_cache;` step already queued in the
+`## Spec 058 — Deep-Reveal Grounding` entry above covers this remediation too, provided that
+TRUNCATE runs at or after this code deploys. Staging's 058 TRUNCATE is already marked DONE
+2026-08-04 — i.e. it ran BEFORE this code — so on staging it must be run again.
+
+### Run it
+
+Nothing beyond the code deploy, plus (only where 058's TRUNCATE already ran before this code
+shipped — which is the case for staging):
+
+```sql
+TRUNCATE TABLE explanation_cache;
+```
+
+### Verify
+
+`SELECT count(*) FROM explanation_cache;` -> 0 immediately after any TRUNCATE. Then request a deep
+reveal for `3154442332131341225551` played column 5 and confirm the served text contains a
+`[zone:...]` span for `c2r6` and `c5r5` (previously stripped, OI-172).
+
+### Roll back
+
+Revert the code commits and redeploy. No data or schema to undo; the cache simply refills.
+
 ## Template for new entries
 
 ```markdown
