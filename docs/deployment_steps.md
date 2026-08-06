@@ -1857,3 +1857,41 @@ Revert the code commits and redeploy. No data or schema to undo; the cache simpl
 ### Verify          — the command and the success condition
 ### Roll back       — or an explicit "not reversible; back up first"
 ```
+
+---
+
+## Spec 058 remediation — audio/TTS addendum (no separate step required)
+
+**Status**: PENDING (informational — no action beyond the `explanation_cache` TRUNCATE already queued)
+**When**: n/a — resolved by the TRUNCATE
+**Blocks**: nothing
+**Applies to**: staging / production
+
+### What this settles
+
+The 058 remediation changed deep-reveal *text* substantially (cells now read "column 1, row 3", and
+lines are named and highlighted). The obvious worry is stale audio. Checked at source rather than
+assumed:
+
+`GET /api/user/tts/deep-reveal` (`server/index.js`) is keyed by the **position hash**
+(`moveString:col`), **not** by a text hash, and it **404s unless an `explanation_cache` row already
+exists** for that position. It reuses the stored clip only when `cacheEntry.audio_path` matches the
+path it just derived. So once `TRUNCATE TABLE explanation_cache;` runs, the row and its `audio_path`
+are gone, the next request regenerates the explanation and re-synthesizes from the new text. **No
+separate audio purge is needed.**
+
+Note this differs from the coach voice, which is keyed by i18n key and *can* go stale or silent on
+dynamic text (memory `project_tts_audio_cached_by_text`). Do not generalize that trap to this path.
+
+### Run it
+
+Nothing. Covered by the `TRUNCATE TABLE explanation_cache;` in the entry above.
+
+### Verify
+
+After the TRUNCATE, request a deep reveal for `315444233213134122` played column 5, then fetch its
+TTS. Success condition: the audio says "column one, row three" and never "c1r3".
+
+### Roll back
+
+n/a — no action taken.
