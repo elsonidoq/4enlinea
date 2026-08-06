@@ -6713,3 +6713,130 @@ map) rather than changing the existing shape, and leave the 8 call sites reading
 today. Do NOT attach the window to a tag as `tag.window` — `tagSpec` branches on that name and it
 would silently convert every major's single-cell alias into a `windows:` spec (see
 `reason-render-grounded-prompt.md` §11c, which records this trap).
+
+---
+
+## OI-180 — `halfForkCellsSpec` bundles a fork's disjoint endpoints into ONE `windows:` group, so the spec claims a line that does not exist
+
+**Status**: open (data-model correctness; the *visual* symptom was fixed 2026-08-06, the spec is still wrong)
+**Area**: `connect-four/server/scripts/renderReasonModel.mjs` (`halfForkCellsSpec`)
+**Discovered**: deep-reveal learner-quality evaluation, 2026-08-06
+
+`windows:` means "a line of squares", with `|` separating multiple lines — that is how
+`halfLineSpec` uses it (`renderReasonModel.mjs:111-115`, joins each window's cells with `,` and the
+windows with `|`). But `halfForkCellsSpec` comma-joins a double threat's two **disjoint** endpoints
+into a single group:
+
+```js
+function halfForkCellsSpec(h) {
+  if (!h || h.tacticTag !== 'double_threat' || (h.forkCells?.length ?? 0) < 2) return null;
+  return 'windows:' + h.forkCells.join(',');     // renderReasonModel.mjs:105
+}
+```
+
+`forkCells` are the two squares that each *independently* finish a line. They are not collinear and
+not one window. Measured on board `3154442332131341225551` (spec-058 feedback case 4), this emits
+`future:windows:c2r6,c5r5` — c2r6 and c5r5 are 3 columns and 1 row apart.
+
+It is preferentially **required**, not merely offered: `deriveRequiredSet` tries the fork spec first
+per half and only falls back to the point cell (`renderReasonModel.mjs:166`,
+`if (!push(half, halfForkCellsSpec(h))) push(half, denialCell(h))`), so the model is obliged to use
+the malformed handle.
+
+The rendered symptom — `Board.jsx` drawing one capsule from the group's first cell to its last,
+crossing c3r6/c3r5/c4r5 including an occupied square, so it read on screen as a four-in-a-row — was
+fixed 2026-08-06 by `isContiguousLine` (`src/components/boardCapsuleGeometry.js`), which falls back
+to per-cell dots for a non-line group. **That is a defensive fix in the renderer; the producer still
+emits a spec that asserts a line.** Two consequences remain:
+
+1. Any *other* consumer of the spec string (the annotation gate, `toAllowedSet`, an eval harness, a
+   future renderer) still reads "line" and has no way to know otherwise.
+2. The renderer's guard is geometric, so a fork whose two endpoints happen to be adjacent and
+   collinear would still draw a false connecting line. Nothing downstream can distinguish "line"
+   from "set of squares" — the spec vocabulary has no term for the latter.
+
+**If picked up**: the obvious minimal encoding, `windows:c2r6|c5r5` (two one-cell groups), does
+**not** work today — `zoneToWindowGroups` drops groups shorter than 2 cells
+(`src/lib/annotatedText.js:278`, `.filter(w => w.length >= 2)`). So this needs either a new spec
+kind for "an unordered set of squares" or a deliberate relaxation of that filter, and either way it
+ripples through `zoneParser`'s `isValidSpec`/`expandSpec`, `toAllowedSet`, `annotationGate`'s
+`checkP5Strong`, and `deriveRequiredSet`'s alias index. Frozen fixtures in
+`src/pages/groundingDiffCases.js` are a historical record and must NOT be rewritten to match.
+Cross-refs: D45, OI-177, OI-182.
+
+---
+
+## OI-181 — a column-only retry is invisible in `deep_reveal_failures`, so the better-column fix cannot be measured on staging
+
+**Status**: open (observability only, no user-facing impact; deliberately not fixed — see below)
+**Area**: `connect-four/server/mechanismExplainer.mjs` (`missingHandles`), `connect-four/server/index.js` (`deep_reveal_failures` insert)
+**Discovered**: deep-reveal learner-quality remediation, 2026-08-06
+
+As of 2026-08-06 `computeMechanism` retries on two content misses — a required square/line the
+answer failed to tag, **and/or** a failure to name the column the player should have played
+(`mentionsBetterColumn`). Both are folded into one amended prompt on the single shared retry budget.
+
+But `missingHandles` is still assigned only the required-set groups (`missingHandles = missing`), so
+the endpoint's two-attempt logging path — which inserts a `deep_reveal_failures` row of kind
+`missing_required_squares` when a retry still came back short — never fires for a retry triggered
+*only* by an unnamed better column. A column miss that survives the retry is therefore silent in
+staging.
+
+**Why deferred, deliberately:** widening `missingHandles` to carry a non-handle entry would change
+the meaning of an existing log row and of the `missing_required_squares` failure kind, which other
+queries and the spec-058 acceptance evidence both read. Better to add a distinct signal than to
+overload one.
+
+**If picked up**: add a separate field (e.g. `missingBetterCol`) threaded alongside `missingHandles`
+and a distinct `deep_reveal_failures` kind, rather than folding it into the existing row. Note this
+is the only way to get a real measurement of whether the retry actually changes model behaviour —
+the unit tests prove the retry *fires*, not that the model complies. Cross-refs: OI-177.
+
+---
+
+## OI-182 — a double threat's required set names both finishing squares but never the square that CREATES the fork, so the explanation lists effects and omits the cause
+
+**Status**: open (pedagogical correctness — the explanation is true but does not teach)
+**Area**: `connect-four/server/scripts/renderReasonModel.mjs` (`deriveRequiredSet`, `halfForkCellsSpec`)
+**Discovered**: deep-reveal learner-quality evaluation, 2026-08-06
+
+Evaluated as *teaching* rather than as grounding mechanics, the strongest defect across the four
+spec-058 feedback boards is that the explanations restate an outcome and never name a cause. The
+concrete instance, board `3154442332131341225551` (case 4), attempt 8:
+
+> "…your played move lets your opponent answer with a double threat on the two finishing squares at
+> column 2, row 6 and column 5, row 5, so you give up your long win and face an immediate loss."
+
+c2r6 and c5r5 only *both* become winning after the opponent plays **c3r5**, which simultaneously
+completes the diagonal c5r3-c4r4-c3r5-c2r6 and the row c2r5-c3r5-c4r5-c5r5. c3r5 is the move that
+creates the fork — the one square a learner needs in order to see the threat coming. It **was
+offered** (`future:c3r5` appears in that record's `offeredSpecs`) and was not required, so the model
+never had to mention it and did not.
+
+Likely mechanism, from `deriveRequiredSet` (`renderReasonModel.mjs:164-167`):
+
+```js
+for (const half of HALVES) {
+  if (!push(half, halfForkCellsSpec(h))) push(half, denialCell(h));
+}
+```
+
+For a `double_threat` half the fork-cells spec succeeds, so the per-half point slot is consumed by
+the *endpoints* and `denialCell(h)` (`h?.cell ?? h?.completingCell`) is never pushed for that half.
+UNVERIFIED: I did not confirm that `denialCell` for this half resolves to c3r5 specifically — only
+that the endpoints preempt it and that c3r5 was offered but not required.
+
+The same shape appears on board `315444233213` (case 2), where the fork's shared prerequisite c6r2
+is unmentioned, and on `3154` (case 1), where "their own winning four-in-a-row" is asserted in prose
+with no line grounded at all (`future:windows:c3r4,c4r4,c5r4,c6r4` offered, not emitted).
+
+**If picked up**: add a pivot/prerequisite slot to the required set for fork halves so the causal
+square is obliged, not merely offered — the evidence already carries it, the selection step discards
+it. Prompt wording alone will not do this: measured INERT (0/12) for this class of instruction,
+while the required-set mechanism moved it (12/12) — see memory
+`feedback_require_dont_suggest_llm_handles`. Note FR-005 caps the required set at three groups, so a
+pivot slot must displace something rather than being added on top; the line group is the likely
+candidate to drop, given OI-178 shows line handles already produce unreadable prose. Validate any
+change through `judge-deep-reveals` on the production artifact, NOT through the feature-vector
+sufficiency harness — the evidence object already contains these squares, so this is a selection
+failure, not a context-sufficiency failure. Cross-refs: D45, OI-178, OI-180.
