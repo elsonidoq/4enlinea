@@ -2,6 +2,7 @@ import { useState, useRef, useEffect, useMemo, memo } from 'react';
 import { Icon } from './Icon.jsx';
 import { getColumnA11yProps } from './boardA11y.js';
 import { getColumnLabels, getRowLabels } from './boardCoordinateLabels.js';
+import { isContiguousLine } from './boardCapsuleGeometry.js';
 import { boardPropsAreEqual } from '../lib/board.js';
 import { windowCountTint } from '../lib/lessonWindows.js';
 
@@ -150,10 +151,22 @@ function BoardImpl({
     for (const { color, cells, windows } of zhCells) {
       let runs, dots;
       if (windows && windows.length > 0) {
-        // windows: spec — each window is already a structurally correct threat window;
-        // draw one capsule per window (first cell → last cell), no dots.
-        runs = windows.map(w => ({ start: w[0], end: w[w.length - 1] }));
+        // windows: spec — the producer also uses it to bundle disjoint cells (e.g. the two
+        // endpoints of a fork), so a group is NOT guaranteed to be a real line. Only draw the
+        // first→last capsule when the group actually is one; otherwise fall back to the
+        // generic grouping so unrelated cells render as separate dots instead of one bar
+        // falsely crossing the squares in between.
+        runs = [];
         dots = [];
+        for (const w of windows) {
+          if (isContiguousLine(w)) {
+            runs.push({ start: w[0], end: w[w.length - 1] });
+          } else {
+            const g = groupCellsByCapsules(w);
+            runs.push(...g.runs);
+            dots.push(...g.dots);
+          }
+        }
       } else {
         ({ runs, dots } = groupCellsByCapsules(cells));
       }
