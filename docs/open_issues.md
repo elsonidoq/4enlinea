@@ -6651,3 +6651,37 @@ isolation, and neither is wired to the other.
 retry. Note the retry prompt should then say the handle was *mis-anchored*, not *unused* — telling a
 model to "use `future:c7r3`" when it already did is unlikely to fix the anchoring. Cross-refs: D44
 (mismatch policy), FR-008, `docs/architecture/reason-render-grounded-prompt.md` §11d.
+
+---
+
+## OI-178 — `humanizeGroundedCoordinates` expands every cell of a multi-cell window, producing unreadable line prose
+
+**Status**: open (cosmetic/quality; introduced by D44 + D45 interacting, spec-058 attempt 3)
+**Area**: `connect-four/server/reasonRenderGuard.mjs` (`humanizeGroundedCoordinates`)
+**Discovered**: spec-058 feedback remediation attempt 3, 2026-08-05
+
+D44 rewrites a raw coordinate inside a covering zone into "column N, row M" so the highlight
+survives `checkP6`. That is right for a single cell. D45 then made multi-cell `windows:` handles
+*required*, so the model now routinely writes all four cells of a line inside one zone — and each is
+expanded independently. Measured, `specs/058-deep-reveal-grounding/t043-attempt3-run2-results.json`,
+board `3154`:
+
+```
+[zone:future:windows:c4r3,c5r3,c6r3,c7r3]your four-in-a-row line running through column 4,
+row 3, column 5, row 3, column 6, row 3, and column 7, row 3[/zone:...]
+```
+
+and board `3154442332131341225551`: "the four-in-a-row line running through column 7, row 3,
+column 6, row 4, column 5, row 5, and column 4, row 6".
+
+Every coordinate is correct and grounded, and the highlight renders — this is not a correctness bug.
+But a learner reading it aloud gets a coordinate list where the point is *the line*, and the board
+already shows which squares those are. Contrast board `315444233213`, where the model wrote "the two
+finish squares your opponent can still use later" and the capsule does the pointing — that is the
+wording the epic wants.
+
+**If picked up**: either (a) prompt the coach to name a multi-cell handle by its shape ("the line
+through the middle", "the two finish squares") and let the capsule carry the coordinates, or (b) let
+`humanizeGroundedCoordinates` collapse a run of cells belonging to one window into a single phrase
+rather than expanding each. Option (a) is likely better — the highlight is the pointing device, so
+the prose should not duplicate it. Cross-refs: D44, D45.
