@@ -27,6 +27,53 @@
 //     resource geometry a fourth alias family (D43). Same real pipeline
 //     (computeMechanism -> toAllowedSet -> guardExplainMoveLlmPayload), same real LLM call.
 //
+// WHAT ATTEMPT 1 ACTUALLY MEASURED (the reason these rows are worth keeping).
+// Replaying the guard chain over each stored `rawMechanism` (no LLM, no solver) attributes every
+// missing required spec across the 12 board-runs (4 boards x 3 re-runs):
+//
+//     missing-required causes: { 'STRIPPED_BY_GUARD(P6:raw_coordinate)': 11 }
+//     required-set satisfied: 5/12 as served at d4e948c
+//
+// That inverts the attempt-0 hypothesis:
+//   - The model emitted EVERY required spec in ALL 12 board-runs. `MODEL_NEVER_EMITTED` is ZERO.
+//     It never failed to find or use a handle.
+//   - `checkP5Strong` rejected nothing. Decision A rejected nothing — attempt 0's two rejections on
+//     board 4 are gone, because D43 now offers `future:c2r6` / `future:c5r5` standalone.
+//   - 100% of the remaining loss was `P6:raw_coordinate`: the model narrates the coordinate inside
+//     the visible anchor, P6 forbids `cNrM`/`colN` there, and `stripFailingZoneSpans` deletes the
+//     WHOLE ANNOTATION as the penalty for a WORDING fault — destroying a correct, engine-grounded
+//     highlight. Case 3's human had asked for the text to KEEP `c1r3`'s precision; P6 structurally
+//     forbade exactly that.
+//
+// VALIDATED LEVER. `humanizeGroundedCoordinates` (reasonRenderGuard.mjs, wired at the top of
+// `guardExplainMoveLlmPayload`) turns check-then-strip into rewrite-then-check for a coordinate a
+// zone's own spec vouches for. Replaying the SAME stored model outputs through the current guard:
+//
+//     required satisfied 5/12 (as served at d4e948c) -> 10/12 (current worktree)
+//     of the 11 P6 strips: 9 recovered, 2 still stripped
+//
+// and the 2 residual are NOT guard over-punishment — they are genuine model mis-anchors, where the
+// spec points at one square and the words name another, and the mismatch policy correctly rejects
+// them:
+//     run1 `3154`         spec=future:c7r3  anchor="c6r3"
+//     run2 `315444233213` spec=future:c5r5  anchor="c4r5"
+//
+// Do NOT read this as "delete P6". Removing P6 outright scores 12/12 only by also admitting those
+// two mis-anchored spans — a false highlight is worse than a missing one. The true residual model
+// error rate is 2 of 23 required-spec emissions.
+//
+// Board 3, run 3, before -> after the lever, on identical model output:
+//     served at d4e948c:  "keep the column 1 square that completes your four-in-a-row line alive"
+//     current guard:      "keep [zone:c1r3]the column 1, row 3 square that completes your
+//                          four-in-a-row line[/zone:c1r3] alive"
+// i.e. precision preserved AND grounded — the case-3 ask, satisfied.
+//
+// These stored `rawMechanism` strings are therefore a REUSABLE REGRESSION HARNESS: any future guard
+// change can be scored against 12 real model outputs for free, without another LLM run.
+//
+// `attribution[]`, `guardFailures[]`, `requiredSatisfiedIfP6DidNotStrip` and
+// `requiredSatisfiedUnderCurrentGuard` on each attempt carry this per-spec.
+//
 // Why three attempt-1 rows and not one: the engine half is deterministic — `offeredSpecs` and
 // `requiredSpecs` are BYTE-IDENTICAL across all three runs on all four boards — but the LLM half
 // is not. `emittedSpecs` varies run to run, so a single run is a sample, not a measurement.
@@ -46,8 +93,15 @@
 //   315444233213134122     0 -> 1 / 0 / 0
 //   3154442332131341225551 0 -> 1 / 0 / 4
 
-export const GROUNDING_DIFF_CASES =
-[
+//
+// ATTEMPTS 4-9 appended 2026-08-05 by the feedback-closure loop:
+//   4-6  -> specs/058-deep-reveal-grounding/t042-attempt2-run{1,2,3}-results.json  (post-D44, commit 2f9f8a7)
+//   7-9  -> specs/058-deep-reveal-grounding/t043-attempt3-run{1,2,3}-results.json  (post-D45, commit 5403129)
+// Each entry records the decision it was measured against in `decision`; attempts 1-3 predate both
+// and are D43-era. `defaultAttempt` = 8 (t043 run 2 — every required spec emitted, zero
+// guard failures on all four boards). Attempt 0 and the frozen staging fields are untouched.
+//
+export const GROUNDING_DIFF_CASES = [
   {
     "movestring": "3154",
     "playedCol": 4,
@@ -95,6 +149,22 @@ export const GROUNDING_DIFF_CASES =
         "decisionARejectedSpecs": [],
         "rawMechanism": "You needed to keep the deep parity fight on the side that works for you. By playing [zone:col5]column 5[/zone:col5], you give up that balance and let your opponent steer to the stronger reply; instead, [zone:col6]column 6[/zone:col6] keeps the tougher defense alive and preserves the later line through [zone:future:c7r3]c6r3[/zone:future:c7r3] rather than handing control to [zone:future:c6r4]c6r4[/zone:future:c6r4].",
         "requiredSubsetOfEmitted": false,
+        "guardFailures": [
+          "P6:raw_coordinate:future:c7r3",
+          "P6:raw_coordinate:future:c6r4"
+        ],
+        "attribution": [
+          {
+            "spec": "future:c7r3",
+            "status": "STRIPPED_BY_GUARD:P6 (spec/anchor MISMATCH — genuine model error, correctly rejected)"
+          },
+          {
+            "spec": "future:c6r4",
+            "status": "STRIPPED_BY_GUARD:P6 (recovered by the current rewrite-then-check guard)"
+          }
+        ],
+        "requiredSatisfiedIfP6DidNotStrip": true,
+        "requiredSatisfiedUnderCurrentGuard": false,
         "note": "Attempt 1 — D43 rebuild (half resource geometry offered as a fourth alias family), real-pipeline run 1 of 3"
       },
       {
@@ -120,6 +190,19 @@ export const GROUNDING_DIFF_CASES =
         "decisionARejectedSpecs": [],
         "rawMechanism": "You need the tougher defense that keeps your deep parity line alive: [zone:future:c7r3]this square matters later, once the forced sequence reaches it[/zone:future:c7r3] is part of the line you want to preserve, while [zone:future:c6r4]this square matters later, once the forced sequence reaches it[/zone:future:c6r4] is where your opponent can cash in after the played move. By choosing column 5 instead of column 6, you let them take over the later four-in-a-row race and convert that deep edge into the win.",
         "requiredSubsetOfEmitted": true,
+        "guardFailures": [],
+        "attribution": [
+          {
+            "spec": "future:c7r3",
+            "status": "EMITTED"
+          },
+          {
+            "spec": "future:c6r4",
+            "status": "EMITTED"
+          }
+        ],
+        "requiredSatisfiedIfP6DidNotStrip": true,
+        "requiredSatisfiedUnderCurrentGuard": true,
         "note": "Attempt 1 — D43 rebuild, real-pipeline run 2 of 3 (same code, same offers; LLM re-sampled)"
       },
       {
@@ -147,9 +230,194 @@ export const GROUNDING_DIFF_CASES =
         "decisionARejectedSpecs": [],
         "rawMechanism": "By playing [zone:col6]column 6[/zone:col6], you keep the deep parity fight on your side and preserve the later [zone:future:c7r3]square that matters for your four-in-a-row route[/zone:future:c7r3]. Playing [zone:col5]column 5[/zone:col5] hands your opponent the reply that turns the position around, because the later [zone:future:c6r4]square that matters for your opponent’s winning line[/zone:future:c6r4] becomes the one they can use to finish the race.",
         "requiredSubsetOfEmitted": true,
+        "guardFailures": [],
+        "attribution": [
+          {
+            "spec": "future:c7r3",
+            "status": "EMITTED"
+          },
+          {
+            "spec": "future:c6r4",
+            "status": "EMITTED"
+          }
+        ],
+        "requiredSatisfiedIfP6DidNotStrip": true,
+        "requiredSatisfiedUnderCurrentGuard": true,
         "note": "Attempt 1 — D43 rebuild, real-pipeline run 3 of 3 (same code, same offers; LLM re-sampled)"
+      },
+      {
+        "n": 4,
+        "at": "2026-08-05",
+        "decision": "D44",
+        "text": "You should play the tougher defense in column 6, because it keeps the later fight centered on column 6 and avoids handing your opponent the reply that turns into [zone:future:c6r4]column 6, row 4[/zone:future:c6r4]. Your played move in column 5 let them steer the game into their later four-in-a-row line instead of yours, so you lost the parity battle that was deciding this position.",
+        "offeredSpecs": [
+          "col6",
+          "col5",
+          "future:c7r3",
+          "future:windows:c4r3,c5r3,c6r3,c7r3",
+          "future:c6r4",
+          "future:windows:c3r4,c4r4,c5r4,c6r4"
+        ],
+        "requiredSpecs": [
+          "future:c7r3",
+          "future:c6r4"
+        ],
+        "emittedSpecs": [
+          "future:c6r4"
+        ],
+        "decisionARejectedSpecs": [],
+        "guardFailures": [
+          "P6:raw_coordinate:future:c7r3"
+        ],
+        "allRequiredEmitted": false,
+        "rawMechanism": "You should play the tougher defense in column 6, because it keeps the later fight centered on [zone:future:c7r3]c6r3[/zone:future:c7r3] and avoids handing your opponent the reply that turns into [zone:future:c6r4]c6r4[/zone:future:c6r4]. Your played move in column 5 let them steer the game into their later four-in-a-row line instead of yours, so you lost the parity battle that was deciding this position.",
+        "note": "Attempt 2 — D44 (humanizeGroundedCoordinates: a coordinate inside a covering zone is rewritten to \"column N, row M\" instead of the span being stripped). Real-pipeline run 1 of 3, measured at commit 2f9f8a7."
+      },
+      {
+        "n": 5,
+        "at": "2026-08-05",
+        "decision": "D44",
+        "text": "Column 6 keeps your deep parity resource alive and makes your opponent do the hardest defense. By playing column 5 instead, you let them answer in a way that wins the later four-in-a-row line tied to [zone:future:c6r4]that key square[/zone:future:c6r4], while your own later line tied to [zone:future:c7r3]your key square[/zone:future:c7r3] never gets the same chance to decide the race.",
+        "offeredSpecs": [
+          "col6",
+          "col5",
+          "future:c7r3",
+          "future:windows:c4r3,c5r3,c6r3,c7r3",
+          "future:c6r4",
+          "future:windows:c3r4,c4r4,c5r4,c6r4"
+        ],
+        "requiredSpecs": [
+          "future:c7r3",
+          "future:c6r4"
+        ],
+        "emittedSpecs": [
+          "future:c6r4",
+          "future:c7r3"
+        ],
+        "decisionARejectedSpecs": [],
+        "guardFailures": [],
+        "allRequiredEmitted": true,
+        "rawMechanism": "Column 6 keeps your deep parity resource alive and makes your opponent do the hardest defense. By playing column 5 instead, you let them answer in a way that wins the later four-in-a-row line tied to [zone:future:c6r4]that key square[/zone:future:c6r4], while your own later line tied to [zone:future:c7r3]your key square[/zone:future:c7r3] never gets the same chance to decide the race.",
+        "note": "Attempt 2 — D44 (humanizeGroundedCoordinates: a coordinate inside a covering zone is rewritten to \"column N, row M\" instead of the span being stripped). Real-pipeline run 2 of 3, measured at commit 2f9f8a7."
+      },
+      {
+        "n": 6,
+        "at": "2026-08-05",
+        "decision": "D44",
+        "text": "You needed to keep the tougher defense alive on [zone:future:c7r3]the key square that only matters later[/zone:future:c7r3]. By playing column 5, you let your opponent steer the game toward [zone:future:c6r4]the square that matters for their later reply[/zone:future:c6r4], and that handed them the stronger late four-in-a-row line instead of the parity fight you wanted. Column 6 is the move that keeps the ending hardest for them to convert.",
+        "offeredSpecs": [
+          "col6",
+          "col5",
+          "future:c7r3",
+          "future:windows:c4r3,c5r3,c6r3,c7r3",
+          "future:c6r4",
+          "future:windows:c3r4,c4r4,c5r4,c6r4"
+        ],
+        "requiredSpecs": [
+          "future:c7r3",
+          "future:c6r4"
+        ],
+        "emittedSpecs": [
+          "future:c7r3",
+          "future:c6r4"
+        ],
+        "decisionARejectedSpecs": [],
+        "guardFailures": [],
+        "allRequiredEmitted": true,
+        "rawMechanism": "You needed to keep the tougher defense alive on [zone:future:c7r3]the key square that only matters later[/zone:future:c7r3]. By playing column 5, you let your opponent steer the game toward [zone:future:c6r4]the square that matters for their later reply[/zone:future:c6r4], and that handed them the stronger late four-in-a-row line instead of the parity fight you wanted. Column 6 is the move that keeps the ending hardest for them to convert.",
+        "note": "Attempt 2 — D44 (humanizeGroundedCoordinates: a coordinate inside a covering zone is rewritten to \"column N, row M\" instead of the span being stripped). Real-pipeline run 3 of 3, measured at commit 2f9f8a7."
+      },
+      {
+        "n": 7,
+        "at": "2026-08-05",
+        "decision": "D45",
+        "text": "You should play column 6 because it keeps your deep parity win alive and leaves the harder defense in place. By playing column 5, you let your opponent switch the race and gain the better reply in the later four-in-a-row fight, so the line through [zone:future:windows:c4r3,c5r3,c6r3,c7r3]your four-in-a-row line on row 3[/zone:future:windows:c4r3,c5r3,c6r3,c7r3] no longer holds up the same way. The key squares are column 6 for your plan and [zone:future:c6r4]column 6, row 4[/zone:future:c6r4] for the opponent's counterplay once the sequence reaches them.",
+        "offeredSpecs": [
+          "col6",
+          "col5",
+          "future:c7r3",
+          "future:windows:c4r3,c5r3,c6r3,c7r3",
+          "future:c6r4",
+          "future:windows:c3r4,c4r4,c5r4,c6r4"
+        ],
+        "requiredSpecs": [
+          "future:c7r3",
+          "future:c6r4",
+          "future:windows:c4r3,c5r3,c6r3,c7r3"
+        ],
+        "emittedSpecs": [
+          "future:windows:c4r3,c5r3,c6r3,c7r3",
+          "future:c6r4"
+        ],
+        "decisionARejectedSpecs": [],
+        "guardFailures": [
+          "P6:raw_coordinate:future:c7r3"
+        ],
+        "allRequiredEmitted": false,
+        "rawMechanism": "You should play column 6 because it keeps your deep parity win alive and leaves the harder defense in place. By playing column 5, you let your opponent switch the race and gain the better reply in the later four-in-a-row fight, so the line through [zone:future:windows:c4r3,c5r3,c6r3,c7r3]your four-in-a-row line on row 3[/zone:future:windows:c4r3,c5r3,c6r3,c7r3] no longer holds up the same way. The key squares are [zone:future:c7r3]c6r3[/zone:future:c7r3] for your plan and [zone:future:c6r4]c6r4[/zone:future:c6r4] for the opponent's counterplay once the sequence reaches them.",
+        "note": "Attempt 3 — D45 (the LINE is REQUIRED, not merely offered: deriveRequiredSet derives one point group per half plus one line group). Real-pipeline run 1 of 3, measured at commit 5403129. CURRENT CODE."
+      },
+      {
+        "n": 8,
+        "at": "2026-08-05",
+        "decision": "D45",
+        "text": "You needed the move that kept your deep parity fight alive: [zone:future:windows:c4r3,c5r3,c6r3,c7r3]your four-in-a-row line running through column 4, row 3, column 5, row 3, column 6, row 3, and column 7, row 3[/zone:future:windows:c4r3,c5r3,c6r3,c7r3]. By playing column 5 instead, you let your opponent steer the reply into [zone:future:c6r4]the key square at column 6, row 4[/zone:future:c6r4], which opens their own winning four-in-a-row and leaves you without the same tough defense. The better move was column 6 because it preserves your [zone:future:c7r3]key square at column 7, row 3[/zone:future:c7r3] and keeps the harder defensive hold.",
+        "offeredSpecs": [
+          "col6",
+          "col5",
+          "future:c7r3",
+          "future:windows:c4r3,c5r3,c6r3,c7r3",
+          "future:c6r4",
+          "future:windows:c3r4,c4r4,c5r4,c6r4"
+        ],
+        "requiredSpecs": [
+          "future:c7r3",
+          "future:c6r4",
+          "future:windows:c4r3,c5r3,c6r3,c7r3"
+        ],
+        "emittedSpecs": [
+          "future:windows:c4r3,c5r3,c6r3,c7r3",
+          "future:c6r4",
+          "future:c7r3"
+        ],
+        "decisionARejectedSpecs": [],
+        "guardFailures": [],
+        "allRequiredEmitted": true,
+        "rawMechanism": "You needed the move that kept your deep parity fight alive: [zone:future:windows:c4r3,c5r3,c6r3,c7r3]your four-in-a-row line running through c4r3, c5r3, c6r3, and c7r3[/zone:future:windows:c4r3,c5r3,c6r3,c7r3]. By playing column 5 instead, you let your opponent steer the reply into [zone:future:c6r4]the key square at c6r4[/zone:future:c6r4], which opens their own winning four-in-a-row and leaves you without the same tough defense. The better move was column 6 because it preserves your [zone:future:c7r3]key square at c7r3[/zone:future:c7r3] and keeps the harder defensive hold.",
+        "note": "Attempt 3 — D45 (the LINE is REQUIRED, not merely offered: deriveRequiredSet derives one point group per half plus one line group). Real-pipeline run 2 of 3, measured at commit 5403129. CURRENT CODE."
+      },
+      {
+        "n": 9,
+        "at": "2026-08-05",
+        "decision": "D45",
+        "text": "You needed the tougher defense on the square that matters later on column 6, because that is what keeps your deep [zone:future:windows:c4r3,c5r3,c6r3,c7r3]four-in-a-row line[/zone:future:windows:c4r3,c5r3,c6r3,c7r3] alive. By playing column 5 instead, you let your opponent answer on [zone:future:c6r4]the square that matters later on column 6, row 4[/zone:future:c6r4] and take over the parity battle around that line, so your later resource no longer holds.",
+        "offeredSpecs": [
+          "col6",
+          "col5",
+          "future:c7r3",
+          "future:windows:c4r3,c5r3,c6r3,c7r3",
+          "future:c6r4",
+          "future:windows:c3r4,c4r4,c5r4,c6r4"
+        ],
+        "requiredSpecs": [
+          "future:c7r3",
+          "future:c6r4",
+          "future:windows:c4r3,c5r3,c6r3,c7r3"
+        ],
+        "emittedSpecs": [
+          "future:windows:c4r3,c5r3,c6r3,c7r3",
+          "future:c6r4"
+        ],
+        "decisionARejectedSpecs": [],
+        "guardFailures": [
+          "P6:raw_coordinate:future:c7r3"
+        ],
+        "allRequiredEmitted": false,
+        "rawMechanism": "You needed the tougher defense on [zone:future:c7r3]the square that matters later on c6r4[/zone:future:c7r3], because that is what keeps your deep [zone:future:windows:c4r3,c5r3,c6r3,c7r3]four-in-a-row line[/zone:future:windows:c4r3,c5r3,c6r3,c7r3] alive. By playing column 5 instead, you let your opponent answer on [zone:future:c6r4]the square that matters later on c6r4[/zone:future:c6r4] and take over the parity battle around that line, so your later resource no longer holds.",
+        "note": "Attempt 3 — D45 (the LINE is REQUIRED, not merely offered: deriveRequiredSet derives one point group per half plus one line group). Real-pipeline run 3 of 3, measured at commit 5403129. CURRENT CODE."
       }
-    ]
+    ],
+    "defaultAttempt": 8
   },
   {
     "movestring": "315444233213",
@@ -206,6 +474,19 @@ export const GROUNDING_DIFF_CASES =
         "decisionARejectedSpecs": [],
         "rawMechanism": "Your move on column 2 gives your opponent the first clean [term:double_threat]double threat[/term:double_threat] in the later fight, so they can force the key reply sequence and break your parity plan. The stronger move is column 4, because it keeps your [zone:future:c5r5]key square[/zone:future:c5r5] alive and prevents the opponent from turning their [zone:future:c3r5]later key square[/zone:future:c3r5] into the decisive fork.",
         "requiredSubsetOfEmitted": true,
+        "guardFailures": [],
+        "attribution": [
+          {
+            "spec": "future:c5r5",
+            "status": "EMITTED"
+          },
+          {
+            "spec": "future:c3r5",
+            "status": "EMITTED"
+          }
+        ],
+        "requiredSatisfiedIfP6DidNotStrip": true,
+        "requiredSatisfiedUnderCurrentGuard": true,
         "note": "Attempt 1 — D43 rebuild (half resource geometry offered as a fourth alias family), real-pipeline run 1 of 3"
       },
       {
@@ -233,6 +514,22 @@ export const GROUNDING_DIFF_CASES =
         "decisionARejectedSpecs": [],
         "rawMechanism": "You needed to keep the [term:double_threat]double threat[/term:double_threat] alive on the later c2-c3-c4-c5 line, with [zone:future:c5r5]c4r5[/zone:future:c5r5] as the key support square and [zone:future:c3r5]c3r5[/zone:future:c3r5] as the opponent's later counter-square. By playing in column 2, you gave up the toughest defense and let your opponent force through the later four-in-a-row line instead of making them answer your threat.",
         "requiredSubsetOfEmitted": false,
+        "guardFailures": [
+          "P6:raw_coordinate:future:c5r5",
+          "P6:raw_coordinate:future:c3r5"
+        ],
+        "attribution": [
+          {
+            "spec": "future:c5r5",
+            "status": "STRIPPED_BY_GUARD:P6 (spec/anchor MISMATCH — genuine model error, correctly rejected)"
+          },
+          {
+            "spec": "future:c3r5",
+            "status": "STRIPPED_BY_GUARD:P6 (recovered by the current rewrite-then-check guard)"
+          }
+        ],
+        "requiredSatisfiedIfP6DidNotStrip": true,
+        "requiredSatisfiedUnderCurrentGuard": false,
         "note": "Attempt 1 — D43 rebuild, real-pipeline run 2 of 3 (same code, same offers; LLM re-sampled)"
       },
       {
@@ -263,9 +560,221 @@ export const GROUNDING_DIFF_CASES =
         "decisionARejectedSpecs": [],
         "rawMechanism": "Your better defense is [zone:future:c5r5]the square that keeps your later four-in-a-row line alive[/zone:future:c5r5] on the winning side of the parity fight, while your played move let your opponent steer the game into [zone:future:c3r5]the square that matters later for their forced line[/zone:future:c3r5]. That hands them a [term:double_threat]double threat[/term:double_threat] idea in the deeper sequence, so they can press harder than you can cover.",
         "requiredSubsetOfEmitted": true,
+        "guardFailures": [],
+        "attribution": [
+          {
+            "spec": "future:c5r5",
+            "status": "EMITTED"
+          },
+          {
+            "spec": "future:c3r5",
+            "status": "EMITTED"
+          }
+        ],
+        "requiredSatisfiedIfP6DidNotStrip": true,
+        "requiredSatisfiedUnderCurrentGuard": true,
         "note": "Attempt 1 — D43 rebuild, real-pipeline run 3 of 3 (same code, same offers; LLM re-sampled)"
+      },
+      {
+        "n": 4,
+        "at": "2026-08-05",
+        "decision": "D44",
+        "text": "You should have taken the move that keeps your [term:double_threat]double threat[/term:double_threat] alive; instead, the played move lets your opponent answer with a [term:double_threat]double threat[/term:double_threat] that you can't cover in time. The safer move is the one that preserves your [zone:future:c5r5]later key square[/zone:future:c5r5] and keeps pressure on [zone:future:c3r5]the opponent's later key square[/zone:future:c3r5], so the deep fight still goes your way.",
+        "offeredSpecs": [
+          "col4",
+          "col2",
+          "c3r4",
+          "windows:c6r1,c5r2,c4r3,c3r4",
+          "future:windows:c3r5,c7r1",
+          "future:c5r5",
+          "future:windows:c2r5,c3r5,c4r5,c5r5",
+          "future:c3r5",
+          "future:windows:c6r2,c5r3,c4r4,c3r5",
+          "future:windows:c6r2,c5r3,c4r4,c3r5|c7r1,c6r2,c5r3,c4r4",
+          "future:c7r1"
+        ],
+        "requiredSpecs": [
+          "future:c5r5",
+          "future:c3r5"
+        ],
+        "emittedSpecs": [
+          "future:c5r5",
+          "future:c3r5"
+        ],
+        "decisionARejectedSpecs": [],
+        "guardFailures": [],
+        "allRequiredEmitted": true,
+        "rawMechanism": "You should have taken the move that keeps your [term:double_threat]double threat[/term:double_threat] alive; instead, the played move lets your opponent answer with a [term:double_threat]double threat[/term:double_threat] that you can't cover in time. The safer move is the one that preserves your [zone:future:c5r5]later key square[/zone:future:c5r5] and keeps pressure on [zone:future:c3r5]the opponent's later key square[/zone:future:c3r5], so the deep fight still goes your way.",
+        "note": "Attempt 2 — D44 (humanizeGroundedCoordinates: a coordinate inside a covering zone is rewritten to \"column N, row M\" instead of the span being stripped). Real-pipeline run 1 of 3, measured at commit 2f9f8a7."
+      },
+      {
+        "n": 5,
+        "at": "2026-08-05",
+        "decision": "D44",
+        "text": "You needed the tougher defense that keeps your [zone:future:c5r5]later key square[/zone:future:c5r5] alive and makes your opponent work. By playing elsewhere, you let them steer into a [term:double_threat]double threat[/term:double_threat] that hits [zone:future:c3r5]their later key square[/zone:future:c3r5] and the paired finishing spot, so they can force the win instead of you holding the parity fight.",
+        "offeredSpecs": [
+          "col4",
+          "col2",
+          "c3r4",
+          "windows:c6r1,c5r2,c4r3,c3r4",
+          "future:windows:c3r5,c7r1",
+          "future:c5r5",
+          "future:windows:c2r5,c3r5,c4r5,c5r5",
+          "future:c3r5",
+          "future:windows:c6r2,c5r3,c4r4,c3r5",
+          "future:windows:c6r2,c5r3,c4r4,c3r5|c7r1,c6r2,c5r3,c4r4",
+          "future:c7r1"
+        ],
+        "requiredSpecs": [
+          "future:c5r5",
+          "future:c3r5"
+        ],
+        "emittedSpecs": [
+          "future:c5r5",
+          "future:c3r5"
+        ],
+        "decisionARejectedSpecs": [],
+        "guardFailures": [],
+        "allRequiredEmitted": true,
+        "rawMechanism": "You needed the tougher defense that keeps your [zone:future:c5r5]later key square[/zone:future:c5r5] alive and makes your opponent work. By playing elsewhere, you let them steer into a [term:double_threat]double threat[/term:double_threat] that hits [zone:future:c3r5]their later key square[/zone:future:c3r5] and the paired finishing spot, so they can force the win instead of you holding the parity fight.",
+        "note": "Attempt 2 — D44 (humanizeGroundedCoordinates: a coordinate inside a covering zone is rewritten to \"column N, row M\" instead of the span being stripped). Real-pipeline run 2 of 3, measured at commit 2f9f8a7."
+      },
+      {
+        "n": 6,
+        "at": "2026-08-05",
+        "decision": "D44",
+        "text": "Your move on column 2 lets your opponent answer with a [term:double_threat]double threat[/term:double_threat], so they get two winning shots at once and you can only stop one. The tougher defense is column 4, because it keeps your [zone:future:c5r5]key square that matters later[/zone:future:c5r5] in play instead of handing your opponent [zone:future:c3r5]the square that matters later for their finish[/zone:future:c3r5].",
+        "offeredSpecs": [
+          "col4",
+          "col2",
+          "c3r4",
+          "windows:c6r1,c5r2,c4r3,c3r4",
+          "future:windows:c3r5,c7r1",
+          "future:c5r5",
+          "future:windows:c2r5,c3r5,c4r5,c5r5",
+          "future:c3r5",
+          "future:windows:c6r2,c5r3,c4r4,c3r5",
+          "future:windows:c6r2,c5r3,c4r4,c3r5|c7r1,c6r2,c5r3,c4r4",
+          "future:c7r1"
+        ],
+        "requiredSpecs": [
+          "future:c5r5",
+          "future:c3r5"
+        ],
+        "emittedSpecs": [
+          "future:c5r5",
+          "future:c3r5"
+        ],
+        "decisionARejectedSpecs": [],
+        "guardFailures": [],
+        "allRequiredEmitted": true,
+        "rawMechanism": "Your move on column 2 lets your opponent answer with a [term:double_threat]double threat[/term:double_threat], so they get two winning shots at once and you can only stop one. The tougher defense is column 4, because it keeps your [zone:future:c5r5]key square that matters later[/zone:future:c5r5] in play instead of handing your opponent [zone:future:c3r5]the square that matters later for their finish[/zone:future:c3r5].",
+        "note": "Attempt 2 — D44 (humanizeGroundedCoordinates: a coordinate inside a covering zone is rewritten to \"column N, row M\" instead of the span being stripped). Real-pipeline run 3 of 3, measured at commit 2f9f8a7."
+      },
+      {
+        "n": 7,
+        "at": "2026-08-05",
+        "decision": "D45",
+        "text": "You should have kept the [term:double_threat]double threat[/term:double_threat] alive by playing the move that preserves your [zone:future:windows:c2r5,c3r5,c4r5,c5r5]four-in-a-row line[/zone:future:windows:c2r5,c3r5,c4r5,c5r5] instead of drifting into the forced reply that gives your opponent the two finishing squares in [zone:future:windows:c3r5,c7r1]their fork[/zone:future:windows:c3r5,c7r1]. The better move is the tougher defense because it keeps [zone:future:c5r5]the key square[/zone:future:c5r5] in play and makes your opponent work through the deep parity fight instead of handing them a clean follow-up.",
+        "offeredSpecs": [
+          "col4",
+          "col2",
+          "c3r4",
+          "windows:c6r1,c5r2,c4r3,c3r4",
+          "future:windows:c3r5,c7r1",
+          "future:c5r5",
+          "future:windows:c2r5,c3r5,c4r5,c5r5",
+          "future:c3r5",
+          "future:windows:c6r2,c5r3,c4r4,c3r5",
+          "future:windows:c6r2,c5r3,c4r4,c3r5|c7r1,c6r2,c5r3,c4r4",
+          "future:c7r1"
+        ],
+        "requiredSpecs": [
+          "future:c5r5",
+          "future:windows:c3r5,c7r1",
+          "future:windows:c2r5,c3r5,c4r5,c5r5"
+        ],
+        "emittedSpecs": [
+          "future:windows:c2r5,c3r5,c4r5,c5r5",
+          "future:windows:c3r5,c7r1",
+          "future:c5r5"
+        ],
+        "decisionARejectedSpecs": [],
+        "guardFailures": [],
+        "allRequiredEmitted": true,
+        "rawMechanism": "You should have kept the [term:double_threat]double threat[/term:double_threat] alive by playing the move that preserves your [zone:future:windows:c2r5,c3r5,c4r5,c5r5]four-in-a-row line[/zone:future:windows:c2r5,c3r5,c4r5,c5r5] instead of drifting into the forced reply that gives your opponent the two finishing squares in [zone:future:windows:c3r5,c7r1]their fork[/zone:future:windows:c3r5,c7r1]. The better move is the tougher defense because it keeps [zone:future:c5r5]the key square[/zone:future:c5r5] in play and makes your opponent work through the deep parity fight instead of handing them a clean follow-up.",
+        "note": "Attempt 3 — D45 (the LINE is REQUIRED, not merely offered: deriveRequiredSet derives one point group per half plus one line group). Real-pipeline run 1 of 3, measured at commit 5403129. CURRENT CODE."
+      },
+      {
+        "n": 8,
+        "at": "2026-08-05",
+        "decision": "D45",
+        "text": "You should have kept the [term:double_threat]double threat[/term:double_threat] alive on [zone:future:windows:c3r5,c7r1]the two finish squares your opponent can still use later[/zone:future:windows:c3r5,c7r1], because that forces them to answer everywhere at once. By playing in column 2, you stepped away from the [zone:future:windows:c2r5,c3r5,c4r5,c5r5]four-in-a-row line that runs through columns 2 to 5[/zone:future:windows:c2r5,c3r5,c4r5,c5r5] and let your opponent take the deeper forcing path instead of having to respect your [zone:future:c5r5]key square[/zone:future:c5r5].",
+        "offeredSpecs": [
+          "col4",
+          "col2",
+          "c3r4",
+          "windows:c6r1,c5r2,c4r3,c3r4",
+          "future:windows:c3r5,c7r1",
+          "future:c5r5",
+          "future:windows:c2r5,c3r5,c4r5,c5r5",
+          "future:c3r5",
+          "future:windows:c6r2,c5r3,c4r4,c3r5",
+          "future:windows:c6r2,c5r3,c4r4,c3r5|c7r1,c6r2,c5r3,c4r4",
+          "future:c7r1"
+        ],
+        "requiredSpecs": [
+          "future:c5r5",
+          "future:windows:c3r5,c7r1",
+          "future:windows:c2r5,c3r5,c4r5,c5r5"
+        ],
+        "emittedSpecs": [
+          "future:windows:c3r5,c7r1",
+          "future:windows:c2r5,c3r5,c4r5,c5r5",
+          "future:c5r5"
+        ],
+        "decisionARejectedSpecs": [],
+        "guardFailures": [],
+        "allRequiredEmitted": true,
+        "rawMechanism": "You should have kept the [term:double_threat]double threat[/term:double_threat] alive on [zone:future:windows:c3r5,c7r1]the two finish squares your opponent can still use later[/zone:future:windows:c3r5,c7r1], because that forces them to answer everywhere at once. By playing in column 2, you stepped away from the [zone:future:windows:c2r5,c3r5,c4r5,c5r5]four-in-a-row line that runs through columns 2 to 5[/zone:future:windows:c2r5,c3r5,c4r5,c5r5] and let your opponent take the deeper forcing path instead of having to respect your [zone:future:c5r5]key square[/zone:future:c5r5].",
+        "note": "Attempt 3 — D45 (the LINE is REQUIRED, not merely offered: deriveRequiredSet derives one point group per half plus one line group). Real-pipeline run 2 of 3, measured at commit 5403129. CURRENT CODE."
+      },
+      {
+        "n": 9,
+        "at": "2026-08-05",
+        "decision": "D45",
+        "text": "You needed to keep the [zone:future:windows:c2r5,c3r5,c4r5,c5r5]four-in-a-row line that runs through the middle[/zone:future:windows:c2r5,c3r5,c4r5,c5r5] alive and leave [zone:future:c5r5]that key square for later[/zone:future:c5r5], so the tougher defense was column 4. By playing column 2, you let your opponent keep the [term:double_threat]double threat[/term:double_threat] on [zone:future:windows:c3r5,c7r1]the two finishing squares they can aim for later[/zone:future:windows:c3r5,c7r1], and that switches the fight in their favor.",
+        "offeredSpecs": [
+          "col4",
+          "col2",
+          "c3r4",
+          "windows:c6r1,c5r2,c4r3,c3r4",
+          "future:windows:c3r5,c7r1",
+          "future:c5r5",
+          "future:windows:c2r5,c3r5,c4r5,c5r5",
+          "future:c3r5",
+          "future:windows:c6r2,c5r3,c4r4,c3r5",
+          "future:windows:c6r2,c5r3,c4r4,c3r5|c7r1,c6r2,c5r3,c4r4",
+          "future:c7r1"
+        ],
+        "requiredSpecs": [
+          "future:c5r5",
+          "future:windows:c3r5,c7r1",
+          "future:windows:c2r5,c3r5,c4r5,c5r5"
+        ],
+        "emittedSpecs": [
+          "future:windows:c2r5,c3r5,c4r5,c5r5",
+          "future:c5r5",
+          "future:windows:c3r5,c7r1"
+        ],
+        "decisionARejectedSpecs": [],
+        "guardFailures": [],
+        "allRequiredEmitted": true,
+        "rawMechanism": "You needed to keep the [zone:future:windows:c2r5,c3r5,c4r5,c5r5]four-in-a-row line that runs through the middle[/zone:future:windows:c2r5,c3r5,c4r5,c5r5] alive and leave [zone:future:c5r5]that key square for later[/zone:future:c5r5], so the tougher defense was column 4. By playing column 2, you let your opponent keep the [term:double_threat]double threat[/term:double_threat] on [zone:future:windows:c3r5,c7r1]the two finishing squares they can aim for later[/zone:future:windows:c3r5,c7r1], and that switches the fight in their favor.",
+        "note": "Attempt 3 — D45 (the LINE is REQUIRED, not merely offered: deriveRequiredSet derives one point group per half plus one line group). Real-pipeline run 3 of 3, measured at commit 5403129. CURRENT CODE."
       }
-    ]
+    ],
+    "defaultAttempt": 8
   },
   {
     "movestring": "315444233213134122",
@@ -317,6 +826,17 @@ export const GROUNDING_DIFF_CASES =
         "decisionARejectedSpecs": [],
         "rawMechanism": "You needed to keep the move at [zone:c1r3]c1r3[/zone:c1r3] alive, because that is the square that lets your four-in-a-row line finish later. By playing in column 6 instead, you gave your opponent the chance to take that key square and stop your winning line, so your best defense was the move in [zone:col3]column 3[/zone:col3] that preserves the threat.",
         "requiredSubsetOfEmitted": false,
+        "guardFailures": [
+          "P6:raw_coordinate:c1r3"
+        ],
+        "attribution": [
+          {
+            "spec": "c1r3",
+            "status": "STRIPPED_BY_GUARD:P6 (recovered by the current rewrite-then-check guard)"
+          }
+        ],
+        "requiredSatisfiedIfP6DidNotStrip": true,
+        "requiredSatisfiedUnderCurrentGuard": true,
         "note": "Attempt 1 — D43 rebuild (half resource geometry offered as a fourth alias family), real-pipeline run 1 of 3"
       },
       {
@@ -338,6 +858,17 @@ export const GROUNDING_DIFF_CASES =
         "decisionARejectedSpecs": [],
         "rawMechanism": "You should keep the [zone:c1r3]c1r3[/zone:c1r3] threat alive, because that is the square that completes your four-in-a-row line and forces the long fight in your favor. Playing in column 6 lets your opponent take that square away, so you lose the deep parity fight and only hold the draw instead of the win.",
         "requiredSubsetOfEmitted": false,
+        "guardFailures": [
+          "P6:raw_coordinate:c1r3"
+        ],
+        "attribution": [
+          {
+            "spec": "c1r3",
+            "status": "STRIPPED_BY_GUARD:P6 (recovered by the current rewrite-then-check guard)"
+          }
+        ],
+        "requiredSatisfiedIfP6DidNotStrip": true,
+        "requiredSatisfiedUnderCurrentGuard": true,
         "note": "Attempt 1 — D43 rebuild, real-pipeline run 2 of 3 (same code, same offers; LLM re-sampled)"
       },
       {
@@ -359,9 +890,177 @@ export const GROUNDING_DIFF_CASES =
         "decisionARejectedSpecs": [],
         "rawMechanism": "You needed to keep [zone:c1r3]the c1r3 square that completes your four-in-a-row line[/zone:c1r3] alive, because that is the deep line that makes your attack work. By playing column 6 instead, you let your opponent take that square and shut down your forcing path, so you only get a draw instead of the win your better move preserves.",
         "requiredSubsetOfEmitted": false,
+        "guardFailures": [
+          "P6:raw_coordinate:c1r3"
+        ],
+        "attribution": [
+          {
+            "spec": "c1r3",
+            "status": "STRIPPED_BY_GUARD:P6 (recovered by the current rewrite-then-check guard)"
+          }
+        ],
+        "requiredSatisfiedIfP6DidNotStrip": true,
+        "requiredSatisfiedUnderCurrentGuard": true,
         "note": "Attempt 1 — D43 rebuild, real-pipeline run 3 of 3 (same code, same offers; LLM re-sampled)"
+      },
+      {
+        "n": 4,
+        "at": "2026-08-05",
+        "decision": "D44",
+        "text": "You should have kept the [zone:c1r3]winning square at column 1, row 3[/zone:c1r3] alive, because that is the deep four-in-a-row line you were playing for. By dropping in column 6 instead, you let your opponent take away that same square and turn your forced win into only a draw.",
+        "offeredSpecs": [
+          "col3",
+          "col6",
+          "c1r3",
+          "windows:c1r3,c2r3,c3r3,c4r3",
+          "c1r4",
+          "windows:c1r4,c2r4,c3r4,c4r4"
+        ],
+        "requiredSpecs": [
+          "c1r3"
+        ],
+        "emittedSpecs": [
+          "c1r3"
+        ],
+        "decisionARejectedSpecs": [],
+        "guardFailures": [],
+        "allRequiredEmitted": true,
+        "rawMechanism": "You should have kept the [zone:c1r3]winning square at c1r3[/zone:c1r3] alive, because that is the deep four-in-a-row line you were playing for. By dropping in column 6 instead, you let your opponent take away that same square and turn your forced win into only a draw.",
+        "note": "Attempt 2 — D44 (humanizeGroundedCoordinates: a coordinate inside a covering zone is rewritten to \"column N, row M\" instead of the span being stripped). Real-pipeline run 1 of 3, measured at commit 2f9f8a7."
+      },
+      {
+        "n": 5,
+        "at": "2026-08-05",
+        "decision": "D44",
+        "text": "You should keep the threat alive at [zone:c1r3]column 1, row 3[/zone:c1r3], because that is the square that makes your four-in-a-row line work later. By playing column 6 instead, you let your opponent take away that same key square and turn your forced win into a draw.",
+        "offeredSpecs": [
+          "col3",
+          "col6",
+          "c1r3",
+          "windows:c1r3,c2r3,c3r3,c4r3",
+          "c1r4",
+          "windows:c1r4,c2r4,c3r4,c4r4"
+        ],
+        "requiredSpecs": [
+          "c1r3"
+        ],
+        "emittedSpecs": [
+          "c1r3"
+        ],
+        "decisionARejectedSpecs": [],
+        "guardFailures": [],
+        "allRequiredEmitted": true,
+        "rawMechanism": "You should keep the threat alive at [zone:c1r3]c1r3[/zone:c1r3], because that is the square that makes your four-in-a-row line work later. By playing column 6 instead, you let your opponent take away that same key square and turn your forced win into a draw.",
+        "note": "Attempt 2 — D44 (humanizeGroundedCoordinates: a coordinate inside a covering zone is rewritten to \"column N, row M\" instead of the span being stripped). Real-pipeline run 2 of 3, measured at commit 2f9f8a7."
+      },
+      {
+        "n": 6,
+        "at": "2026-08-05",
+        "decision": "D44",
+        "text": "You needed to keep the [zone:c1r3]square at column 1, row 3[/zone:c1r3] alive, because that is the key point in your deep four-in-a-row line. By playing column 6 instead, you let your opponent take that spot later and stop your long win from coming through.",
+        "offeredSpecs": [
+          "col3",
+          "col6",
+          "c1r3",
+          "windows:c1r3,c2r3,c3r3,c4r3",
+          "c1r4",
+          "windows:c1r4,c2r4,c3r4,c4r4"
+        ],
+        "requiredSpecs": [
+          "c1r3"
+        ],
+        "emittedSpecs": [
+          "c1r3"
+        ],
+        "decisionARejectedSpecs": [],
+        "guardFailures": [],
+        "allRequiredEmitted": true,
+        "rawMechanism": "You needed to keep the [zone:c1r3]square at c1r3[/zone:c1r3] alive, because that is the key point in your deep four-in-a-row line. By playing column 6 instead, you let your opponent take that spot later and stop your long win from coming through.",
+        "note": "Attempt 2 — D44 (humanizeGroundedCoordinates: a coordinate inside a covering zone is rewritten to \"column N, row M\" instead of the span being stripped). Real-pipeline run 3 of 3, measured at commit 2f9f8a7."
+      },
+      {
+        "n": 7,
+        "at": "2026-08-05",
+        "decision": "D45",
+        "text": "You needed to keep the [zone:windows:c1r3,c2r3,c3r3,c4r3]four-in-a-row line[/zone:windows:c1r3,c2r3,c3r3,c4r3] alive and the [zone:c1r3]key square on column 1, row 3[/zone:c1r3] as your deep winning resource. By playing elsewhere, you let your opponent take that square and shut down the long parity fight, so your move only holds a draw instead of the tougher winning continuation.",
+        "offeredSpecs": [
+          "col3",
+          "col6",
+          "c1r3",
+          "windows:c1r3,c2r3,c3r3,c4r3",
+          "c1r4",
+          "windows:c1r4,c2r4,c3r4,c4r4"
+        ],
+        "requiredSpecs": [
+          "c1r3",
+          "windows:c1r3,c2r3,c3r3,c4r3"
+        ],
+        "emittedSpecs": [
+          "windows:c1r3,c2r3,c3r3,c4r3",
+          "c1r3"
+        ],
+        "decisionARejectedSpecs": [],
+        "guardFailures": [],
+        "allRequiredEmitted": true,
+        "rawMechanism": "You needed to keep the [zone:windows:c1r3,c2r3,c3r3,c4r3]four-in-a-row line[/zone:windows:c1r3,c2r3,c3r3,c4r3] alive and the [zone:c1r3]key square on c1r3[/zone:c1r3] as your deep winning resource. By playing elsewhere, you let your opponent take that square and shut down the long parity fight, so your move only holds a draw instead of the tougher winning continuation.",
+        "note": "Attempt 3 — D45 (the LINE is REQUIRED, not merely offered: deriveRequiredSet derives one point group per half plus one line group). Real-pipeline run 1 of 3, measured at commit 5403129. CURRENT CODE."
+      },
+      {
+        "n": 8,
+        "at": "2026-08-05",
+        "decision": "D45",
+        "text": "You should have kept the fight on [zone:windows:c1r3,c2r3,c3r3,c4r3]your four-in-a-row line[/zone:windows:c1r3,c2r3,c3r3,c4r3] and the key square at [zone:c1r3]column 1, row 3[/zone:c1r3], because that is the deep winning resource you were playing for. By dropping in column 6 instead, you let your opponent take away that square later, so your best result there is only a draw even though the better move keeps the win alive.",
+        "offeredSpecs": [
+          "col3",
+          "col6",
+          "c1r3",
+          "windows:c1r3,c2r3,c3r3,c4r3",
+          "c1r4",
+          "windows:c1r4,c2r4,c3r4,c4r4"
+        ],
+        "requiredSpecs": [
+          "c1r3",
+          "windows:c1r3,c2r3,c3r3,c4r3"
+        ],
+        "emittedSpecs": [
+          "windows:c1r3,c2r3,c3r3,c4r3",
+          "c1r3"
+        ],
+        "decisionARejectedSpecs": [],
+        "guardFailures": [],
+        "allRequiredEmitted": true,
+        "rawMechanism": "You should have kept the fight on [zone:windows:c1r3,c2r3,c3r3,c4r3]your four-in-a-row line[/zone:windows:c1r3,c2r3,c3r3,c4r3] and the key square at [zone:c1r3]c1r3[/zone:c1r3], because that is the deep winning resource you were playing for. By dropping in column 6 instead, you let your opponent take away that square later, so your best result there is only a draw even though the better move keeps the win alive.",
+        "note": "Attempt 3 — D45 (the LINE is REQUIRED, not merely offered: deriveRequiredSet derives one point group per half plus one line group). Real-pipeline run 2 of 3, measured at commit 5403129. CURRENT CODE."
+      },
+      {
+        "n": 9,
+        "at": "2026-08-05",
+        "decision": "D45",
+        "text": "You needed to keep [zone:windows:c1r3,c2r3,c3r3,c4r3]your four-in-a-row line[/zone:windows:c1r3,c2r3,c3r3,c4r3] alive by taking the key square at [zone:c1r3]column 1, row 3[/zone:c1r3]; that keeps the deep winning line open and forces the hardest reply. By playing column 6 instead, you let your opponent take that square later and [zone:windows:c1r3,c2r3,c3r3,c4r3]the line[/zone:windows:c1r3,c2r3,c3r3,c4r3] no longer works for you, so the best you can do is a draw.",
+        "offeredSpecs": [
+          "col3",
+          "col6",
+          "c1r3",
+          "windows:c1r3,c2r3,c3r3,c4r3",
+          "c1r4",
+          "windows:c1r4,c2r4,c3r4,c4r4"
+        ],
+        "requiredSpecs": [
+          "c1r3",
+          "windows:c1r3,c2r3,c3r3,c4r3"
+        ],
+        "emittedSpecs": [
+          "windows:c1r3,c2r3,c3r3,c4r3",
+          "c1r3"
+        ],
+        "decisionARejectedSpecs": [],
+        "guardFailures": [],
+        "allRequiredEmitted": true,
+        "rawMechanism": "You needed to keep [zone:windows:c1r3,c2r3,c3r3,c4r3]your four-in-a-row line[/zone:windows:c1r3,c2r3,c3r3,c4r3] alive by taking the key square at [zone:c1r3]c1r3[/zone:c1r3]; that keeps the deep winning line open and forces the hardest reply. By playing column 6 instead, you let your opponent take that square later and [zone:windows:c1r3,c2r3,c3r3,c4r3]the line[/zone:windows:c1r3,c2r3,c3r3,c4r3] no longer works for you, so the best you can do is a draw.",
+        "note": "Attempt 3 — D45 (the LINE is REQUIRED, not merely offered: deriveRequiredSet derives one point group per half plus one line group). Real-pipeline run 3 of 3, measured at commit 5403129. CURRENT CODE."
       }
-    ]
+    ],
+    "defaultAttempt": 8
   },
   {
     "movestring": "3154442332131341225551",
@@ -427,6 +1126,22 @@ export const GROUNDING_DIFF_CASES =
         "decisionARejectedSpecs": [],
         "rawMechanism": "You needed to keep the deep parity fight alive with [zone:future:c7r3]the key square on c7r3[/zone:future:c7r3]; that was the line that gave you the win. By playing [zone:col6]c6[/zone:col6], you instead let your opponent answer with [zone:future:c2r6]the key square on c2r6[/zone:future:c2r6] and finish a [term:double_threat]double threat[/term:double_threat] that you cannot cover in time.",
         "requiredSubsetOfEmitted": false,
+        "guardFailures": [
+          "P6:raw_coordinate:future:c7r3",
+          "P6:raw_coordinate:future:c2r6"
+        ],
+        "attribution": [
+          {
+            "spec": "future:c7r3",
+            "status": "STRIPPED_BY_GUARD:P6 (recovered by the current rewrite-then-check guard)"
+          },
+          {
+            "spec": "future:c2r6",
+            "status": "STRIPPED_BY_GUARD:P6 (recovered by the current rewrite-then-check guard)"
+          }
+        ],
+        "requiredSatisfiedIfP6DidNotStrip": true,
+        "requiredSatisfiedUnderCurrentGuard": true,
         "note": "Attempt 1 — D43 rebuild (half resource geometry offered as a fourth alias family), real-pipeline run 1 of 3"
       },
       {
@@ -459,6 +1174,22 @@ export const GROUNDING_DIFF_CASES =
         "decisionARejectedSpecs": [],
         "rawMechanism": "You should keep the deep forcing line alive with column 3; that preserves your future winning move on [zone:future:c7r3]c7r3[/zone:future:c7r3]. By playing column 6 instead, you hand your opponent the forcing reply at [zone:future:c2r6]c2r6[/zone:future:c2r6], which creates a [term:double_threat]double threat[/term:double_threat] they cannot cover in time, so they take over the game.",
         "requiredSubsetOfEmitted": false,
+        "guardFailures": [
+          "P6:raw_coordinate:future:c7r3",
+          "P6:raw_coordinate:future:c2r6"
+        ],
+        "attribution": [
+          {
+            "spec": "future:c7r3",
+            "status": "STRIPPED_BY_GUARD:P6 (recovered by the current rewrite-then-check guard)"
+          },
+          {
+            "spec": "future:c2r6",
+            "status": "STRIPPED_BY_GUARD:P6 (recovered by the current rewrite-then-check guard)"
+          }
+        ],
+        "requiredSatisfiedIfP6DidNotStrip": true,
+        "requiredSatisfiedUnderCurrentGuard": true,
         "note": "Attempt 1 — D43 rebuild, real-pipeline run 2 of 3 (same code, same offers; LLM re-sampled)"
       },
       {
@@ -496,9 +1227,250 @@ export const GROUNDING_DIFF_CASES =
         "decisionARejectedSpecs": [],
         "rawMechanism": "You needed to keep the deep [zone:future:c7r3]key square[/zone:future:c7r3] alive: it leads to your winning line on c7r3 and wins by force if you stay on that track. By playing [zone:col6]column 6[/zone:col6] instead, you let your opponent answer with [zone:future:c2r6]their key square[/zone:future:c2r6] and create a [term:double_threat]double threat[/term:double_threat] that you cannot cover both sides of.",
         "requiredSubsetOfEmitted": true,
+        "guardFailures": [],
+        "attribution": [
+          {
+            "spec": "future:c7r3",
+            "status": "EMITTED"
+          },
+          {
+            "spec": "future:c2r6",
+            "status": "EMITTED"
+          }
+        ],
+        "requiredSatisfiedIfP6DidNotStrip": true,
+        "requiredSatisfiedUnderCurrentGuard": true,
         "note": "Attempt 1 — D43 rebuild, real-pipeline run 3 of 3 (same code, same offers; LLM re-sampled)"
+      },
+      {
+        "n": 4,
+        "at": "2026-08-05",
+        "decision": "D44",
+        "text": "You needed to keep the deep forcing line alive with [zone:future:c7r3]the square that matters later when the forced sequence reaches it[/zone:future:c7r3]; instead, your played move stepped away from it and let your opponent answer with [zone:future:c2r6]the square that matters later when the forced sequence reaches it[/zone:future:c2r6]. That gives them a [term:double_threat]double threat[/term:double_threat] and turns your move into a losing concession, while the better move keeps the tougher central fight and the forcing line alive.",
+        "offeredSpecs": [
+          "col3",
+          "col6",
+          "c1r3",
+          "windows:c1r3,c2r3,c3r3,c4r3",
+          "c1r4",
+          "windows:c1r4,c2r4,c3r4,c4r4",
+          "windows:c1r3,c7r6",
+          "c7r6",
+          "windows:c4r3,c5r4,c6r5,c7r6",
+          "future:windows:c2r6,c5r5",
+          "future:c7r3",
+          "future:windows:c7r3,c6r4,c5r5,c4r6",
+          "future:c2r6",
+          "future:windows:c5r3,c4r4,c3r5,c2r6",
+          "future:windows:c5r3,c4r4,c3r5,c2r6|c2r5,c3r5,c4r5,c5r5",
+          "future:c5r5"
+        ],
+        "requiredSpecs": [
+          "future:c7r3",
+          "future:c2r6"
+        ],
+        "emittedSpecs": [
+          "future:c7r3",
+          "future:c2r6"
+        ],
+        "decisionARejectedSpecs": [],
+        "guardFailures": [],
+        "allRequiredEmitted": true,
+        "rawMechanism": "You needed to keep the deep forcing line alive with [zone:future:c7r3]the square that matters later when the forced sequence reaches it[/zone:future:c7r3]; instead, your played move stepped away from it and let your opponent answer with [zone:future:c2r6]the square that matters later when the forced sequence reaches it[/zone:future:c2r6]. That gives them a [term:double_threat]double threat[/term:double_threat] and turns your move into a losing concession, while the better move keeps the tougher central fight and the forcing line alive.",
+        "note": "Attempt 2 — D44 (humanizeGroundedCoordinates: a coordinate inside a covering zone is rewritten to \"column N, row M\" instead of the span being stripped). Real-pipeline run 1 of 3, measured at commit 2f9f8a7."
+      },
+      {
+        "n": 5,
+        "at": "2026-08-05",
+        "decision": "D44",
+        "text": "You should have kept the deep [term:double_threat]double threat[/term:double_threat] alive on [zone:future:c7r3]the square that later finishes your hidden four-in-a-row line[/zone:future:c7r3]; that is the move that keeps the far-off win in play. By playing column 6 instead, you give up that line and let your opponent answer with [zone:future:c2r6]the square that later closes their own four-in-a-row line[/zone:future:c2r6], so they can force their win instead.",
+        "offeredSpecs": [
+          "col3",
+          "col6",
+          "c1r3",
+          "windows:c1r3,c2r3,c3r3,c4r3",
+          "c1r4",
+          "windows:c1r4,c2r4,c3r4,c4r4",
+          "windows:c1r3,c7r6",
+          "c7r6",
+          "windows:c4r3,c5r4,c6r5,c7r6",
+          "future:windows:c2r6,c5r5",
+          "future:c7r3",
+          "future:windows:c7r3,c6r4,c5r5,c4r6",
+          "future:c2r6",
+          "future:windows:c5r3,c4r4,c3r5,c2r6",
+          "future:windows:c5r3,c4r4,c3r5,c2r6|c2r5,c3r5,c4r5,c5r5",
+          "future:c5r5"
+        ],
+        "requiredSpecs": [
+          "future:c7r3",
+          "future:c2r6"
+        ],
+        "emittedSpecs": [
+          "future:c7r3",
+          "future:c2r6"
+        ],
+        "decisionARejectedSpecs": [],
+        "guardFailures": [],
+        "allRequiredEmitted": true,
+        "rawMechanism": "You should have kept the deep [term:double_threat]double threat[/term:double_threat] alive on [zone:future:c7r3]the square that later finishes your hidden four-in-a-row line[/zone:future:c7r3]; that is the move that keeps the far-off win in play. By playing column 6 instead, you give up that line and let your opponent answer with [zone:future:c2r6]the square that later closes their own four-in-a-row line[/zone:future:c2r6], so they can force their win instead.",
+        "note": "Attempt 2 — D44 (humanizeGroundedCoordinates: a coordinate inside a covering zone is rewritten to \"column N, row M\" instead of the span being stripped). Real-pipeline run 2 of 3, measured at commit 2f9f8a7."
+      },
+      {
+        "n": 6,
+        "at": "2026-08-05",
+        "decision": "D44",
+        "text": "You should have kept the deep [term:double_threat]double threat[/term:double_threat] alive at [zone:future:c7r3]column 7, row 3[/zone:future:c7r3], because that line was your forced win. By playing column 6, you let your opponent answer with [zone:future:c2r6]column 2, row 6[/zone:future:c2r6] and finish their own four-in-a-row line, so you gave up your win and handed them a faster one.",
+        "offeredSpecs": [
+          "col3",
+          "col6",
+          "c1r3",
+          "windows:c1r3,c2r3,c3r3,c4r3",
+          "c1r4",
+          "windows:c1r4,c2r4,c3r4,c4r4",
+          "windows:c1r3,c7r6",
+          "c7r6",
+          "windows:c4r3,c5r4,c6r5,c7r6",
+          "future:windows:c2r6,c5r5",
+          "future:c7r3",
+          "future:windows:c7r3,c6r4,c5r5,c4r6",
+          "future:c2r6",
+          "future:windows:c5r3,c4r4,c3r5,c2r6",
+          "future:windows:c5r3,c4r4,c3r5,c2r6|c2r5,c3r5,c4r5,c5r5",
+          "future:c5r5"
+        ],
+        "requiredSpecs": [
+          "future:c7r3",
+          "future:c2r6"
+        ],
+        "emittedSpecs": [
+          "future:c7r3",
+          "future:c2r6"
+        ],
+        "decisionARejectedSpecs": [],
+        "guardFailures": [],
+        "allRequiredEmitted": true,
+        "rawMechanism": "You should have kept the deep [term:double_threat]double threat[/term:double_threat] alive at [zone:future:c7r3]c7r3[/zone:future:c7r3], because that line was your forced win. By playing column 6, you let your opponent answer with [zone:future:c2r6]c2r6[/zone:future:c2r6] and finish their own four-in-a-row line, so you gave up your win and handed them a faster one.",
+        "note": "Attempt 2 — D44 (humanizeGroundedCoordinates: a coordinate inside a covering zone is rewritten to \"column N, row M\" instead of the span being stripped). Real-pipeline run 3 of 3, measured at commit 2f9f8a7."
+      },
+      {
+        "n": 7,
+        "at": "2026-08-05",
+        "decision": "D45",
+        "text": "You should have kept the deep [term:double_threat]double threat[/term:double_threat] alive by playing [zone:future:c7r3]the key square on column 7, row 3[/zone:future:c7r3], because that preserves your [zone:future:windows:c7r3,c6r4,c5r5,c4r6]four-in-a-row line from column 7, row 3 through column 4, row 6[/zone:future:windows:c7r3,c6r4,c5r5,c4r6] and makes the opponent work. Instead, by dropping in column 6 you handed them [zone:future:windows:c2r6,c5r5]both finishing squares they can use later[/zone:future:windows:c2r6,c5r5], so they can force their own win while your original deep win disappears.",
+        "offeredSpecs": [
+          "col3",
+          "col6",
+          "c1r3",
+          "windows:c1r3,c2r3,c3r3,c4r3",
+          "c1r4",
+          "windows:c1r4,c2r4,c3r4,c4r4",
+          "windows:c1r3,c7r6",
+          "c7r6",
+          "windows:c4r3,c5r4,c6r5,c7r6",
+          "future:windows:c2r6,c5r5",
+          "future:c7r3",
+          "future:windows:c7r3,c6r4,c5r5,c4r6",
+          "future:c2r6",
+          "future:windows:c5r3,c4r4,c3r5,c2r6",
+          "future:windows:c5r3,c4r4,c3r5,c2r6|c2r5,c3r5,c4r5,c5r5",
+          "future:c5r5"
+        ],
+        "requiredSpecs": [
+          "future:c7r3",
+          "future:windows:c2r6,c5r5",
+          "future:windows:c7r3,c6r4,c5r5,c4r6"
+        ],
+        "emittedSpecs": [
+          "future:c7r3",
+          "future:windows:c7r3,c6r4,c5r5,c4r6",
+          "future:windows:c2r6,c5r5"
+        ],
+        "decisionARejectedSpecs": [],
+        "guardFailures": [],
+        "allRequiredEmitted": true,
+        "rawMechanism": "You should have kept the deep [term:double_threat]double threat[/term:double_threat] alive by playing [zone:future:c7r3]the key square on c7r3[/zone:future:c7r3], because that preserves your [zone:future:windows:c7r3,c6r4,c5r5,c4r6]four-in-a-row line from c7r3 through c4r6[/zone:future:windows:c7r3,c6r4,c5r5,c4r6] and makes the opponent work. Instead, by dropping in column 6 you handed them [zone:future:windows:c2r6,c5r5]both finishing squares they can use later[/zone:future:windows:c2r6,c5r5], so they can force their own win while your original deep win disappears.",
+        "note": "Attempt 3 — D45 (the LINE is REQUIRED, not merely offered: deriveRequiredSet derives one point group per half plus one line group). Real-pipeline run 1 of 3, measured at commit 5403129. CURRENT CODE."
+      },
+      {
+        "n": 8,
+        "at": "2026-08-05",
+        "decision": "D45",
+        "text": "You needed to keep [zone:future:windows:c7r3,c6r4,c5r5,c4r6]the four-in-a-row line running through column 7, row 3, column 6, row 4, column 5, row 5, and column 4, row 6[/zone:future:windows:c7r3,c6r4,c5r5,c4r6] alive by playing the move that preserves [zone:future:c7r3]column 7, row 3[/zone:future:c7r3]. Instead, your played move lets your opponent answer with [term:double_threat]a double threat[/term:double_threat] on [zone:future:windows:c2r6,c5r5]the two finishing squares at column 2, row 6 and column 5, row 5[/zone:future:windows:c2r6,c5r5], so you give up your long win and face an immediate loss.",
+        "offeredSpecs": [
+          "col3",
+          "col6",
+          "c1r3",
+          "windows:c1r3,c2r3,c3r3,c4r3",
+          "c1r4",
+          "windows:c1r4,c2r4,c3r4,c4r4",
+          "windows:c1r3,c7r6",
+          "c7r6",
+          "windows:c4r3,c5r4,c6r5,c7r6",
+          "future:windows:c2r6,c5r5",
+          "future:c7r3",
+          "future:windows:c7r3,c6r4,c5r5,c4r6",
+          "future:c2r6",
+          "future:windows:c5r3,c4r4,c3r5,c2r6",
+          "future:windows:c5r3,c4r4,c3r5,c2r6|c2r5,c3r5,c4r5,c5r5",
+          "future:c5r5"
+        ],
+        "requiredSpecs": [
+          "future:c7r3",
+          "future:windows:c2r6,c5r5",
+          "future:windows:c7r3,c6r4,c5r5,c4r6"
+        ],
+        "emittedSpecs": [
+          "future:windows:c7r3,c6r4,c5r5,c4r6",
+          "future:c7r3",
+          "future:windows:c2r6,c5r5"
+        ],
+        "decisionARejectedSpecs": [],
+        "guardFailures": [],
+        "allRequiredEmitted": true,
+        "rawMechanism": "You needed to keep [zone:future:windows:c7r3,c6r4,c5r5,c4r6]the four-in-a-row line running through c7r3, c6r4, c5r5, and c4r6[/zone:future:windows:c7r3,c6r4,c5r5,c4r6] alive by playing the move that preserves [zone:future:c7r3]c7r3[/zone:future:c7r3]. Instead, your played move lets your opponent answer with [term:double_threat]a double threat[/term:double_threat] on [zone:future:windows:c2r6,c5r5]the two finishing squares at c2r6 and c5r5[/zone:future:windows:c2r6,c5r5], so you give up your long win and face an immediate loss.",
+        "note": "Attempt 3 — D45 (the LINE is REQUIRED, not merely offered: deriveRequiredSet derives one point group per half plus one line group). Real-pipeline run 2 of 3, measured at commit 5403129. CURRENT CODE."
+      },
+      {
+        "n": 9,
+        "at": "2026-08-05",
+        "decision": "D45",
+        "text": "You should have kept the deep [term:double_threat]double threat[/term:double_threat] alive by playing [zone:future:c7r3]the later square on column 7, row 3[/zone:future:c7r3], because that keeps your [zone:future:windows:c7r3,c6r4,c5r5,c4r6]four-in-a-row line from column 7, row 3 through column 4, row 6[/zone:future:windows:c7r3,c6r4,c5r5,c4r6] in play. Instead, your move lets the opponent answer with their own [term:double_threat]double threat[/term:double_threat] on [zone:future:windows:c2r6,c5r5]the two finish squares at column 2, row 6 and column 5, row 5[/zone:future:windows:c2r6,c5r5], so they get the forcing line and you lose the race.",
+        "offeredSpecs": [
+          "col3",
+          "col6",
+          "c1r3",
+          "windows:c1r3,c2r3,c3r3,c4r3",
+          "c1r4",
+          "windows:c1r4,c2r4,c3r4,c4r4",
+          "windows:c1r3,c7r6",
+          "c7r6",
+          "windows:c4r3,c5r4,c6r5,c7r6",
+          "future:windows:c2r6,c5r5",
+          "future:c7r3",
+          "future:windows:c7r3,c6r4,c5r5,c4r6",
+          "future:c2r6",
+          "future:windows:c5r3,c4r4,c3r5,c2r6",
+          "future:windows:c5r3,c4r4,c3r5,c2r6|c2r5,c3r5,c4r5,c5r5",
+          "future:c5r5"
+        ],
+        "requiredSpecs": [
+          "future:c7r3",
+          "future:windows:c2r6,c5r5",
+          "future:windows:c7r3,c6r4,c5r5,c4r6"
+        ],
+        "emittedSpecs": [
+          "future:c7r3",
+          "future:windows:c7r3,c6r4,c5r5,c4r6",
+          "future:windows:c2r6,c5r5"
+        ],
+        "decisionARejectedSpecs": [],
+        "guardFailures": [],
+        "allRequiredEmitted": true,
+        "rawMechanism": "You should have kept the deep [term:double_threat]double threat[/term:double_threat] alive by playing [zone:future:c7r3]the later square on c7r3[/zone:future:c7r3], because that keeps your [zone:future:windows:c7r3,c6r4,c5r5,c4r6]four-in-a-row line from c7r3 through c4r6[/zone:future:windows:c7r3,c6r4,c5r5,c4r6] in play. Instead, your move lets the opponent answer with their own [term:double_threat]double threat[/term:double_threat] on [zone:future:windows:c2r6,c5r5]the two finish squares at c2r6 and c5r5[/zone:future:windows:c2r6,c5r5], so they get the forcing line and you lose the race.",
+        "note": "Attempt 3 — D45 (the LINE is REQUIRED, not merely offered: deriveRequiredSet derives one point group per half plus one line group). Real-pipeline run 3 of 3, measured at commit 5403129. CURRENT CODE."
       }
-    ]
+    ],
+    "defaultAttempt": 8
   }
-]
-;
+];

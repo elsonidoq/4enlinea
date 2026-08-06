@@ -141,9 +141,12 @@ function RevealSide({ label, sublabel, accent, text, boardObj, overlays }) {
 function CaseCard({ c, i }) {
   const boardObj = useMemo(() => buildBoard(c.movestring), [c.movestring]);
 
-  // Default to the LATEST attempt; the selector lets you walk back through earlier ones, which is
-  // the whole point of keeping attempts[] rather than overwriting a single `after`.
-  const latestN = c.attempts[c.attempts.length - 1].n;
+  // Default to `defaultAttempt` when the data names one, else the LATEST attempt. The named default
+  // is the cleanest run of the CURRENT code (every required spec emitted, zero guard failures on all
+  // four boards); the LLM is nondeterministic, so the last-written run is a sample, not the best
+  // evidence. The selector lets you walk back through earlier ones, which is the whole point of
+  // keeping attempts[] rather than overwriting a single `after`.
+  const latestN = c.defaultAttempt ?? c.attempts[c.attempts.length - 1].n;
   const [selectedN, setSelectedN] = useState(latestN);
   const attempt = c.attempts.find(a => a.n === selectedN) ?? c.attempts[c.attempts.length - 1];
 
@@ -238,6 +241,43 @@ function CaseCard({ c, i }) {
                   </strong>}
             </div>
           )}
+
+          {/* Attribution — the point of keeping rawMechanism. A missing highlight has two very
+              different causes, and the page must not leave you guessing which one you're looking
+              at: the coach never named the referent, or it did and the guard deleted the span. */}
+          {attempt.attribution?.length > 0 && (
+            <div style={{ marginBottom: 4 }}>
+              <span style={{ color: '#64748b', marginRight: 6 }}>why:</span>
+              {attempt.attribution.map(({ spec, status }) => {
+                const emitted = status === 'EMITTED';
+                const stripped = status.startsWith('STRIPPED_BY_GUARD');
+                const palette = emitted
+                  ? { bg: '#ecfdf5', fg: '#047857', bd: '#6ee7b7' }
+                  : stripped
+                    ? { bg: '#fff7ed', fg: '#c2410c', bd: '#fdba74' }
+                    : { bg: '#fef2f2', fg: '#b91c1c', bd: '#fca5a5' };
+                return (
+                  <span key={spec} style={{
+                    display: 'inline-block', fontFamily: MONO, fontSize: 11, padding: '2px 6px',
+                    margin: '2px 3px 2px 0', borderRadius: 4,
+                    background: palette.bg, color: palette.fg, border: `1px solid ${palette.bd}`,
+                  }}>{spec} → {status}</span>
+                );
+              })}
+              {attempt.attribution.some(a => a.status.startsWith('STRIPPED_BY_GUARD')) && (
+                <div style={{ fontSize: 11, color: '#7c2d12', marginTop: 4, lineHeight: 1.5 }}>
+                  The coach <strong>did</strong> emit these, correctly anchored. They were deleted
+                  because the visible anchor text contained a raw coordinate, which{' '}
+                  <code style={{ fontFamily: MONO }}>checkP6</code> forbids — a{' '}
+                  <em>wording</em> fault penalised by removing the <em>highlight</em>.
+                  {attempt.requiredSatisfiedIfP6DidNotStrip && (
+                    <> Counterfactual: with P6 not stripping, this board&rsquo;s required set is
+                    fully satisfied.</>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
           {attempt.rawMechanism && attempt.rawMechanism !== attempt.text && (
             <details style={{ marginTop: 6 }}>
               <summary style={{ cursor: 'pointer', color: '#b45309', fontSize: 12 }}>
@@ -316,7 +356,10 @@ export default function AdminGroundingDiffPage() {
   // CaseCard; these stay pinned to the newest run so the header always states the current position).
   const totals = useMemo(() => GROUNDING_DIFF_CASES.reduce((a, c) => {
     const b = countGroundedZones(c.before);
-    const f = countGroundedZones(c.attempts[c.attempts.length - 1].text);
+    const shown = (c.defaultAttempt != null
+      ? c.attempts.find(a => a.n === c.defaultAttempt)
+      : null) ?? c.attempts[c.attempts.length - 1];
+    const f = countGroundedZones(shown.text);
     return {
       before: a.before + b.total,
       after: a.after + f.total,
@@ -382,6 +425,24 @@ export default function AdminGroundingDiffPage() {
               <span style={{ color: '#94a3b8' }}> → </span>
               <span style={{ color: '#047857' }}>{totals.emptyAfter} of 4</span>
             </div>
+          </div>
+          <div style={{ flex: '1 1 100%', fontSize: 12.5, color: '#7c2d12', lineHeight: 1.6,
+            background: '#fff7ed', border: '1px solid #fdba74', borderRadius: 8, padding: '10px 12px' }}>
+            <strong>What attempt 1 measured.</strong> Replaying the guard over each stored{' '}
+            <code style={{ fontFamily: MONO }}>rawMechanism</code> attributes every missing
+            required spec across the 12 board-runs (4 boards &times; 3 re-runs):{' '}
+            <strong>11 of 11 misses were <code style={{ fontFamily: MONO }}>P6:raw_coordinate</code>{' '}
+            strips; zero were the model failing to emit.</strong> The D43 offer families work and
+            the coach uses them every time — the loss was that P6 deleted a correct,
+            engine-grounded highlight as the penalty for a wording fault.{' '}
+            <strong>Validated lever:</strong> replaying those same model outputs through the
+            current rewrite-then-check guard{' '}
+            (<code style={{ fontFamily: MONO }}>humanizeGroundedCoordinates</code>) moves required
+            satisfaction <strong>5/12 &rarr; 10/12</strong>; 9 of the 11 strips recover. The 2 that
+            remain are <em>not</em> over-punishment — they are genuine model mis-anchors
+            (<code style={{ fontFamily: MONO }}>spec=future:c7r3</code> with anchor
+            &ldquo;c6r3&rdquo;), correctly rejected. So this is not an argument for deleting P6:
+            that would score 12/12 only by also admitting two false highlights.
           </div>
           <div style={{ flex: '1 1 320px', fontSize: 12, color: '#475569', lineHeight: 1.5 }}>
             The boards on this page are the <em>decision</em> position (before the blunder). The
