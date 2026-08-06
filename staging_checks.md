@@ -2040,3 +2040,46 @@ state, or the audio artifact store.
     offered but never *required*) and OI-172 (whole-window-only admission strips a single member cell
     of an offered window — measured to cost 2 real highlights on `3154442332131341225551`).
   - **Source**: spec 058 SC-001, SC-002; the four staging `llm_feedback` rows.
+
+### Epic 11 — remediation addendum (D43 / D44 / D45) — added 2026-08-05
+
+The four staging `llm_feedback` cases were re-closed after the original 058 pass. This addendum
+**supersedes the "known, accepted gaps" note in the check above**: OI-171 is RESOLVED (D43/D45) and
+OI-172 is mitigated (fork cells are now offered standalone, so its rejection no longer costs a
+highlight). Do not judge the check above against those two gaps any more.
+
+All measurement below was done against the **offline** pipeline
+(`specs/058-deep-reveal-grounding/t043-attempt3-script.mjs`, 3 real-LLM runs × 4 boards) plus a local
+browser pass on `/admin/grounding-diff`. What that cannot confirm is the deployed HTTP path.
+
+- [ ] **A live staging deep reveal emits a `windows:` line handle and renders it as a LINE.**
+  - **What**: after the code deploy **and** a re-run of `TRUNCATE TABLE explanation_cache;` (staging's
+    058 TRUNCATE is marked DONE 2026-08-04, i.e. it ran BEFORE this code — see
+    `docs/deployment_steps.md`), request a fresh deep reveal for `315444233213` played column 1 and
+    for `3154442332131341225551` played column 5. Confirm the served text carries a
+    `[zone:...windows:...]` span, and that tapping it on the real deep-reveal screen draws a
+    multi-cell capsule, not a single dot.
+  - **Why staging**: the `windows:` handle only becomes *required* through `deriveRequiredSet` on the
+    fresh-generation path; a cache hit passes `allowedSet: null` and bypasses it entirely. Local runs
+    drove the guard chain directly rather than over HTTP.
+  - **Expected**: `future:windows:c2r5,c3r5,c4r5,c5r5` (or the board's line handle) present as a real
+    tag; the fork board additionally shows `c2r6`/`c5r5`; capsule spans all cells of the window.
+  - **Source**: D45; spec 058 SC-001/SC-002; staging feedback cases 1c, 2a, 2b, 4b.
+
+- [ ] **No raw coordinate reaches a live user, and precision is preserved (D44).**
+  - **What**: across the same fresh reveals, confirm no served text contains a bare `cNrM`, and that
+    a cell reference reads "column 1, row 3" rather than the row-dropping "column 1". Then request
+    the Spanish locale and confirm "columna 1, fila 3".
+  - **Why staging**: the `es` path is served by real locale resolution over HTTP; local runs only
+    exercised `en`. **Note OI-176** — `checkP2`'s column regex cannot match `columna N`, so P2 is a
+    no-op on `es`; a mis-anchored Spanish highlight will NOT be caught by the gate.
+  - **Expected**: zero bare `cNrM` in any served text; `en` and `es` both row-precise.
+  - **Source**: D44; staging feedback cases 1a, 3a.
+
+- [ ] **TTS speaks the humanized wording, not a coordinate.**
+  - **What**: play the deep-reveal audio for a position whose text contains a cell reference and
+    confirm the voice says "column one, row three" and never "c1r3".
+  - **Why staging**: audio artifacts are keyed by text and served from the artifact store; a
+    pre-change clip can persist after the text changes (see memory `project_tts_audio_cached_by_text`).
+  - **Expected**: spoken text matches the served text; no stale clip from before D44.
+  - **Source**: D44; staging feedback case 1a.

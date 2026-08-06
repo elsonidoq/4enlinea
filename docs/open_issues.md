@@ -6685,3 +6685,31 @@ through the middle", "the two finish squares") and let the capsule carry the coo
 `humanizeGroundedCoordinates` collapse a run of cells belonging to one window into a single phrase
 rather than expanding each. Option (a) is likely better — the highlight is the pointing device, so
 the prose should not duplicate it. Cross-refs: D44, D45.
+
+---
+
+## OI-179 — `tagBoard` scans the board twice per call because `getMajorThreatCells` discards the window it computes
+
+**Status**: open (efficiency only, no correctness impact; deliberately not fixed — see below)
+**Area**: `connect-four/server/classifier.js` (`getMajorThreatCells`), `connect-four/server/scripts/reasonBoardTags.mjs` (`tagBoard`)
+**Discovered**: spec-058 feedback remediation, 2026-08-05
+
+`getMajorThreatCells` walks all 42 cells × 4 directions × 4 offsets and, inside that loop, builds
+each candidate 4-window — then **throws the window away**, returning only the empty cell keyed
+`"r,c"` with boolean flags `{rm, rn, ym, yn}`. The line geometry it computed is exactly what
+`tagBoard` needs for its `lineWindow` field (added 2026-08-05 so a `major`/`immediate` tag can offer
+a `windows:` line alias). Because the window is gone, `tagBoard` calls `findMajorThreatWindows`
+(`server/llmCoachHelpers.js`) afterwards and re-scans the same board.
+
+**Why deferred, deliberately:** `getMajorThreatCells` has **8 live call sites** — `classifier.js`
+(×6), `scripts/visualize_board.mjs`, `scripts/reasonBoardTags.mjs`, plus an independent copy at
+`src/lib/board.js` used by `ChallengeScreen.jsx`. Changing its return shape touches all of them for
+a constant-factor win on a path that is not hot (one deep-reveal generation, already dominated by a
+solver call and an LLM round-trip). `findMajorThreatWindows` is also named the canonical group-level
+scanner in `docs/architecture/server-conventions.md`, so reusing it is the conventional choice.
+
+**If picked up**: add a parallel field (e.g. return `{..., windows}` alongside the existing keyed
+map) rather than changing the existing shape, and leave the 8 call sites reading what they read
+today. Do NOT attach the window to a tag as `tag.window` — `tagSpec` branches on that name and it
+would silently convert every major's single-cell alias into a `windows:` spec (see
+`reason-render-grounded-prompt.md` §11c, which records this trap).
