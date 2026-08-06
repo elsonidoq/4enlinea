@@ -7,10 +7,13 @@
 // The returned `mechanism` string already carries inline [zone:…] tags, so it drops directly into
 // the /api/explain-move-llm response as `explanation` and renders via <AnnotatedExplanation>.
 //
-// Retry: the LLM call is retried ONCE, and only on an LLM-related error (a call failure or an
-// unparseable response). Evidence + prompt are computed a single time and reused across the retry
-// (the solver pass is the expensive part). `postprocessAnswer` already repairs zone tags silently,
-// so there is no annotation-based retry.
+// Retry: the LLM call is retried ONCE — a single budget shared by every trigger. It fires on an
+// LLM-related error (a call failure or an unparseable response), OR, for an otherwise-successful
+// attempt, on a content miss: a required square/line the answer failed to tag, and/or a failure to
+// name the column the player should have played instead. The two content misses are computed
+// together and folded into ONE amended prompt (never one retry each). Evidence + prompt are
+// computed a single time and reused across the retry (the solver pass is the expensive part).
+// `postprocessAnswer` already repairs zone tags silently, so there is no annotation-repair retry.
 //
 // Errors: LLM errors never throw — they surface in callError/parseError so the endpoint can log to
 // deep_reveal_failures and return 500. A genuine terminal board (computeReason throwing) DOES
@@ -24,6 +27,8 @@ import {
   postprocessAnswer,
 } from './scripts/compute.mjs';
 import { callOpenAIChat } from './llmChat.js';
+import { stripInternalTokens } from './reasonRenderGuard.mjs';
+import { serverT } from './locale.mjs';
 
 // ── OpenAI call (thin wrapper around the unified, instrumented helper; spec 047 US5) ─────────
 // Preserves the pre-existing bare-string-content contract for computeMechanism's callers.
@@ -82,26 +87,85 @@ function missingRequiredGroups(requiredSet, attempt) {
   return (requiredSet ?? []).filter((g) => !usedSpecs.includes(g.spec));
 }
 
+// ── Better-column compliance (the "what should I have played instead?" floor) ────────────────
+// A deep reveal that never names the column the player should have played instead is not an
+// explanation the player can act on. The information is already in the prompt verbatim
+// (renderReasonModel.mjs's `renderDecision`: "- Better move: column N (lands at cNrM)"), so this
+// is an enforcement gap, not a context gap — and prompt wording alone was measured INERT for this
+// class of instruction (0/12 runs), while the required-set retry moved it (12/12). Hence a
+// post-check on the same single retry, not more prompt text.
+//
+// WHICH STRING IS TESTED, and why: the attempt's POST-`processAnnotations` `mechanism`
+// (`attempt.mechanism`), run through the guard's own `stripInternalTokens` — i.e. our closest
+// available prediction of the text the player is actually served.
+//   - Not the RAW LLM string: `postprocessAnswer` has already rewritten every offered
+//     `[zone:{handle}]` to its expanded `cNrM`/`windows:` spec by the time we see the attempt, so
+//     the raw string is not what ships and is not what the rest of this module reasons about.
+//   - Not a bare `/column N/` search on `mechanism`: `guardExplainMoveLlmPayload` rewrites raw
+//     `cN` / `cNrM` / `colN` prose tokens into "column N" (locale-aware) before serving, so a
+//     mechanism reading "you should have played c2r1" DOES reach the player as "column 2". A naive
+//     literal search would call that a miss and burn the single shared retry on nothing.
+//   - `stripInternalTokens` is the right predictor because it is the guard's FINAL pass over every
+//     served explanation, and it skips `[zone:…]` DELIMITERS byte-for-byte — so a bare
+//     `[zone:c2r1]` tag with no prose naming the column correctly does NOT satisfy this check
+//     (that square's coverage is the required-set check's job, not this one's).
+// Residual, accepted imprecision: the endpoint's earlier `stripFailingZoneSpans` can delete a span
+// whose text carried the column word, so a satisfied check can still, rarely, be served without it.
+// Erring that way is deliberate — it costs a missing mention, never a wasted retry.
+export function mentionsBetterColumn(attempt, bestCol, locale = 'en') {
+  if (bestCol == null) return true;              // nothing to require — abstain, do not invent
+  const mechanism = attempt?.mechanism;
+  if (!mechanism) return true;                   // no text at all is an LLM-error case; that retry trigger owns it
+  // bestCol is 0-indexed like every other coordinate in server code; the +1 here is the display
+  // conversion, matching renderDecision()'s own `column ${col + 1}`.
+  const columnWord = serverT(locale, 'column')(bestCol + 1); // "column 2" | "columna 2"
+  const served = stripInternalTokens(mechanism, locale);
+  return new RegExp(`\\b${columnWord.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i').test(served);
+}
+
 // Builds the retry prompt for a required-set miss (FR-008: explicitly name the missing
-// square(s)/line(s) to the coach). This is a genuinely amended prompt, not a resend of the
-// original — the missing-handle block below is new text appended to the same evidence/instructions.
-function buildMissingSquaresRetryPrompt(prompt, missing) {
-  const missingLines = missing.map((g) => `- [zone:${g.handle}] = ${g.role}`).join('\n');
-  return `${prompt}
-
----
-
-# Retry: required squares were missing
+// square(s)/line(s) to the coach) and/or a missing better-column mention. This is a genuinely
+// amended prompt, not a resend of the original — each block below is new text appended to the same
+// evidence/instructions.
+//
+// The two misses are folded into ONE prompt on purpose: the retry budget is exactly one and it is
+// shared (see computeMechanism below). Spending it on the column and leaving a required square
+// unenforced (or vice versa) would trade one regression for another.
+// `missingBetterColPhrase` is the LOCALIZED "column N" / "columna N" wording the retry must produce
+// (null when the column was already named): the surrounding prompt is English, but under locale
+// 'es' the model writes Spanish prose, so the phrase we demand has to be the Spanish one — it is
+// what `mentionsBetterColumn` looks for and what the player reads.
+function buildRetryPrompt(prompt, missing, missingBetterColPhrase) {
+  const blocks = [];
+  if (missing.length > 0) {
+    const missingLines = missing.map((g) => `- [zone:${g.handle}] = ${g.role}`).join('\n');
+    blocks.push(`# Retry: required squares were missing
 Your previous answer did not wrap the following required square(s)/line(s) in a
 [zone:<handle>]...[/zone:<handle>] tag using the exact handle listed below. Write the explanation
 again, following every instruction above, and this time make sure each one of these appears as a
 zone tag in your \`mechanism\`:
-${missingLines}
+${missingLines}`);
+  }
+  if (missingBetterColPhrase) {
+    blocks.push(`# Retry: the better move's column was never named
+Your previous answer never told the player which column they should have played instead. The
+Decision block above is canonical: the better move is **${missingBetterColPhrase}**. Write the
+explanation again, following every instruction above, and this time say that column explicitly in
+the prose of your \`mechanism\`, spelled out as "${missingBetterColPhrase}" — not only as a
+[zone:…] tag, and never as a raw cNrM/cN token.`);
+  }
+  return `${prompt}
+
+---
+
+${blocks.join('\n\n')}
 
 Return the full JSON object again (all fields), not just the changed part.`;
 }
 
-// ── Compute one board's mechanism (with a single retry — LLM error OR required-square miss) ──
+// ── Compute one board's mechanism ────────────────────────────────────────────────────────────
+// A SINGLE retry, shared across every trigger: LLM error, required-square miss, and/or an
+// unnamed better column. The two content misses are folded into one amended prompt.
 // Returns a discriminated result:
 //   { notABlunder: true, evidence }                       — played move is not a blunder
 //   { notABlunder: false, evidence, nv, prompt, renderDecision,
@@ -143,15 +207,26 @@ export async function computeMechanism(movestring, col, { solver, model, callLLM
     // content problem the prompt can address).
     finalAttempt = await runLlmAttempt(prompt, renderDecision, call);
   } else {
-    // New trigger (spec 058, US2, FR-008): attempt 1 succeeded as an LLM call but omitted one or
-    // more required squares/lines. Retry exactly once, with an amended prompt naming exactly what
-    // was missing. An empty requiredSet (FR-006 abstain, ~13/29 of the measured corpus) makes
-    // `missing` empty and this is a clean no-op.
+    // Content triggers: attempt 1 succeeded as an LLM call but (a) omitted one or more required
+    // squares/lines (spec 058, US2, FR-008) and/or (b) never named the column the player should
+    // have played instead. An empty requiredSet (FR-006 abstain, ~13/29 of the measured corpus)
+    // makes `missing` empty, and a compliant attempt makes the column check pass, so a fully
+    // compliant answer is a clean no-op.
+    //
+    // BOTH misses are computed BEFORE the retry and folded into ONE amended prompt: the budget is a
+    // single retry, and it is shared. There is deliberately no second pass — spending the retry on
+    // the column and then having none left for a missing required square (or vice versa) would just
+    // move the regression.
     const requiredSet = renderDecision?.requiredSet ?? [];
     const missing = missingRequiredGroups(requiredSet, attempt1);
-    if (missing.length > 0) {
+    // bestCol is 0-indexed on the narrator vector, exactly as on the evidence it came from.
+    const bestCol = nv?.bestCol ?? null;
+    const missingBetterColPhrase = mentionsBetterColumn(attempt1, bestCol, locale)
+      ? null
+      : serverT(locale, 'column')(bestCol + 1);
+    if (missing.length > 0 || missingBetterColPhrase) {
       missingHandles = missing;
-      const retryPrompt = buildMissingSquaresRetryPrompt(prompt, missing);
+      const retryPrompt = buildRetryPrompt(prompt, missing, missingBetterColPhrase);
       finalAttempt = await runLlmAttempt(retryPrompt, renderDecision, call);
     }
   }

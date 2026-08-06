@@ -8,10 +8,14 @@
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { createSolverProcess } from '../c4solver-wrapper.js';
-import { computeMechanism, parseAnswer } from '../mechanismExplainer.mjs';
+import { computeMechanism, parseAnswer, mentionsBetterColumn } from '../mechanismExplainer.mjs';
 
 const MOVESTRING = '3325';
 const PLAYED_COL = 5;
+// Harvested live (computeMechanism on MOVESTRING/PLAYED_COL): evidence.bestCol === nv.bestCol === 1
+// (0-indexed) and the prompt's canonical Decision block reads
+// "- Better move: column 2 (lands at c2r1). Outcome: win." — so DISPLAY column 2.
+const BEST_COL = 1;
 
 // This fixture's real requiredSet (harvested live for MOVESTRING/PLAYED_COL via
 // buildRenderDecision, re-harvested after D45) is THREE groups: { half: 'lostResource',
@@ -22,12 +26,17 @@ const PLAYED_COL = 5;
 // attempt, keeping every pre-existing test in this file (predating the required-set retry
 // trigger) exercising exactly the retry count its name says. `missingAnswer`, further down, is
 // the deliberate required-set MISS fixture used by the required-set retry tests.
+//
+// `okAnswer` ALSO names the better column in prose ("column 2"), because a fully compliant answer
+// must now satisfy BOTH content checks — the required set and `mentionsBetterColumn` — or it would
+// trigger the (single, shared) retry. `noColumnAnswer` below is the byte-for-byte prior text, kept
+// as the fixture that isolates a column-only miss.
 const okAnswer = JSON.stringify({
   better_move: 4, played_outcome: 'draw', best_outcome: 'win',
-  mechanism: 'You gave up the win at [zone:you-immediate]this square[/zone:you-immediate] on [zone:you-immediate-line]the bottom row of four[/zone:you-immediate-line], and left [zone:opp-key-square]the square your opponent needs[/zone:opp-key-square] open.',
+  mechanism: 'You gave up the win at [zone:you-immediate]this square[/zone:you-immediate] on [zone:you-immediate-line]the bottom row of four[/zone:you-immediate-line], and left [zone:opp-key-square]the square your opponent needs[/zone:opp-key-square] open. Playing column 2 instead would have kept the win.',
   key_cells: [], fields_relied_on: [], unsure_about: '', confidence: 'high',
 });
-const OK_MECHANISM = 'You gave up the win at [zone:c1r1]this square[/zone:c1r1] on [zone:windows:c1r1,c2r1,c3r1,c4r1]the bottom row of four[/zone:windows:c1r1,c2r1,c3r1,c4r1], and left [zone:c2r1]the square your opponent needs[/zone:c2r1] open.'; // okAnswer, post processAnnotations (handle -> expanded spec)
+const OK_MECHANISM = 'You gave up the win at [zone:c1r1]this square[/zone:c1r1] on [zone:windows:c1r1,c2r1,c3r1,c4r1]the bottom row of four[/zone:windows:c1r1,c2r1,c3r1,c4r1], and left [zone:c2r1]the square your opponent needs[/zone:c2r1] open. Playing column 2 instead would have kept the win.'; // okAnswer, post processAnnotations (handle -> expanded spec)
 
 let solver;
 before(async () => { solver = await createSolverProcess(); });
@@ -190,6 +199,118 @@ test('an empty required set is a clean no-op — no retry triggered solely by th
   assert.equal(calls, 1, 'no retry when attempt 1 already satisfies the required set');
   assert.equal(res.missingHandles.length, 0);
   assert.deepEqual(res.attempt1.usedSpecs.sort(), ['c1r1', 'c2r1', 'windows:c1r1,c2r1,c3r1,c4r1']);
+});
+
+// ── Better-column compliance + the COMBINED single retry ─────────────────────────────────────
+// The regression: 3 of the 4 spec-058 staging-feedback boards were served an explanation that
+// never named the column the player should have played instead (groundingDiffCases.js, attempt 8).
+//
+// `noColumnAnswer` is the previous `okAnswer` text verbatim: it satisfies this fixture's whole
+// required set (all three zone handles) while never naming column 2 — so it isolates a
+// column-only miss from a required-square miss.
+const noColumnAnswer = JSON.stringify({
+  better_move: 4, played_outcome: 'draw', best_outcome: 'win',
+  mechanism: 'You gave up the win at [zone:you-immediate]this square[/zone:you-immediate] on [zone:you-immediate-line]the bottom row of four[/zone:you-immediate-line], and left [zone:opp-key-square]the square your opponent needs[/zone:opp-key-square] open.',
+  key_cells: [], fields_relied_on: [], unsure_about: '', confidence: 'high',
+});
+
+test('mentionsBetterColumn: literal display wording counts; the wrong column does not', () => {
+  assert.equal(mentionsBetterColumn({ mechanism: 'Playing column 2 keeps the win.' }, BEST_COL), true);
+  assert.equal(mentionsBetterColumn({ mechanism: 'Playing column 5 keeps the win.' }, BEST_COL), false);
+  // 0-indexed in, 1-indexed out: bestCol 1 is display column 2, never "column 1".
+  assert.equal(mentionsBetterColumn({ mechanism: 'Playing column 1 keeps the win.' }, BEST_COL), false);
+});
+
+test('mentionsBetterColumn: a raw coordinate the guard rewrites to "column N" counts', () => {
+  // guardExplainMoveLlmPayload's stripInternalTokens turns "c2r1"/"c2" into "column 2" before the
+  // player sees it, so these ARE named columns in the served text.
+  assert.equal(mentionsBetterColumn({ mechanism: 'You should have played c2r1.' }, BEST_COL), true);
+  assert.equal(mentionsBetterColumn({ mechanism: 'You should have played c2.' }, BEST_COL), true);
+  assert.equal(mentionsBetterColumn({ mechanism: 'You should have played c5r1.' }, BEST_COL), false);
+});
+
+test('mentionsBetterColumn: a bare zone TAG is not a mention — the delimiter never reaches the reader', () => {
+  // stripInternalTokens passes [zone:…] delimiters through byte-for-byte; only the prose between
+  // them is rewritten. A highlight with no wording leaves the player without a column to play.
+  assert.equal(
+    mentionsBetterColumn({ mechanism: 'Take [zone:c2r1]this square[/zone:c2r1].' }, BEST_COL), false);
+  assert.equal(
+    mentionsBetterColumn({ mechanism: 'Take [zone:c2r1]the c2r1 square[/zone:c2r1].' }, BEST_COL), true);
+});
+
+test('mentionsBetterColumn: locale "es" looks for the Spanish wording', () => {
+  assert.equal(mentionsBetterColumn({ mechanism: 'Jugá en la columna 2.' }, BEST_COL, 'es'), true);
+  assert.equal(mentionsBetterColumn({ mechanism: 'Play in column 2.' }, BEST_COL, 'es'), false);
+});
+
+test('mentionsBetterColumn: abstains (true) when there is no better column or no text', () => {
+  assert.equal(mentionsBetterColumn({ mechanism: 'anything' }, null), true);
+  assert.equal(mentionsBetterColumn({ mechanism: null }, BEST_COL), true);
+});
+
+test('a column-only miss (required set fully satisfied) triggers exactly one retry naming the column', async () => {
+  let calls = 0;
+  const seenPrompts = [];
+  const callLLM = async (prompt) => {
+    calls++;
+    seenPrompts.push(prompt);
+    return calls === 1 ? noColumnAnswer : okAnswer;
+  };
+  const res = await computeMechanism(MOVESTRING, PLAYED_COL, { solver, callLLM });
+
+  assert.equal(calls, 2, 'exactly one retry — the column miss alone must trigger it');
+  assert.notEqual(seenPrompts[1], seenPrompts[0], 'retry prompt must be amended, never resent unchanged');
+  // Assert against the APPENDED block only. The base prompt already contains "column 2" in its
+  // canonical Decision block, so a match against the whole retry prompt would be vacuous.
+  assert.ok(seenPrompts[1].startsWith(seenPrompts[0]), 'retry prompt is the original plus new text');
+  const appended = seenPrompts[1].slice(seenPrompts[0].length);
+  assert.match(appended, /was never named/, 'the appended block is the better-column block');
+  assert.match(appended, /column 2/, 'and it names the better column in display form');
+  // The required set was already satisfied, so the squares block must NOT be in the retry prompt.
+  assert.doesNotMatch(appended, /required squares were missing/);
+  assert.equal(res.missingHandles.length, 0, 'no required square was missing');
+  assert.equal(res.mechanism, OK_MECHANISM);
+});
+
+test('a required-square miss AND a column miss share ONE retry, in ONE amended prompt naming both', async () => {
+  let calls = 0;
+  const seenPrompts = [];
+  const callLLM = async (prompt) => {
+    calls++;
+    seenPrompts.push(prompt);
+    return calls === 1 ? missingAnswer : okAnswer; // missingAnswer misses every handle AND the column
+  };
+  const res = await computeMechanism(MOVESTRING, PLAYED_COL, { solver, callLLM });
+
+  assert.equal(calls, 2, 'still exactly one retry — never one per miss');
+  // Again: only the APPENDED text counts. "column 2" appears in the base prompt's Decision block,
+  // and matching the whole prompt would pass even with the column trigger removed.
+  assert.ok(seenPrompts[1].startsWith(seenPrompts[0]));
+  const appended = seenPrompts[1].slice(seenPrompts[0].length);
+  assert.match(appended, /you-immediate/, 'the single retry prompt names the missing handle(s)');
+  assert.match(appended, /was never named[\s\S]*column 2/, '…and, in the same prompt, the missing better column');
+  assert.equal(res.missingHandles.length, 3);
+  assert.equal(res.mechanism, OK_MECHANISM);
+});
+
+test('an answer that names the column but misses a required square retries without the column block', async () => {
+  let calls = 0;
+  const seenPrompts = [];
+  const columnOnlyAnswer = JSON.stringify({
+    better_move: 4, played_outcome: 'draw', best_outcome: 'win',
+    mechanism: 'You gave up the win — column 2 was the move.',
+    key_cells: [], fields_relied_on: [], unsure_about: '', confidence: 'high',
+  });
+  const callLLM = async (prompt) => {
+    calls++;
+    seenPrompts.push(prompt);
+    return calls === 1 ? columnOnlyAnswer : okAnswer;
+  };
+  await computeMechanism(MOVESTRING, PLAYED_COL, { solver, callLLM });
+
+  assert.equal(calls, 2);
+  assert.match(seenPrompts[1], /required squares were missing/);
+  assert.doesNotMatch(seenPrompts[1], /was never named/, 'the column block must be omitted when the column was named');
 });
 
 test('locale "en" (and the default) omit the Spanish output directive — unchanged from current behavior', async () => {
