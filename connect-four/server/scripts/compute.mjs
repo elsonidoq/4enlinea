@@ -82,6 +82,8 @@ Options:
                               condition-D answer lines also carry a render_decision record for the grader.
   --n <N>               Runs per record per condition (--llm only). Default: 3.
   --model <id>          OpenAI model (--llm only). Default: $EXPLAIN_MODEL.
+  --sentence-budget <t> Answer-length instruction for the mechanism field, as prose (e.g. "1-3",
+                        "4-6"). Default: 1-3. Used by the budget-ablation arm.
   -h, --help            Show this help and exit.
 
 Requires OPENAI_API_KEY (and a model) for --llm; loaded from connect-four/server/.env.`;
@@ -91,7 +93,7 @@ Requires OPENAI_API_KEY (and a model) for --llm; loaded from connect-four/server
 // process.exit or depends on --input being present. Everything below this point that the CLI
 // entry needs (INPUT, evidenceOut, useLlm, ts, N, model, CONDITIONS) is declared with `let` at
 // module scope and populated only when this file is the entry point.
-let inputArg, INPUT, inputStem, evidenceOut, useLlm, ts, N, model, CONDITIONS, idFilter;
+let inputArg, INPUT, inputStem, evidenceOut, useLlm, ts, N, model, CONDITIONS, idFilter, sentenceBudget;
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
   if (process.argv.includes('--help') || process.argv.includes('-h')) {
     console.log(HELP);
@@ -119,6 +121,7 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
   ts = new Date().toISOString().replace(/:/g, '-').replace(/\.\d+Z$/, 'Z');
   N = parseInt(argVal('--n', '3'), 10);
   model = argVal('--model', process.env.EXPLAIN_MODEL);
+  sentenceBudget = argVal('--sentence-budget', '1-3');
   const condArg = (argVal('--condition', 'A') || 'A').toLowerCase();
   CONDITIONS = condArg === 'all' ? ['A', 'B', 'C', 'D'] : condArg.toUpperCase().split(',');
 
@@ -195,7 +198,14 @@ function projectVector(fv, condition) {
 }
 
 // ── Build the isolated prompt: glossary + vector + task ─────────────────────────
-const TASK = `# Your task
+// Exported for the budget-ablation arm: the answer schema with a parameterised sentence budget.
+// `budget` is prose ('1-3', '4-6'), not a number — it is read by the model, not parsed.
+export function answerSchemaBlock(budget = '1-3') {
+  return `  "mechanism":        "<${budget} sentences spoken directly to the player as their coach: the load-bearing reason the played move is worse. 2nd person, plain Connect Four language, NO internal/field/engine terms>",`;
+}
+
+function buildTask(budget) {
+  return `# Your task
 
 You are reading the feature vector below for a single Connect Four decision. Using ONLY the
 glossary above and the facts in this vector (and the board its \`movestring\` describes), explain
@@ -210,7 +220,7 @@ Return ONLY a single JSON object (no prose, no markdown fences) with EXACTLY the
   "better_move":      <integer 1-7, the better column in 1-INDEXED DISPLAY (column 1 = leftmost)>,
   "played_outcome":   "win" | "draw" | "loss",   // result of the PLAYED move, with best play
   "best_outcome":     "win" | "draw" | "loss",   // result of the BETTER move, with best play
-  "mechanism":        "<1-3 sentences spoken directly to the player as their coach: the load-bearing reason the played move is worse. 2nd person, plain Connect Four language, NO internal/field/engine terms>",
+${answerSchemaBlock(budget)}
   "key_cells":        ["c5r4", ...],   // squares the mechanism rests on, cNrM (1-indexed); [] if none
   "fields_relied_on": ["case", "lostResource.tacticTag", "opponentPunishment.tie.kind", ...],
   "unsure_about":     "<what the vector did NOT let you determine, or empty string>",
@@ -231,6 +241,7 @@ Notes:
   whether your claims trace to engineered fields or to re-deriving from \`movestring\`.
 - Never claim a "win" as guaranteed by the single move unless it completes four-in-a-row; the
   \`_with_best_play\` outcomes mean "with correct continuation".`;
+}
 
 export const SPANISH_OUTPUT_DIRECTIVE = `
 
@@ -243,21 +254,22 @@ English enum values like "win"/"draw"/"loss", numeric \`better_move\`, \`cNrM\` 
 translate, rename, or reformat the [zone:…] / [term:…] tags or the cell references inside
 \`mechanism\` — copy those tokens verbatim; only the surrounding prose is Spanish.`;
 
-export function buildPromptForCondition(glossary, fv, condition, locale = 'en') {
+export function buildPromptForCondition(glossary, fv, condition, locale = 'en', budget = '1-3') {
   const localeSuffix = locale === 'es' ? SPANISH_OUTPUT_DIRECTIVE : '';
+  const task = buildTask(budget);
   if (condition === 'D') {
     return `${assembleGroundedPrompt(buildReasonRenderModel(fv))}
 
 ---
 
-${TASK}${localeSuffix}`;
+${task}${localeSuffix}`;
   }
   const projected = projectVector(fv, condition);
   return `${glossary}
 
 ---
 
-${TASK}${localeSuffix}
+${task}${localeSuffix}
 
 # Feature vector
 
@@ -323,7 +335,7 @@ async function runLlm(evidenceRows) {
     for (const condition of CONDITIONS) {
       let prompt;
       try {
-        prompt = buildPromptForCondition(glossaryText, nv, condition);
+        prompt = buildPromptForCondition(glossaryText, nv, condition, 'en', sentenceBudget);
       } catch (err) {
         // Prompt-build failure (e.g. condition D's buildReasonRenderModel throwing
         // UncoveredVectorFieldError / classifyCausalLink no-match on a novel record) must not

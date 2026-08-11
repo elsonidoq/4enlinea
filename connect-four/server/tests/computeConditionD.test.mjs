@@ -55,3 +55,11 @@ test('postprocessAnswer expands handles + rederives key_cells only when a zone w
   assert.deepEqual(postprocessAnswer(same, null), { answer: same, repairs: [], usedSpecs: [] });
   assert.deepEqual(postprocessAnswer(null, rd), { answer: null, repairs: [], usedSpecs: [] });
 });
+
+test('sentence budget is interpolated into the mechanism schema line', async () => {
+  const { answerSchemaBlock } = await import('../scripts/compute.mjs');
+  assert.match(answerSchemaBlock('1-3'), /<1-3 sentences spoken directly to the player/);
+  assert.match(answerSchemaBlock('4-6'), /<4-6 sentences spoken directly to the player/);
+  // the rest of the contract must not drift with the budget
+  assert.match(answerSchemaBlock('4-6'), /NO internal\/field\/engine terms/);
+});
