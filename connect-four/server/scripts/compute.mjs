@@ -26,7 +26,7 @@
 //   D — grounded render prompt:      staged boards + causal frames + reading key (P4); condition-D
 //                                    answer lines also carry a `render_decision` record for the grader.
 
-import { readFileSync, writeFileSync, appendFileSync, existsSync } from 'fs';
+import { readFileSync, writeFileSync, appendFileSync, existsSync, mkdirSync } from 'fs';
 import { fileURLToPath } from 'url';
 import { dirname, join, isAbsolute, resolve, basename } from 'path';
 import { createSolverProcess } from '../c4solver-wrapper.js';
@@ -317,7 +317,12 @@ async function runLlm(evidenceRows) {
 
   const glossaryText = readFileSync(GLOSSARY_PATH, 'utf8');
   // Answers file: always derived from input stem + launch timestamp (never overloads evidence --out).
-  const answersOut = join(__dirname, `fv_suff_answers_${inputStem}_${ts}.jsonl`);
+  // Written to reason_corpus/runs/ — the directory GET /api/admin/fv-suff reads (server/index.js's
+  // FV_SUFF_RUNS_DIR) and where grade-fv-sufficiency writes its `<stem>_grades.jsonl` sidecar. Writing
+  // to server/scripts/ instead left every run invisible to the browser until moved by hand.
+  const runsDir = join(__dirname, 'reason_corpus', 'runs');
+  mkdirSync(runsDir, { recursive: true });
+  const answersOut = join(runsDir, `fv_suff_answers_${inputStem}_${ts}.jsonl`);
 
   console.log(`Answerer: ${evidenceRows.length} records × ${N} runs × ${CONDITIONS.length} condition(s) [${CONDITIONS.join(',')}]`);
   console.log(`Model: ${model}`);
