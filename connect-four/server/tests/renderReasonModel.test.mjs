@@ -147,36 +147,50 @@ test('buildRenderDecision records branch-invariance + finalMovestring for enable
   assert.equal(rd.finalMovestring, '3413306133');            // opponent's line (no lostResource winning_line)
 });
 
-test('opening vectors no longer throw and lead with the opening frame', () => {
+test('opening vectors no longer throw and lead with the opening frame, and now carry the causal frame too', () => {
+  // Re-pointed for Task 6 (spec 058): the opening branch used to REPLACE the causal frame and print
+  // only the decision board; it now MERGES both frames and shows whatever boards the causal link
+  // needs (selectBoards(pruned)), same as a non-opening record.
   for (const kind of ['namedOpening', 'defense', 'centrality']) {
     const model = buildReasonRenderModel(OPENING[kind]);   // was: throws UncoveredVectorFieldError
-    assert.equal(model.frames.length, 1);
+    assert.equal(model.frames.length, 2);
     assert.ok(/opening/i.test(model.frames[0].text));
-    assert.deepEqual(model.boards.map((b) => b.id), ['decision']);   // decision board only
+    assert.equal(model.frames[1].id, model.link.id);
+    assert.ok(model.boards.some((b) => b.id === 'decision'));
   }
 });
 
-test('opening prompt has the opening reading key and no deep board', () => {
+test('opening prompt has the opening reading key and shows the deep board when the link needs it', () => {
+  // Re-pointed for Task 6 (spec 058): suppressing the projectedDeep board on an opening record was
+  // the bug (eval-13/20/35 — render_decision reported it shown but the prompt never printed it). The
+  // deep board now prints like any other record; it is the `future:` decorator + GUARDRAIL wording
+  // that keep it from reading as a present threat, not omitting it.
   const model = buildReasonRenderModel(OPENING.centrality);
   const prompt = assembleGroundedPrompt(model);
   assert.match(prompt, /book line|opening/i);
-  assert.doesNotMatch(prompt, /projectedDeep/);
+  assert.match(prompt, /projectedDeep/);
 });
 
-test('opening records never offer or require a deep half cell (guardrail + pruneOpeningResidue)', () => {
+test('opening records offer the deep half cell under future: framing, and require it (Task 6, spec 058)', () => {
+  // Re-pointed for Task 6 (spec 058): this test used to assert the SUPPRESSION this task reverses.
+  // The half-geometry family is now offered on an opening record too, always future:-prefixed.
   for (const kind of ['namedOpening', 'defense', 'centrality']) {
     const model = buildReasonRenderModel(OPENING[kind]);
-    assert.deepEqual(model.zones.aliases.filter((a) => a.spec.startsWith('future:')), [],
-      `${kind}: opening records must offer no future: handle`);
-    assert.deepEqual(model.requiredSet, [], `${kind}: opening records require nothing`);
+    const futureAliases = model.zones.aliases.filter((a) => a.spec.startsWith('future:'));
+    assert.ok(futureAliases.length > 0, `${kind}: opening records must offer future: handles`);
+    assert.ok(model.requiredSet.length > 0, `${kind}: opening records must require something`);
   }
 });
 
-test('opening prompt never leaks a deep completing cell or parityAttribution into Vector facts', () => {
+test('opening prompt names the deep completing cell, always under future/later framing', () => {
+  // Re-pointed for Task 6 (spec 058): the deep completing cell and parityAttribution used to be
+  // stripped from the JSON residue by pruneOpeningResidue (now deleted). They now appear like any
+  // other record's residue; the GUARDRAIL + role text are what stop the model from reading the cell
+  // as a present threat, not withholding the field.
   for (const kind of ['namedOpening', 'defense', 'centrality']) {
     const prompt = assembleGroundedPrompt(buildReasonRenderModel(OPENING[kind]));
-    assert.doesNotMatch(prompt, /"completingCell"/);
-    assert.doesNotMatch(prompt, /"parityAttribution"/);
+    assert.match(prompt, /"completingCell"/);
+    assert.match(prompt, /matters later|not a threat right now/i);
   }
 });
 
@@ -218,7 +232,9 @@ test('assembled prompt does not duplicate the guardrail on a non-opening record'
 
 test('assembled prompt includes the opening frame\'s own guardrail alongside the link guardrail', () => {
   const prompt = assembleGroundedPrompt(buildReasonRenderModel(OPENING.namedOpening));
-  assert.match(prompt, /do not ground a specific deep/i); // openingFrame.mjs's own GUARDRAIL text
+  // Re-pointed for Task 6 (spec 058): openingFrame.mjs's own GUARDRAIL text now reads "matters LATER"
+  // instead of "do not ground a specific deep completing cell" — see Task 6, openingFrame.mjs GUARDRAIL.
+  assert.match(prompt, /matters LATER/i);
 });
 
 // ── deriveRequiredSet (spec 058, US2 — Derivation Rule, spec.md, verbatim from the epic) ────────
@@ -496,4 +512,50 @@ test('fix 3: the prompt requires a term to be PAIRED with an adjacent zone, with
     'the prompt must say a term alone points at nothing on the board');
   assert.match(termBlock, /next to|adjacent|alongside/i, 'the prompt must ask for adjacency');
   assert.match(termBlock, /Bad:[\s\S]*Good:/i, 'a worked bad/good example must accompany the rule');
+});
+
+// ── Task 6 (spec 058): opening path merges the causal frame instead of replacing it ─────────────
+
+test('opening record: the causal frame reaches the prompt alongside the opening frame', async () => {
+  const { readFileSync } = await import('node:fs');
+  const { fileURLToPath } = await import('node:url');
+  const { dirname, join } = await import('node:path');
+  const { toNarratorVector, pruneVector } = await import('../scripts/reasonNarratorVector.mjs');
+  const here = dirname(fileURLToPath(import.meta.url));
+  const rows = readFileSync(join(here, '../scripts/reason_corpus/evidence.jsonl'), 'utf8')
+    .trim().split('\n').map((l) => JSON.parse(l));
+
+  // eval-12 is an opening record whose L6 link names both completing cells.
+  const fv = pruneVector(toNarratorVector(rows.find((r) => r.id === 'eval-12').evidence));
+  const model = buildReasonRenderModel(fv);
+  const prompt = assembleGroundedPrompt(model);
+
+  assert.equal(model.frames.length, 2, 'opening record must carry BOTH frames');
+  assert.ok(prompt.includes(model.link.text),
+    'link.text is absent from the prompt — the model cannot use what it was never shown');
+  assert.ok(prompt.includes(fv.lostResource.completingCell),
+    `completing cell ${fv.lostResource.completingCell} is absent from the prompt`);
+});
+
+test('opening record: half-geometry aliases are offered, under future: framing', async () => {
+  const { readFileSync } = await import('node:fs');
+  const { fileURLToPath } = await import('node:url');
+  const { dirname, join } = await import('node:path');
+  const { toNarratorVector, pruneVector } = await import('../scripts/reasonNarratorVector.mjs');
+  const here = dirname(fileURLToPath(import.meta.url));
+  const rows = readFileSync(join(here, '../scripts/reason_corpus/evidence.jsonl'), 'utf8')
+    .trim().split('\n').map((l) => JSON.parse(l));
+  const fv = pruneVector(toNarratorVector(rows.find((r) => r.id === 'eval-12').evidence));
+  const model = buildReasonRenderModel(fv);
+
+  const handles = model.zones.aliases.map((a) => a.handle);
+  assert.ok(handles.some((h) => /key-square|key-line/.test(h)),
+    `no half-geometry alias offered; got ${handles.join(', ')}`);
+  // A deep half must NOT be offered as a present threat (the eval-3 trap the suppression guarded).
+  for (const a of model.zones.aliases) {
+    if (/key-square|key-line/.test(a.handle)) {
+      assert.match(a.spec, /^future:/, `${a.handle} must carry the future: decorator`);
+      assert.match(a.role, /matters later|not a threat right now/);
+    }
+  }
 });

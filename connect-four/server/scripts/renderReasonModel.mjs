@@ -84,17 +84,6 @@ function buildDecision(pruned) {
   };
 }
 
-// Opening residue: the deep halves demote to a horizon; strip their cells so no deep cNrM leaks into the prompt.
-function pruneOpeningResidue(rendered) {
-  const horizonOnly = (h) => (h && typeof h === 'object')
-    ? Object.fromEntries(['register', 'pliesToEnd'].filter((k) => k in h).map((k) => [k, h[k]]))
-    : h;
-  const out = { ...rendered };
-  if (out.lostResource) out.lostResource = horizonOnly(out.lostResource);
-  if (out.opponentPunishment) out.opponentPunishment = horizonOnly(out.opponentPunishment);
-  return out;
-}
-
 // A half's POINT geometry (D45). Normally the load-bearing cell, `denialCell(h)`. But a
 // double_threat half's load-bearing geometry is TWO squares, not one — requiring only its
 // completingCell leaves the other fork square dark and a `[term:double_threat]` (which highlights
@@ -182,19 +171,27 @@ export function buildReasonRenderModel(nv) {
 
   const openingFrame = composeOpeningFrame(pruned);
   if (openingFrame) {
+    // The opening IS the teachable frame, but it is no longer a REPLACEMENT for the causal one:
+    // printing only the opening frame kept link.text — and every cell it names — out of the prompt
+    // entirely (verified: eval-12's c2r5 appeared nowhere), so the model could not name the reason
+    // even when the engine had it. Both frames print; the deep geometry is offered under the
+    // `future:` decorator so it reads as "matters later", never as a present threat.
     const allBoards = boardSelectionDecisions(pruned);
-    const zones = buildAnnotationOffer(pruned, allBoards, { openingHorizon: true });
-    const decisionBoard = allBoards.find((b) => b.id === 'decision');
+    const zones = buildAnnotationOffer(pruned, allBoards);
     return {
       perspective: { you: pruned.player, opponent: pruned.opponent },
       decision: buildDecision(pruned),
       link,
-      frames: [{ id: openingFrame.id, confidence: openingFrame.confidence, text: openingFrame.text,
-                 covers: openingFrame.covers, guardrail: openingFrame.guardrail }],
-      boards: [decisionBoard],
+      frames: [
+        { id: openingFrame.id, confidence: openingFrame.confidence, text: openingFrame.text,
+          covers: openingFrame.covers, guardrail: openingFrame.guardrail },
+        { id: link.id, confidence: link.confidence, text: link.text,
+          covers: link.covers, guardrail: link.guardrail },
+      ],
+      boards: selectBoards(pruned),
       zones,
       requiredSet: deriveRequiredSet(pruned, zones),
-      rendered: pruneOpeningResidue(renderedFields(pruned, link.covers)),
+      rendered: renderedFields(pruned, link.covers),
       openingReadingKey: OPENING_READING_KEY,
       coverage: { ok: true, unowned: [] },
     };
@@ -267,8 +264,12 @@ export function buildRenderDecision(nv) {
   const link = classifyCausalLink(pruned, ctx);
   assertCoverage(pruned, link.covers);
   const openingFrame = composeOpeningFrame(pruned);
-  const zones = buildAnnotationOffer(pruned, boardSelectionDecisions(pruned),
-                                     { openingHorizon: !!openingFrame });
+  // Mirrors buildReasonRenderModel's opening branch (Task 6, spec 058): the prompt no longer
+  // suppresses half-geometry aliases on an opening record, so render_decision.zones must not either —
+  // postprocessAnswer validates the model's answer against THIS object, not the prompt's. Filed as
+  // OI-186 for full unification (buildRenderDecision should consume buildReasonRenderModel instead of
+  // recomputing); this line is the interim single-source fix.
+  const zones = buildAnnotationOffer(pruned, boardSelectionDecisions(pruned));
 
   let openingContext = null;
   if (openingFrame) {

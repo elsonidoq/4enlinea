@@ -66,7 +66,9 @@ test('centralityQualitative: strong gap -> much_easier', () => {
 });
 
 test('guardrail forbids deep-cell grounding', () => {
-  assert.match(composeOpeningFrame(namedFv).guardrail, /do not ground a specific deep/i);
+  // Re-pointed for Task 6 (spec 058): GUARDRAIL no longer says "do not ground"; it requires the LATER
+  // framing instead, so the deep cell CAN be named as long as it is framed as future, not present.
+  assert.match(composeOpeningFrame(namedFv).guardrail, /matters LATER/i);
 });
 
 test('guardrail forbids inventing a centrality claim when qualitative is null', () => {

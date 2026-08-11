@@ -61,7 +61,8 @@ function horizonTail(fv) {
 const nameTag = (oc) => `the ${oc.family}${oc.id ? ` (${oc.id})` : ''}`;
 
 const GUARDRAIL = 'Explain the blunder through the opening — book line, centrality, parity. '
-  + 'Do NOT ground a specific deep completing cell; the deep resolution is a horizon, not a teachable square.';
+  + 'The deep resource resolves a long way out: when you name its square or line, say plainly that it '
+  + 'matters LATER, once the forced sequence reaches it — never describe it as a threat that exists now.';
 
 const GUARDRAIL_NO_CENTRALITY = ' The two landing cells are NOT stated to differ in centrality or '
   + 'difficulty here — do not say one column is "more central," "the stronger column," or "easier '

@@ -147,9 +147,12 @@ export function buildAnnotationOffer(pruned, boardDecisions, opts = {}) {
   // Present vs future: a half whose register is not 'immediate' resolves many plies away and its
   // cells are EMPTY now, so it gets the `future:` prefix + future role text (FR-002, Settled
   // decision 8(b), the eval-3 present-threat trap). The rule reuses horizonForRegister rather than
-  // a new plies threshold. Opening records suppress this family entirely: their guardrail says
-  // "Do NOT ground a specific deep completing cell", and pruneOpeningResidue strips these very
-  // fields from the prompt residue.
+  // a new plies threshold. Opening records are NO LONGER suppressed here (Task 6, spec 058): this
+  // family is now offered on an opening record too, always under the `future:` decorator — the
+  // guardrail (openingFrame.mjs's GUARDRAIL, now "matters LATER … never describe it as a threat
+  // that exists now") is what keeps the model from reading a deep cell as a present threat, not
+  // withholding the handle. `opts.openingHorizon` is kept as a caller-controlled override (unused
+  // by either production caller) rather than removed outright.
   const halfPairs = opts.openingHorizon
     ? []
     : [[pruned.lostResource, 'you'], [pruned.opponentPunishment, 'opp']];
