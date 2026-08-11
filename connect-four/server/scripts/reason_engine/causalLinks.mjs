@@ -99,19 +99,19 @@ export const CAUSAL_LINKS = [
                   && fv.lostResource?.register === 'parity' && !hasSharedCell(fv),
     covers: ['route', 'lostResource.terminal', 'opponentPunishment.terminal'],
     guardrail: 'The culprit square is not cleanly isolable; hedge — do not fabricate a crisp cause.',
-    template: (fv) => `You had a parity/zugzwang win (resolves ${horizonPhrase(fv.lostResource?.register)}${pliesTail(fv)}); the played move loses the parity battle — the exact culprit square isn't cleanly isolable. The winning group runs through ${cells(fv.lostResource?.window)}.` },
+    template: (fv) => `You had a parity/zugzwang win (resolves ${horizonPhrase(fv.lostResource?.register)}${pliesTail(fv)}), and column ${col1(fv.bestCol)} was the move that kept it. The played move loses the parity battle — the exact culprit square isn't cleanly isolable. The winning group runs through ${cells(fv.lostResource?.window)}.` },
   { id: 'L5', family: 'sign', confidence: 'high',
     when: (fv) => fv.route !== 'realized_denied' && fv.lostResource?.kind === 'winning_line'
                   && fv.opponentPunishment?.kind === 'denial',
     covers: CODES_SIGN,
     guardrail: 'You had a forced win; state its horizon honestly (may be deep). The played move let the opponent deny it.',
-    template: (fv) => `You had a forced win — it resolves ${horizonPhrase(fv.lostResource?.register)}${pliesTail(fv)} via a ${forkOrParity(fv.lostResource)} completing at ${fv.lostResource?.completingCell}. The played move let the opponent deny it at ${denialCell(fv.opponentPunishment)}.` },
+    template: (fv) => `You had a forced win — it resolves ${horizonPhrase(fv.lostResource?.register)}${pliesTail(fv)} via a ${forkOrParity(fv.lostResource)} completing at ${fv.lostResource?.completingCell}. Column ${col1(fv.bestCol)} was the move that kept it; the played move let the opponent deny it at ${denialCell(fv.opponentPunishment)}.` },
   { id: 'L6', family: 'sign', confidence: 'high',
     when: (fv) => fv.route !== 'realized_denied' && fv.lostResource?.kind === 'winning_line'
                   && fv.opponentPunishment?.kind === 'winning_line',
     covers: CODES_SIGN,
     guardrail: 'You gave up a win AND handed the opponent their own; name both lines with their horizons.',
-    template: (fv) => `You had a forced win via ${fv.lostResource?.completingCell} (${horizonPhrase(fv.lostResource?.register)}${pliesTail(fv)}); the played move gives it up AND lets the opponent force their own win via ${fv.opponentPunishment?.completingCell}.` },
+    template: (fv) => `You had a forced win via ${fv.lostResource?.completingCell} (${horizonPhrase(fv.lostResource?.register)}${pliesTail(fv)}), and column ${col1(fv.bestCol)} was the move that kept it. The played move gives it up AND lets the opponent force their own win via ${fv.opponentPunishment?.completingCell}.` },
 ];
 
 export function classifyCausalLink(fv, ctx = {}) {

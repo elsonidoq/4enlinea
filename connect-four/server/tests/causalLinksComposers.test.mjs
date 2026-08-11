@@ -8,7 +8,7 @@ import { classifyCausalLink } from '../scripts/reason_engine/causalLinks.mjs';
 import { patternOnAfterBestBoard } from '../scripts/reasonBoardSelect.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const CORPUS = join(__dirname, '../scripts/fv_suff/reason_evidence_boards_coverage_2026-07-02T11-37-56Z.jsonl');
+const CORPUS = join(__dirname, '../scripts/reason_corpus/evidence.jsonl');
 const rows = readFileSync(CORPUS, 'utf8').trim().split('\n').map((l) => JSON.parse(l));
 export function classifyById(id) {
   const fv = pruneVector(toNarratorVector(rows.find((r) => r.id === id).evidence));
@@ -16,18 +16,18 @@ export function classifyById(id) {
   return { fv, link: classifyCausalLink(fv, ctx) };
 }
 
-test('L5 (eval-3): deep fork framed as deep, not immediate', () => {
-  const { link } = classifyById('eval-3');
+test('L5 (pin-L5-deep-fork): deep fork framed as deep, not immediate', () => {
+  const { link } = classifyById('pin-L5-deep-fork');
   assert.equal(link.id, 'L5');
   assert.match(link.text, /forced win/i);
-  assert.match(link.text, /deep on a forced line/);      // horizon-honest (eval-3 fix)
+  assert.match(link.text, /deep on a forced line/);      // horizon-honest (pin-L5-deep-fork fix)
   assert.match(link.text, /c4r3/);                        // fork completing cell named
   assert.match(link.text, /c6r5/);                        // opponent denial cell named
   assert.doesNotMatch(link.text, /immediate|right now|current threat/i);
 });
 
-test('L1 (eval-22): completes YOUR tactic; opponent denial named', () => {
-  const { link } = classifyById('eval-22');
+test('L1 (pin-L1-completes-your-tactic): completes YOUR tactic; opponent denial named', () => {
+  const { link } = classifyById('pin-L1-completes-your-tactic');
   assert.equal(link.id, 'L1');
   assert.match(link.text, /better move \(col 3\)/);       // bestCol 2 -> display 3
   assert.match(link.text, /double threat/i);              // double_threat slug -> plain C4 phrase
@@ -36,8 +36,8 @@ test('L1 (eval-22): completes YOUR tactic; opponent denial named', () => {
   assert.match(link.text, /c3r1/);                        // opponent denial cell
 });
 
-test('L2 (eval-21): played move handed the opponent the pattern', () => {
-  const { link } = classifyById('eval-21');
+test('L2 (pin-L2-enabled-opponent): played move handed the opponent the pattern', () => {
+  const { link } = classifyById('pin-L2-enabled-opponent');
   assert.equal(link.id, 'L2');
   assert.match(link.text, /let the opponent occupy c2r1/);
   assert.match(link.text, /double threat/i);              // double_threat slug -> plain C4 phrase
@@ -45,8 +45,8 @@ test('L2 (eval-21): played move handed the opponent the pattern', () => {
   assert.match(link.text, /better move \(col 3\)/);       // bestCol 2 -> display 3
 });
 
-test('L3 (eval-23): no-causation, hold-the-line wording; names the branch-invariant pattern', () => {
-  const { link } = classifyById('eval-23');
+test('L3 (pin-L3-no-causation): no-causation, hold-the-line wording; names the branch-invariant pattern', () => {
+  const { link } = classifyById('pin-L3-no-causation');
   assert.equal(link.id, 'L3');
   assert.match(link.text, /7-shaped double threat/);      // figure_7 slug -> plain C4 phrase
   assert.match(link.text, /c4r3/);
@@ -56,23 +56,23 @@ test('L3 (eval-23): no-causation, hold-the-line wording; names the branch-invari
   assert.match(link.guardrail, /caused or enabled/i);     // causation guardrail preserved (not in player text)
 });
 
-test('L4 (eval-4): missed defense; occupies the block, names the opponent window', () => {
-  const { link } = classifyById('eval-4');
+test('L4 (pin-L4-missed-defense): missed defense; occupies the block, names the opponent window', () => {
+  const { link } = classifyById('pin-L4-missed-defense');
   assert.equal(link.id, 'L4');
   assert.match(link.text, /better move \(col 5\)/);       // bestCol 4 -> display 5
   assert.match(link.text, /occupies c5r4/);
   assert.match(link.text, /skipped that defense/i);
 });
 
-test('L6 (eval-6): gave up a win AND handed the opponent one', () => {
-  const { link } = classifyById('eval-6');
+test('L6 (pin-L6-lost-win-and-gave-one): gave up a win AND handed the opponent one', () => {
+  const { link } = classifyById('pin-L6-lost-win-and-gave-one');
   assert.equal(link.id, 'L6');
   assert.match(link.text, /forced win via c2r5/);
   assert.match(link.text, /opponent force their own win via c2r6/);
 });
 
-test('L7 (eval-8): practical swindle framed as toughest defense, no defeatist wording', () => {
-  const { link } = classifyById('eval-8');
+test('L7 (pin-L7-practical-swindle): practical swindle framed as toughest defense, no defeatist wording', () => {
+  const { link } = classifyById('pin-L7-practical-swindle');
   assert.equal(link.id, 'L7');
   assert.match(link.text, /practical swindle/i);
   assert.match(link.text, /stubborn defense|most resilient|toughest/i);   // hold-the-line reframe
@@ -80,18 +80,40 @@ test('L7 (eval-8): practical swindle framed as toughest defense, no defeatist wo
   assert.doesNotMatch(link.text, /you (would )?win\b/i);   // must not claim a win
 });
 
-test('L8 (eval-2): a draw abandoned; opponent now has a forced win', () => {
-  const { link } = classifyById('eval-2');
+test('L8 (pin-L8-draw-abandoned): a draw abandoned; opponent now has a forced win', () => {
+  const { link } = classifyById('pin-L8-draw-abandoned');
   assert.equal(link.id, 'L8');
   assert.match(link.text, /position was a draw/i);
   assert.match(link.text, /occupying c4r4/);
   assert.match(link.text, /forced win/i);
 });
 
-test('L9 (eval-13): hedged parity, culprit not isolable', () => {
-  const { link } = classifyById('eval-13');
+test('L9 (pin-L9-hedged-parity): hedged parity, culprit not isolable', () => {
+  const { link } = classifyById('pin-L9-hedged-parity');
   assert.equal(link.id, 'L9');
   assert.match(link.text, /parity/i);
   assert.match(link.text, /isn't cleanly isolable/i);
   assert.doesNotMatch(link.text, /the culprit is c\d+r\d+/i);  // must NOT fabricate a crisp cause
 });
+
+// The A6 invariant: the composed frame is the ONLY place the player learns which column to play.
+// A parenthetical "(col N)" was measured to be dropped from the coach's prose about half the time,
+// and L5/L6/L9 omitted the column entirely. Every link must state it as prose.
+const ONE_PER_LINK = {
+  L1: 'pin-L1-completes-your-tactic', L2: 'pin-L2-enabled-opponent', L3: 'pin-L3-no-causation',
+  L4: 'pin-L4-missed-defense', L5: 'pin-L5-deep-fork', L6: 'pin-L6-lost-win-and-gave-one',
+  L7: 'pin-L7-practical-swindle', L8: 'pin-L8-draw-abandoned', L9: 'pin-L9-hedged-parity',
+};
+
+for (const [linkId, boardId] of Object.entries(ONE_PER_LINK)) {
+  test(`${linkId}: composed text names the better column as prose, not a parenthetical`, () => {
+    const { fv, link } = classifyById(boardId);
+    assert.equal(link.id, linkId);
+    const display = fv.bestCol + 1;
+    // Either surface form is acceptable: measured as SERVED (through the guard's cNrM -> "column N"
+    // rewrite), "(col N)" fails A6 on only 9% of mid/late runs vs 0% for prose — while templates
+    // naming no column at all fail 58%. The invariant is that the column is named, not how.
+    assert.match(link.text, new RegExp(`(?:[Cc]olumn ${display}\\b|\\(col ${display}\\))`),
+      `${linkId} must name the better column (${display}); got: ${link.text}`);
+  });
+}
