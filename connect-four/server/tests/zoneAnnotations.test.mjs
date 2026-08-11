@@ -313,6 +313,29 @@ test('a half with an `immediate` register is offered WITHOUT the future: prefix'
   assert.equal(byHandle['opp-key-square'], 'c2r1');
 });
 
+test('a denial half is offered as the OPPONENT geometry, not the player\'s own', async () => {
+  // OI-184, task 7 (deep-reveal-render-remediation): buildAnnotationOffer used to hard-map
+  // lostResource -> 'you' / opponentPunishment -> 'opp' by POSITION. A denial/neutralization half
+  // describes the geometry the OPPONENT was denied, not the mover's own line, so it must flip owner.
+  const { readFileSync } = await import('node:fs');
+  const { fileURLToPath } = await import('node:url');
+  const { dirname, join } = await import('node:path');
+  const { toNarratorVector, pruneVector } = await import('../scripts/reasonNarratorVector.mjs');
+  const { boardSelectionDecisions } = await import('../scripts/reasonBoardSelect.mjs');
+  const here = dirname(fileURLToPath(import.meta.url));
+  const rows = readFileSync(join(here, '../scripts/reason_corpus/evidence.jsonl'), 'utf8')
+    .trim().split('\n').map((l) => JSON.parse(l));
+
+  const fv = pruneVector(toNarratorVector(rows.find((r) => r.id === 'pin-L2-enabled-opponent').evidence));
+  assert.equal(fv.lostResource.kind, 'denial', 'fixture assumption: this half is a denial');
+  const zones = buildAnnotationOffer(fv, boardSelectionDecisions(fv));
+  for (const a of zones.aliases) {
+    if (a.handle.startsWith('you-key')) {
+      assert.fail(`denial geometry offered as the player's own: ${a.handle} = ${a.spec} (${a.role})`);
+    }
+  }
+});
+
 test('openingHorizon suppresses the half-geometry family entirely (opening guardrail)', () => {
   const openingPruned = { bestCol: 3, playedCol: 1,
     lostResource: { register: 'parity', completingCell: 'c5r5', window: ['c2r5','c3r5','c4r5','c5r5'] },

@@ -18,11 +18,16 @@ const PLAYED_COL = 5;
 const BEST_COL = 1;
 
 // This fixture's real requiredSet (harvested live for MOVESTRING/PLAYED_COL via
-// buildRenderDecision, re-harvested after D45) is THREE groups: { half: 'lostResource',
-// spec: 'c1r1', handle: 'you-immediate' }, { half: 'opponentPunishment', spec: 'c2r1',
-// handle: 'opp-key-square' }, and — new under D45, the single line/window slot —
+// buildRenderDecision, re-harvested after D45, and again after task 7/OI-184) is THREE groups:
+// { half: 'lostResource', spec: 'c1r1', handle: 'you-immediate' }, { half: 'opponentPunishment',
+// spec: 'c2r1', handle: 'you-key-square' }, and — new under D45, the single line/window slot —
 // { half: 'lostResource', spec: 'windows:c1r1,c2r1,c3r1,c4r1', handle: 'you-immediate-line' }.
-// `okAnswer` wraps all three so it satisfies the required set on the first
+// The opponentPunishment half's handle is 'you-key-square', not 'opp-key-square': this board's
+// opponentPunishment is `kind: 'denial'` (the opponent occupying c2r1 to kill the mover's OWN
+// double-threat window, D20 realized/denied fastpath) — the geometry is the mover's own line
+// (window === lostResource's shared window), not the opponent's, so task 7's `halfOwner` derives
+// owner 'you' here even though this is the opponentPunishment half (OI-184: owner follows the
+// half's kind, not its position). `okAnswer` wraps all three so it satisfies the required set on the first
 // attempt, keeping every pre-existing test in this file (predating the required-set retry
 // trigger) exercising exactly the retry count its name says. `missingAnswer`, further down, is
 // the deliberate required-set MISS fixture used by the required-set retry tests.
@@ -33,10 +38,10 @@ const BEST_COL = 1;
 // as the fixture that isolates a column-only miss.
 const okAnswer = JSON.stringify({
   better_move: 4, played_outcome: 'draw', best_outcome: 'win',
-  mechanism: 'You gave up the win at [zone:you-immediate]this square[/zone:you-immediate] on [zone:you-immediate-line]the bottom row of four[/zone:you-immediate-line], and left [zone:opp-key-square]the square your opponent needs[/zone:opp-key-square] open. Playing column 2 instead would have kept the win.',
+  mechanism: 'You gave up the win at [zone:you-immediate]this square[/zone:you-immediate] on [zone:you-immediate-line]the bottom row of four[/zone:you-immediate-line], and left [zone:you-key-square]the square you needed to keep[/zone:you-key-square] open. Playing column 2 instead would have kept the win.',
   key_cells: [], fields_relied_on: [], unsure_about: '', confidence: 'high',
 });
-const OK_MECHANISM = 'You gave up the win at [zone:c1r1]this square[/zone:c1r1] on [zone:windows:c1r1,c2r1,c3r1,c4r1]the bottom row of four[/zone:windows:c1r1,c2r1,c3r1,c4r1], and left [zone:c2r1]the square your opponent needs[/zone:c2r1] open. Playing column 2 instead would have kept the win.'; // okAnswer, post processAnnotations (handle -> expanded spec)
+const OK_MECHANISM = 'You gave up the win at [zone:c1r1]this square[/zone:c1r1] on [zone:windows:c1r1,c2r1,c3r1,c4r1]the bottom row of four[/zone:windows:c1r1,c2r1,c3r1,c4r1], and left [zone:c2r1]the square you needed to keep[/zone:c2r1] open. Playing column 2 instead would have kept the win.'; // okAnswer, post processAnnotations (handle -> expanded spec)
 
 let solver;
 before(async () => { solver = await createSolverProcess(); });
@@ -161,7 +166,7 @@ test('a required-set miss triggers exactly one retry with an amended prompt nami
   assert.equal(res.missingHandles.length, 3);
   assert.equal(res.missingHandles[0].handle, 'you-immediate');
   assert.equal(res.missingHandles[0].spec, 'c1r1');
-  assert.equal(res.missingHandles[1].handle, 'opp-key-square');
+  assert.equal(res.missingHandles[1].handle, 'you-key-square');
   assert.equal(res.missingHandles[1].spec, 'c2r1');
   // D45: the line slot. Before D45 this group did not exist — the line was offered, never required.
   assert.equal(res.missingHandles[2].handle, 'you-immediate-line');
@@ -210,7 +215,7 @@ test('an empty required set is a clean no-op — no retry triggered solely by th
 // column-only miss from a required-square miss.
 const noColumnAnswer = JSON.stringify({
   better_move: 4, played_outcome: 'draw', best_outcome: 'win',
-  mechanism: 'You gave up the win at [zone:you-immediate]this square[/zone:you-immediate] on [zone:you-immediate-line]the bottom row of four[/zone:you-immediate-line], and left [zone:opp-key-square]the square your opponent needs[/zone:opp-key-square] open.',
+  mechanism: 'You gave up the win at [zone:you-immediate]this square[/zone:you-immediate] on [zone:you-immediate-line]the bottom row of four[/zone:you-immediate-line], and left [zone:you-key-square]the square you needed to keep[/zone:you-key-square] open.',
   key_cells: [], fields_relied_on: [], unsure_about: '', confidence: 'high',
 });
 

@@ -66,6 +66,19 @@ function tagSpec(tag) {
   return tag.cell; // already cNrM, a valid single-cell spec
 }
 
+// Which player does this half's GEOMETRY belong to? The half's position is not the answer: a
+// `lostResource` whose kind is 'denial' or 'neutralization' describes the OPPONENT's line that the
+// better move would have taken away, so offering it as "the line you are playing for" is board-false
+// (measured: pin-L2, board 334 — the c2r1-c5r1 window holds two player-1 discs and none of player 2's,
+// yet it was offered to the player-2 mover as their own). Only a half the mover would COMPLETE is
+// theirs.
+const OPPONENT_OWNED = new Set(['denial', 'neutralization']);
+export function halfOwner(half, side) {
+  const flipped = OPPONENT_OWNED.has(half?.kind);
+  if (side === 'you') return flipped ? 'opp' : 'you';
+  return flipped ? 'you' : 'opp';
+}
+
 export function buildAnnotationOffer(pruned, boardDecisions, opts = {}) {
   const aliases = [];
   const zoneAliasMap = {};
@@ -125,8 +138,9 @@ export function buildAnnotationOffer(pruned, boardDecisions, opts = {}) {
   // often complete several plies away — offering them as an ordinary present-tense alias would be
   // the eval-3 present-threat trap. Instead they get a distinct `future:`-prefixed spec + role, so
   // the prompt and client can frame them as "matters later," never as a present threat (FR-002).
-  for (const [half, owner] of [[pruned.lostResource, 'you'], [pruned.opponentPunishment, 'opp']]) {
+  for (const [half, side] of [[pruned.lostResource, 'you'], [pruned.opponentPunishment, 'opp']]) {
     if (!half || half.tacticTag !== 'double_threat' || !half.forkCells?.length) continue;
+    const owner = halfOwner(half, side);
     const rawSpec = half.forkCells.length === 1 ? half.forkCells[0] : 'windows:' + half.forkCells.join(',');
     const spec = 'future:' + rawSpec;
     if (seen.has(spec)) continue;
@@ -156,8 +170,9 @@ export function buildAnnotationOffer(pruned, boardDecisions, opts = {}) {
   const halfPairs = opts.openingHorizon
     ? []
     : [[pruned.lostResource, 'you'], [pruned.opponentPunishment, 'opp']];
-  for (const [half, owner] of halfPairs) {
+  for (const [half, side] of halfPairs) {
     if (!half) continue;
+    const owner = halfOwner(half, side);
     const isFuture = horizonForRegister(half.register) !== 'immediate';
     const pre = isFuture ? 'future:' : '';
     const cellKind = isFuture ? 'future' : 'major';   // 'major' never over-claims immediacy
