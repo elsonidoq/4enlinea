@@ -53,11 +53,9 @@ function centralityClause(fv, winningFraming) {
 
 function horizonTail(fv) {
   const half = fv.case && fv.case.startsWith('win_') ? fv.lostResource : fv.opponentPunishment;
-  const plies = half?.pliesToEnd;
   const battle = half?.register === 'parity' ? 'a parity battle'
     : half?.register === 'forced_sequence' ? 'a deep forced line' : 'a deep line';
-  const pliesTxt = plies != null ? `~${plies} plies, ` : '';
-  return ` The solver confirms this resolves deep (${pliesTxt}${battle}) — too far to pin to one square; the lesson is the opening.`;
+  return ` This one only settles a long way out, through ${battle} — too far to pin to a single square; the lesson is the opening.`;
 }
 
 const nameTag = (oc) => `the ${oc.family}${oc.id ? ` (${oc.id})` : ''}`;
@@ -72,25 +70,29 @@ const GUARDRAIL_NO_CENTRALITY = ' The two landing cells are NOT stated to differ
 export function composeOpeningFrame(fv) {
   const oc = fv.openingContext;
   if (!oc) return null;
-  const guardrail = GUARDRAIL + (centralityQualitative(fv) === null ? GUARDRAIL_NO_CENTRALITY : '');
-  const base = { confidence: 'high', covers: [], guardrail };
+  // The prohibition is gated on the EMITTED clause, never on a predicate the branch may override:
+  // O2 suppresses the clause on centralityGrounded:false while centralityQualitative can still be
+  // non-null, which previously dropped both the clause and its prohibition (eval-21).
+  const mk = (id, kind, lead, clause) => ({
+    id, kind, confidence: 'high', covers: [],
+    guardrail: GUARDRAIL + (clause === '' ? GUARDRAIL_NO_CENTRALITY : ''),
+    text: lead + clause + horizonTail(fv),
+  });
 
   if (oc.namedOpening) {
     const o = oc.namedOpening;
-    const text = `In the opening you were following ${nameTag(o)}. The book move is column ${col1(o.bookNextCol)}; `
-      + `you played column ${col1(fv.playedCol)}, leaving the line.`
-      + centralityClause(fv, true) + horizonTail(fv);
-    return { ...base, id: 'O1', kind: 'namedOpening', text };
+    return mk('O1', 'namedOpening',
+      `In the opening you were following ${nameTag(o)}. The book move is column ${col1(o.bookNextCol)}; `
+      + `you played column ${col1(fv.playedCol)}, leaving the line.`,
+      centralityClause(fv, true));
   }
   if (oc.defense) {
     const o = oc.defense;
-    const text = `In the opening you were following ${nameTag(o)}. The more resilient move is column ${col1(o.bestDefenseCol)}; `
-      + `column ${col1(fv.playedCol)} gives ground faster.`
-      + (o.centralityGrounded ? centralityClause(fv, false) : '') + horizonTail(fv);
-    return { ...base, id: 'O2', kind: 'defense', text };
+    return mk('O2', 'defense',
+      `In the opening you were following ${nameTag(o)}. The more resilient move is column ${col1(o.bestDefenseCol)}; `
+      + `column ${col1(fv.playedCol)} gives ground faster.`,
+      o.centralityGrounded ? centralityClause(fv, false) : '');
   }
-  // centrality
   const o = oc.centrality;
-  const text = `${o.text}` + centralityClause(fv, fv.player === 1) + horizonTail(fv);
-  return { ...base, id: 'O3', kind: 'centrality', text };
+  return mk('O3', 'centrality', `${o.text}`, centralityClause(fv, fv.player === 1));
 }

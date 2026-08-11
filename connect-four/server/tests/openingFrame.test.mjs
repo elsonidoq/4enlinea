@@ -81,3 +81,29 @@ test('guardrail omits the no-centrality clause when qualitative is non-null', ()
     assert.doesNotMatch(composeOpeningFrame(defenseFv).guardrail, /not stated to differ in centrality/i);
   }
 });
+
+test('frame text carries no engine vocabulary (A5a)', () => {
+  for (const fv of [namedFv, defenseFv, centralityFv]) {
+    const { text } = composeOpeningFrame(fv);
+    assert.doesNotMatch(text, /\bsolver\b/i, `"solver" leaked into coach prose: ${text}`);
+    assert.doesNotMatch(text, /\bplies\b/i, `"plies" leaked into coach prose: ${text}`);
+    assert.match(text, /lesson is the opening/);   // the frame's point survives the rewrite
+  }
+});
+
+test('centrality prohibition is attached whenever no centrality clause was emitted', () => {
+  // O2 with centralityGrounded:false suppresses the clause; the guardrail MUST then forbid the claim.
+  const ungrounded = { ...defenseFv,
+    openingContext: { defense: { ...defenseFv.openingContext.defense, centralityGrounded: false } } };
+  const f = composeOpeningFrame(ungrounded);
+  assert.doesNotMatch(f.text, /easier to build a connected four/);   // clause suppressed
+  assert.match(f.guardrail, /more central/,                          // ...so prohibition present
+    'clause was suppressed but GUARDRAIL_NO_CENTRALITY was not attached');
+});
+
+test('a frame that DOES state centrality does not also forbid it', () => {
+  const f = composeOpeningFrame(defenseFv);       // centralityGrounded: true
+  if (/easier to build a connected four/.test(f.text)) {
+    assert.doesNotMatch(f.guardrail, /do not say one column is "more central"/);
+  }
+});
