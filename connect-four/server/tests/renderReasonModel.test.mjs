@@ -616,7 +616,10 @@ test('assembled prompt never names a TERM_KB slug or a zone handle it does not o
   const { fileURLToPath } = await import('node:url');
   const { dirname, join } = await import('node:path');
   const { toNarratorVector, pruneVector } = await import('../scripts/reasonNarratorVector.mjs');
-  const { OFFERABLE_TERM_SLUGS } = await import('../scripts/reason_engine/zoneAnnotations.mjs');
+  // Fix round 4 (finding 6): this loop swept only OFFERABLE_TERM_SLUGS — 4 of the 15 redactable
+  // slugs — so z_threat / minor_threat / forced_block / major_threat_* had NO corpus-wide guard,
+  // which is how a raw-slug leak survived an earlier review round. Sweep the full redactable set.
+  const { REDACTABLE_TAG_SLUGS } = await import('../scripts/renderReasonModel.mjs');
   const here = dirname(fileURLToPath(import.meta.url));
   const rows = readFileSync(join(here, '../scripts/reason_corpus/evidence.jsonl'), 'utf8')
     .trim().split('\n').map((l) => JSON.parse(l));
@@ -628,7 +631,7 @@ test('assembled prompt never names a TERM_KB slug or a zone handle it does not o
     const prompt = assembleGroundedPrompt(model);
 
     const offeredTerms = new Set((model.zones.terms ?? []).map((t) => t.slug));
-    for (const slug of OFFERABLE_TERM_SLUGS) {
+    for (const slug of REDACTABLE_TAG_SLUGS) {
       if (offeredTerms.has(slug)) continue;
       if (new RegExp(`\\b${slug}\\b`).test(prompt)) violations.push(`${r.id}: term ${slug}`);
     }
@@ -869,3 +872,161 @@ test('fix round 3: an unoffered claimeven board tag renders its vetted phrase, n
     'the bare word "claimeven" must not appear anywhere in the prompt as a standalone token');
 });
 
+
+// ── Fix round 4 (whole-branch review) ────────────────────────────────────────────────────────────
+// Shared corpus loader for the round-4 regressions below (same shape the tests above use inline).
+async function loadCorpus() {
+  const { readFileSync: rf } = await import('node:fs');
+  const { fileURLToPath } = await import('node:url');
+  const { dirname, join } = await import('node:path');
+  const here = dirname(fileURLToPath(import.meta.url));
+  return rf(join(here, '../scripts/reason_corpus/evidence.jsonl'), 'utf8')
+    .trim().split('\n').map((l) => JSON.parse(l));
+}
+
+// Finding 1. redactUnofferedSlugsInTree drops a display phrase into WHICHEVER half carries the tag,
+// including `opponentPunishment` — so a second-person phrase becomes a confidently-worded FALSE
+// attribution about the half punishing the player. Measured at HEAD 77e8024: eval-21 / eval-38
+// (`opponentPunishment.basis` = "a threat square you're guaranteed to reach…"), eval-31
+// (`opponentPunishment.tacticTag` = "…a row you're favored to reach first"), eval-36
+// (`opponentPunishment.tacticTag` = "…parity does not favor you to reach first").
+// Asserted through the PRODUCTION path (assembleGroundedPrompt(buildReasonRenderModel(...))).
+test('fix round 4 (finding 1): display phrases are owner-neutral on every corpus record — no second person, and none inside the opponent half', async () => {
+  const { toNarratorVector, pruneVector } = await import('../scripts/reasonNarratorVector.mjs');
+  const { RENDER_DISPLAY_PHRASE } = await import('../scripts/renderReasonModel.mjs');
+  const rows = await loadCorpus();
+  const SECOND_PERSON = /\byou\b|\byour\b|\byou're\b|\byourself\b/i;
+  const violations = [];
+  for (const [slug, phrase] of Object.entries(RENDER_DISPLAY_PHRASE)) {
+    if (SECOND_PERSON.test(phrase)) violations.push(`RENDER_DISPLAY_PHRASE.${slug} is second-person: ${phrase}`);
+  }
+  // And the same phrases as they actually reach the model, per record.
+  for (const r of rows) {
+    const prompt = assembleGroundedPrompt(buildReasonRenderModel(pruneVector(toNarratorVector(r.evidence))));
+    for (const [slug, phrase] of Object.entries(RENDER_DISPLAY_PHRASE)) {
+      if (prompt.includes(phrase) && SECOND_PERSON.test(phrase)) violations.push(`${r.id}: ${slug}`);
+    }
+  }
+  assert.deepEqual(violations, [], `owner-asserting display phrases:\n${violations.join('\n')}`);
+});
+
+test('fix round 4 (finding 1, named regression records): eval-21/31/36/38 never receive a second-person parity/zugzwang phrase', async () => {
+  const { toNarratorVector, pruneVector } = await import('../scripts/reasonNarratorVector.mjs');
+  const rows = await loadCorpus();
+  for (const id of ['eval-21', 'eval-31', 'eval-36', 'eval-38']) {
+    const record = rows.find((r) => r.id === id);
+    assert.ok(record, `${id} must exist in the corpus`);
+    const prompt = assembleGroundedPrompt(buildReasonRenderModel(pruneVector(toNarratorVector(record.evidence))));
+    assert.doesNotMatch(prompt, /you're guaranteed to reach/, `${id}: z_threat phrase must not assert the player's perspective`);
+    assert.doesNotMatch(prompt, /you're favored to reach first/, `${id}: major_threat_parity phrase must not assert the player's perspective`);
+    assert.doesNotMatch(prompt, /parity does not favor you to reach/, `${id}: major_threat_nonparity phrase must not assert the player's perspective`);
+  }
+  // Positive counterpart: the neutral wording IS delivered (the redaction still fires).
+  const e21 = rows.find((r) => r.id === 'eval-21');
+  const p21 = assembleGroundedPrompt(buildReasonRenderModel(pruneVector(toNarratorVector(e21.evidence))));
+  assert.match(p21, /a threat square the column's parity guarantees its owner reaches first \(zugzwang\)/);
+  const e36 = rows.find((r) => r.id === 'eval-36');
+  const p36 = assembleGroundedPrompt(buildReasonRenderModel(pruneVector(toNarratorVector(e36.evidence))));
+  assert.match(p36, /parity does not deliver to its owner/);
+});
+
+// Finding 4. The reading key in the SAME prompt forbids the model to repeat "window"; the
+// minor_threat phrase contained "four-window". Measured at HEAD on 11 records (eval-5/6/9/10/11/12/
+// 27/31, pin-L6/L7/L8). Also restores the KB predicate (allen-minor-threat.md: "two discs and two
+// empty cells (and no opponent disc)").
+test('fix round 4 (finding 4): no display phrase reaching the model contains a token the reading key bans', async () => {
+  const { toNarratorVector, pruneVector } = await import('../scripts/reasonNarratorVector.mjs');
+  const { RENDER_DISPLAY_PHRASE } = await import('../scripts/renderReasonModel.mjs');
+  const BANNED = /\bhistogram\b|\bwindows?\b|completing cell|\bsolver\b|\bscore\b/i;
+  const bad = Object.entries(RENDER_DISPLAY_PHRASE).filter(([, p]) => BANNED.test(p)).map(([s]) => s);
+  assert.deepEqual(bad, [], `display phrases containing a banned token: ${bad.join(', ')}`);
+  const rows = await loadCorpus();
+  const e5 = rows.find((r) => r.id === 'eval-5');
+  assert.ok(e5, 'eval-5 must exist in the corpus');
+  const prompt = assembleGroundedPrompt(buildReasonRenderModel(pruneVector(toNarratorVector(e5.evidence))));
+  assert.doesNotMatch(prompt, /two discs and two empty squares in that four-window/);
+  assert.match(prompt, /a minor threat — two discs and two empty squares in the same line of four, with none of the opponent's/);
+});
+
+// Finding 5. The KB-terms adjacency worked example fell back to an UNRELATED real handle when the
+// demonstrated term has no pointer of its own — measured on eval-7/8/11/12/15/16, e.g.
+// "…[term:figure_7]…[/term:figure_7] on [zone:better-col]where it lives[/zone:better-col]": the fork
+// does not live on the better column. Prefer the abstract placeholder.
+test('fix round 4 (finding 5): the adjacency worked example uses the abstract placeholder, never an unrelated real handle', async () => {
+  const { toNarratorVector, pruneVector } = await import('../scripts/reasonNarratorVector.mjs');
+  const rows = await loadCorpus();
+  const record = rows.find((r) => r.id === 'eval-7');
+  assert.ok(record, 'eval-7 must exist in the corpus');
+  const model = buildReasonRenderModel(pruneVector(toNarratorVector(record.evidence)));
+  const term = model.zones.terms[0];
+  assert.ok(term, 'harvested check: eval-7 must offer at least one term');
+  assert.deepEqual(model.zones.aliases.filter((a) => a.kbId === term.slug).map((a) => a.handle), [],
+    'harvested check: eval-7 offers no alias tied to the demonstrated term — this is the fallback case');
+  const prompt = assembleGroundedPrompt(model);
+  assert.match(prompt, /\[zone:<handle>\]where it lives\[\/zone:<handle>\]/,
+    'the worked example must use the abstract <handle> placeholder when no pointer exists for the demonstrated term');
+  assert.doesNotMatch(prompt, /\[zone:better-col\]where it lives/,
+    'the worked example must not point the demonstrated term at an unrelated real handle');
+});
+
+// Finding 3. First-offer-wins dedupe let the fork pivot EVICT the other half's key square and
+// relabel the OPPONENT's completing square as YOUR pivot. Measured at HEAD: eval-11 and eval-12
+// (lostResource pivot c2r4 === opponentPunishment.completingCell c2r4) — the required set read
+// `[zone:you-fork-pivot] = the square you play to CREATE the fork` for c2r4 while the causal link in
+// the same prompt said the opponent forces their win via c2r4. Abstain instead.
+test('fix round 4 (finding 3): eval-11/eval-12 abstain from the pivot and keep the opponent key square in the required set', async () => {
+  const { toNarratorVector, pruneVector } = await import('../scripts/reasonNarratorVector.mjs');
+  const rows = await loadCorpus();
+  for (const id of ['eval-11', 'eval-12']) {
+    const record = rows.find((r) => r.id === id);
+    assert.ok(record, `${id} must exist in the corpus`);
+    const fv = pruneVector(toNarratorVector(record.evidence));
+    assert.equal(fv.opponentPunishment.completingCell, 'c2r4', `harvested check: ${id}'s opponent completing square`);
+    const model = buildReasonRenderModel(fv);
+    assert.deepEqual(model.zones.aliases.filter((a) => a.handle.endsWith('-fork-pivot')).map((a) => a.handle), [],
+      `${id}: no pivot may be offered when the pivot cell is the other half's completing square`);
+    const opp = model.zones.aliases.find((a) => a.handle === 'opp-key-square');
+    assert.ok(opp && opp.spec.endsWith('c2r4'), `${id}: opp-key-square must survive for c2r4`);
+    assert.ok((model.requiredSet ?? []).some((g) => g.handle === 'opp-key-square'),
+      `${id}: the opponent's key square must be back in the required set`);
+    const prompt = assembleGroundedPrompt(model);
+    assert.doesNotMatch(prompt, /to CREATE the fork/, `${id}: no pivot role text may reach the model`);
+  }
+});
+
+test('fix round 4 (finding 3): the pivot feature is NOT disabled — records with a non-clashing pivot still offer and require it', async () => {
+  const { toNarratorVector, pruneVector } = await import('../scripts/reasonNarratorVector.mjs');
+  const rows = await loadCorpus();
+  const offering = [];
+  for (const r of rows) {
+    const model = buildReasonRenderModel(pruneVector(toNarratorVector(r.evidence)));
+    if (model.zones.aliases.some((a) => a.handle.endsWith('-fork-pivot'))) offering.push(r.id);
+  }
+  // Measured after the abstain rule: 16 of the 18 previously-offering records (eval-11, eval-12 now
+  // abstain). A regression that disabled the feature would show a much smaller number.
+  assert.ok(offering.length >= 15, `pivot offering collapsed to ${offering.length} records: ${offering.join(',')}`);
+  assert.ok(offering.includes('eval-16') && offering.includes('eval-20') && offering.includes('pin-L5-deep-fork'),
+    `expected pivot still offered on the non-clashing records; got ${offering.join(',')}`);
+  assert.ok(!offering.includes('eval-11') && !offering.includes('eval-12'));
+});
+
+// Finding 2. `roleText`'s two fork-pivot branches interpolated `${who} plays`, producing "the square
+// you plays to CREATE the fork" — measured 0 occurrences at base, 13 records at HEAD, twice each
+// (Highlightable regions AND the required set), incl. eval-16, eval-20, pin-L5-deep-fork.
+test('fix round 4 (finding 2): the fork-pivot role text is grammatical for both owners, corpus-wide and through the prompt', async () => {
+  const { toNarratorVector, pruneVector } = await import('../scripts/reasonNarratorVector.mjs');
+  const rows = await loadCorpus();
+  const violations = [];
+  let sawPivot = 0;
+  for (const r of rows) {
+    const prompt = assembleGroundedPrompt(buildReasonRenderModel(pruneVector(toNarratorVector(r.evidence))));
+    if (/to CREATE the fork/.test(prompt)) sawPivot += 1;
+    if (/\byou plays\b/.test(prompt)) violations.push(`${r.id}: "you plays"`);
+    if (/\byour opponent play\b/.test(prompt)) violations.push(`${r.id}: "your opponent play"`);
+  }
+  assert.ok(sawPivot > 0, 'harvested check: at least one corpus record must still show a fork-pivot role');
+  assert.deepEqual(violations, [], `ungrammatical fork-pivot role text:\n${violations.join('\n')}`);
+  const e16 = rows.find((r) => r.id === 'eval-16');
+  const p16 = assembleGroundedPrompt(buildReasonRenderModel(pruneVector(toNarratorVector(e16.evidence))));
+  assert.match(p16, /the square you play to CREATE the fork/);
+});

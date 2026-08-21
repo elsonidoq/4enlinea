@@ -63,8 +63,13 @@ function roleText(owner, kind) {
   // run — the singular 'future' wording made the model call a two-square fork "the later fork
   // square" (measured, t043 run 1).
   if (kind === 'future-fork') return `BOTH of the two squares ${who} can finish on — this is the fork itself, and it matters later, once the forced sequence reaches it, not right now`;
-  if (kind === 'fork-pivot') return `the square ${who} plays to CREATE the fork — the move that makes both winning squares live at once; it matters later, once the forced sequence reaches it`;
-  if (kind === 'fork-pivot-now') return `the square ${who} plays to CREATE the fork — the move that makes both winning squares live at once`;
+  // Fix round 4 (finding 2): `${who} plays` produced "the square you plays to CREATE the fork" —
+  // ungrammatical, and it reached the model twice per record (Highlightable regions AND the required
+  // set) on 13 corpus records. The surrounding branches conjugate explicitly (see the 'line' branch
+  // above); these two now do the same.
+  const plays = owner === 'you' ? 'you play' : 'your opponent plays';
+  if (kind === 'fork-pivot') return `the square ${plays} to CREATE the fork — the move that makes both winning squares live at once; it matters later, once the forced sequence reaches it`;
+  if (kind === 'fork-pivot-now') return `the square ${plays} to CREATE the fork — the move that makes both winning squares live at once`;
   return `a single square completing ${who}'s four-in-a-row line`; // major
 }
 
@@ -225,8 +230,20 @@ export function buildAnnotationOffer(pruned, boardDecisions, opts = {}) {
     // The fork PIVOT (OI-182). forkCells are the squares the fork FINISHES on; the pivot is the move
     // that creates it — the only part a player can learn to see coming. Offered separately so an
     // explanation can name the cause, not just the effects.
+    // Fix round 4 (finding 3). The pivot is offered from the FIRST half in `halfPairs`, and the
+    // dedupe below is first-offer-wins — so when the pivot cell coincides with the OTHER half's
+    // completing square, the pivot EVICTS that half's `-key-square` alias and the same cell is
+    // relabelled as "the square you play to CREATE the fork" while the causal link in the same
+    // prompt says the opponent forces their win there. Both labels are true of different lines,
+    // which is exactly why it reads as a contradiction. Abstain (I2 — never guess) rather than pick
+    // one, consistent with forkPivotCell's existing forkCells guard. Measured: 3 of the 20 fork
+    // halves in the corpus (eval-11, eval-12, eval-26); the other 17 still offer their pivot.
+    const otherHalf = half === pruned.lostResource ? pruned.opponentPunishment : pruned.lostResource;
+    const otherCells = new Set([otherHalf?.completingCell, otherHalf?.cell].filter(Boolean));
     const pivot = forkPivotCell(half);
-    if (pivot) offers.push([`${owner}-fork-pivot`, pivot, isFuture ? 'fork-pivot' : 'fork-pivot-now']);
+    if (pivot && !otherCells.has(pivot)) {
+      offers.push([`${owner}-fork-pivot`, pivot, isFuture ? 'fork-pivot' : 'fork-pivot-now']);
+    }
     for (const [base, rawSpec, kind] of offers) {
       // Dedup on the UNPREFIXED geometry so a cell already offered as a present structural alias
       // is never re-offered under a future: framing (and vice versa) — first offer wins.

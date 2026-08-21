@@ -415,7 +415,9 @@ function combinedGuardrail(model) {
 // defect class as an unoffered TERM_KB slug. Mirrored from reasonEngine.mjs's TAG_PRIORITY (not
 // exported, and that file is render-layer OFF LIMITS per the task brief — "render-layer only," never
 // touch reasonEngine.mjs) — keep in sync if TAG_PRIORITY's tag set changes.
-const REDACTABLE_TAG_SLUGS = [
+// Exported (fix round 4, finding 6) so the corpus-wide invariant test can sweep ALL redactable
+// slugs instead of only the 4 offerable TERM_KB ones.
+export const REDACTABLE_TAG_SLUGS = [
   ...OFFERABLE_TERM_SLUGS,
   'forced_win', 'z_threat', 'odd_even_threat', 'j_shape', 'undercut', 'overcut',
   'major_threat_parity', 'major_threat_nonparity', 'forced_block', 'forbidden_columns', 'minor_threat',
@@ -447,13 +449,24 @@ const REDACTABLE_TAG_SLUGS = [
 // odd_even_threat, j_shape, undercut, overcut, forbidden_columns) are measured UNREACHABLE across the
 // full 63-record corpus (0 occurrences each) — see the report's table — so they are left without an
 // entry rather than inventing unverified wording for a case nothing exercises today.
-const RENDER_DISPLAY_PHRASE = {
+// Fix round 4 (finding 1). These phrases are OWNER-NEUTRAL by contract. redactUnofferedSlugsInTree
+// substitutes a perspective-neutral tag slug wherever it appears, INCLUDING inside the
+// `opponentPunishment` half — so any second-person wording ("you", "your", "you're") became a
+// confidently-worded FALSE attribution about the half that punishes the player (measured at HEAD:
+// eval-21/eval-38 opponentPunishment.basis, eval-31/eval-36 opponentPunishment.tacticTag). Never
+// re-introduce a second-person pronoun here; say "its owner" / "one player" instead. Wording is
+// sourced from the KB entries: docs/knowledge-base/community-z-threat.md (odd empty-cell count ⇒
+// the owner lands on the threat row), community-forced-block.md, allen-minor-threat.md ("two discs
+// … two empty cells (and no opponent disc)"), derived-parity-aligned-threat.md / allen-major-threat.md.
+// Fix round 4 (finding 4): minor_threat's old phrase contained "four-window" — "window" is a token
+// the SAME prompt's reading key forbids the model to repeat — and dropped the KB's "no opponent disc".
+export const RENDER_DISPLAY_PHRASE = {
   claimeven: 'controlling the even squares of a column to guarantee a threat',
-  z_threat: "a threat square you're guaranteed to reach through the column's parity (zugzwang)",
-  forced_block: "a threat you must block right now (the opponent can make four next move)",
-  minor_threat: 'a minor threat (two discs and two empty squares in that four-window)',
-  major_threat_parity: "a three-in-a-row threat on a row you're favored to reach first (parity)",
-  major_threat_nonparity: "a three-in-a-row threat on a row parity does not favor you to reach first",
+  z_threat: "a threat square the column's parity guarantees its owner reaches first (zugzwang)",
+  forced_block: 'a threat that must be blocked immediately — otherwise four-in-a-row completes on the next move',
+  minor_threat: "a minor threat — two discs and two empty squares in the same line of four, with none of the opponent's",
+  major_threat_parity: 'a three-in-a-row threat whose empty square sits on a row that parity delivers to its owner',
+  major_threat_nonparity: 'a three-in-a-row threat whose empty square sits on a row that parity does not deliver to its owner',
 };
 
 // Fix round 3 (task 9b, finding 2, still open after round 2). `TAG_PHRASE[slug] ?? RENDER_DISPLAY_PHRASE[slug]
@@ -552,9 +565,12 @@ export function assembleGroundedPrompt(model) {
   // absent on most records (leaked on 36/40 term-offering records). Use a REAL handle tied to the
   // demonstrated term's own geometry (pointersFor, same linkage the binding text below already
   // relies on) when one is offered; else any other real offered alias; else the abstract placeholder.
-  const adjacencyHandle = exampleTerm
-    ? (pointersFor(exampleTerm.slug)[0] ?? exampleAlias?.handle ?? null)
-    : null;
+  // Fix round 4 (finding 5): the `exampleAlias?.handle` fallback made the worked example point at an
+  // UNRELATED real handle whenever the demonstrated term has no pointer of its own — measured e.g.
+  // "…[term:figure_7]…[/term:figure_7] on [zone:better-col]where it lives[/zone:better-col]" on
+  // eval-7/8/11/12/15/16: the fork does not live on the better column. Not a leak (the handle IS
+  // offered) but a false worked example the model imitates. Prefer the abstract <handle> placeholder.
+  const adjacencyHandle = exampleTerm ? (pointersFor(exampleTerm.slug)[0] ?? null) : null;
   const adjacencyZoneTag = adjacencyHandle ? `zone:${adjacencyHandle}` : 'zone:<handle>';
   const termLines = model.zones.terms.length
     ? model.zones.terms.map((t) => {
