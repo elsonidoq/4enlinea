@@ -58,6 +58,7 @@ function roleText(owner, kind) {
   // square" (measured, t043 run 1).
   if (kind === 'future-fork') return `BOTH of the two squares ${who} can finish on — this is the fork itself, and it matters later, once the forced sequence reaches it, not right now`;
   if (kind === 'fork-pivot') return `the square ${who} plays to CREATE the fork — the move that makes both winning squares live at once; it matters later, once the forced sequence reaches it`;
+  if (kind === 'fork-pivot-now') return `the square ${who} plays to CREATE the fork — the move that makes both winning squares live at once`;
   return `a single square completing ${who}'s four-in-a-row line`; // major
 }
 
@@ -219,7 +220,7 @@ export function buildAnnotationOffer(pruned, boardDecisions, opts = {}) {
     // that creates it — the only part a player can learn to see coming. Offered separately so an
     // explanation can name the cause, not just the effects.
     const pivot = forkPivotCell(half);
-    if (pivot) offers.push([`${owner}-fork-pivot`, pivot, 'fork-pivot']);
+    if (pivot) offers.push([`${owner}-fork-pivot`, pivot, isFuture ? 'fork-pivot' : 'fork-pivot-now']);
     for (const [base, rawSpec, kind] of offers) {
       // Dedup on the UNPREFIXED geometry so a cell already offered as a present structural alias
       // is never re-offered under a future: framing (and vice versa) — first offer wins.

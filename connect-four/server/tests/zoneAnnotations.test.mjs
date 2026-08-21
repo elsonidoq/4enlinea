@@ -412,3 +412,32 @@ test('an OFFERED tag produces no repair', () => {
   assert.deepEqual(out.repairs, []);
   assert.ok(out.mechanism.includes('[zone:col4]'));              // handle expanded to its real spec
 });
+
+test('fork-pivot role text follows the half register — no "matters later" claim on an immediate fork', () => {
+  // Built by hand, not harvested: no corpus record has an immediate-register fork half (all 20 fork
+  // halves are register 'forced_sequence'), so this pins the latent path directly.
+  const immediateFork = {
+    tacticTag: 'double_threat', register: 'immediate',
+    forkCells: ['c5r5', 'c7r6'],
+    line: [{ ply: 1, mover: 1, col: 3, cell: 'c4r1' }, { ply: 2, mover: 1, col: 4, cell: 'c5r4' }],
+  };
+  const prunedNow = { bestCol: 2, playedCol: 3, lostResource: immediateFork, opponentPunishment: {} };
+  const zonesNow = buildAnnotationOffer(prunedNow, []);
+  const pivotNow = zonesNow.aliases.find((a) => a.handle.endsWith('-fork-pivot'));
+  assert.ok(pivotNow, 'immediate-register fork should still offer a pivot alias');
+  assert.doesNotMatch(pivotNow.spec, /^future:/, 'an immediate-register fork pivot must not carry future:');
+  assert.match(pivotNow.role, /creates|makes both/i);
+  assert.doesNotMatch(pivotNow.role, /matters later/i);
+  assert.doesNotMatch(pivotNow.role, /once the forced sequence reaches it/i);
+
+  // Same shape, forced_sequence register: the future: prefix and "matters later" framing must persist.
+  const deepFork = { ...immediateFork, register: 'forced_sequence' };
+  const prunedLater = { bestCol: 2, playedCol: 3, lostResource: deepFork, opponentPunishment: {} };
+  const zonesLater = buildAnnotationOffer(prunedLater, []);
+  const pivotLater = zonesLater.aliases.find((a) => a.handle.endsWith('-fork-pivot'));
+  assert.ok(pivotLater, 'forced_sequence-register fork should still offer a pivot alias');
+  assert.match(pivotLater.spec, /^future:/, 'a forced_sequence-register fork pivot must carry future:');
+  assert.match(pivotLater.role, /creates|makes both/i);
+  assert.match(pivotLater.role, /matters later/i);
+  assert.match(pivotLater.role, /once the forced sequence reaches it/i);
+});
