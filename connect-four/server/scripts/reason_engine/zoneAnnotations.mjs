@@ -33,6 +33,12 @@ const TERM_KB = {
   claimeven:        { kbId: 'claimeven', description: 'controlling the even squares of a column to guarantee a threat' },
 };
 
+// The closed set of slugs that can ever be OFFERED as a [term:...] (task 9b): the render layer needs
+// this to know which slugs are safe to display unconditionally vs which must be redacted/conditioned
+// on `zones.terms`. Exported so renderReasonModel.mjs has one source of truth instead of a mirrored
+// literal.
+export const OFFERABLE_TERM_SLUGS = Object.keys(TERM_KB);
+
 // Plain-language role text per (owner, kind) for the prompt's "Highlightable regions" list.
 // kind === 'future' (US1, deep-reveal-grounding spec 058) is a deep fork cell — it must read as
 // something that matters LATER, once a forced sequence reaches it, never as a present threat

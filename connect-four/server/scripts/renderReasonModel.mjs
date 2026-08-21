@@ -9,7 +9,7 @@ import { selectBoards, renderThreatList, patternOnAfterBestBoard, boardSelection
 import { groundCell, horizonForRegister } from './reasonCellGrounding.mjs';
 import { parseBoardState } from '../classifier.js';
 import { composeOpeningFrame, centralityQualitative } from './reason_engine/openingFrame.mjs';
-import { buildAnnotationOffer, forkPivotCell } from './reason_engine/zoneAnnotations.mjs';
+import { buildAnnotationOffer, forkPivotCell, OFFERABLE_TERM_SLUGS } from './reason_engine/zoneAnnotations.mjs';
 
 // The pruned vector minus fields the board carries (transformed) or statically excluded.
 // Path-precise: recurse into plain-object containers; classify arrays/primitives by their own path;
@@ -384,11 +384,9 @@ function combinedGuardrail(model) {
 // tactic-name display through TAG_PHRASE's canonical phrase whenever the slug is not offered this
 // record, and keep the raw slug only where it IS offered (that's the whole point of offering it).
 //
-// TERM_KB (zoneAnnotations.mjs) is the closed set of slugs that can ever be offered; it is not
-// exported (and this task must not edit that file, per the task brief — another lane may be
-// committing to it concurrently), so its 4 keys are mirrored here. Keep in sync if TERM_KB's key set
-// changes.
-const OFFERABLE_SLUGS = ['immediate_threat', 'double_threat', 'figure_7', 'claimeven'];
+// TERM_KB (zoneAnnotations.mjs) is the closed set of slugs that can ever be offered — imported as
+// OFFERABLE_TERM_SLUGS (one source of truth, no mirrored literal).
+const OFFERABLE_SLUGS = OFFERABLE_TERM_SLUGS;
 
 // claimeven collides: TAG_PHRASE.claimeven is the literal string 'claimeven' (the phrase IS the
 // slug), so routing it through TAG_PHRASE cannot change what is displayed. Measured over the full
@@ -425,13 +423,19 @@ function redactUnofferedSlugsInTree(node, offered) {
 
 export function assembleGroundedPrompt(model) {
   const offeredSlugs = new Set((model.zones.terms ?? []).map((t) => t.slug));
-  // The two Bad/Good worked examples below (Highlightable regions + KB terms blocks) used to hardcode
-  // `immediate_threat` / `double_threat` unconditionally — the largest single source of the task-9b
-  // leak (49/63 corpus records), since every prompt showed these regardless of what was offered.
-  // Use a slug this record ACTUALLY offers (still concrete, still legitimate) when one exists;
-  // otherwise fall back to a placeholder that is not a real TERM_KB slug at all, so the syntax demo
-  // survives even when no term is offered without ever tripping the "no unoffered slug" invariant.
-  const exampleSlug = model.zones.terms[0]?.slug ?? 'the_idea';
+  // Fix round 1 (task-9b, finding 1/2). The two worked examples below used to hardcode
+  // `immediate_threat` / `double_threat`, then a placeholder ('the_idea') when nothing was offered —
+  // but demonstrating `[term:the_idea]` syntax on a record with ZERO offered terms taught the model to
+  // emit a [term:] tag exactly when it must not: the pipeline strips it as `unoffered_term:the_idea`,
+  // reproducing the measured "taught but not offered" failure with a fake slug instead of a real one.
+  // A worked term example is only ever legitimate when this record actually offers a term — use the
+  // first OFFERED term (both its slug AND its canonicalPhrase, so the wrapped words and the tag never
+  // contradict each other — finding 2), and when none is offered, do not demonstrate [term:] syntax
+  // at all (see hasTerms branches below).
+  const hasTerms = model.zones.terms.length > 0;
+  const exampleTerm = hasTerms ? model.zones.terms[0] : null;
+  const hasZones = model.zones.aliases.length > 0;
+  const exampleAlias = hasZones ? model.zones.aliases[0] : null;
   const boards = model.boards.map((b) =>
     `## Board: ${b.id} (${b.reason})\n${b.ascii}\nTactics:\n${redactUnofferedSlugsInText(renderThreatList(b.tags), offeredSlugs)}`).join('\n\n');
   const frames = model.frames.map((f) => f.text).filter(Boolean).join('\n\n');
@@ -481,9 +485,22 @@ export function assembleGroundedPrompt(model) {
     'To highlight a phrase, wrap it in BOTH an opening and a closing tag: '
       + '[zone:<handle>]phrase[/zone:<handle>], using a handle from this list verbatim. Every '
       + 'opening tag MUST have a matching closing tag — never write a handle on its own as if it '
-      + `were a word. Bad: "the [term:${exampleSlug}] on c2 is worth keeping" (no closing tag; `
-      + `used as a noun). Good: "[term:${exampleSlug}]the threat you need to keep `
-      + `alive[/term:${exampleSlug}] on c2". Never write a raw square. Do not overlap a `
+      // The open/close-tag rule is general (applies to both [zone:...] and [term:...]); the worked
+      // pair below demonstrates it with whichever kind is actually usable on this record — a term
+      // when one is offered (finding 2: the wrapped words are that term's own canonicalPhrase, never
+      // a hardcoded phrase that could contradict the slug), else a zone handle when one is offered,
+      // else the abstract <handle> form (never a fabricated concrete handle, finding 1).
+      + (exampleTerm
+        ? `were a word. Bad: "the [term:${exampleTerm.slug}] on c2 is worth keeping" (no closing tag; `
+          + `used as a noun). Good: "[term:${exampleTerm.slug}]${exampleTerm.canonicalPhrase}`
+          + `[/term:${exampleTerm.slug}] on c2". `
+        : exampleAlias
+          ? `were a word. Bad: "the [zone:${exampleAlias.handle}] on c2 is worth keeping" (no closing `
+            + `tag; used as a noun). Good: "[zone:${exampleAlias.handle}]the square that matters here`
+            + `[/zone:${exampleAlias.handle}] on c2". `
+          : 'were a word. Bad: "the highlight on c2 is worth keeping" (no closing tag; used as a '
+            + 'noun). Good: "[zone:<handle>]the square that matters here[/zone:<handle>] on c2". ')
+      + 'Never write a raw square. Do not overlap a '
       + 'highlight and a term on the same words. A handle whose role below says it "matters later" '
       + 'or "once the forced sequence reaches it" names a square that is not yet playable — '
       + 'describe it in future or conditional language ("this matters once...", "later, if..."), '
@@ -513,26 +530,39 @@ export function assembleGroundedPrompt(model) {
     requiredLines,
     '',
     '# KB terms you may name',
-    'When you use one of these ideas, wrap the words in BOTH an opening and a closing tag: '
-      + '[term:<slug>]phrase[/term:<slug>], using a slug from this list verbatim. Every opening '
-      + 'tag MUST have a matching closing tag — never write a slug on its own as if it were a '
-      + 'word. Only these slugs, only when you actually use the idea.',
+    // Fix round 1 (task-9b, finding 1): when this record offers NO terms, do not describe or
+    // demonstrate [term:...] syntax at all — the model has nothing legitimate to use it for, and a
+    // syntax demo (even a placeholder one) measurably taught it to emit the tag anyway.
+    hasTerms
+      ? 'When you use one of these ideas, wrap the words in BOTH an opening and a closing tag: '
+        + '[term:<slug>]phrase[/term:<slug>], using a slug from this list verbatim. Every opening '
+        + 'tag MUST have a matching closing tag — never write a slug on its own as if it were a '
+        + 'word. Only these slugs, only when you actually use the idea.'
+      : 'No named KB terms apply to this record. Do NOT tag any phrase as a named term anywhere in '
+        + 'your `mechanism` — there is no slug offered to use, so a term tag has nothing valid to '
+        + 'name. Describe any idea in plain words instead.',
     // Fix 3 (spec 058 feedback remediation, attempt 2, ask 2c). A [term:...] opens a glossary popup
     // and highlights NOTHING, so naming the idea left the player with no way to see where it was.
     // A term and a zone can never wrap the same phrase — the client's parser is single-pass and
     // non-nesting, so a nested tag survives as literal visible text on screen. Adjacency is the
     // only shape that both names the idea and points at it, so ask for it positively rather than
-    // only forbidding the overlap.
-    'A [term:...] tag opens a glossary popup — it never highlights anything on the board, so a '
-      + 'named idea on its own leaves the player with nothing to look at. A term and a highlight '
-      + 'can never wrap the SAME words. To both name an idea AND point at it, put them next to '
-      + 'each other: the term on the words that name the idea, and a separate [zone:...] on the '
-      + 'neighbouring words that say where it is. '
-      + `Bad: "you handed him [term:${exampleSlug}]a double threat[/term:${exampleSlug}]" — named, `
-      + 'but the player is never shown where it lives. '
-      + `Good: "you handed him [term:${exampleSlug}]a double threat[/term:${exampleSlug}] on `
-      + '[zone:opp-fork-lines]the two squares he can finish on[/zone:opp-fork-lines]" — the term '
-      + 'names it, the adjacent highlight points at it.',
+    // only forbidding the overlap. Only relevant when a term is actually offered (finding 1).
+    ...(hasTerms ? [
+      'A [term:...] tag opens a glossary popup — it never highlights anything on the board, so a '
+        + 'named idea on its own leaves the player with nothing to look at. A term and a highlight '
+        + 'can never wrap the SAME words. To both name an idea AND point at it, put them next to '
+        + 'each other: the term on the words that name the idea, and a separate [zone:...] on the '
+        + 'neighbouring words that say where it is. '
+        // Finding 2: the wrapped words are the term's own canonicalPhrase, never a hardcoded phrase
+        // ("a double threat") that could name the wrong idea for whatever slug is actually offered.
+        + `Bad: "you handed him [term:${exampleTerm?.slug}]${exampleTerm?.canonicalPhrase}`
+        + `[/term:${exampleTerm?.slug}]" — named, `
+        + 'but the player is never shown where it lives. '
+        + `Good: "you handed him [term:${exampleTerm?.slug}]${exampleTerm?.canonicalPhrase}`
+        + `[/term:${exampleTerm?.slug}] on `
+        + '[zone:opp-fork-lines]the two squares he can finish on[/zone:opp-fork-lines]" — the term '
+        + 'names it, the adjacent highlight points at it.',
+    ] : []),
     termLines,
     '',
     '# Internal evidence fields (for your reading only — do NOT name these in `mechanism`; cite paths in `fields_relied_on`)',

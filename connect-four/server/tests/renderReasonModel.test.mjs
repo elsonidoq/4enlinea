@@ -218,10 +218,27 @@ test('render model + prompt expose offered zone handles and term slugs', () => {
 });
 
 test('annotation instructions require a paired close tag with a bad/good example', () => {
+  // NV offers no terms (task-9b finding 1: a term-tag worked example is illegitimate here), so the
+  // worked pair falls back to the zone syntax it DOES have (NV offers zone aliases like better-col).
   const prompt = assembleGroundedPrompt(buildReasonRenderModel(NV));
   assert.match(prompt, /MUST have a matching closing tag/i);
   assert.match(prompt, /Bad:.*no closing tag/i);
-  assert.match(prompt, /Good:.*\[term:/i);
+  assert.match(prompt, /Good:.*\[zone:/i);
+  assert.doesNotMatch(prompt, /\[term:/i, 'NV offers no terms — the literal [term: substring must not appear anywhere');
+});
+
+test('annotation instructions demonstrate [term:] syntax when a term IS offered, with the matching canonical phrase', () => {
+  const model = buildReasonRenderModel(NV);
+  model.zones = {
+    aliases: model.zones.aliases,
+    terms: [{ slug: 'figure_7', kbId: 'figure_7', canonicalPhrase: '7-shaped double threat',
+              description: 'a 7-shaped fork giving two winning squares at once' }],
+  };
+  const prompt = assembleGroundedPrompt(model);
+  assert.match(prompt, /Good:.*\[term:figure_7\]/i);
+  // Finding 2: the words wrapped by the example tag must be the offered term's OWN canonicalPhrase,
+  // never a hardcoded phrase that could name the wrong idea for whatever slug is actually offered.
+  assert.match(prompt, /\[term:figure_7\]7-shaped double threat\[\/term:figure_7\]/);
 });
 
 test('assembled prompt does not duplicate the guardrail on a non-opening record', () => {
@@ -506,12 +523,32 @@ test('fix 2: a line-kind role tells the model to prefer it over a single-square 
 });
 
 test('fix 3: the prompt requires a term to be PAIRED with an adjacent zone, with a worked example', () => {
-  const prompt = assembleGroundedPrompt(buildReasonRenderModel(NV));
+  // This adjacency worked-example only applies when a term is actually offered (task-9b finding 1) —
+  // NV offers none, so override zones with an offered term, mirroring the D45 "term whose idea has an
+  // offered pointing handle" fixture above.
+  const model = buildReasonRenderModel(NV);
+  model.zones = {
+    aliases: model.zones.aliases,
+    terms: [{ slug: 'double_threat', kbId: 'double_threat', canonicalPhrase: 'double threat',
+              description: 'two winning squares at once' }],
+  };
+  const prompt = assembleGroundedPrompt(model);
   const termBlock = prompt.split('# KB terms you may name')[1];
   assert.match(termBlock, /never highlight|does not highlight|no highlight/i,
     'the prompt must say a term alone points at nothing on the board');
   assert.match(termBlock, /next to|adjacent|alongside/i, 'the prompt must ask for adjacency');
   assert.match(termBlock, /Bad:[\s\S]*Good:/i, 'a worked bad/good example must accompany the rule');
+});
+
+test('fix round 1 (finding 1): a record with no offered terms shows NO [term: substring anywhere in the prompt', () => {
+  const prompt = assembleGroundedPrompt(buildReasonRenderModel(NV)); // NV offers zero terms
+  // Not just no CONCRETE worked example (e.g. [term:immediate_threat] or the old [term:the_idea]
+  // placeholder) — the literal `[term:` substring must not appear at all, including in the
+  // prohibition sentence itself, which is phrased in words rather than in bracket notation for
+  // exactly this reason.
+  assert.doesNotMatch(prompt, /\[term:/i);
+  assert.match(prompt, /No named KB terms apply to this record/i);
+  assert.match(prompt, /Do NOT tag any phrase as a named term/i);
 });
 
 // ── Task 6 (spec 058): opening path merges the causal frame instead of replacing it ─────────────
@@ -611,4 +648,57 @@ test('regression: pin-L2-enabled-opponent must not display double_threat when it
   assert.equal(offered.has('double_threat'), false, 'this regression fixture must have an empty double_threat offer');
   assert.doesNotMatch(prompt, /\bdouble_threat\b/,
     'double_threat must not appear anywhere in the prompt when zones.terms does not offer it');
+});
+
+// ── Fix round 1 (finding 1/2): harvested corpus coverage, both directions ───────────────────────
+// Finding 1: `pin-L2-enabled-opponent` was CLAIMED to have an empty `zones.terms` offer; verify that
+// directly here (rather than assuming it) before relying on it as the no-terms exemplar.
+test('fix round 1: pin-L2-enabled-opponent (verified empty zones.terms) shows NO [term: substring anywhere in the prompt', async () => {
+  const { readFileSync } = await import('node:fs');
+  const { fileURLToPath } = await import('node:url');
+  const { dirname, join } = await import('node:path');
+  const { toNarratorVector, pruneVector } = await import('../scripts/reasonNarratorVector.mjs');
+  const here = dirname(fileURLToPath(import.meta.url));
+  const rows = readFileSync(join(here, '../scripts/reason_corpus/evidence.jsonl'), 'utf8')
+    .trim().split('\n').map((l) => JSON.parse(l));
+  const record = rows.find((r) => r.id === 'pin-L2-enabled-opponent');
+  assert.ok(record, 'pin-L2-enabled-opponent must exist in the corpus');
+
+  const fv = pruneVector(toNarratorVector(record.evidence));
+  const model = buildReasonRenderModel(fv);
+  assert.deepEqual(model.zones.terms ?? [], [], 'harvested check: this record must offer zero terms');
+
+  const prompt = assembleGroundedPrompt(model);
+  assert.doesNotMatch(prompt, /\[term:/i,
+    'no [term:...] tag or syntax demo may appear anywhere when the record offers zero terms');
+});
+
+// Finding 1's other direction: a record that DOES offer a term must still demonstrate the [term:...]
+// syntax, using a slug it actually offers. Harvested (not invented): the corpus's first record whose
+// zones.terms is non-empty is eval-7, offering `figure_7`.
+test('fix round 1: a record that DOES offer a term (eval-7, harvested) still demonstrates [term:<offered-slug>] syntax', async () => {
+  const { readFileSync } = await import('node:fs');
+  const { fileURLToPath } = await import('node:url');
+  const { dirname, join } = await import('node:path');
+  const { toNarratorVector, pruneVector } = await import('../scripts/reasonNarratorVector.mjs');
+  const here = dirname(fileURLToPath(import.meta.url));
+  const rows = readFileSync(join(here, '../scripts/reason_corpus/evidence.jsonl'), 'utf8')
+    .trim().split('\n').map((l) => JSON.parse(l));
+  const record = rows.find((r) => r.id === 'eval-7');
+  assert.ok(record, 'eval-7 must exist in the corpus');
+
+  const fv = pruneVector(toNarratorVector(record.evidence));
+  const model = buildReasonRenderModel(fv);
+  const offeredSlugs = (model.zones.terms ?? []).map((t) => t.slug);
+  assert.ok(offeredSlugs.length > 0, 'harvested check: this record must offer at least one term');
+
+  const prompt = assembleGroundedPrompt(model);
+  const usedSlug = model.zones.terms[0].slug;
+  const usedPhrase = model.zones.terms[0].canonicalPhrase;
+  assert.match(prompt, new RegExp(`\\[term:${usedSlug}\\]`),
+    `the prompt must demonstrate [term:...] syntax with an offered slug (${usedSlug})`);
+  // Finding 2: the demonstrated tag's own worked-example wraps that term's canonicalPhrase, never a
+  // hardcoded/mismatched phrase.
+  assert.match(prompt, new RegExp(`\\[term:${usedSlug}\\]${usedPhrase.replace(/[()]/g, '\\$&')}`),
+    `the worked example must wrap ${usedSlug}'s own canonicalPhrase ("${usedPhrase}"), not a hardcoded phrase`);
 });
