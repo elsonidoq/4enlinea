@@ -60,8 +60,17 @@ function horizonTail(fv) {
 
 const nameTag = (oc) => `the ${oc.family}${oc.id ? ` (${oc.id})` : ''}`;
 
-const GUARDRAIL = 'Explain the blunder through the opening — book line, centrality, parity. '
-  + 'The deep resource resolves a long way out: when you name its square or line, say plainly that it '
+// Task 9d fix round 1 (spec 058 feedback remediation). The first sentence enumerates the admissible
+// framings for the blunder explanation; on an O3 (centrality-fallback) record there is no book line
+// at all, so unconditionally offering "book line" as a framing actively directs the model toward the
+// fabrication this task exists to prevent (measured on eval-11: 3/5 runs fabricated specific
+// book-line adherence). Split on that first sentence only, by frame kind — O1 (namedOpening) and O2
+// (defense) genuinely have a book/defense line, O3 (centrality) does not. The second sentence (the
+// deep-resource "matters LATER" text) is D46's settled substance and stays BYTE-IDENTICAL across
+// both variants — this fix does not touch it.
+const GUARDRAIL_ADMISSIBLE_FRAMINGS_BOOK_LINE = 'Explain the blunder through the opening — book line, centrality, parity. ';
+const GUARDRAIL_ADMISSIBLE_FRAMINGS_CENTRALITY_ONLY = 'Explain the blunder through the opening — centrality, parity. ';
+const GUARDRAIL_DEEP_RESOURCE = 'The deep resource resolves a long way out: when you name its square or line, say plainly that it '
   + 'matters LATER, once the forced sequence reaches it — never describe it as a threat that exists now.';
 
 const GUARDRAIL_NO_CENTRALITY = ' The two landing cells are NOT stated to differ in centrality or '
@@ -73,10 +82,13 @@ export function composeOpeningFrame(fv) {
   if (!oc) return null;
   // The prohibition is gated on the EMITTED clause, never on a predicate the branch may override:
   // O2 suppresses the clause on centralityGrounded:false while centralityQualitative can still be
-  // non-null, which previously dropped both the clause and its prohibition (eval-21).
+  // non-null, which previously dropped both the clause and its prohibition (eval-21). Composes with
+  // the book-line/centrality-only split above: GUARDRAIL_NO_CENTRALITY is appended after whichever
+  // admissible-framings sentence applies, unchanged.
   const mk = (id, kind, lead, clause) => ({
     id, kind, confidence: 'high', covers: [],
-    guardrail: GUARDRAIL + (clause === '' ? GUARDRAIL_NO_CENTRALITY : ''),
+    guardrail: (kind === 'centrality' ? GUARDRAIL_ADMISSIBLE_FRAMINGS_CENTRALITY_ONLY : GUARDRAIL_ADMISSIBLE_FRAMINGS_BOOK_LINE)
+      + GUARDRAIL_DEEP_RESOURCE + (clause === '' ? GUARDRAIL_NO_CENTRALITY : ''),
     text: lead + clause + horizonTail(fv),
   });
 

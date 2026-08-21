@@ -695,22 +695,22 @@ test('O3 centrality opening record (eval-11, harvested/verified): prompt must no
 
   const model = buildReasonRenderModel(fv);
   const prompt = assembleGroundedPrompt(model);
-  // Scoped to the Opening reading key block itself — this task's mandate is renderReasonModel.mjs's
-  // OPENING_READING_KEY / its assembly only. openingFrame.mjs's GUARDRAIL constant (out of scope,
-  // settled by D46, task-brief hard prohibition) separately names "book line" as one of three generic
-  // admissible framings ("book line, centrality, parity") in EVERY opening record's guardrail line —
-  // that pre-existing, unconditional mention is not this task's finding or fix and is left untouched;
-  // asserting over the whole prompt would require editing openingFrame.mjs, which is prohibited.
-  const readingKeySection = prompt.slice(prompt.indexOf('# Opening reading key'));
-  assert.doesNotMatch(readingKeySection, /book line/i, 'O3 opening reading key must not teach "book line" vocabulary');
-  assert.doesNotMatch(readingKeySection, /book move/i, 'O3 opening reading key must not teach "book move" vocabulary');
+  // Fix round 1 (task 9d): originally scoped to just the reading-key section because
+  // openingFrame.mjs's GUARDRAIL constant unconditionally named "book line" in every opening
+  // record's guardrail line. The coordinator ruled that clause was never part of D46's settled
+  // substance and lifted the prohibition for it (openingFrame.mjs's GUARDRAIL_ADMISSIBLE_FRAMINGS_*
+  // split) — the WHOLE assembled prompt is now checked, per the brief's original Step 1 wording.
+  assert.doesNotMatch(prompt, /book line/i, 'O3 record must not be taught "book line" vocabulary anywhere in the prompt');
+  assert.doesNotMatch(prompt, /book move/i, 'O3 record must not be taught "book move" vocabulary anywhere in the prompt');
   assert.doesNotMatch(prompt, /matchedPrefixLen/, 'O3 record must not be taught the matchedPrefixLen field — it has no matched opening');
 });
 
 // Positive counterpart (gating, not blanket deletion): an O1 namedOpening record still DOES teach
-// the book-line bullets. eval-9 was harvested as the corpus's O1 example (see the composeOpeningFrame
-// sweep in the task-9d report).
-test('O1 namedOpening opening record (eval-9, harvested/verified): prompt still teaches book-line vocabulary', async () => {
+// the book-line vocabulary, in BOTH places that can carry it — the reading key (renderReasonModel.mjs)
+// AND the guardrail (openingFrame.mjs) — proving the gating composes correctly rather than having
+// silently deleted the vocabulary from one of the two sites. eval-9 was harvested as the corpus's O1
+// example (see the composeOpeningFrame sweep in the task-9d report).
+test('O1 namedOpening opening record (eval-9, harvested/verified): prompt still teaches book-line vocabulary in the reading key AND the guardrail', async () => {
   const { readFileSync } = await import('node:fs');
   const { fileURLToPath } = await import('node:url');
   const { dirname, join } = await import('node:path');
@@ -727,8 +727,11 @@ test('O1 namedOpening opening record (eval-9, harvested/verified): prompt still 
 
   const model = buildReasonRenderModel(fv);
   const prompt = assembleGroundedPrompt(model);
-  assert.match(prompt, /book line/i, 'O1 record must still be taught "book line" vocabulary');
-  assert.match(prompt, /matchedPrefixLen/, 'O1 record must still be taught the matchedPrefixLen field');
+  assert.match(prompt, /matchedPrefixLen/, 'O1 record must still be taught the matchedPrefixLen field (reading key)');
+  const readingKeySection = prompt.slice(prompt.indexOf('# Opening reading key'), prompt.indexOf('# Highlightable regions'));
+  assert.match(readingKeySection, /book line/i, 'O1 reading key must still teach "book line" vocabulary');
+  const guardrailLine = prompt.split('Guardrail: ')[1].split('\n')[0];
+  assert.match(guardrailLine, /book line/i, 'O1 guardrail line must still offer "book line" as an admissible framing');
 });
 
 // Finding 1's other direction: a record that DOES offer a term must still demonstrate the [term:...]
