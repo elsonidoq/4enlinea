@@ -345,3 +345,49 @@ test('openingHorizon suppresses the half-geometry family entirely (opening guard
   assert.ok(withHalves.includes('you-key-square'));
   assert.deepEqual(suppressed, ['better-col', 'played-col']);
 });
+
+test('a double_threat half offers the fork PIVOT, distinct from the finishing squares', async () => {
+  const { readFileSync } = await import('node:fs');
+  const { fileURLToPath } = await import('node:url');
+  const { dirname, join } = await import('node:path');
+  const { toNarratorVector, pruneVector } = await import('../scripts/reasonNarratorVector.mjs');
+  const { boardSelectionDecisions } = await import('../scripts/reasonBoardSelect.mjs');
+  const here = dirname(fileURLToPath(import.meta.url));
+  const rows = readFileSync(join(here, '../scripts/reason_corpus/evidence.jsonl'), 'utf8')
+    .trim().split('\n').map((l) => JSON.parse(l));
+
+  const fv = pruneVector(toNarratorVector(rows.find((r) => r.id === 'eval-18').evidence));
+  const half = fv.lostResource;
+  // Harvested, not assumed — printed from the corpus on 2026-08-11:
+  //   tacticTag 'double_threat', forkCells ["c5r5","c7r6"], entryCell 'c6r3',
+  //   line.length 28, line[27] = {ply:39, mover:1, col:4, cell:'c5r4'}
+  assert.equal(half.tacticTag, 'double_threat');
+  assert.deepEqual(half.forkCells, ['c5r5', 'c7r6']);
+
+  const zones = buildAnnotationOffer(fv, boardSelectionDecisions(fv));
+  const pivot = zones.aliases.find((a) => a.handle.endsWith('-fork-pivot'));
+  assert.ok(pivot, `no fork-pivot alias offered; got ${zones.aliases.map((a) => a.handle).join(', ')}`);
+  assert.match(pivot.spec, /c5r4$/, 'the pivot is the LAST ply of line[], not entryCell');
+  assert.doesNotMatch(pivot.spec, /c6r3/, 'c6r3 is entryCell (line[0]) — the wrong end of the line');
+  assert.match(pivot.role, /creates|makes both/i);
+  assert.ok(!half.forkCells.includes(pivot.spec.replace('future:', '')),
+    'the pivot must be distinct from the finishing squares');
+});
+
+test('a figure_7 half also gets fork aliases (it is a 7-shaped double threat)', async () => {
+  const { readFileSync } = await import('node:fs');
+  const { fileURLToPath } = await import('node:url');
+  const { dirname, join } = await import('node:path');
+  const { toNarratorVector, pruneVector } = await import('../scripts/reasonNarratorVector.mjs');
+  const { boardSelectionDecisions } = await import('../scripts/reasonBoardSelect.mjs');
+  const here = dirname(fileURLToPath(import.meta.url));
+  const rows = readFileSync(join(here, '../scripts/reason_corpus/evidence.jsonl'), 'utf8')
+    .trim().split('\n').map((l) => JSON.parse(l));
+
+  // eval-12's lostResource is tacticTag 'figure_7', forkCells ["c2r5"] (harvested 2026-08-11).
+  const fv = pruneVector(toNarratorVector(rows.find((r) => r.id === 'eval-12').evidence));
+  assert.equal(fv.lostResource.tacticTag, 'figure_7');
+  const zones = buildAnnotationOffer(fv, boardSelectionDecisions(fv));
+  assert.ok(zones.aliases.some((a) => /fork/.test(a.handle)),
+    `figure_7 fork got no fork alias; handles: ${zones.aliases.map((a) => a.handle).join(', ')}`);
+});

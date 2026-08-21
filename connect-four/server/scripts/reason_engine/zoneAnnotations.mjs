@@ -57,7 +57,29 @@ function roleText(owner, kind) {
   // run — the singular 'future' wording made the model call a two-square fork "the later fork
   // square" (measured, t043 run 1).
   if (kind === 'future-fork') return `BOTH of the two squares ${who} can finish on — this is the fork itself, and it matters later, once the forced sequence reaches it, not right now`;
+  if (kind === 'fork-pivot') return `the square ${who} plays to CREATE the fork — the move that makes both winning squares live at once; it matters later, once the forced sequence reaches it`;
   return `a single square completing ${who}'s four-in-a-row line`; // major
+}
+
+// Both tags are forks — figure_7's canonical phrase is literally '7-shaped double threat'
+// (causalLinks.mjs TAG_PHRASE). All three fork branches below previously gated on 'double_threat'
+// alone, so a figure_7 half got no fork alias at all (6 of the 20 fork halves in the corpus).
+const FORK_TAGS = new Set(['double_threat', 'figure_7']);
+
+// The square that CREATES the fork = the LAST ply of the half's own line. NOT `entryCell`, which the
+// glossary defines as the FIRST move of `line` (feature-vector-glossary.md:168, reasonEngine.mjs:646)
+// — the opposite end. On eval-18 entryCell is c6r3 (ply 1 of 28) while the fork is created at c5r4
+// (ply 39); the two forkCells c5r5/c7r6 never appear in `line` at all, because they are the
+// gravity-next squares above it, which is precisely why the last ply makes both live at once.
+// Validated over the full case space: 20/20 fork halves in the corpus have a non-empty `line` whose
+// last ply is neither a forkCell nor entryCell.
+export function forkPivotCell(half) {
+  if (!half || !FORK_TAGS.has(half.tacticTag)) return null;
+  const line = half.line;
+  if (!Array.isArray(line) || !line.length) return null;      // abstain, never guess (I2)
+  const cell = line[line.length - 1]?.cell ?? null;
+  if (!cell || (half.forkCells ?? []).includes(cell)) return null;
+  return cell;
 }
 
 // A window-bearing tag becomes a windows: spec (the whole line); a plain tag becomes its cNrM cell.
@@ -139,7 +161,7 @@ export function buildAnnotationOffer(pruned, boardDecisions, opts = {}) {
   // the eval-3 present-threat trap. Instead they get a distinct `future:`-prefixed spec + role, so
   // the prompt and client can frame them as "matters later," never as a present threat (FR-002).
   for (const [half, side] of [[pruned.lostResource, 'you'], [pruned.opponentPunishment, 'opp']]) {
-    if (!half || half.tacticTag !== 'double_threat' || !half.forkCells?.length) continue;
+    if (!half || !FORK_TAGS.has(half.tacticTag) || !half.forkCells?.length) continue;
     const owner = halfOwner(half, side);
     const rawSpec = half.forkCells.length === 1 ? half.forkCells[0] : 'windows:' + half.forkCells.join(',');
     const spec = 'future:' + rawSpec;
@@ -182,7 +204,7 @@ export function buildAnnotationOffer(pruned, boardDecisions, opts = {}) {
     if (Array.isArray(half.window) && half.window.length) {
       offers.push([`${owner}-key-line`, 'windows:' + half.window.join(','), lineKind]);
     }
-    if (half.tacticTag === 'double_threat' && (half.forkWindows?.length ?? 0) >= 2) {
+    if (FORK_TAGS.has(half.tacticTag) && (half.forkWindows?.length ?? 0) >= 2) {
       offers.push([`${owner}-fork-lines`,
                    'windows:' + half.forkWindows.map((w) => w.join(',')).join('|'), lineKind]);
     }
@@ -190,9 +212,14 @@ export function buildAnnotationOffer(pruned, boardDecisions, opts = {}) {
     // whole window, so a correct single-cell fork highlight was being stripped (OI-172, measured:
     // c2r6 and c5r5 on 3154442332131341225551). Offering the cells individually closes that
     // without weakening Decision A — a window member that is never offered standalone still fails.
-    for (const fc of (half.tacticTag === 'double_threat' ? half.forkCells ?? [] : [])) {
+    for (const fc of (FORK_TAGS.has(half.tacticTag) ? half.forkCells ?? [] : [])) {
       offers.push([`${owner}-fork-square`, fc, cellKind]);
     }
+    // The fork PIVOT (OI-182). forkCells are the squares the fork FINISHES on; the pivot is the move
+    // that creates it — the only part a player can learn to see coming. Offered separately so an
+    // explanation can name the cause, not just the effects.
+    const pivot = forkPivotCell(half);
+    if (pivot) offers.push([`${owner}-fork-pivot`, pivot, 'fork-pivot']);
     for (const [base, rawSpec, kind] of offers) {
       // Dedup on the UNPREFIXED geometry so a cell already offered as a present structural alias
       // is never re-offered under a future: framing (and vice versa) — first offer wins.

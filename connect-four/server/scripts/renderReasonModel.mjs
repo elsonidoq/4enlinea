@@ -9,7 +9,7 @@ import { selectBoards, renderThreatList, patternOnAfterBestBoard, boardSelection
 import { groundCell, horizonForRegister } from './reasonCellGrounding.mjs';
 import { parseBoardState } from '../classifier.js';
 import { composeOpeningFrame, centralityQualitative } from './reason_engine/openingFrame.mjs';
-import { buildAnnotationOffer } from './reason_engine/zoneAnnotations.mjs';
+import { buildAnnotationOffer, forkPivotCell } from './reason_engine/zoneAnnotations.mjs';
 
 // The pruned vector minus fields the board carries (transformed) or statically excluded.
 // Path-precise: recurse into plain-object containers; classify arrays/primitives by their own path;
@@ -153,6 +153,12 @@ export function deriveRequiredSet(pruned, zones) {
   for (const half of HALVES) {
     const h = pruned?.[half];
     if (!push(half, halfForkCellsSpec(h))) push(half, denialCell(h));
+  }
+  // The fork pivot earns a slot when the half is a fork: naming both endpoints without the move that
+  // creates them is the A7c failure (OI-182) — the endpoints are the effect, the pivot is the cause.
+  for (const half of HALVES) {
+    if (groups.length >= 3) break;
+    push(half, forkPivotCell(pruned?.[half]));
   }
   // The single line/window slot (FR-005: "plus at most one line/window"), lostResource first.
   for (const half of HALVES) {
