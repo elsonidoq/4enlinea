@@ -3,7 +3,7 @@
 // P2 adds tags/grounding; P3 adds rich causal-frame text.
 
 import { pruneVector } from './reasonNarratorVector.mjs';
-import { classifyCausalLink, denialCell } from './reason_engine/causalLinks.mjs';
+import { classifyCausalLink, denialCell, TAG_PHRASE } from './reason_engine/causalLinks.mjs';
 import { dispositionOf, assertCoverage, leafPaths } from './fieldDisposition.mjs';
 import { selectBoards, renderThreatList, patternOnAfterBestBoard, boardSelectionDecisions } from './reasonBoardSelect.mjs';
 import { groundCell, horizonForRegister } from './reasonCellGrounding.mjs';
@@ -372,9 +372,68 @@ function combinedGuardrail(model) {
   return model.link.guardrail;
 }
 
+// Task 9b (spec 058 feedback remediation). Measured over 125 graded runs (task-9b-brief.md):
+// splitting on whether the assembled prompt DISPLAYS a TERM_KB slug it does not OFFER, G7b passes
+// 74/90 (82%) when it does vs 35/35 (100%) when it doesn't — every G7b failure fell in the "taught
+// but not offered" condition. The prompt used to print raw slugs (Tactics lines, the half-JSON
+// residue, and two static worked examples) unconditionally, so the model learned vocabulary
+// `zones.terms` never authorized it to use, and the pipeline stripped it back out at grading time.
+//
+// The fix is display-side only (never widen zones.terms — a term with no KB entry renders an empty
+// glossary popup, per zoneAnnotations.mjs's TERM_KB comment on `conditional_swindle`): route every
+// tactic-name display through TAG_PHRASE's canonical phrase whenever the slug is not offered this
+// record, and keep the raw slug only where it IS offered (that's the whole point of offering it).
+//
+// TERM_KB (zoneAnnotations.mjs) is the closed set of slugs that can ever be offered; it is not
+// exported (and this task must not edit that file, per the task brief — another lane may be
+// committing to it concurrently), so its 4 keys are mirrored here. Keep in sync if TERM_KB's key set
+// changes.
+const OFFERABLE_SLUGS = ['immediate_threat', 'double_threat', 'figure_7', 'claimeven'];
+
+// claimeven collides: TAG_PHRASE.claimeven is the literal string 'claimeven' (the phrase IS the
+// slug), so routing it through TAG_PHRASE cannot change what is displayed. Measured over the full
+// 63-record evidence corpus (2026-08-21): zero records display `claimeven` while it is unoffered —
+// see task-9b-report.md for the script and output. The invariant below therefore stays STRICT
+// (claimeven is not exempted); this comment records that the collision is live but currently
+// unreached, not silently designed around.
+// Replace a bare, unoffered TERM_KB slug wherever it appears as a whole word in free text (the
+// Tactics lines) — never touches an OFFERED slug, and never touches slugs outside TERM_KB (e.g.
+// `conditional_swindle`, which never appears as a bare board tag kind).
+function redactUnofferedSlugsInText(text, offered) {
+  let out = text;
+  for (const slug of OFFERABLE_SLUGS) {
+    if (offered.has(slug)) continue;
+    out = out.replace(new RegExp(`\\b${slug}\\b`, 'g'), TAG_PHRASE[slug] ?? slug);
+  }
+  return out;
+}
+
+// Same substitution over the JSON residue tree (the half fields: `tag`/`tacticTag` leaves), applied
+// to a fresh object so the caller's `model.rendered` is never mutated.
+function redactUnofferedSlugsInTree(node, offered) {
+  if (Array.isArray(node)) return node.map((el) => redactUnofferedSlugsInTree(el, offered));
+  if (node !== null && typeof node === 'object') {
+    const out = {};
+    for (const [k, v] of Object.entries(node)) out[k] = redactUnofferedSlugsInTree(v, offered);
+    return out;
+  }
+  if (typeof node === 'string' && OFFERABLE_SLUGS.includes(node) && !offered.has(node)) {
+    return TAG_PHRASE[node] ?? node;
+  }
+  return node;
+}
+
 export function assembleGroundedPrompt(model) {
+  const offeredSlugs = new Set((model.zones.terms ?? []).map((t) => t.slug));
+  // The two Bad/Good worked examples below (Highlightable regions + KB terms blocks) used to hardcode
+  // `immediate_threat` / `double_threat` unconditionally — the largest single source of the task-9b
+  // leak (49/63 corpus records), since every prompt showed these regardless of what was offered.
+  // Use a slug this record ACTUALLY offers (still concrete, still legitimate) when one exists;
+  // otherwise fall back to a placeholder that is not a real TERM_KB slug at all, so the syntax demo
+  // survives even when no term is offered without ever tripping the "no unoffered slug" invariant.
+  const exampleSlug = model.zones.terms[0]?.slug ?? 'the_idea';
   const boards = model.boards.map((b) =>
-    `## Board: ${b.id} (${b.reason})\n${b.ascii}\nTactics:\n${renderThreatList(b.tags)}`).join('\n\n');
+    `## Board: ${b.id} (${b.reason})\n${b.ascii}\nTactics:\n${redactUnofferedSlugsInText(renderThreatList(b.tags), offeredSlugs)}`).join('\n\n');
   const frames = model.frames.map((f) => f.text).filter(Boolean).join('\n\n');
   const regions = model.zones.aliases.length
     ? model.zones.aliases.map((a) => `- [zone:${a.handle}] = ${a.role} (on the ${a.truthBoard} board)`).join('\n')
@@ -422,9 +481,9 @@ export function assembleGroundedPrompt(model) {
     'To highlight a phrase, wrap it in BOTH an opening and a closing tag: '
       + '[zone:<handle>]phrase[/zone:<handle>], using a handle from this list verbatim. Every '
       + 'opening tag MUST have a matching closing tag — never write a handle on its own as if it '
-      + 'were a word. Bad: "the [term:immediate_threat] on c2 is worth keeping" (no closing tag; '
-      + 'used as a noun). Good: "[term:immediate_threat]the threat you need to keep '
-      + 'alive[/term:immediate_threat] on c2". Never write a raw square. Do not overlap a '
+      + `were a word. Bad: "the [term:${exampleSlug}] on c2 is worth keeping" (no closing tag; `
+      + `used as a noun). Good: "[term:${exampleSlug}]the threat you need to keep `
+      + `alive[/term:${exampleSlug}] on c2". Never write a raw square. Do not overlap a `
       + 'highlight and a term on the same words. A handle whose role below says it "matters later" '
       + 'or "once the forced sequence reaches it" names a square that is not yet playable — '
       + 'describe it in future or conditional language ("this matters once...", "later, if..."), '
@@ -469,16 +528,16 @@ export function assembleGroundedPrompt(model) {
       + 'can never wrap the SAME words. To both name an idea AND point at it, put them next to '
       + 'each other: the term on the words that name the idea, and a separate [zone:...] on the '
       + 'neighbouring words that say where it is. '
-      + 'Bad: "you handed him [term:double_threat]a double threat[/term:double_threat]" — named, '
+      + `Bad: "you handed him [term:${exampleSlug}]a double threat[/term:${exampleSlug}]" — named, `
       + 'but the player is never shown where it lives. '
-      + 'Good: "you handed him [term:double_threat]a double threat[/term:double_threat] on '
+      + `Good: "you handed him [term:${exampleSlug}]a double threat[/term:${exampleSlug}] on `
       + '[zone:opp-fork-lines]the two squares he can finish on[/zone:opp-fork-lines]" — the term '
       + 'names it, the adjacent highlight points at it.',
     termLines,
     '',
     '# Internal evidence fields (for your reading only — do NOT name these in `mechanism`; cite paths in `fields_relied_on`)',
     '```json',
-    JSON.stringify(model.rendered, null, 2),
+    JSON.stringify(redactUnofferedSlugsInTree(model.rendered, offeredSlugs), null, 2),
     '```',
   ].join('\n');
 }

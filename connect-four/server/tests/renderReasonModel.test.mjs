@@ -559,3 +559,56 @@ test('opening record: half-geometry aliases are offered, under future: framing',
     }
   }
 });
+
+// ── Task 9b: never display a term slug the prompt does not offer ────────────────────────────────
+// Measured over 125 graded runs (task-9b-brief.md): prompts that DISPLAY a TERM_KB slug they do not
+// OFFER pass G7b 74/90 (82%); prompts that don't display an unoffered slug pass 35/35 (100%). Every
+// G7b failure fell in the "taught but not offered" condition. `pin-L2-enabled-opponent` reaches the
+// model with `double_threat` shown three times against an empty `zones.terms`.
+//
+// The four TERM_KB slugs (zoneAnnotations.mjs TERM_KB, not exported — mirrored here; keep in sync if
+// its key set changes): immediate_threat, double_threat, figure_7, claimeven.
+test('assembled prompt never names a TERM_KB slug it does not offer (task 9b, corpus-wide)', async () => {
+  const { readFileSync } = await import('node:fs');
+  const { fileURLToPath } = await import('node:url');
+  const { dirname, join } = await import('node:path');
+  const { toNarratorVector, pruneVector } = await import('../scripts/reasonNarratorVector.mjs');
+  const here = dirname(fileURLToPath(import.meta.url));
+  const rows = readFileSync(join(here, '../scripts/reason_corpus/evidence.jsonl'), 'utf8')
+    .trim().split('\n').map((l) => JSON.parse(l));
+
+  const TERM_KB_SLUGS = ['immediate_threat', 'double_threat', 'figure_7', 'claimeven'];
+  const violations = [];
+  for (const r of rows) {
+    const fv = pruneVector(toNarratorVector(r.evidence));
+    const model = buildReasonRenderModel(fv);
+    const prompt = assembleGroundedPrompt(model);
+    const offered = new Set((model.zones.terms ?? []).map((t) => t.slug));
+    for (const slug of TERM_KB_SLUGS) {
+      if (offered.has(slug)) continue;
+      if (new RegExp(`\\b${slug}\\b`).test(prompt)) violations.push(`${r.id}: ${slug}`);
+    }
+  }
+  assert.deepEqual(violations, [], `unoffered TERM_KB slugs leaked into the prompt:\n${violations.join('\n')}`);
+});
+
+test('regression: pin-L2-enabled-opponent must not display double_threat when it is not offered', async () => {
+  const { readFileSync } = await import('node:fs');
+  const { fileURLToPath } = await import('node:url');
+  const { dirname, join } = await import('node:path');
+  const { toNarratorVector, pruneVector } = await import('../scripts/reasonNarratorVector.mjs');
+  const here = dirname(fileURLToPath(import.meta.url));
+  const rows = readFileSync(join(here, '../scripts/reason_corpus/evidence.jsonl'), 'utf8')
+    .trim().split('\n').map((l) => JSON.parse(l));
+  const record = rows.find((r) => r.id === 'pin-L2-enabled-opponent');
+  assert.ok(record, 'pin-L2-enabled-opponent must exist in the corpus');
+
+  const fv = pruneVector(toNarratorVector(record.evidence));
+  const model = buildReasonRenderModel(fv);
+  const prompt = assembleGroundedPrompt(model);
+  const offered = new Set((model.zones.terms ?? []).map((t) => t.slug));
+
+  assert.equal(offered.has('double_threat'), false, 'this regression fixture must have an empty double_threat offer');
+  assert.doesNotMatch(prompt, /\bdouble_threat\b/,
+    'double_threat must not appear anywhere in the prompt when zones.terms does not offer it');
+});
