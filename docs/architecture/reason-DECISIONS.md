@@ -511,8 +511,8 @@ Format: **Decision** / **Rationale** / **Status** / **Source**.
   812/812 green (as of B5); 806/806 at B4. This task (B6) adds no code — glossary + grader + this
   entry only.
 - **Source:** Task briefs B1–B6 (2026-07-04/05); task reports `task-B1-report.md`…`task-B5-report.md`;
-  `docs/knowledge-base/allen-*-opening.md` (the five source KB lines); memory
-  `feedback_reason_case_requires_eval_and_grader`, `project_reason_render_layer`,
+  `docs/knowledge-base/allen-*-opening.md` (the five source KB lines);
+  `docs/architecture/feature-vector-sufficiency-experiment.md` §7b; memories `project_reason_render_layer`,
   `project_reason_opening_traps`; I0/I2/I8/I9/I12.
 
 ---
@@ -621,7 +621,7 @@ substitute" contract — NOT a new causal-link family:
   reduces both halves in the "Vector facts" residue to `{register, pliesToEnd}` — WITHOUT it,
   `renderedFields` leaks a 35-ply `completingCell` (e.g. `c6r2`) into the prompt, and the grader's
   `deepResourceGrounded:false` then FALSE-FAILS any answer that grounds it (a render-invited
-  fabrication). Engine output is unchanged — this is render-only (I0 / `feedback_engine_soundness_then_render`).
+  fabrication). Engine output is unchanged — this is render-only (`reason-INVARIANTS.md` I0/I0b).
 - **Two distinct "centralities."** The `O3` lead is the engine's geometry statement
   (`openingContext.centrality.text`, backed by `betterHasMoreLines:true`) — an always-valid claim, NOT
   gated. The landing-cell clause ("easier to build a four through `{cell}`") IS gated on
@@ -1436,3 +1436,85 @@ deep-fork family). Tests: `server/tests/renderReasonModel.test.mjs`,
 `server/tests/zoneAnnotations.test.mjs`, `server/tests/mechanismExplainer.test.mjs`.
 Evidence: `specs/058-deep-reveal-grounding/t043-attempt3-run{1,2,3}-results.json`,
 `t043-attempt3-script.mjs`. Related: D43, D44, OI-172.
+
+---
+
+### D46 — An opening record MERGES the causal frame instead of replacing it; the deep resource is grounded as a `future:` square, not withheld
+
+- **Decision (reverses D28's opening-suppression posture):** `buildReasonRenderModel`'s opening branch
+  now emits `frames: [openingFrame, link]` and `boards: selectBoards(pruned)`, calls
+  `buildAnnotationOffer` **without** `openingHorizon`, and `pruneOpeningResidue` is **deleted**.
+  `openingFrame.mjs`'s `GUARDRAIL` flips from *"Do NOT ground a specific deep completing cell"* to
+  *"when you name its square or line, say plainly that it matters LATER … never as a threat that
+  exists now"*. `buildRenderDecision` mirrors the same offer set, so the routing record and the prompt
+  cannot disagree (interim fix; full unification is OI-186).
+- **Why the reversal:** printing only the opening frame kept `link.text` — and every cell it names —
+  **out of the prompt entirely**. Verified on eval-12: `prompt.includes(link.text)` was `false` and the
+  completing cell `c2r5` appeared nowhere. The model was being asked to ground an explanation on
+  geometry it had never been shown. Measured before/after, live-to-live: opening records went from
+  **2.60 to 6.63** mean zone aliases; `link.text` in the prompt from **0/30 to 30/30**; boards actually
+  printed from **0/30 to 30/30** (the record had claimed `projectedDeep` was shown while only
+  `decision` was rendered). Non-opening records are **byte-identical** (7.97 → 7.97).
+- **The bet, and its revert trigger:** the suppression existed to stop a deep, currently-empty cell
+  reading as a present threat (the eval-3 trap). That job now belongs to the **`future:` decorator** —
+  the spec prefix plus role text "matters later, once the forced sequence reaches it — not a threat
+  right now" — and to the new guardrail, rather than to withholding the handle. **If a post-fix grading
+  run shows deep cells narrated as present threats, revert this decision**, not the `future:` machinery.
+- **Status:** IMPLEMENTED (commit `e6eaed2`). `npm run test:fast` 1949/0. Two assertions that pinned the
+  old guardrail wording were re-pointed at the new text.
+- **Source:** the 2026-08-06 63-case grading (opening records passed 1 of 30) and the 2026-08-11
+  25-board baseline; plan `docs/superpowers/plans/2026-08-11-deep-reveal-render-remediation.md` Task 6.
+
+---
+
+### D47 — Alias ownership derives from the half's KIND, not its position in the evidence object
+
+- **Decision:** `zoneAnnotations.mjs` exports `halfOwner(half, side)`. A half whose `kind` is
+  `denial` or `neutralization` describes the OTHER player's geometry, so the owner flips:
+  `lostResource`+`denial` → `opp` (the opponent line you would have denied);
+  `opponentPunishment`+`denial` → `you` (your line they deny). Both alias loops use it.
+- **Why:** the previous hard-map (`lostResource → 'you'`, `opponentPunishment → 'opp'`) offered the
+  opponent's window to the player as *"the whole four-in-a-row line YOU are playing for"*. This is
+  **OI-184**, filed from the 2026-08-06 evaluation as the most severe defect found — a served
+  explanation handed the learner the opponent's fork and labelled it theirs. **37 of 126** halves in
+  the corpus flip owner under the correct rule.
+- **Trap for future work:** the flip runs in BOTH directions. A fixture asserting `opp-key-square` on
+  an `opponentPunishment`+`denial` board was encoding the bug and was corrected to `you-key-square`;
+  do not "restore" it.
+- **Status:** IMPLEMENTED (commit `e5c0c75`). `test:fast` 1950/0. Related: D45, OI-182, OI-184.
+
+---
+
+### D48 — The render layer must never DISPLAY a handle or slug it does not OFFER; and a fork's pivot is offered but not yet enforced
+
+- **Decision (three rules, all render-layer):**
+  1. **Display ⊆ offer.** `assembleGroundedPrompt` may never print a term slug or a concrete
+     `[zone:<handle>]` that is not in this record's `zones.terms` / `zones.aliases`. Tactic names render
+     through `TAG_PHRASE`'s canonical phrase (plus a render-only `RENDER_DISPLAY_PHRASE` map for slugs
+     whose canonical phrase is missing or identical to the slug), and every worked example draws its
+     handles from the record's own offer set, falling back to an abstract `<handle>` placeholder rather
+     than a real-but-unrelated handle. When a record offers no terms, the prompt does not demonstrate
+     `[term:]` syntax at all.
+  2. **An unoffered tag is recorded, not silently dropped.** `dropUnoffered` pushes
+     `unoffered_zone:<handle>` / `unoffered_term:<slug>` into the same `repairs` array as
+     `stripUnclosedTags`, so an invented slug is visible downstream instead of vanishing.
+  3. **A fork's pivot is offered and required** — the LAST ply of the half's `line[]`, never `entryCell`
+     (which is `line[0]`, the opposite end), and never a `forkCell` or the other half's completing cell.
+- **Why, measured:** over 125 graded runs, prompts that displayed an unoffered slug passed G7b 74/90
+  (82%); prompts that did not passed 35/35 (100%) — every G7b failure sat in the "taught but not
+  offered" condition. Corpus-wide the defect was 49/63 records for term slugs and 44/63 for zone
+  handles. After the fix: **0/63 and 0/63**, and the post-fix subset re-measure moved G7b **87% → 98%**.
+- **What this decision does NOT claim.** The same re-measure did **not** support the accompanying
+  hypothesis that naming the better column in prose fixes A6: the treated templates moved only
+  43%→54%, the untouched control group moved the wrong way, and three boards fail A6 5/5 or 4/5 while
+  the prompt states the column verbatim, because the model paraphrases it as "the central move". A6's
+  headline +8pts is entirely in the confounded opening stratum. **Do not cite this entry as evidence
+  for the prose-column rule.**
+- **Known limit:** `forkPivotCell` keys off `half.tacticTag ∈ {double_threat, figure_7}` + `forkCells`.
+  A board whose fork lives in the board TAGS rather than a tagged half (e.g. `eval-47`) gets no pivot
+  and still fails A7c deterministically. A7c is improved (9→6 run-failures), not closed.
+- **Open revert trigger (D46's, now live):** `pin-L5-deep-fork` shows 3/5 runs conflating the deep
+  fork-creating cell with the immediate best move, because the `fork-pivot` role text omits the
+  "not right now" contrast its `future-fork` sibling carries. Fix that clause before re-measuring.
+- **Status:** IMPLEMENTED (commits `0d6f818`..`3771fba`, `test:fast` 1976/0). Measurement:
+  `docs/superpowers/plans/2026-08-11-baseline-numbers.md`. Related: D45, D46, D47, OI-182.
