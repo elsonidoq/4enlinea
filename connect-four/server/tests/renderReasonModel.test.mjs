@@ -673,6 +673,64 @@ test('fix round 1: pin-L2-enabled-opponent (verified empty zones.terms) shows NO
     'no [term:...] tag or syntax demo may appear anywhere when the record offers zero terms');
 });
 
+// ── Task 9d: opening reading key only teaches book-line vocabulary when there is one ─────────────
+// Measured on eval-11 (an O3 centrality opening record — no namedOpening, no defense, so
+// openingContext has no book line at all): 3/5 runs fabricated specific book-line adherence the
+// record cannot support (graded A4/A7b failures) because the reading key taught "book line" /
+// "family" / "id" / "matchedPrefixLen" vocabulary unconditionally.
+test('O3 centrality opening record (eval-11, harvested/verified): prompt must not teach book-line vocabulary', async () => {
+  const { readFileSync } = await import('node:fs');
+  const { fileURLToPath } = await import('node:url');
+  const { dirname, join } = await import('node:path');
+  const { toNarratorVector, pruneVector } = await import('../scripts/reasonNarratorVector.mjs');
+  const { composeOpeningFrame } = await import('../scripts/reason_engine/openingFrame.mjs');
+  const here = dirname(fileURLToPath(import.meta.url));
+  const rows = readFileSync(join(here, '../scripts/reason_corpus/evidence.jsonl'), 'utf8')
+    .trim().split('\n').map((l) => JSON.parse(l));
+  const record = rows.find((r) => r.id === 'eval-11');
+  assert.ok(record, 'eval-11 must exist in the corpus');
+
+  const fv = pruneVector(toNarratorVector(record.evidence));
+  assert.equal(composeOpeningFrame(fv).kind, 'centrality', 'harvested check: eval-11 must be the O3 centrality frame');
+
+  const model = buildReasonRenderModel(fv);
+  const prompt = assembleGroundedPrompt(model);
+  // Scoped to the Opening reading key block itself — this task's mandate is renderReasonModel.mjs's
+  // OPENING_READING_KEY / its assembly only. openingFrame.mjs's GUARDRAIL constant (out of scope,
+  // settled by D46, task-brief hard prohibition) separately names "book line" as one of three generic
+  // admissible framings ("book line, centrality, parity") in EVERY opening record's guardrail line —
+  // that pre-existing, unconditional mention is not this task's finding or fix and is left untouched;
+  // asserting over the whole prompt would require editing openingFrame.mjs, which is prohibited.
+  const readingKeySection = prompt.slice(prompt.indexOf('# Opening reading key'));
+  assert.doesNotMatch(readingKeySection, /book line/i, 'O3 opening reading key must not teach "book line" vocabulary');
+  assert.doesNotMatch(readingKeySection, /book move/i, 'O3 opening reading key must not teach "book move" vocabulary');
+  assert.doesNotMatch(prompt, /matchedPrefixLen/, 'O3 record must not be taught the matchedPrefixLen field — it has no matched opening');
+});
+
+// Positive counterpart (gating, not blanket deletion): an O1 namedOpening record still DOES teach
+// the book-line bullets. eval-9 was harvested as the corpus's O1 example (see the composeOpeningFrame
+// sweep in the task-9d report).
+test('O1 namedOpening opening record (eval-9, harvested/verified): prompt still teaches book-line vocabulary', async () => {
+  const { readFileSync } = await import('node:fs');
+  const { fileURLToPath } = await import('node:url');
+  const { dirname, join } = await import('node:path');
+  const { toNarratorVector, pruneVector } = await import('../scripts/reasonNarratorVector.mjs');
+  const { composeOpeningFrame } = await import('../scripts/reason_engine/openingFrame.mjs');
+  const here = dirname(fileURLToPath(import.meta.url));
+  const rows = readFileSync(join(here, '../scripts/reason_corpus/evidence.jsonl'), 'utf8')
+    .trim().split('\n').map((l) => JSON.parse(l));
+  const record = rows.find((r) => r.id === 'eval-9');
+  assert.ok(record, 'eval-9 must exist in the corpus');
+
+  const fv = pruneVector(toNarratorVector(record.evidence));
+  assert.equal(composeOpeningFrame(fv).kind, 'namedOpening', 'harvested check: eval-9 must be the O1 namedOpening frame');
+
+  const model = buildReasonRenderModel(fv);
+  const prompt = assembleGroundedPrompt(model);
+  assert.match(prompt, /book line/i, 'O1 record must still be taught "book line" vocabulary');
+  assert.match(prompt, /matchedPrefixLen/, 'O1 record must still be taught the matchedPrefixLen field');
+});
+
 // Finding 1's other direction: a record that DOES offer a term must still demonstrate the [term:...]
 // syntax, using a slug it actually offers. Harvested (not invented): the corpus's first record whose
 // zones.terms is non-empty is eval-7, offering `figure_7`.

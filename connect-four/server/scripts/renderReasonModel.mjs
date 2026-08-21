@@ -198,7 +198,7 @@ export function buildReasonRenderModel(nv) {
       zones,
       requiredSet: deriveRequiredSet(pruned, zones),
       rendered: renderedFields(pruned, link.covers),
-      openingReadingKey: OPENING_READING_KEY,
+      openingReadingKey: openingReadingKeyFor(openingFrame),
       coverage: { ok: true, unowned: [] },
     };
   }
@@ -336,11 +336,33 @@ const READING_KEY = `# Reading key (the few coded fields shown below)
 - Every column number shown anywhere in this prompt is a 1-indexed display column (column 1 = leftmost). The move columns and their landing cells are given in the Decision block above — use them verbatim; do not re-derive move→cell→role.
 - These coded names are for YOUR reading only. Never repeat a field name, "histogram", "window", "completing cell", "solver", or "score" in your answer's \`mechanism\` — say it in plain Connect Four instead (threat, fork, double threat, four-in-a-row line, block, central).`;
 
-const OPENING_READING_KEY = `# Opening reading key
+// Task 9d (spec 058 feedback remediation). Measured on eval-11 (O3 centrality frame — no
+// namedOpening, no defense, openingContext.lead has no book line at all): 3/5 runs fabricated
+// specific "book-line adherence" the record cannot support (graded A4/A7b failures), because the
+// reading key below taught "book line" / "family" / "id" / "matchedPrefixLen" vocabulary
+// unconditionally, even when the frame has no book line for those fields to describe. O1
+// (namedOpening) and O2 (defense) genuinely have a book/defense line to read those fields against;
+// O3 (centrality) does not — it only ever has centrality + parity. Gate the book-line bullets (and
+// the book-line clause of the third, shared bullet) on the frame kind instead of deleting them.
+const OPENING_READING_KEY_BOOK_LINE = `# Opening reading key
 - family / id: the named opening line this position is on (id absent = shared prefix, family only).
 - matchedPrefixLen: how many opening plies matched the book line.
 - The blunder is explained through the opening (book line, centrality, parity), NOT a deep tactical cell.
 - The winning resolution is deep (many plies away) and is stated only as a horizon — there is no near-term threat cell to read.`;
+
+const OPENING_READING_KEY_CENTRALITY_ONLY = `# Opening reading key
+- This position matches no named opening or defense line — do not name a family, id, or how many plies matched; none apply here.
+- The blunder is explained through the opening (centrality, parity), NOT a deep tactical cell.
+- The winning resolution is deep (many plies away) and is stated only as a horizon — there is no near-term threat cell to read.`;
+
+// Selects the opening reading key by frame kind (composeOpeningFrame's 'namedOpening' | 'defense' |
+// 'centrality') rather than re-deriving from openingContext — the frame already told us which case
+// this is.
+function openingReadingKeyFor(openingFrame) {
+  return openingFrame.kind === 'centrality'
+    ? OPENING_READING_KEY_CENTRALITY_ONLY
+    : OPENING_READING_KEY_BOOK_LINE;
+}
 
 // The outcome-defining half for the horizon summary.
 function horizonHalf(pruned) {
