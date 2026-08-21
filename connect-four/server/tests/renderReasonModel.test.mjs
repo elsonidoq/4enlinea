@@ -830,3 +830,42 @@ test('fix round 2: zero offered aliases falls back to the abstract <handle>/<lin
   // No term worked example either — zero terms were offered.
   assert.doesNotMatch(prompt, /\[term:/i, 'no [term:] syntax may appear when zero terms are offered');
 });
+
+// ── Fix round 3 (task 9b, finding 2, reopened) ───────────────────────────────────────────────────
+// `displayPhraseFor`'s round-2 form was `TAG_PHRASE[slug] ?? RENDER_DISPLAY_PHRASE[slug] ?? slug` —
+// `TAG_PHRASE.claimeven` is the STRING 'claimeven' (truthy), so `??` never fell through and the
+// redaction stayed an identity substitution for exactly the slug it was written to fix. This test
+// exercises the PRODUCTION path end to end (not displayPhraseFor in isolation, which the dead branch
+// would have passed): take a real corpus record, inject an unoffered `claimeven` board tag the way
+// the checkpoint reviewer did, and assert the rendered Tactics list carries the vetted phrase, never
+// the bare slug.
+test('fix round 3: an unoffered claimeven board tag renders its vetted phrase, never the bare slug, through the real prompt-assembly path', async () => {
+  const { readFileSync } = await import('node:fs');
+  const { fileURLToPath } = await import('node:url');
+  const { dirname, join } = await import('node:path');
+  const { toNarratorVector, pruneVector } = await import('../scripts/reasonNarratorVector.mjs');
+  const here = dirname(fileURLToPath(import.meta.url));
+  const rows = readFileSync(join(here, '../scripts/reason_corpus/evidence.jsonl'), 'utf8')
+    .trim().split('\n').map((l) => JSON.parse(l));
+  const record = rows.find((r) => r.id === 'pin-L2-enabled-opponent');
+  assert.ok(record, 'pin-L2-enabled-opponent must exist in the corpus');
+
+  const fv = pruneVector(toNarratorVector(record.evidence));
+  const model = buildReasonRenderModel(fv);
+  assert.equal((model.zones.terms ?? []).some((t) => t.slug === 'claimeven'), false,
+    'harvested check: this record must not already offer claimeven');
+
+  // Inject an unoffered claimeven board tag onto the decision board, mirroring the reviewer's
+  // injection method — a real board-tag shape (kind/cell/owner), not a synthetic string.
+  const decisionBoard = model.boards.find((b) => b.id === 'decision');
+  assert.ok(decisionBoard, 'model must carry a decision board to inject onto');
+  decisionBoard.tags.push({ kind: 'claimeven', cell: 'c1r1', owner: 'you' });
+
+  const prompt = assembleGroundedPrompt(model);
+  const tacticsBlock = prompt.split('Tactics:')[1].split('\n\n')[0];
+  assert.match(tacticsBlock, /controlling the even squares of a column to guarantee a threat/,
+    'the injected claimeven tag must render its vetted phrase in the Tactics list');
+  assert.doesNotMatch(prompt, /\bclaimeven\b/,
+    'the bare word "claimeven" must not appear anywhere in the prompt as a standalone token');
+});
+

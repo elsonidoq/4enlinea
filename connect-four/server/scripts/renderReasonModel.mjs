@@ -436,13 +436,39 @@ const REDACTABLE_TAG_SLUGS = [
 //     player-facing English.
 // This map is consulted by displayPhraseFor() ONLY, strictly AFTER TAG_PHRASE, so the four TERM_KB
 // slugs' existing TAG_PHRASE-routed behaviour is untouched.
+// Fix round 3 (task 9b): re-checking the whole map surfaced FOUR more live identity holes beyond
+// claimeven/z_threat — `forced_block`, `minor_threat`, `major_threat_parity`, `major_threat_nonparity`
+// all leak the bare slug into a real corpus record's JSON residue TODAY (forced_block: eval-32;
+// minor_threat: 11 records incl. eval-5/eval-9; major_threat_parity: eval-31; major_threat_nonparity:
+// eval-36 — see task-9b-report.md for the full re-measurement). Wording sourced from classifier.js's
+// own detector comments (categorizeThreats' majorParityAligned/majorNonParity/minor bucket doc,
+// detectForcedBlock's STANDING_THREAT_TAGS pairing with immediate_threat), plain player-facing
+// English, no engine vocabulary. The remaining REDACTABLE_TAG_SLUGS members (forced_win,
+// odd_even_threat, j_shape, undercut, overcut, forbidden_columns) are measured UNREACHABLE across the
+// full 63-record corpus (0 occurrences each) — see the report's table — so they are left without an
+// entry rather than inventing unverified wording for a case nothing exercises today.
 const RENDER_DISPLAY_PHRASE = {
   claimeven: 'controlling the even squares of a column to guarantee a threat',
   z_threat: "a threat square you're guaranteed to reach through the column's parity (zugzwang)",
+  forced_block: "a threat you must block right now (the opponent can make four next move)",
+  minor_threat: 'a minor threat (two discs and two empty squares in that four-window)',
+  major_threat_parity: "a three-in-a-row threat on a row you're favored to reach first (parity)",
+  major_threat_nonparity: "a three-in-a-row threat on a row parity does not favor you to reach first",
 };
 
+// Fix round 3 (task 9b, finding 2, still open after round 2). `TAG_PHRASE[slug] ?? RENDER_DISPLAY_PHRASE[slug]
+// ?? slug` never falls through for claimeven: `TAG_PHRASE.claimeven` is the STRING 'claimeven' — truthy,
+// not null/undefined — so `??` short-circuits there and RENDER_DISPLAY_PHRASE.claimeven is dead code.
+// The redaction stayed an identity substitution for exactly the slug it was written to fix.
+// The real condition is not "does TAG_PHRASE have an entry" but "is that entry an actual PHRASE — i.e.
+// different from the slug itself". Generic (not a `slug === 'claimeven'` special case): any future slug
+// whose canonical phrase happens to equal its own name is handled the same way. The four normal TERM_KB
+// slugs are untouched — their TAG_PHRASE values differ from their slugs, so they still resolve through
+// TAG_PHRASE exactly as before.
 function displayPhraseFor(slug) {
-  return TAG_PHRASE[slug] ?? RENDER_DISPLAY_PHRASE[slug] ?? slug;
+  const tagPhrase = TAG_PHRASE[slug];
+  if (tagPhrase && tagPhrase !== slug) return tagPhrase;
+  return RENDER_DISPLAY_PHRASE[slug] ?? tagPhrase ?? slug;
 }
 
 // Replace a bare, unoffered engine tag slug wherever it appears as a whole word in free text (the
