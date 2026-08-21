@@ -406,30 +406,60 @@ function combinedGuardrail(model) {
 // tactic-name display through TAG_PHRASE's canonical phrase whenever the slug is not offered this
 // record, and keep the raw slug only where it IS offered (that's the whole point of offering it).
 //
-// TERM_KB (zoneAnnotations.mjs) is the closed set of slugs that can ever be offered — imported as
+// TERM_KB (zoneAnnotations.mjs) is the closed set of slugs that can ever be OFFERED — imported as
 // OFFERABLE_TERM_SLUGS (one source of truth, no mirrored literal).
-const OFFERABLE_SLUGS = OFFERABLE_TERM_SLUGS;
+//
+// Fix round 2 (task 9b, finding 3). A slug OUTSIDE TERM_KB can never be offered at all —
+// buildAnnotationOffer only ever populates `zones.terms` from TERM_KB — so any of the engine's other
+// tag kinds leaking into a Tactics line or the JSON residue is unconditionally wrong, the exact same
+// defect class as an unoffered TERM_KB slug. Mirrored from reasonEngine.mjs's TAG_PRIORITY (not
+// exported, and that file is render-layer OFF LIMITS per the task brief — "render-layer only," never
+// touch reasonEngine.mjs) — keep in sync if TAG_PRIORITY's tag set changes.
+const REDACTABLE_TAG_SLUGS = [
+  ...OFFERABLE_TERM_SLUGS,
+  'forced_win', 'z_threat', 'odd_even_threat', 'j_shape', 'undercut', 'overcut',
+  'major_threat_parity', 'major_threat_nonparity', 'forced_block', 'forbidden_columns', 'minor_threat',
+];
 
-// claimeven collides: TAG_PHRASE.claimeven is the literal string 'claimeven' (the phrase IS the
-// slug), so routing it through TAG_PHRASE cannot change what is displayed. Measured over the full
-// 63-record evidence corpus (2026-08-21): zero records display `claimeven` while it is unoffered —
-// see task-9b-report.md for the script and output. The invariant below therefore stays STRICT
-// (claimeven is not exempted); this comment records that the collision is live but currently
-// unreached, not silently designed around.
-// Replace a bare, unoffered TERM_KB slug wherever it appears as a whole word in free text (the
-// Tactics lines) — never touches an OFFERED slug, and never touches slugs outside TERM_KB (e.g.
+// Fix round 2 (task 9b, findings 2 & 3). TAG_PHRASE (causalLinks.mjs) is the single source for
+// causal-link TEMPLATE text — frozen for an in-flight measurement, so it must NOT be edited or
+// extended here. Two display-only gaps TAG_PHRASE cannot fix:
+//   - claimeven: TAG_PHRASE.claimeven === 'claimeven' (finding 2) — the phrase IS the slug, so a
+//     TAG_PHRASE lookup is an identity substitution, a silent no-op. Wording below matches
+//     zoneAnnotations.mjs's TERM_KB.claimeven.description (the same KB-vetted phrase already shown
+//     to the model whenever claimeven IS offered), so an unoffered claimeven reads consistently with
+//     an offered one.
+//   - z_threat: has NO TAG_PHRASE entry at all (finding 3) — a live board-tag slug
+//     (reasonEngine.mjs TAG_PRIORITY / REGISTER_CLASS, and `basis: 'z_threat'` in its parity-witness
+//     construction) that TAG_PHRASE[t] ?? slug falls through to raw. Wording sourced from
+//     docs/knowledge-base/community-z-threat.md (the parity-toggle mechanism), kept in plain
+//     player-facing English.
+// This map is consulted by displayPhraseFor() ONLY, strictly AFTER TAG_PHRASE, so the four TERM_KB
+// slugs' existing TAG_PHRASE-routed behaviour is untouched.
+const RENDER_DISPLAY_PHRASE = {
+  claimeven: 'controlling the even squares of a column to guarantee a threat',
+  z_threat: "a threat square you're guaranteed to reach through the column's parity (zugzwang)",
+};
+
+function displayPhraseFor(slug) {
+  return TAG_PHRASE[slug] ?? RENDER_DISPLAY_PHRASE[slug] ?? slug;
+}
+
+// Replace a bare, unoffered engine tag slug wherever it appears as a whole word in free text (the
+// Tactics lines) — never touches an OFFERED TERM_KB slug (a slug outside TERM_KB is never offered at
+// all, so it is always eligible here), and never touches a slug outside REDACTABLE_TAG_SLUGS (e.g.
 // `conditional_swindle`, which never appears as a bare board tag kind).
 function redactUnofferedSlugsInText(text, offered) {
   let out = text;
-  for (const slug of OFFERABLE_SLUGS) {
+  for (const slug of REDACTABLE_TAG_SLUGS) {
     if (offered.has(slug)) continue;
-    out = out.replace(new RegExp(`\\b${slug}\\b`, 'g'), TAG_PHRASE[slug] ?? slug);
+    out = out.replace(new RegExp(`\\b${slug}\\b`, 'g'), displayPhraseFor(slug));
   }
   return out;
 }
 
-// Same substitution over the JSON residue tree (the half fields: `tag`/`tacticTag` leaves), applied
-// to a fresh object so the caller's `model.rendered` is never mutated.
+// Same substitution over the JSON residue tree (the half fields: `tag`/`tacticTag`/`basis` leaves),
+// applied to a fresh object so the caller's `model.rendered` is never mutated.
 function redactUnofferedSlugsInTree(node, offered) {
   if (Array.isArray(node)) return node.map((el) => redactUnofferedSlugsInTree(el, offered));
   if (node !== null && typeof node === 'object') {
@@ -437,10 +467,21 @@ function redactUnofferedSlugsInTree(node, offered) {
     for (const [k, v] of Object.entries(node)) out[k] = redactUnofferedSlugsInTree(v, offered);
     return out;
   }
-  if (typeof node === 'string' && OFFERABLE_SLUGS.includes(node) && !offered.has(node)) {
-    return TAG_PHRASE[node] ?? node;
+  if (typeof node === 'string' && REDACTABLE_TAG_SLUGS.includes(node) && !offered.has(node)) {
+    return displayPhraseFor(node);
   }
   return node;
+}
+
+// Fix round 2 (task 9b, IMPORTANT 1). Classify an alias's spec as a LINE (windows:...), a COLUMN
+// (colN — better-col/played-col, never a fit for a "square" worked example), or a SQUARE (a plain
+// cNrM cell). Used to pick a REAL offered alias of each shape for the worked examples below, instead
+// of a hardcoded handle that may not be offered on this record.
+function specKind(spec) {
+  const raw = spec.startsWith('future:') ? spec.slice('future:'.length) : spec;
+  if (raw.startsWith('windows:')) return 'line';
+  if (raw.startsWith('col')) return 'column';
+  return 'square';
 }
 
 export function assembleGroundedPrompt(model) {
@@ -458,6 +499,15 @@ export function assembleGroundedPrompt(model) {
   const exampleTerm = hasTerms ? model.zones.terms[0] : null;
   const hasZones = model.zones.aliases.length > 0;
   const exampleAlias = hasZones ? model.zones.aliases[0] : null;
+  // Fix round 2 (task 9b, IMPORTANT 1). The MATCH-THE-SHAPE worked example teaches line-vs-square
+  // handle selection; it must demonstrate with a REAL alias this record offers of each shape, never a
+  // hardcoded one (which leaked on 33/28 of 63 corpus records for you-key-square/you-key-line, and on
+  // records offering neither shape at all). Fall back to the abstract <line-handle>/<square-handle>
+  // form, independently per slot, when this record has no real alias of that shape.
+  const lineAlias = model.zones.aliases.find((a) => specKind(a.spec) === 'line') ?? null;
+  const squareAlias = model.zones.aliases.find((a) => specKind(a.spec) === 'square') ?? null;
+  const lineHandleTag = lineAlias ? `zone:${lineAlias.handle}` : 'zone:<line-handle>';
+  const squareHandleTag = squareAlias ? `zone:${squareAlias.handle}` : 'zone:<square-handle>';
   const boards = model.boards.map((b) =>
     `## Board: ${b.id} (${b.reason})\n${b.ascii}\nTactics:\n${redactUnofferedSlugsInText(renderThreatList(b.tags), offeredSlugs)}`).join('\n\n');
   const frames = model.frames.map((f) => f.text).filter(Boolean).join('\n\n');
@@ -471,6 +521,15 @@ export function assembleGroundedPrompt(model) {
   // `kbId === slug`, which is how buildAnnotationOffer already links the two). A conditional
   // pairing, not a required-set group — it costs none of FR-005's three capped slots.
   const pointersFor = (slug) => model.zones.aliases.filter((a) => a.kbId === slug).map((a) => a.handle);
+  // Fix round 2 (task 9b, IMPORTANT 1). The KB-terms adjacency worked example below used to hardcode
+  // `[zone:opp-fork-lines]` — a handle unrelated to whatever term is actually being demonstrated, and
+  // absent on most records (leaked on 36/40 term-offering records). Use a REAL handle tied to the
+  // demonstrated term's own geometry (pointersFor, same linkage the binding text below already
+  // relies on) when one is offered; else any other real offered alias; else the abstract placeholder.
+  const adjacencyHandle = exampleTerm
+    ? (pointersFor(exampleTerm.slug)[0] ?? exampleAlias?.handle ?? null)
+    : null;
+  const adjacencyZoneTag = adjacencyHandle ? `zone:${adjacencyHandle}` : 'zone:<handle>';
   const termLines = model.zones.terms.length
     ? model.zones.terms.map((t) => {
       const pointers = pointersFor(t.slug);
@@ -535,11 +594,14 @@ export function assembleGroundedPrompt(model) {
     'MATCH THE SHAPE OF YOUR WORDS TO THE SHAPE OF THE HANDLE. If your words name a line, strip, '
       + 'or row of four squares, you MUST use a whole-line handle — one whose role below says it is '
       + 'a LINE of four squares. A single-square handle is only for words that name one square. '
-      + 'Bad: "[zone:you-key-square]the square that keeps your four-in-a-row line alive'
-      + '[/zone:you-key-square]" — the words name a line but the board lights up one square. '
-      + 'Good: "you gave up [zone:you-key-line]the four-in-a-row line running from column 2 to '
-      + 'column 5[/zone:you-key-line], and [zone:you-key-square]the square that finishes it'
-      + '[/zone:you-key-square] with it" — line words on the line handle, square words on the '
+      // Fix round 2 (task 9b, IMPORTANT 1): demonstrate with a REAL alias this record offers of each
+      // shape (lineAlias/squareAlias, derived above), falling back to the abstract <line-handle> /
+      // <square-handle> form — independently per slot — when this record offers neither.
+      + `Bad: "[${squareHandleTag}]the square that keeps your four-in-a-row line alive`
+      + `[/${squareHandleTag}]" — the words name a line but the board lights up one square. `
+      + `Good: "you gave up [${lineHandleTag}]the four-in-a-row line running from column 2 to `
+      + `column 5[/${lineHandleTag}], and [${squareHandleTag}]the square that finishes it`
+      + `[/${squareHandleTag}] with it" — line words on the line handle, square words on the `
       + 'square handle.',
     regions,
     '',
@@ -577,12 +639,15 @@ export function assembleGroundedPrompt(model) {
         + 'neighbouring words that say where it is. '
         // Finding 2: the wrapped words are the term's own canonicalPhrase, never a hardcoded phrase
         // ("a double threat") that could name the wrong idea for whatever slug is actually offered.
-        + `Bad: "you handed him [term:${exampleTerm?.slug}]${exampleTerm?.canonicalPhrase}`
-        + `[/term:${exampleTerm?.slug}]" — named, `
+        // `exampleTerm` is provably non-null inside this hasTerms branch (item 7) — no `?.` needed.
+        // Fix round 2 (IMPORTANT 1): the adjacent zone tag is a REAL offered handle
+        // (adjacencyZoneTag, derived above), never the hardcoded `opp-fork-lines`.
+        + `Bad: "you handed him [term:${exampleTerm.slug}]${exampleTerm.canonicalPhrase}`
+        + `[/term:${exampleTerm.slug}]" — named, `
         + 'but the player is never shown where it lives. '
-        + `Good: "you handed him [term:${exampleTerm?.slug}]${exampleTerm?.canonicalPhrase}`
-        + `[/term:${exampleTerm?.slug}] on `
-        + '[zone:opp-fork-lines]the two squares he can finish on[/zone:opp-fork-lines]" — the term '
+        + `Good: "you handed him [term:${exampleTerm.slug}]${exampleTerm.canonicalPhrase}`
+        + `[/term:${exampleTerm.slug}] on `
+        + `[${adjacencyZoneTag}]where it lives[/${adjacencyZoneTag}]" — the term `
         + 'names it, the adjacent highlight points at it.',
     ] : []),
     termLines,

@@ -167,7 +167,10 @@ test('opening prompt has the opening reading key and shows the deep board when t
   // that keep it from reading as a present threat, not omitting it.
   const model = buildReasonRenderModel(OPENING.centrality);
   const prompt = assembleGroundedPrompt(model);
-  assert.match(prompt, /book line|opening/i);
+  // Fix round 2 (task 9b, IMPORTANT 4): `/book line|opening/i` was VACUOUS — it matched every prompt,
+  // opening or not, because the tag-pairing instruction contains the words "an opening and a closing
+  // tag". Assert the actual section header instead, as the O1 test below does via indexOf.
+  assert.match(prompt, /# Opening reading key/);
   assert.match(prompt, /projectedDeep/);
 });
 
@@ -597,36 +600,51 @@ test('opening record: half-geometry aliases are offered, under future: framing',
   }
 });
 
-// ── Task 9b: never display a term slug the prompt does not offer ────────────────────────────────
+// ── Task 9b: never display a term slug OR a zone handle the prompt does not offer ───────────────
 // Measured over 125 graded runs (task-9b-brief.md): prompts that DISPLAY a TERM_KB slug they do not
 // OFFER pass G7b 74/90 (82%); prompts that don't display an unoffered slug pass 35/35 (100%). Every
 // G7b failure fell in the "taught but not offered" condition. `pin-L2-enabled-opponent` reaches the
 // model with `double_threat` shown three times against an empty `zones.terms`.
 //
-// The four TERM_KB slugs (zoneAnnotations.mjs TERM_KB, not exported — mirrored here; keep in sync if
-// its key set changes): immediate_threat, double_threat, figure_7, claimeven.
-test('assembled prompt never names a TERM_KB slug it does not offer (task 9b, corpus-wide)', async () => {
+// Fix round 2 (task 9b, IMPORTANT 1 + item 5): the same defect, one level over, landed on axis G7a —
+// two hardcoded worked-example zone handles (`you-key-square`/`you-key-line`/`opp-fork-lines`) leaked
+// on 44/63 corpus records (130 instances). Extended here to cover both halves in one corpus-wide
+// sweep, and importing OFFERABLE_TERM_SLUGS (zoneAnnotations.mjs) rather than mirroring TERM_KB's key
+// set as a literal — a 5th TERM_KB key would otherwise silently under-check the term half.
+test('assembled prompt never names a TERM_KB slug or a zone handle it does not offer (task 9b, corpus-wide)', async () => {
   const { readFileSync } = await import('node:fs');
   const { fileURLToPath } = await import('node:url');
   const { dirname, join } = await import('node:path');
   const { toNarratorVector, pruneVector } = await import('../scripts/reasonNarratorVector.mjs');
+  const { OFFERABLE_TERM_SLUGS } = await import('../scripts/reason_engine/zoneAnnotations.mjs');
   const here = dirname(fileURLToPath(import.meta.url));
   const rows = readFileSync(join(here, '../scripts/reason_corpus/evidence.jsonl'), 'utf8')
     .trim().split('\n').map((l) => JSON.parse(l));
 
-  const TERM_KB_SLUGS = ['immediate_threat', 'double_threat', 'figure_7', 'claimeven'];
   const violations = [];
   for (const r of rows) {
     const fv = pruneVector(toNarratorVector(r.evidence));
     const model = buildReasonRenderModel(fv);
     const prompt = assembleGroundedPrompt(model);
-    const offered = new Set((model.zones.terms ?? []).map((t) => t.slug));
-    for (const slug of TERM_KB_SLUGS) {
-      if (offered.has(slug)) continue;
-      if (new RegExp(`\\b${slug}\\b`).test(prompt)) violations.push(`${r.id}: ${slug}`);
+
+    const offeredTerms = new Set((model.zones.terms ?? []).map((t) => t.slug));
+    for (const slug of OFFERABLE_TERM_SLUGS) {
+      if (offeredTerms.has(slug)) continue;
+      if (new RegExp(`\\b${slug}\\b`).test(prompt)) violations.push(`${r.id}: term ${slug}`);
+    }
+
+    // Zone-handle half: every concrete [zone:<handle>] in the prompt must name a handle THIS record
+    // actually offers (model.zones.aliases). An abstract placeholder like [zone:<line-handle>] never
+    // matches this pattern (it contains `<`/`>`, outside the handle character class), so it is not a
+    // false positive here.
+    const offeredHandles = new Set((model.zones.aliases ?? []).map((a) => a.handle));
+    const zoneTagRe = /\[zone:([a-zA-Z0-9_-]+)\]/g;
+    let m;
+    while ((m = zoneTagRe.exec(prompt))) {
+      if (!offeredHandles.has(m[1])) violations.push(`${r.id}: zone ${m[1]}`);
     }
   }
-  assert.deepEqual(violations, [], `unoffered TERM_KB slugs leaked into the prompt:\n${violations.join('\n')}`);
+  assert.deepEqual(violations, [], `unoffered slugs/handles leaked into the prompt:\n${violations.join('\n')}`);
 });
 
 test('regression: pin-L2-enabled-opponent must not display double_threat when it is not offered', async () => {
@@ -705,6 +723,30 @@ test('O3 centrality opening record (eval-11, harvested/verified): prompt must no
   assert.doesNotMatch(prompt, /matchedPrefixLen/, 'O3 record must not be taught the matchedPrefixLen field — it has no matched opening');
 });
 
+// Fix round 2 (task 9b, IMPORTANT 4). The three doesNotMatch checks above prove what an O3 record
+// does NOT receive; nothing previously asserted what it DOES positively receive. Assert the actual
+// centrality-only reading key content (OPENING_READING_KEY_CENTRALITY_ONLY, renderReasonModel.mjs).
+test('O3 centrality opening record (eval-11): the reading key positively states no book line applies', async () => {
+  const { readFileSync } = await import('node:fs');
+  const { fileURLToPath } = await import('node:url');
+  const { dirname, join } = await import('node:path');
+  const { toNarratorVector, pruneVector } = await import('../scripts/reasonNarratorVector.mjs');
+  const { composeOpeningFrame } = await import('../scripts/reason_engine/openingFrame.mjs');
+  const here = dirname(fileURLToPath(import.meta.url));
+  const rows = readFileSync(join(here, '../scripts/reason_corpus/evidence.jsonl'), 'utf8')
+    .trim().split('\n').map((l) => JSON.parse(l));
+  const record = rows.find((r) => r.id === 'eval-11');
+  const fv = pruneVector(toNarratorVector(record.evidence));
+  assert.equal(composeOpeningFrame(fv).kind, 'centrality', 'harvested check: eval-11 must be the O3 centrality frame');
+
+  const prompt = assembleGroundedPrompt(buildReasonRenderModel(fv));
+  const readingKeySection = prompt.slice(prompt.indexOf('# Opening reading key'), prompt.indexOf('# Highlightable regions'));
+  assert.match(readingKeySection, /matches no named opening or defense line/i,
+    'O3 reading key must positively state that no book/defense line applies to this record');
+  assert.match(readingKeySection, /centrality, parity/i,
+    'O3 reading key must still teach the centrality/parity vocabulary it DOES need');
+});
+
 // Positive counterpart (gating, not blanket deletion): an O1 namedOpening record still DOES teach
 // the book-line vocabulary, in BOTH places that can carry it — the reading key (renderReasonModel.mjs)
 // AND the guardrail (openingFrame.mjs) — proving the gating composes correctly rather than having
@@ -762,4 +804,29 @@ test('fix round 1: a record that DOES offer a term (eval-7, harvested) still dem
   // hardcoded/mismatched phrase.
   assert.match(prompt, new RegExp(`\\[term:${usedSlug}\\]${usedPhrase.replace(/[()]/g, '\\$&')}`),
     `the worked example must wrap ${usedSlug}'s own canonicalPhrase ("${usedPhrase}"), not a hardcoded phrase`);
+});
+
+// Fix round 2 (task 9b, item 9). The zero-alias branch (abstract <handle>/<line-handle>/
+// <square-handle> placeholders) has no test and no corpus record exercises it (0/63 have empty
+// zones.aliases). Force it with an overridden model.zones, mirroring the D45/fix-round-1 override
+// fixtures above.
+test('fix round 2: zero offered aliases falls back to the abstract <handle>/<line-handle>/<square-handle> placeholders', () => {
+  const model = buildReasonRenderModel(NV);
+  model.zones = { aliases: [], terms: [] };
+  // requiredSet was computed against the ORIGINAL (real) aliases and would itself violate
+  // required-⊆-offered (D2/FR-004) once zones is overridden empty — clear it too, consistent with an
+  // empty-alias world (D45's own override fixtures above make the same requiredSet/zones pairing).
+  model.requiredSet = [];
+  const prompt = assembleGroundedPrompt(model);
+
+  // Highlightable-regions worked example: no term, no zone alias offered at all.
+  assert.match(prompt, /\[zone:<handle>\]/, 'the generic Bad/Good example must fall back to the abstract <handle> form');
+  // MATCH-THE-SHAPE worked example: no line-kind or square-kind alias offered.
+  assert.match(prompt, /\[zone:<line-handle>\]/, 'the shape example must fall back to the abstract <line-handle> form');
+  assert.match(prompt, /\[zone:<square-handle>\]/, 'the shape example must fall back to the abstract <square-handle> form');
+  // No concrete handle may appear anywhere — zero aliases were offered.
+  assert.doesNotMatch(prompt, /\[zone:(?!<[a-z-]+>)[a-zA-Z0-9_-]+\]/,
+    'no concrete [zone:<handle>] may appear when zero aliases are offered');
+  // No term worked example either — zero terms were offered.
+  assert.doesNotMatch(prompt, /\[term:/i, 'no [term:] syntax may appear when zero terms are offered');
 });
