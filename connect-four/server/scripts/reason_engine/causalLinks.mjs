@@ -50,10 +50,15 @@ export const CAUSAL_LINKS = [
     covers: CODES_REALIZED,
     guardrail: 'The correct move builds/completes YOUR pattern; do not attribute it to the opponent.',
     template: (fv) => `The better move (col ${col1(fv.bestCol)}) completes your ${plainTag(fv.lostResource?.tag)} at ${fv.lostResource?.completingCell}; the played move let the opponent take ${denialCell(fv.opponentPunishment)}, denying it.` },
+  // L4 guardrail is case-gated (task 9c): on lose_to_faster_lose both moves lose, so the plain
+  // missed-defense framing must gain L3's hold-the-line clause to avoid implying the played move
+  // caused the loss or that the player is lost. Every other case keeps the original text verbatim.
   { id: 'L4', family: 'realized_denied', confidence: 'high',
     when: (fv) => fv.route === 'realized_denied' && fv.direction === 'defensive_miss',
     covers: CODES_REALIZED,
-    guardrail: 'The better move blocks the opponent pattern; frame it as a missed defense.',
+    guardrail: (fv) => fv.case === 'lose_to_faster_lose'
+      ? 'The better move blocks the opponent pattern; frame it as a missed defense. MUST NOT say the played move caused or enabled the pattern, and MUST NOT tell the player they are lost; both moves lose, but the better one makes the opponent work hardest — frame it as the toughest defense. Do not add a closing caveat like "but the position is still lost," "both lines end poorly," "the result still goes against you," or "you still lose either way" — the practical-resistance framing must stand on its own, with no defeatist final clause.'
+      : 'The better move blocks the opponent pattern; frame it as a missed defense.',
     template: (fv) => `The better move (col ${col1(fv.bestCol)}) occupies ${fv.lostResource?.completingCell}, blocking the opponent's threat on ${cells(fv.opponentPunishment?.window)}; the played move skipped that defense.` },
   // L3/L2 discriminator: the SIGN `case` gates the OUTCOME sentence (D30, supersedes D28 sub-decision 3).
   // L3 asserts "you were already losing, both moves lose" — an OUTCOME claim, valid ONLY when both moves
@@ -117,8 +122,9 @@ export const CAUSAL_LINKS = [
 export function classifyCausalLink(fv, ctx = {}) {
   for (const link of CAUSAL_LINKS) {
     if (link.when(fv, ctx)) {
+      const guardrail = typeof link.guardrail === 'function' ? link.guardrail(fv, ctx) : link.guardrail;
       return { id: link.id, confidence: link.confidence, covers: link.covers,
-               guardrail: link.guardrail, text: link.template ? link.template(fv, ctx) : '' };
+               guardrail, text: link.template ? link.template(fv, ctx) : '' };
     }
   }
   throw new Error(`classifyCausalLink: no rule matched (case=${fv.case} route=${fv.route} direction=${fv.direction})`);

@@ -64,6 +64,23 @@ test('L4 (pin-L4-missed-defense): missed defense; occupies the block, names the 
   assert.match(link.text, /skipped that defense/i);
 });
 
+test('L4 (eval-39): lose_to_faster_lose routes to L4 and gets the hold-the-line guardrail', () => {
+  const { fv, link } = classifyById('eval-39');
+  assert.equal(fv.case, 'lose_to_faster_lose');
+  assert.equal(link.id, 'L4');
+  assert.match(link.guardrail, /toughest|work hardest/i);
+  assert.doesNotMatch(link.guardrail, /you are lost/i);
+  assert.match(link.guardrail, /MUST NOT tell the player they are lost/);
+  assert.match(link.guardrail, /but the position is still lost/); // defeatist-caveat prohibition, like L3/L9
+});
+
+test('L4 (pin-L4-missed-defense): non-lose_to_faster_lose case keeps the original guardrail verbatim', () => {
+  const { fv, link } = classifyById('pin-L4-missed-defense');
+  assert.notEqual(fv.case, 'lose_to_faster_lose');
+  assert.equal(link.id, 'L4');
+  assert.equal(link.guardrail, 'The better move blocks the opponent pattern; frame it as a missed defense.');
+});
+
 test('L6 (pin-L6-lost-win-and-gave-one): gave up a win AND handed the opponent one', () => {
   const { link } = classifyById('pin-L6-lost-win-and-gave-one');
   assert.equal(link.id, 'L6');
