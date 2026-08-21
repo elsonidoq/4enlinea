@@ -292,13 +292,22 @@ export function normalizeAnnotationTags(text) {
 // other export in this file uses this name, verified before exporting.
 export const rcToCellStr = ({ col, row }) => `c${col + 1}r${row + 1}`;
 
-// Strip a [kind:X]…[/kind:X] wrapper whose X is not in `allowed`, keeping the inner text. The
-// non-greedy backreference handles the common flat case; on malformed *overlapping* same-kind tags a
-// stray inner tag may survive — contained blast radius: the frontend degrades an unknown spec to plain
-// text (annotatedText.js isValidSpec) and the grader strips all markup before A5. (m3.)
+// Strip a [kind:X]…[/kind:X] wrapper whose X is not in `allowed`, keeping the inner text, and RECORD
+// each removal. Without the record an invented slug is invisible: annotationRepairs stayed [] while
+// the model emitted [term:central] against an empty term vocabulary (measured, eval-1 run 0), so G7's
+// auto-fail never fired and nothing downstream could see the defect. The non-greedy backreference
+// handles the common flat case; on malformed *overlapping* same-kind tags a stray inner tag may
+// survive — contained blast radius: the frontend degrades an unknown spec to plain text
+// (annotatedText.js isValidSpec) and the grader strips all markup before A5. (m3.)
 function dropUnoffered(text, kind, allowed) {
   const RE = new RegExp(`\\[${kind}:([^\\]!]+)\\](.*?)\\[/${kind}:\\1\\]`, 'gs');
-  return text.replace(RE, (whole, id, inner) => (allowed.has(id) ? whole : inner));
+  const repairs = [];
+  const out = text.replace(RE, (whole, id, inner) => {
+    if (allowed.has(id)) return whole;
+    repairs.push(`unoffered_${kind}:${id}`);
+    return inner;
+  });
+  return { text: out, repairs };
 }
 
 // Delete a [kind:id] opener that has no matching [/kind:id] anywhere later in the text — the model
@@ -349,10 +358,13 @@ export function processAnnotations(mechanism, zones) {
   const aliasMap = Object.fromEntries((zones?.aliases ?? []).map((a) => [a.handle, a.spec]));
 
   let text = normalizeAnnotationTags(mechanism ?? '');
-  text = dropUnoffered(text, 'zone', handles);
-  text = dropUnoffered(text, 'term', slugs);
-
   const repairs = [];
+  for (const [kind, allowed] of [['zone', handles], ['term', slugs]]) {
+    const dropped = dropUnoffered(text, kind, allowed);
+    text = dropped.text;
+    repairs.push(...dropped.repairs);
+  }
+
   for (const kind of ['zone', 'term']) {
     const stripped = stripUnclosedTags(text, kind);
     text = stripped.text;

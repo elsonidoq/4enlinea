@@ -391,3 +391,24 @@ test('a figure_7 half also gets fork aliases (it is a 7-shaped double threat)', 
   assert.ok(zones.aliases.some((a) => /fork/.test(a.handle)),
     `figure_7 fork got no fork alias; handles: ${zones.aliases.map((a) => a.handle).join(', ')}`);
 });
+
+test('an unoffered term is stripped AND recorded as a repair', () => {
+  const zones = { aliases: [{ handle: 'better-col', spec: 'col4' }], terms: [] };
+  const out = processAnnotations('Play [term:central]the middle[/term:central] instead.', zones);
+  assert.equal(out.mechanism, 'Play the middle instead.');       // inner text kept, tag gone
+  assert.ok(out.repairs.includes('unoffered_term:central'),
+    `unoffered slug not recorded; repairs=${JSON.stringify(out.repairs)}`);
+});
+
+test('an unoffered zone handle is stripped AND recorded', () => {
+  const zones = { aliases: [{ handle: 'better-col', spec: 'col4' }], terms: [] };
+  const out = processAnnotations('Take [zone:made-up]that square[/zone:made-up].', zones);
+  assert.ok(out.repairs.includes('unoffered_zone:made-up'));
+});
+
+test('an OFFERED tag produces no repair', () => {
+  const zones = { aliases: [{ handle: 'better-col', spec: 'col4' }], terms: [] };
+  const out = processAnnotations('Play [zone:better-col]column 4[/zone:better-col].', zones);
+  assert.deepEqual(out.repairs, []);
+  assert.ok(out.mechanism.includes('[zone:col4]'));              // handle expanded to its real spec
+});
