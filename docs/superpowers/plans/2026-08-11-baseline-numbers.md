@@ -130,3 +130,46 @@ A1 100% · A2 100% · A6 **89%** · G7a 100% · G7b 97%. The A6 capability gap *
 above), and the subset surfaced a defect this branch introduced (`pin-L5-deep-fork`) plus a control
 regression (`eval-37`). Running a 63-board sweep before resolving those would measure known-defective
 code.
+
+---
+
+# FINAL — post-fix re-measure, 2026-08-23 (`2ef3ccb`) — SUPERSEDES the 08-21 section above
+
+The 08-21 numbers measured `3771fba`, which carried a defect that measurement itself found (the
+fork-pivot role text). This section measures the code that ships. Same frozen 25 boards, same
+`--model gpt-5.4-mini`, same `--n 5`. Report:
+`connect-four/server/scripts/reason_corpus/runs/fv_suff_answers_boards_subset_2026-08-23T15-16-19Z_grade_report.md`
+
+| axis | pre-fix | 08-21 | **final** |
+|---|---|---|---|
+| A3 | 90% | 92% | **98%** |
+| A4 | 86% | 87% | 81% |
+| A5 | 90% | 93% | **94%** |
+| **A6** | **68%** | 76% | **84%** |
+| A7 | 76% | 83% | 81% |
+| G2 | 86% | 91% | 91% |
+| G4 | 96% | 91% | 89% |
+| G5 | 92% | 91% | **96%** |
+| **G7** | **78%** | 71% | **66%** |
+| G7b (mechanical) | 87% | 98% | **98%** |
+| cases passing | 6 | 5 | 5 |
+| **`render_bug` triages** | **7** | 6 | **5** |
+| `prompt_confusion` triages | 11 | 14 | 15 |
+| `vector_error` triages | **0** | **0** | **0** |
+
+A6 by group: treated L5/L6/L9 43% → 54% → **74%**; control L1/L2/L4/L8 (full slice) 78% → 78% → 82%;
+L3/L7 prose 78% → 93% → 95%. A7 sub-tests: A7c **9 → 6 → 4**.
+
+**Read:** the branch removed render-layer defects (`render_bug` 7 → 5, `vector_error` 0 throughout) and
+shifted the residual to model compliance (`prompt_confusion` 11 → 15). G7's decline is real: Task 6 and
+Task 8 grew the required set, so there are more handles to bind and the model drops or mis-binds them.
+Every G7 failure now reads "required handle omitted / wrapped around the wrong cell", never "not
+offered". **Enforcement, not offering, is the next lever.**
+
+**Two corrections to the 08-21 section:** (1) its "control moved the wrong way" was a *mid/late-only*
+slice; on the full control slice the control is flat. (2) Per-board A6 at n=5 is very noisy — two runs
+differing by two wording changes moved `pin-L9` 0/5→4/5 and `eval-35` 1/5→4/5. Trust deterministic
+failures; treat intermittent per-board deltas as noise until replicated.
+
+**Step 4 (63-board sweep): still NOT run**, per the owner's decision to defer it until the fixes landed.
+It is now unblocked — the fixes are in and the subset shows the predicted movement on A6/A7c.
