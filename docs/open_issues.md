@@ -153,7 +153,7 @@ of the subscription's actual status. Under the spec-045 requirement that `tier` 
 Stripe, this is wrong: an `.updated` carrying `past_due`/`canceled`/`unpaid` would keep a user wrongly
 paid. Fix (spec 045): derive tier from the subscription status — active/trialing→paid,
 canceled/unpaid→free, `past_due`→leave unchanged (downgrade only on final termination). Related
-memory: `project_stripe_traps`; `docs/architecture/frontend-conventions.md` (tier source: `store.getProfile()`, never `session.tier`).
+the pre-Paddle Stripe integration (removed in spec 050 — see git history); `docs/architecture/frontend-conventions.md` (tier source: `store.getProfile()`, never `session.tier`).
 
 ---
 
@@ -793,7 +793,7 @@ to subscribe. This is what prompted the user's "I don't see any call to action" 
 
 **If picked up**: add a persistent entry point (e.g. an "Upgrade" row in Settings/account, a home banner,
 or a nav item) that opens `UpgradeModal` via `useUpgradeCheckout()` — it should pass a real
-`returnPathOverride` if launched from a session-only screen. Cross-ref: memory `project_stripe_traps`.
+`returnPathOverride` if launched from a session-only screen. Cross-ref: the pre-Paddle Stripe integration (removed in spec 050 — see git history).
 
 ## OI-25 — Paying from the /summary paywall cannot restore the summary (SESSION_ONLY state lost)
 
@@ -837,7 +837,7 @@ fix). `npm run test:fast`/`npm run test:dom` both green with these added.
 prop; a full-page Stripe checkout redirect reboots the SPA, so on return the `results` are gone and the
 cold-boot rule sends the user to `home`. Mitigation shipped at the time: `PostSetSummaryScreen` passes
 `returnPathOverride='/setpicker'` so the user lands on Challenges instead of home. Cross-ref: memory
-`project_stripe_traps`, [[OI-24]].
+the pre-Paddle Stripe integration (removed in spec 050 — see git history), [[OI-24]].
 
 ## OI-26 — Admin TTS cleanup nulls audio cross-locale under composite explanation_cache key
 
@@ -2792,7 +2792,7 @@ are voiced), so this is ergonomics, not correctness.
 
 **If picked up**: add `connect-four/scripts/generate-lesson-audio.mjs` alongside
 `translate-lessons.mjs` — `--lesson <id>` / all, `--lang en|es|both`, a real `--help` (see
-`feedback_scripts_meaningful_help`), inter-request pacing, retry-on-429 honouring the
+`docs/architecture/server-conventions.md` §CLI script conventions), inter-request pacing, retry-on-429 honouring the
 `RateLimit-Reset` header, and a non-zero exit with the raw body printed when a response is not JSON.
 Report per-lesson `generated`/`failed` counts and a final orphan audit. Related: OI-18.
 
@@ -3580,7 +3580,7 @@ handoff. It is a data-loss footgun for the next person who runs it, not a produc
 **If picked up**: add a real `--help`/`-h` that prints purpose, both positional args and their
 defaults, and exits 0 before any work; validate that `maxGames` parses to a positive integer and
 exit non-zero otherwise; and refuse to write a fixture file with fewer rows than the existing one
-unless `--force` is passed. Cross-ref: memory `feedback_scripts_meaningful_help.md`; OI-61 item 5.
+unless `--force` is passed. Cross-ref: `docs/architecture/server-conventions.md` §CLI script conventions; OI-61 item 5.
 
 ---
 
@@ -6840,3 +6840,199 @@ candidate to drop, given OI-178 shows line handles already produce unreadable pr
 change through `judge-deep-reveals` on the production artifact, NOT through the feature-vector
 sufficiency harness — the evidence object already contains these squares, so this is a selection
 failure, not a context-sufficiency failure. Cross-refs: D45, OI-178, OI-180.
+
+---
+
+## OI-183 — no batch harness exercises the production deep-reveal path, so the retry layer cannot be measured
+
+**Status**: open (missing capability — this is why quality regressions reach staging unmeasured)
+**Area**: `connect-four/server/mechanismExplainer.mjs`, `connect-four/server/scripts/compute.mjs`, `.claude/skills/judge-deep-reveals/`
+**Discovered**: deep-reveal learner-quality evaluation, 2026-08-06
+
+`grep -rn computeMechanism connect-four/server` returns only `index.js` (the live endpoint),
+`mechanismExplainer.mjs` itself, `reasonRenderGuard.mjs` and the unit test. **Nothing drives the
+production deep-reveal path in batch.** Consequences:
+
+- `compute.mjs --llm --condition D` is production-faithful for the **prompt** (it defines
+  `buildPromptForCondition`, which production imports) but calls the model directly, so it never
+  exercises `computeMechanism`'s single shared retry — neither the required-set miss nor the
+  `mentionsBetterColumn` check added 2026-08-06. Attempt-1 behaviour is all that is measurable.
+- `compute.mjs` passes no `locale` (defaults `'en'`) while production threads `locale`, so Spanish
+  output has **zero** eval coverage. Compounds OI-176.
+- The `judge-deep-reveals` skill's 9-item rubric maps well onto real production defects (items 1, 2,
+  8, 9 each caught a defect found by hand on 2026-08-06) but its Input section expects
+  `run_eval.mjs`'s record shape, and `run_eval.mjs` is DEPRECATED and drives the retired
+  `buildExplainContext` path. **The rubric has no live producer.**
+
+**If picked up**: a thin batch harness that imports `computeMechanism` over
+`reason_corpus/boards.jsonl` and emits `judge-deep-reveals`' record shape (`prompt`,
+`attempt1_response`, `attempt1_failures`, `attempt2_*`, `final_response`, plus the solver score
+vectors). The endpoint already does the per-board work; this needs a loop and a writer. Prefer that
+over adapting the skill's input contract — the shape it wants is the shape production produces.
+Do **not** reach for the feature-vector sufficiency harness for this: the evidence object already
+contains the needed cells, so these are selection/render failures, not context-sufficiency failures.
+Cross-refs: OI-176, OI-181, OI-182.
+
+---
+
+## OI-184 — a deep reveal attributed the OPPONENT's double threat to the learner ("you should have kept the double threat alive")
+
+**Status**: open (factual correctness — the most severe defect found in the 2026-08-06 evaluation)
+**Area**: `connect-four/server/scripts/renderReasonModel.mjs` / the condition-D prompt; instance frozen in `connect-four/src/pages/groundingDiffCases.js` (case 2, attempt 8)
+**Discovered**: deep-reveal learner-quality evaluation, 2026-08-06
+
+Board `315444233213`, Green to move, played column 2, better column 4. Served text:
+
+> "You should have kept the **double threat** alive on the two finish squares **your opponent** can
+> still use later, because that forces them to answer everywhere at once."
+
+The sentence contradicts itself, and the reading that survives is the false one. The two squares
+(`future:windows:c3r5,c7r1`) share **no** 4-window containing a single Green disc: the only windows
+joining them run through c6r2 / c5r3 / c4r4, and `c5r3 = O(6)`, `c4r4 = O(12)` — **two Gray discs,
+zero Green**. They are the *opponent's* finishing squares. The explanation hands the learner the
+opponent's fork and labels it theirs.
+
+This is a **perspective/ownership inversion**, distinct from OI-182's missing-pivot defect, and it
+may well survive the OI-182 fix — naming the pivot square does not by itself fix whose threat it is.
+Note the same record also never names the better column (fixed 2026-08-06 by `mentionsBetterColumn`)
+and highlights a row-5 line holding **no disc of either colour**, while the board's one real, present,
+solver-confirmed Green threat (`Major threats: col3 row4 (X)`, the diagonal c6r1-c5r2-c4r3→c3r4) is
+offered and never used.
+
+**If picked up**: check whether the half's `perspective`/owner is reaching the prompt for a
+`double_threat` on the `opponentPunishment` half, and whether the required-set handle carries owner
+information at all — if the model is given two cells with no owner, "whose threat is this?" is a coin
+flip it will sometimes lose. A rendered instance is reproducible from the frozen case-2 record.
+Cross-refs: OI-180, OI-182.
+
+---
+
+## OI-185 — D29's ablation anchor was deleted; the P4 ablation runbook now points at files that do not exist
+
+**Status**: open (decision + doc consistency, no code impact)
+**Area**: `docs/architecture/reason-P4-ablation-runbook.md`, `docs/architecture/reason-DECISIONS.md` (D29)
+**Discovered**: corpus consolidation, 2026-08-06
+
+D29 retained the frozen-29 board set (`boards_coverage_2026-07-02T11-37-56Z.jsonl` and its evidence)
+as an **ablation + regression anchor deliberately distinct** from the newer P4 coverage set. Both
+files were deleted on 2026-08-06 when the corpus was consolidated to a single committed set at
+`connect-four/server/scripts/reason_corpus/`.
+
+Nothing broke: the nine L1–L9 regression anchors D29 cared about survive as semantic `pin-*` rows in
+the new corpus, recomputed against the current engine and passing. But **D29's stated rationale — two
+deliberately separate sets — no longer describes reality**, and the runbook's §"The frozen-29 input
+board set is already committed" instructs the reader to use a path that no longer exists. A RETIRED
+banner was added to the runbook pointing here.
+
+**If picked up**: either append a decision superseding D29 (one consolidated corpus; ablation runs
+against `reason_corpus/boards.jsonl`, regression anchors are the `pin-*` rows), or restore a separate
+ablation set if the two-set separation is still wanted. This is a decision, not a path edit — do not
+silently rewrite D29. Cross-refs: OI-183.
+
+---
+
+## OI-186 — `buildRenderDecision` recomputes the offer set instead of consuming `buildReasonRenderModel`, so the two can silently disagree on what was offered
+
+**Status**: open (structural — a one-line mirror papers over this in spec 058's Task 6, full fix deferred)
+**Area**: `connect-four/server/scripts/renderReasonModel.mjs` (`buildReasonRenderModel`, `buildRenderDecision`)
+**Discovered**: deep-reveal render remediation planning (spec 058), 2026-08-11
+
+`buildReasonRenderModel` assembles the actual grounded prompt, and 80 lines later
+`buildRenderDecision` independently recomputes an equivalent-but-separate offer set from the same
+narrator vector:
+
+```js
+// renderReasonModel.mjs:269-271 (buildReasonRenderModel's opening branch, prompt-facing)
+const openingFrame = composeOpeningFrame(pruned);
+const zones = buildAnnotationOffer(pruned, boardSelectionDecisions(pruned),
+                                   { openingHorizon: !!openingFrame });
+```
+
+`buildRenderDecision`'s `zones` is the object the answer pipeline validates the model's response
+against — `compute.mjs:296-303`, `postprocessAnswer(answer, render_decision)` calls
+`processAnnotations(answer.mechanism ?? '', render_decision.zones)`, not against
+`buildReasonRenderModel`'s zones. When the two computations diverge, every alias the prompt offered but
+`render_decision.zones` does not is treated by `dropUnoffered` as invented and stripped, which (after
+OI-...-class fixes that make unoffered tags recorded, spec 058 Task 9) surfaces as
+`unoffered_zone:*`/`unoffered_term:*` repairs — a G7 auto-fail for content the model was legitimately
+offered.
+
+This is not hypothetical: the grader already flagged the same drift class on eval-21 (G3
+counterexample) — "`buildRenderDecision` at `:311` still reports `boardSelectionDecisions`" while "the
+assembled prompt renders ONLY the decision board." Spec 058's Task 6 (opening records now merge the
+causal frame back into the prompt instead of suppressing half-geometry aliases) hits the identical seam:
+without a mirroring change, `buildReasonRenderModel` would offer the newly-un-suppressed aliases while
+`buildRenderDecision` kept suppressing them. Task 6 lands a one-line mirror (dropping the
+`{ openingHorizon: ... }` option from the `buildRenderDecision` call too) as an interim fix — chosen
+over making `buildRenderDecision` consume `buildReasonRenderModel` directly, because changing the
+grader's ground-truth artifact in the same pass as the thing being measured would confound the spec 058
+re-measurement, the same reasoning that already deferred G5 in that plan.
+
+**If picked up**: make `buildRenderDecision` consume `buildReasonRenderModel`'s output (or a shared
+helper both call) rather than recomputing the offer set independently, so the two structurally cannot
+diverge again. Do this as an isolated change, verified against a baseline captured BEFORE the change —
+not bundled into a round that is also measuring prompt-content fixes, for the same reason spec 058 kept
+it out. Cross-refs: eval-21 G3 counterexample, spec 058 Task 6.
+
+## OI-187 — `requiredSet` never obliges the better column, so nothing enforces the one thing A6 measures
+
+**Status**: open (measured, not fixed)
+**Area**: `connect-four/server/scripts/renderReasonModel.mjs` (`deriveRequiredSet`)
+**Discovered**: 2026-08-11 render-remediation baseline, 125 graded runs
+
+`deriveRequiredSet` obliges the better column in **0 of 125 runs**. A6 — "does the served prose tell
+the player which column to play" — is the largest single axis failure (85/125 = 68% on the production
+model), and the required-set retry is the one enforcement lever with measured effect (12/12 vs 0/12
+for prompt wording).
+
+**Do not treat this as a drop-in A6 fix.** Verified against production's own `mentionsBetterColumn`:
+the required set forces the **tag**, not the **words**, and A6 grades the served text.
+
+```
+PASS  "Play [zone:col4]column 4[/zone:col4] instead."
+FAIL  "Play [zone:col4]the central column[/zone:col4] instead."   <- required tag satisfied, A6 fails
+```
+
+Obliging `better-col` would still be worth doing for **A7b** (it highlights the column on the board, so
+"the more central column" becomes locatable), but it cannot move A6 on its own. Task 4 of the
+remediation plan addresses A6 by putting the words in the template instead.
+
+## OI-188 — the decision board's Tactics list asserts patterns that are not board-true on it
+
+**Status**: open (deliberately deferred from the 2026-08-11 remediation to avoid confounding its measurement)
+**Area**: `connect-four/server/scripts/reasonBoardSelect.mjs` (`patternOpts` overlay) → the rendered threat list
+**Discovered**: 2026-08-06 grading (pin-L1, pin-L2), re-confirmed 2026-08-11
+
+The rendered `Tactics:` line under `## Board: decision` can name a pattern that exists only on a LATER
+board. On `pin-L2-enabled-opponent` (movestring `334`) it prints `double_threat at c2r1`, while
+`./visualize_board.sh 334` reports `Major threats: none` — the fork only appears on the punishment
+line `33432`. This is a **board-false rendered region** (G5): the model narrates it faithfully and is
+then graded wrong for doing so.
+
+Deferred because it lives in a different module from the remediation's changes and would confound the
+before/after read. It interacts with OI-189: the false Tactics line is one of the three places the
+`double_threat` slug reaches the model on a record whose `zones.terms` is empty.
+
+## OI-189 — the prompt displays term slugs it does not offer, and every unoffered-term emission traces to it
+
+**Status**: open (fix specified as Task 9b of the 2026-08-11 remediation plan; not yet implemented)
+**Area**: `connect-four/server/scripts/renderReasonModel.mjs` (`assembleGroundedPrompt`) + the rendered threat list
+**Discovered**: 2026-08-11 baseline, 125 graded runs
+
+Raw tag slugs (`double_threat`, `figure_7`, `immediate_threat`, `claimeven`) appear in the rendered
+Tactics lines, the half fields and the worked example even when `render_decision.zones.terms` is
+**empty**. The model uses the vocabulary it was shown; `processAnnotations` then strips it as unoffered.
+
+Split over 125 runs by whether the prompt displays a slug it does not offer:
+
+| prompt displays an unoffered slug | G7b pass |
+|---|---|
+| yes | 74/90 (82%) |
+| no  | **35/35 (100%)** |
+
+**Every** G7b failure falls in the "taught but not offered" condition; there are zero failures without
+it. On `pin-L2-enabled-opponent` the slug reaches the model three times and it emits
+`[term:double_threat]` on **5/5 runs**. Model-independent and deterministic — render the canonical
+`TAG_PHRASE` wording instead of the slug where the term is not offered. Do NOT instead widen
+`zones.terms`: a term with no KB entry renders an empty popup (which is why `conditional_swindle` is
+deliberately absent from `TERM_KB`).
