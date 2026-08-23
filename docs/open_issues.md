@@ -7161,3 +7161,29 @@ only 2 of the 3 required discs exist.
 `opp-key-square` siblings carry byte-identical role text, so the model swaps them). This is a
 **correctness** bug in the composed frame, not a wording one — the narration is board-false.
 Cross-refs: OI-188, OI-191.
+
+## OI-196 — the REQUIRED-handle block restates roles without the board disambiguator the Highlightable-regions block carries
+
+**Status**: open
+**Area**: `connect-four/server/scripts/renderReasonModel.mjs` (`assembleGroundedPrompt`, `requiredLines`)
+**Discovered**: 2026-08-23 post-fix subset re-measure (`eval-47`, 4/5 runs)
+
+Verified at source:
+
+```js
+// :564  Highlightable regions — carries the board
+`- [zone:${a.handle}] = ${a.role} (on the ${a.truthBoard} board)`
+// :600  Required set — the block the prompt calls mandatory — DROPS it
+`- [zone:${g.handle}] = ${g.role}`
+```
+
+So two required handles whose roles differ only by which board they are true on restate **identically**
+in the block the model is told it "cannot be honest without". On `eval-47`, `you-immediate` (`c3r6`, the
+**afterBest** board) and `you-immediate-3` (`c5r4`, the **afterPlayed** board) become indistinguishable
+there, and 4 of 5 runs conflate the two squares — runs 1–2 fabricate the opponent taking `c3r6`, runs
+3–4 recommend playing `c3r6`, i.e. **the exact column the player just blundered**, contradicting the
+Decision block's own "column 5".
+
+One-line fix: append the same `(on the … board)` suffix in `requiredLines`. This is the required-set
+sibling of OI-191 (identical role text on offered aliases) and probably the cheapest high-value fix in
+the current backlog. Cross-refs: OI-191, OI-193.
