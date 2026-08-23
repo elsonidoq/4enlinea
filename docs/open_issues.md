@@ -7116,3 +7116,48 @@ squares.
 So **"20/20 fork halves get a pivot" is true only for the tagged-half definition of a fork.** A7c
 improved (9 → 6 run-failures across the subset) but is not closed, and OI-182 should not be reported as
 closing it generally.
+
+## OI-194 — causal-link templates embed raw `cNrM` notation into the very text the prompt forbids the model to echo
+
+**Status**: open
+**Area**: `connect-four/server/scripts/reason_engine/causalLinks.mjs` (L1, L4, L8 templates interpolate `completingCell` / `window` cells)
+**Discovered**: 2026-08-23 post-fix subset re-measure (`eval-32` 5/5, contributing on `eval-37`, `eval-11`, `eval-38`, `pin-L5`)
+
+The assembled prompt tells the model *"Never write a raw square"* and the reading key says `cNrM` codes
+are for internal reading only — while the composed causal frame it is asked to build on **contains raw
+`cNrM` cells**, e.g. L4:
+
+```js
+template: (fv) => `The better move (col ${col1(fv.bestCol)}) occupies ${fv.lostResource?.completingCell}, blocking the opponent's threat on ${cells(fv.opponentPunishment?.window)}; the played move skipped that defense.`
+```
+
+On `eval-32` all 5 runs echo `c6r2` and the window `c7r1·c6r2·c5r3·c4r4` verbatim into player-facing
+prose, failing A5a/G1/G7. The same leak appears intermittently on several other boards. The model is
+being shown one thing and told the opposite — the same "taught but not offered" mechanism as OI-189,
+one level up.
+
+Note this is **pre-existing and unchanged** by the 2026-08-11 remediation branch (`link.text` was
+verified byte-identical base→head on all 63 records), and `eval-32` passed two earlier grading runs
+while failing this one, so the *symptom* is model- and grader-variable even though the *defect* is
+deterministic in the code. Production's serving guard rewrites a bare `cNrM` into "column N" for A6
+purposes, which is why this hides from the mechanical axes.
+
+Fix direction: have the templates carry plain-language references (or the display-column form) rather
+than raw cell codes, so the frame text obeys the rule the prompt states. Cross-refs: OI-188, OI-189.
+
+## OI-195 — the L2 template names the wrong cell as the one the opponent occupies
+
+**Status**: open
+**Area**: `connect-four/server/scripts/reason_engine/causalLinks.mjs` (L2 template) + the decision-board Tactics line
+**Discovered**: 2026-08-23 post-fix subset re-measure (`pin-L2-enabled-opponent`, 4/5 runs)
+
+On `pin-L2-enabled-opponent` the L2 template says the opponent *occupies*
+`opponentPunishment.completingCell` = `c2r1` — but `c2r1` is **still empty** on the engine's own
+`finalMovestring` (`33432`); the opponent actually landed at `lostResource.completingCell` = `c3r1`.
+The decision-board Tactics line on the same record additionally asserts a double threat as present when
+only 2 of the 3 required discs exist.
+
+4 of 5 runs consequently claim the opponent occupied an empty square. Compounded by OI-191 (the two
+`opp-key-square` siblings carry byte-identical role text, so the model swaps them). This is a
+**correctness** bug in the composed frame, not a wording one — the narration is board-false.
+Cross-refs: OI-188, OI-191.
