@@ -7036,3 +7036,83 @@ it. On `pin-L2-enabled-opponent` the slug reaches the model three times and it e
 `TAG_PHRASE` wording instead of the slug where the term is not offered. Do NOT instead widen
 `zones.terms`: a term with no KB entry renders an empty popup (which is why `conditional_swindle` is
 deliberately absent from `TERM_KB`).
+
+---
+
+## OI-190 — the shared `projectedDeep` board is built from ONE half's line, so the other half's aliases are verified against a continuation they do not belong to
+
+**Status**: open
+**Area**: `connect-four/server/scripts/reasonBoardSelect.mjs` (`deepHalf` picker) + every alias carrying `truthBoard: "projectedDeep"`
+**Discovered**: 2026-08-21 post-fix subset re-measure (graded runs on `eval-5`, `eval-21`)
+
+`deepHalf` always prefers `lostResource.finalMovestring` when building the single shared
+`projectedDeep` board. Any `opponentPunishment`-owned alias declaring `truthBoard: "projectedDeep"` is
+therefore checked against the wrong line.
+
+Measured on `eval-5`: `c2r3` is filled by **you** on the rendered `projectedDeep` board, while it truly
+belongs to the **opponent** on `opponentPunishment`'s own `finalMovestring`. On `eval-21` the offered
+`opp-key-line` window `c4r3,c5r3,c6r3,c7r3` is not a completed line on the board it names — it completes
+only on `opponentPunishment.finalMovestring`.
+
+Downstream symptom on `eval-5`: runs 0/2 named the key squares as `c6r6`/`c6r5`, lifted verbatim from
+that board's unrelated Tactics list, instead of the real completing cells `c6r4`/`c2r3`.
+
+This is **model-independent** (it survives a change of model) and is one root cause behind several
+G5/G7/A7b failures. It is the strongest single candidate for the next round's first fix. Either render
+a per-half projected board, or make the alias's `truthBoard` name the half whose line it belongs to.
+Cross-refs: OI-186, OI-188.
+
+## OI-191 — sibling aliases get byte-identical role text, so no model can bind handle → cell deterministically
+
+**Status**: open
+**Area**: `connect-four/server/scripts/reason_engine/zoneAnnotations.mjs` (`roleText` + the `-2` suffixing in `mkHandle`)
+**Discovered**: 2026-08-21 post-fix subset re-measure (`eval-9`, `pin-L2-enabled-opponent`)
+
+When a half offers two aliases of the same kind, `mkHandle` disambiguates the **handle**
+(`you-key-square`, `you-key-square-2`) but `roleText` returns the **same string** for both, with no cell
+hint. The prompt therefore describes two different squares identically.
+
+- `eval-9`: `you-key-square` = `future:c6r5` and `you-key-square-2` = `future:c3r5`, identical roles.
+  Runs 1 and 3 **swapped** the bindings; the on-board highlight mis-locates the named square.
+- `pin-L2-enabled-opponent`: `opp-key-square` = `c3r1` and `opp-key-square-2` = `c2r1`, identical roles.
+  3/5 runs bound the wrong cell and never named `c3r1` — the cell `link.text` says was actually denied.
+
+Model-independent: the information needed to choose is absent from the prompt. Give each sibling a
+distinguishing role (name its cell, or its line/direction), or stop offering indistinguishable siblings.
+
+## OI-192 — first-offer-wins alias dedupe can attach the WRONG HORIZON framing to a shared geometry, including on a REQUIRED handle
+
+**Status**: open
+**Area**: `connect-four/server/scripts/reason_engine/zoneAnnotations.mjs` (`buildAnnotationOffer`'s `seen` dedupe)
+**Discovered**: 2026-08-21 post-fix subset re-measure (`eval-33`, 5/5 deterministic)
+
+The dedupe keys on unprefixed geometry and keeps the **first** offer. When both halves reference the
+same window with different horizons, whichever half is iterated first claims it — including its
+tense.
+
+On `eval-33` the required handle `opp-key-line` (`windows:c4r6,c5r6,c6r6,c7r6`) carries
+`lostResource`'s `forced_sequence` framing, *"not a threat right now"*, while `opponentPunishment` has
+`register: immediate` / `tag: immediate_threat` on that identical window — and the window is tagged
+`immediate at c5r6` on the shown afterPlayed board. **All 5 runs read the board correctly and described
+the line as present**, contradicting the handle's own role text: the model was right and the render was
+wrong.
+
+Related, milder symptom: the same dedupe absorbs the fork pivot on 2 of 20 fork halves (`eval-26`,
+`pin-L6`), so the geometry is still required but under the other alias's role. First-offer-wins needs to
+become horizon-aware (and probably owner-aware). Cross-refs: OI-182, OI-191.
+
+## OI-193 — `forkPivotCell` misses forks that live in the board tags rather than in a tagged half
+
+**Status**: open (partial limit of the OI-182 fix)
+**Area**: `connect-four/server/scripts/reason_engine/zoneAnnotations.mjs` (`forkPivotCell`, `FORK_TAGS`)
+**Discovered**: 2026-08-21 post-fix subset re-measure (`eval-47`, A7c fails 5/5)
+
+The OI-182 fix derives the pivot only when `half.tacticTag ∈ {double_threat, figure_7}` **and**
+`half.forkCells` is present. On `eval-47` **neither half carries a `tacticTag` at all** — the fork is
+represented as board tags, offered as `you-double = windows:c3r6,c6r5,c7r2` and
+`you-double-2 = windows:c5r4,c7r4`. No pivot is offered, and all 5 runs name only the two finishing
+squares.
+
+So **"20/20 fork halves get a pivot" is true only for the tagged-half definition of a fork.** A7c
+improved (9 → 6 run-failures across the subset) but is not closed, and OI-182 should not be reported as
+closing it generally.
