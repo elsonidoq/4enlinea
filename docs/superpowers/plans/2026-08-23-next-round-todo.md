@@ -24,7 +24,30 @@ runs**: 3 are membership failures, 3 are the `annotationRepairs` auto-fail, and 
 only** — the handle was offered and well-formed, but wrapped words that do not match its role.
 
 The plan only ever addressed membership (Task 9b, G7b 87%→98%). The judgment half had no task, no
-target and no guard, and it got harder because Tasks 6 and 8 deliberately grew the required set.
+target and no guard.
+
+**IMPORTANT — the decline is NOT this branch's doing, and there is nothing to roll back.** Verified by
+re-rendering all 25 boards at `e5c0c75` and at HEAD and diffing the offered-alias and required-set
+lines: **only 5 boards changed at all** (`eval-11`, `eval-13`, `eval-16`, `eval-20`, `pin-L5-deep-fork`
+— the fork-pivot boards). Splitting G7 on that line:
+
+| | G7 pre-fix | G7 final |
+|---|---|---|
+| 5 boards this branch changed | 52% | **64%** |
+| 20 boards it left untouched | 84% | **66%** |
+
+The boards we changed improved; the decline is entirely on prompts we did not structurally change, and
+none of the five boards driving it (`eval-32`, `eval-33`, `eval-35`, `eval-6`, `pin-L9`) is one we
+changed. Most likely cause: a stricter grader (this session's `GRADER_INSTRUCTIONS.md` foregrounds the
+judgment half; `eval-32`'s failing text is pre-existing and passed two earlier gradings), plus n=5
+model variance. **So: no rollback, and no existing task needs modifying.** The OI entries below are
+pre-existing defects this grading EXPOSED — which is a good outcome, not damage.
+
+- [ ] **METHODOLOGY FIX, do this before any G7 re-measure: freeze the grader.** G7 is currently not
+  comparable across runs because the instruction text changed between them. Commit the
+  `GRADER_INSTRUCTIONS.md` used for a run alongside its answers file (or fold it into the skill), so
+  the next G7 delta measures code and not rubric wording. Without this, any G7 number we produce next
+  is unattributable in exactly the way this one turned out to be.
 
 23 of those 40 concentrate on five boards that map onto filed defects. These are code-verified and
 model-independent — fix the render, not the model:

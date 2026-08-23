@@ -161,10 +161,23 @@ A6 by group: treated L5/L6/L9 43% → 54% → **74%**; control L1/L2/L4/L8 (full
 L3/L7 prose 78% → 93% → 95%. A7 sub-tests: A7c **9 → 6 → 4**.
 
 **Read:** the branch removed render-layer defects (`render_bug` 7 → 5, `vector_error` 0 throughout) and
-shifted the residual to model compliance (`prompt_confusion` 11 → 15). G7's decline is real: Task 6 and
-Task 8 grew the required set, so there are more handles to bind and the model drops or mis-binds them.
-Every G7 failure now reads "required handle omitted / wrapped around the wrong cell", never "not
-offered". **Enforcement, not offering, is the next lever.**
+shifted the residual to model compliance (`prompt_confusion` 11 → 15).
+
+**CORRECTED on the G7 row (2026-08-23, same day).** An earlier draft of this section said "G7's decline
+is real: Tasks 6 and 8 grew the required set". **That is wrong — the data says the opposite.** Only 5 of
+the 25 boards had their offer/required set changed by this branch at all (`eval-11`, `eval-13`,
+`eval-16`, `eval-20`, `pin-L5-deep-fork`, verified by re-rendering both commits and diffing). Splitting
+G7 on that line: the **5 boards we changed went 52% → 64%**, while the **20 we left untouched went 84% →
+66%**. The decline is entirely on prompts this branch did not structurally change, and none of the five
+boards driving it is one we changed.
+
+G7 is therefore **not comparable across these runs**. The likeliest cause is a stricter grader: the
+08-11 grading ran the skill directly, while both 08-2x runs used a `GRADER_INSTRUCTIONS.md` that
+foregrounds the judgment half. `eval-32` is the proof case — the pre-existing, unchanged L4 raw-`cNrM`
+text fails it 5/5 here after passing two earlier gradings. The comparable half, produced by the same
+script both times, is **G7a 100% → 100% and G7b 87% → 98%**.
+
+Enforcement may still be the right next lever, but this measurement does not establish it.
 
 **Two corrections to the 08-21 section:** (1) its "control moved the wrong way" was a *mid/late-only*
 slice; on the full control slice the control is flat. (2) Per-board A6 at n=5 is very noisy — two runs

@@ -91,3 +91,45 @@ one-line fix)**.
 
 OI-196 and OI-190 are the highest-value next fixes: both are code-verified, both are model-independent,
 and both drive the G7 decline this run measured.
+
+---
+
+# CORRECTION (same day, before any G7 work was started)
+
+**The "G7 declined because Tasks 6 and 8 grew the required set" explanation above is WRONG. Disregard
+it.** It was reasoning from a plausible mechanism instead of from the data. The data says the opposite.
+
+Method: re-rendered `buildReasonRenderModel` for all 25 subset boards at `e5c0c75` (base) and at HEAD
+in a throwaway worktree, and diffed the offered-alias and required-set lines.
+
+**Only 5 of 25 boards had their offer or required set changed by this branch at all** — `eval-11`,
+`eval-13`, `eval-16`, `eval-20`, `pin-L5-deep-fork` (the fork-pivot boards). The other 20 are
+byte-identical.
+
+Splitting G7 on exactly that line:
+
+| | G7 pre-fix | G7 final |
+|---|---|---|
+| 5 boards this branch **structurally changed** | 52% (13/25) | **64% (16/25)** |
+| 20 boards this branch **left untouched** | 84% (84/100) | **66% (66/100)** |
+
+The boards we changed **improved**. The entire decline sits on boards whose offer set, required set and
+role text are identical to before. And the five boards driving it — `eval-32`, `eval-33`, `eval-35`,
+`eval-6`, `pin-L9` — are none of the five we changed.
+
+**Therefore G7 is not comparable across these runs, and the 78% → 66% figure does not measure a
+regression.** Two confounds, one of which I introduced:
+
+1. **Grader instructions differed.** The 2026-08-11 grading ran the skill directly; this session's runs
+   used a `GRADER_INSTRUCTIONS.md` I wrote, which explicitly foregrounds the judgment half ("does each
+   handle wrap a phrase whose meaning matches its `role`; is anything over-wrapped"). A stricter reading
+   of the same unchanged text is the most likely cause. `eval-32` is the proof case: the L4 raw-`cNrM`
+   text that fails it 5/5 here is **pre-existing and unchanged**, and it passed two earlier gradings.
+2. **Model run-to-run variance** at n=5, already documented above.
+
+**What IS comparable** is the mechanical half, produced by the same script on both runs:
+**G7a 100% → 100%, G7b 87% → 98%.** Both held or improved.
+
+**Consequence for the backlog:** OI-190…OI-196 remain valid — they are code-verified defects, several
+reproduced deterministically — but they are **pre-existing defects this grading exposed**, not damage
+this branch did. Nothing here warrants a rollback.
