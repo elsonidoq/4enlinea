@@ -1030,3 +1030,46 @@ test('fix round 4 (finding 2): the fork-pivot role text is grammatical for both 
   const p16 = assembleGroundedPrompt(buildReasonRenderModel(pruneVector(toNarratorVector(e16.evidence))));
   assert.match(p16, /the square you play to CREATE the fork/);
 });
+
+// ── Fix 2 (spec 058 post-measure remediation) ────────────────────────────────────────────────────
+// The "handed him" worked example used to wrap the term's RAW canonicalPhrase, producing
+// ungrammatical prose ("you handed him double threat (two winning squares at once)") and modeling
+// an inline technical-parenthetical dump — suspected mechanism for eval-37's coach-voice regression.
+// Through the production path, using eval-7 (offers `figure_7`), same record fix round 1 uses.
+test('fix 2: the "handed him" worked example wraps a natural noun phrase, not the raw canonicalPhrase', async () => {
+  const rows = await loadCorpus();
+  const record = rows.find((r) => r.id === 'eval-7');
+  assert.ok(record, 'eval-7 must exist in the corpus');
+  const { toNarratorVector, pruneVector } = await import('../scripts/reasonNarratorVector.mjs');
+  const model = buildReasonRenderModel(pruneVector(toNarratorVector(record.evidence)));
+  const usedSlug = model.zones.terms[0].slug;
+  const usedPhrase = model.zones.terms[0].canonicalPhrase;
+  const prompt = assembleGroundedPrompt(model);
+
+  // The bare canonicalPhrase must never be wrapped directly after "handed him" (that was the bug).
+  assert.doesNotMatch(prompt, new RegExp(`handed him \\[term:${usedSlug}\\]${usedPhrase.replace(/[()]/g, '\\$&')}\\[`),
+    'the "handed him" example must not wrap the raw canonicalPhrase verbatim');
+  // It must instead read as a natural noun phrase with an article, still wrapping the tag.
+  assert.match(prompt, new RegExp(`handed him \\[term:${usedSlug}\\](a|an) [a-z0-9-]`),
+    `the "handed him" example must wrap an article + noun phrase for ${usedSlug}`);
+});
+
+// A term whose canonicalPhrase carries a parenthetical gloss (double_threat) must not dump that
+// parenthetical inline into the "handed him" sentence. Built via override (no corpus record offers
+// double_threat as a KB term on its own — figure_7 and immediate_threat dominate), but still
+// asserted through assembleGroundedPrompt(buildReasonRenderModel(...)), the production composer.
+test('fix 2: a term whose canonicalPhrase carries a parenthetical gloss (double_threat) does not dump it inline', async () => {
+  const { TAG_PHRASE } = await import('../scripts/reason_engine/causalLinks.mjs');
+  assert.equal(TAG_PHRASE.double_threat, 'double threat (two winning squares at once)');
+  const model = buildReasonRenderModel(NV);
+  model.zones = { aliases: [{ handle: 'you-key-square', spec: 'c1r1', role: 'x', truthBoard: 'decision', kbId: 'double_threat' }],
+    terms: [{ slug: 'double_threat', kbId: 'double_threat', canonicalPhrase: TAG_PHRASE.double_threat,
+      description: 'two winning squares at once' }] };
+  model.requiredSet = [];
+  const prompt = assembleGroundedPrompt(model);
+
+  assert.doesNotMatch(prompt, /handed him \[term:double_threat\]double threat \(two winning squares at once\)/,
+    'the parenthetical gloss must not be dumped inline after "handed him"');
+  assert.match(prompt, /handed him \[term:double_threat\]a double threat\[\/term:double_threat\]/,
+    'the wrapped words must be a natural noun phrase ("a double threat"), still denoting double_threat');
+});

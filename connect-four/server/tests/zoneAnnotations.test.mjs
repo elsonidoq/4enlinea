@@ -441,3 +441,30 @@ test('fork-pivot role text follows the half register — no "matters later" clai
   assert.match(pivotLater.role, /matters later/i);
   assert.match(pivotLater.role, /once the forced sequence reaches it/i);
 });
+
+// Fix 1 (spec 058 post-measure remediation, pin-L5-deep-fork, 3/5 graded runs). Every other 'future*'
+// role branch carries an explicit "not right now" contrast; fork-pivot omitted it, and the model
+// conflated the 28-plies-away fork-creating cell with the actual immediate best move. Through the
+// production path (buildAnnotationOffer), not roleText in isolation.
+test('fix 1: the fork-pivot role text carries an explicit "not right now" contrast (pin-L5-deep-fork)', async () => {
+  const { readFileSync } = await import('node:fs');
+  const { fileURLToPath } = await import('node:url');
+  const { dirname, join } = await import('node:path');
+  const { toNarratorVector, pruneVector } = await import('../scripts/reasonNarratorVector.mjs');
+  const { boardSelectionDecisions } = await import('../scripts/reasonBoardSelect.mjs');
+  const here = dirname(fileURLToPath(import.meta.url));
+  const rows = readFileSync(join(here, '../scripts/reason_corpus/evidence.jsonl'), 'utf8')
+    .trim().split('\n').map((l) => JSON.parse(l));
+  const record = rows.find((r) => r.id === 'pin-L5-deep-fork');
+  assert.ok(record, 'pin-L5-deep-fork must exist in the corpus');
+
+  const fv = pruneVector(toNarratorVector(record.evidence));
+  const zones = buildAnnotationOffer(fv, boardSelectionDecisions(fv));
+  const pivot = zones.aliases.find((a) => a.handle.endsWith('-fork-pivot'));
+  assert.ok(pivot, `pin-L5-deep-fork must offer a fork-pivot alias; got ${zones.aliases.map((a) => a.handle).join(', ')}`);
+  assert.match(pivot.role, /creates|makes both/i);
+  // The contrast must actively rule out "play this now", matching the sibling future* branches'
+  // "not right now" / "not a threat right now" shape — not merely omit a claim.
+  assert.match(pivot.role, /not.*(the move to play|right now)/i,
+    `fork-pivot role text has no "not right now" contrast: "${pivot.role}"`);
+});

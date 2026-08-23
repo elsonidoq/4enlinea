@@ -536,6 +536,16 @@ export function assembleGroundedPrompt(model) {
   // at all (see hasTerms branches below).
   const hasTerms = model.zones.terms.length > 0;
   const exampleTerm = hasTerms ? model.zones.terms[0] : null;
+  // Fix 2 (spec 058 post-measure remediation). The adjacency worked example below used to wrap the
+  // term's RAW canonicalPhrase verbatim ("you handed him double threat (two winning squares at
+  // once)") — ungrammatical, and it modeled dropping a parenthetical technical gloss inline into
+  // coach prose (suspected mechanism for eval-37's coach-voice regression). The tag/word denotation
+  // must still be honest (the earlier fix this guards against: a hardcoded "a double threat" wrapped
+  // in the wrong slug's tag) — so derive a natural noun phrase FROM the term's own canonicalPhrase
+  // (strip a trailing parenthetical gloss, add an article) rather than hardcoding one.
+  const exampleTermHead = exampleTerm ? exampleTerm.canonicalPhrase.replace(/\s*\([^)]*\)\s*$/, '').trim() : null;
+  const exampleTermArticle = exampleTermHead && /^[aeiou]/i.test(exampleTermHead) ? 'an' : 'a';
+  const exampleTermNounPhrase = exampleTermHead ? `${exampleTermArticle} ${exampleTermHead}` : null;
   const hasZones = model.zones.aliases.length > 0;
   const exampleAlias = hasZones ? model.zones.aliases[0] : null;
   // Fix round 2 (task 9b, IMPORTANT 1). The MATCH-THE-SHAPE worked example teaches line-vs-square
@@ -684,10 +694,10 @@ export function assembleGroundedPrompt(model) {
         // `exampleTerm` is provably non-null inside this hasTerms branch (item 7) — no `?.` needed.
         // Fix round 2 (IMPORTANT 1): the adjacent zone tag is a REAL offered handle
         // (adjacencyZoneTag, derived above), never the hardcoded `opp-fork-lines`.
-        + `Bad: "you handed him [term:${exampleTerm.slug}]${exampleTerm.canonicalPhrase}`
+        + `Bad: "you handed him [term:${exampleTerm.slug}]${exampleTermNounPhrase}`
         + `[/term:${exampleTerm.slug}]" — named, `
         + 'but the player is never shown where it lives. '
-        + `Good: "you handed him [term:${exampleTerm.slug}]${exampleTerm.canonicalPhrase}`
+        + `Good: "you handed him [term:${exampleTerm.slug}]${exampleTermNounPhrase}`
         + `[/term:${exampleTerm.slug}] on `
         + `[${adjacencyZoneTag}]where it lives[/${adjacencyZoneTag}]" — the term `
         + 'names it, the adjacent highlight points at it.',

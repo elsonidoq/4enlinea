@@ -68,7 +68,11 @@ function roleText(owner, kind) {
   // set) on 13 corpus records. The surrounding branches conjugate explicitly (see the 'line' branch
   // above); these two now do the same.
   const plays = owner === 'you' ? 'you play' : 'your opponent plays';
-  if (kind === 'fork-pivot') return `the square ${plays} to CREATE the fork — the move that makes both winning squares live at once; it matters later, once the forced sequence reaches it`;
+  // Fix 1 (spec 058 post-measure remediation, pin-L5-deep-fork): every OTHER 'future*' branch above
+  // carries an explicit "not right now" contrast (`not a threat right now` / `not right now`); this
+  // branch omitted it, and the model conflated a fork-creating cell 28 plies away with the actual
+  // immediate best move. The contrast must rule out "play this now", not merely omit a claim about it.
+  if (kind === 'fork-pivot') return `the square ${plays} to CREATE the fork — the move that makes both winning squares live at once; it matters later, once the forced sequence reaches it — it is NOT the move to play right now`;
   if (kind === 'fork-pivot-now') return `the square ${plays} to CREATE the fork — the move that makes both winning squares live at once`;
   return `a single square completing ${who}'s four-in-a-row line`; // major
 }
