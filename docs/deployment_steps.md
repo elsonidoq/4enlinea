@@ -1527,6 +1527,43 @@ games already stored in `games`/`papergames_games`, not primary user data. A use
 game outcomes are unaffected — only the mistake-review annotations are cleared and will repopulate as
 that user's games are next reviewed or new games are analyzed.
 
+## Papergames account-ID validation (2026-08-25 production hotfix)
+
+**Status**: PENDING — one manual data correction on production
+**When**: after the code deploy (already deployed to production as `main`@231ef48, deployment `be005f16`)
+**Blocks**: nothing — the app works; this one profile cannot import until its ID is corrected
+**Applies to**: production
+
+### What's wrong
+
+The production profile for user `3a83545e-87e8-4dc8-9c87-3441a0342244` stores
+`papergames_id = 69e77229f8f489b51eabd6eb`, which does not resolve on Papergames —
+`GET https://papergames.io/api/profile/69e77229f8f489b51eabd6eb` answers 404
+`{"message":"User with this email does not exist"}`. Every import attempt since at least
+2026-08-19 failed. The correct ID for that account (`elsonidoq`) is
+`69e773d36bf9938bffc1509a`, which answers 200 with `count: 1325`.
+
+The deployed code now rejects a non-existent ID at save time and reports a 404 as
+"Papergames account not found" rather than "API unreachable", but it does **not** rewrite
+the value already stored — that is this step.
+
+### Run it
+
+Through the app, as the affected user (preferred — exercises the new validation):
+Settings → Papergames Import → replace the ID with `69e773d36bf9938bffc1509a` → Save.
+A wrong value now fails at Save with a plain error instead of failing minutes later inside
+the import job.
+
+### Verify
+
+Re-run the import and read the production deploy logs (Railway service `4enlinea-production`,
+filter `import`). Success looks like `[importForUser] API total rooms: <n>` followed by
+`Done — imported: …`. Failure still looks like `Papergames account not found: <id>`.
+
+### Roll back
+
+Nothing to roll back — this only replaces one profile field with a correct value.
+
 ## Template for new entries
 
 ```markdown
