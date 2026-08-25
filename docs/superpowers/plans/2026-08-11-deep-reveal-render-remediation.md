@@ -79,7 +79,14 @@ Full analysis: `connect-four/server/scripts/reason_corpus/runs/fv_suff_answers_b
    G7 number is attributable, which is exactly how correction #2 happened.
 2. **File the A4 open issue** — the *Deferred* section below instructs "file as an open issue after
    Task 10". **This was not done.**
-3. **G7 judgment-half render fixes**: OI-196 (one line), OI-191, OI-192, OI-195.
+3. ~~**G7 judgment-half render fixes**: OI-196 (one line), OI-191, OI-192, OI-195.~~ **DONE
+   2026-08-25**, commit `b9be303`, recorded as **D49**, `test:fast` **1990 / 0**. Code-level outcomes:
+   the `(role, truthBoard)` collision behind OI-191 went **48/63 → 0/63** records; `eval-47`'s two
+   required handles now restate distinctly; `eval-33`'s required `opp-key-line` now reads present-tense;
+   `pin-L2` names the cell the opponent actually took. **No G7 number yet — the subset re-measure
+   (item 5 below, now item 3½) is what decides whether the axis moves.** Two pieces of OI-195 remain
+   open by design: L2's "occupy" verb and its raw `cNrM` notation (OI-194) are *wording* and belong to
+   the prose pass, so bundling them here would have destroyed the attribution.
 4. **Rewrite L1/L2/L4/L8 to prose** — the deferral's own trigger has fired (see below). Spends the
    control group, so it must land in a pass where nothing else touches A6.
 5. **Task 10 Step 4**, the 63-board sweep — after 3 and 4, so it measures fixed code.
