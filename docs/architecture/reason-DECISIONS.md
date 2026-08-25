@@ -1518,3 +1518,47 @@ Evidence: `specs/058-deep-reveal-grounding/t043-attempt3-run{1,2,3}-results.json
   "not right now" contrast its `future-fork` sibling carries. Fix that clause before re-measuring.
 - **Status:** IMPLEMENTED (commits `0d6f818`..`3771fba`, `test:fast` 1976/0). Measurement:
   `docs/superpowers/plans/2026-08-11-baseline-numbers.md`. Related: D45, D46, D47, OI-182.
+
+---
+
+### D49 — Every offered handle must be individually identifiable, and a shared geometry takes the PRESENT framing
+
+- **Decision (four rules, all render-layer; no `computeReason` change):**
+  1. **Sibling roles must differ (OI-191).** `mkHandle` disambiguates the *handle*
+     (`opp-key-square`, `opp-key-square-2`); `roleText` is a pure `(owner, kind)` function and returned
+     the *same* string for both. `buildAnnotationOffer` now runs `disambiguateSiblingRoles` as its last
+     step: any aliases sharing a `(role, truthBoard)` pair — exactly the pair the prompt prints — get
+     their geometry front-loaded into the role (`the one at c3r1: …`, `the one through c4r6·c5r6·…: …`).
+     The `future:` decorator is stripped from the hint (D43: it is framing, not geometry), and an alias
+     with no sibling is left byte-identical.
+  2. **The required block carries the same board disambiguator (OI-196).** `deriveRequiredSet` now
+     propagates the matched alias's `truthBoard`, and `assembleGroundedPrompt`'s required block appends
+     `(on the … board)` exactly as the Highlightable-regions block already did. Two required handles
+     whose roles differ only by which board they are true on used to restate identically in the one
+     block the prompt calls mandatory.
+  3. **First-offer-wins is horizon-aware (OI-192).** When both halves reference the same geometry with
+     different horizons, a `future:` framing may be **upgraded** to the present one — never the reverse.
+     Present tense is the board-truth direction (an immediate offer is board-true on a shown near-term
+     board), and the one-directional rule keeps the eval-3 present-threat trap closed: nothing here can
+     turn a genuinely deep cell into a present threat. Handle, position and offer identity are
+     preserved, so `requiredSet` (matched on the unprefixed spec, D43) and I13's display-⊆-offer
+     contract are untouched.
+  4. **L2's conceded cell is the SHARED cell (OI-195).** `tie.sharedCells[0]`, not the punishment
+     half's `completingCell` — for a `double_threat` the completing cell is one of the fork's remote
+     winning squares, which the opponent has not taken and may never take.
+- **Why, measured (code-level; the LLM re-measure is pending):** the `(role, truthBoard)` collision
+  stood at **48 of 63** corpus records before rule 1 and **0 of 63** after. Rules 3 and 4 were validated
+  against their full case space per I12: `eval-33` is the only corpus record where the two halves offer
+  one geometry at two horizons, and of the five L2-routed records only `pin-L2-enabled-opponent` and its
+  branch-invariance twin have `tie.sharedCells[0] !== completingCell` — the other three render
+  byte-identically, which is what makes the next measurement attributable.
+- **What this decision does NOT claim.** No G7 number yet. These four are the render-side root causes
+  behind four of the five boards driving the G7 judgment failures; whether the axis moves is the next
+  measurement's question, not this entry's.
+- **Deliberately out of scope here.** L2's verb "occupy" still over-claims on the other four L2 records
+  (the named square is empty on the opponent's own line there too) and its raw `cNrM` notation is
+  OI-194. Both are *wording*, and L1/L2/L4/L8's wording belongs to the separate prose pass — bundling
+  them would destroy the attribution, exactly as correction #4 in the remediation plan's STATUS block
+  records.
+- **Status:** IMPLEMENTED, `test:fast` **1990 / 0**. Related: D43, D45, D48, I13, OI-191, OI-192,
+  OI-195, OI-196.

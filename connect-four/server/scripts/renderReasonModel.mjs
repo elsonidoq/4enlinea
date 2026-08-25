@@ -146,7 +146,11 @@ export function deriveRequiredSet(pruned, zones) {
     const alias = aliasBySpec.get(spec);
     if (!alias) return false;                         // match failure — drop, required ⊆ offered (FR-004)
     if (groups.some((g) => g.spec === alias.spec)) return false;
-    groups.push({ half, spec: alias.spec, handle: alias.handle, role: alias.role });
+    // OI-196: carry the alias's truthBoard so the required block can restate the SAME board
+    // disambiguator the Highlightable-regions line does. Without it two required handles whose
+    // roles differ only by which board they are true on print identically in the block the prompt
+    // calls mandatory (measured on eval-47: 4/5 runs conflated c3r6/afterBest with c5r4/afterPlayed).
+    groups.push({ half, spec: alias.spec, handle: alias.handle, role: alias.role, truthBoard: alias.truthBoard });
     return true;
   };
   const HALVES = ['lostResource', 'opponentPunishment'];
@@ -597,7 +601,7 @@ export function assembleGroundedPrompt(model) {
   // using the listed handle, verbatim, exactly as the Highlightable regions block above already
   // instructs. An empty required set (FR-006) says so explicitly rather than being silently omitted.
   const requiredLines = (model.requiredSet ?? []).length
-    ? model.requiredSet.map((g) => `- [zone:${g.handle}] = ${g.role}`).join('\n')
+    ? model.requiredSet.map((g) => `- [zone:${g.handle}] = ${g.role}${g.truthBoard ? ` (on the ${g.truthBoard} board)` : ''}`).join('\n')
     : '(none for this explanation — do not invent one)';
   return [
     renderDecision(model.decision),

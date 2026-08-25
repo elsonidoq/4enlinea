@@ -468,3 +468,98 @@ test('fix 1: the fork-pivot role text carries an explicit "not right now" contra
   assert.match(pivot.role, /not.*(the move to play|right now)/i,
     `fork-pivot role text has no "not right now" contrast: "${pivot.role}"`);
 });
+
+// ── OI-191 — sibling aliases must not restate byte-identically ─────────────────────────────────
+//
+// `mkHandle` disambiguates the handle (`opp-key-square`, `opp-key-square-2`); `roleText` is a pure
+// (owner, kind) function and returned the same string for both, so the prompt described two
+// different squares identically and the model had nothing to bind on. Measured corpus-wide: 48 of
+// 63 records carried at least one (role, truthBoard) collision before this fix, 0 after.
+test('OI-191: two same-kind, same-board aliases get distinguishable role text', () => {
+  const p = {
+    bestCol: 2, playedCol: 3,
+    // `denial` flips the owner (halfOwner's OPPONENT_OWNED set), so BOTH halves offer an
+    // opp-owned present square — the real pin-L2-enabled-opponent shape, where the two
+    // `opp-key-square` siblings restated identically and 3/5 runs bound the wrong cell.
+    lostResource: { kind: 'denial', register: 'immediate', completingCell: 'c3r1' },
+    opponentPunishment: { kind: 'winning_line', register: 'immediate', completingCell: 'c2r1' },
+  };
+  const { aliases } = buildAnnotationOffer(p, []);
+  const squares = aliases.filter((a) => a.spec === 'c3r1' || a.spec === 'c2r1');
+  assert.equal(squares.length, 2);
+  assert.notEqual(squares[0].role, squares[1].role);
+  assert.match(squares.find((a) => a.spec === 'c3r1').role, /c3r1/);
+  assert.match(squares.find((a) => a.spec === 'c2r1').role, /c2r1/);
+});
+
+test('OI-191: the hint strips the future: decorator and renders a window as its cells', () => {
+  const p = {
+    bestCol: 2, playedCol: 3,
+    lostResource: { kind: 'winning_line', register: 'forced_sequence', completingCell: 'c6r5',
+                    window: ['c3r5', 'c4r5', 'c5r5', 'c6r5'] },
+    opponentPunishment: { kind: 'winning_line', register: 'forced_sequence', completingCell: 'c3r5',
+                          window: ['c1r2', 'c2r2', 'c3r2', 'c4r2'] },
+  };
+  const { aliases } = buildAnnotationOffer(p, []);
+  const sq = aliases.find((a) => a.spec === 'future:c6r5');
+  assert.match(sq.role, /^the one at c6r5:/);          // no `future:` leaks into the role
+  const line = aliases.find((a) => a.spec === 'future:windows:c3r5,c4r5,c5r5,c6r5');
+  assert.match(line.role, /^the one through c3r5·c4r5·c5r5·c6r5:/);
+});
+
+test('OI-191: a role with no sibling is left byte-identical (no gratuitous rewording)', () => {
+  const { aliases } = buildAnnotationOffer(pruned, boards);
+  const cols = aliases.filter((a) => a.handle === 'better-col' || a.handle === 'played-col');
+  assert.deepEqual(cols.map((a) => a.role),
+    ['the column of the better move', 'the column you played']);
+  const imm = aliases.find((a) => a.spec === 'c1r4');
+  assert.equal(imm.role, 'the single square where you can make four next move');
+});
+
+// ── OI-192 — first-offer-wins must be horizon-aware ────────────────────────────────────────────
+//
+// Harvested from eval-33 (the deterministic 5/5 case): `lostResource` is `denial` /
+// `forced_sequence` and `opponentPunishment` is `realized_pattern` / `immediate`, on the SAME
+// window. Both flip/resolve to the `opp` owner, so both offer the base handle `opp-key-line`; the
+// first-iterated (future) half used to claim it and the required handle then told the model the
+// window was "not a threat right now" while the board it was shown said otherwise.
+const OI192 = {
+  bestCol: 0, playedCol: 4,
+  lostResource: { kind: 'denial', register: 'forced_sequence',
+                  completingCell: 'c5r6', window: ['c4r6', 'c5r6', 'c6r6', 'c7r6'] },
+  opponentPunishment: { kind: 'realized_pattern', register: 'immediate',
+                        completingCell: 'c5r6', window: ['c4r6', 'c5r6', 'c6r6', 'c7r6'] },
+};
+
+test('OI-192: a shared window offered by both halves takes the PRESENT framing, not whichever half ran first', () => {
+  const { aliases, zoneAliasMap } = buildAnnotationOffer(OI192, []);
+  const line = aliases.filter((a) => a.spec.endsWith('windows:c4r6,c5r6,c6r6,c7r6'));
+  assert.equal(line.length, 1, 'still exactly one alias for the shared geometry');
+  assert.equal(line[0].spec, 'windows:c4r6,c5r6,c6r6,c7r6');   // no future: decorator
+  assert.equal(line[0].truthBoard, 'decision');
+  assert.doesNotMatch(line[0].role, /not a threat right now/);
+  assert.equal(zoneAliasMap[line[0].handle], line[0].spec);    // map stays in sync with the upgrade
+});
+
+test('OI-192: the upgrade is one-directional — an immediate offer is never downgraded to future', () => {
+  const flipped = { ...OI192,
+    lostResource: OI192.opponentPunishment,
+    opponentPunishment: OI192.lostResource };
+  const { aliases } = buildAnnotationOffer(flipped, []);
+  const line = aliases.filter((a) => a.spec.endsWith('windows:c4r6,c5r6,c6r6,c7r6'));
+  assert.equal(line.length, 1);
+  assert.equal(line[0].spec, 'windows:c4r6,c5r6,c6r6,c7r6');
+  assert.equal(line[0].truthBoard, 'decision');
+});
+
+test('OI-192: a deep-only geometry keeps its future framing (the eval-3 present-threat trap stays closed)', () => {
+  const deepOnly = { bestCol: 0, playedCol: 4,
+    lostResource: { kind: 'winning_line', register: 'forced_sequence',
+                    completingCell: 'c5r6', window: ['c4r6', 'c5r6', 'c6r6', 'c7r6'] },
+    opponentPunishment: { kind: 'winning_line', register: 'parity', completingCell: 'c1r1' } };
+  const { aliases } = buildAnnotationOffer(deepOnly, []);
+  const line = aliases.find((a) => a.spec.endsWith('windows:c4r6,c5r6,c6r6,c7r6'));
+  assert.equal(line.spec, 'future:windows:c4r6,c5r6,c6r6,c7r6');
+  assert.equal(line.truthBoard, 'projectedDeep');
+  assert.match(line.role, /not a threat right now/);
+});

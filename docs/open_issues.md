@@ -7064,7 +7064,7 @@ Cross-refs: OI-186, OI-188.
 
 ## OI-191 — sibling aliases get byte-identical role text, so no model can bind handle → cell deterministically
 
-**Status**: open
+**Status**: FIXED 2026-08-25 (D49 rule 1) — `disambiguateSiblingRoles` front-loads the geometry into any role that collides on `(role, truthBoard)`. Corpus collisions 48/63 -> 0/63. LLM re-measure pending.
 **Area**: `connect-four/server/scripts/reason_engine/zoneAnnotations.mjs` (`roleText` + the `-2` suffixing in `mkHandle`)
 **Discovered**: 2026-08-21 post-fix subset re-measure (`eval-9`, `pin-L2-enabled-opponent`)
 
@@ -7082,7 +7082,7 @@ distinguishing role (name its cell, or its line/direction), or stop offering ind
 
 ## OI-192 — first-offer-wins alias dedupe can attach the WRONG HORIZON framing to a shared geometry, including on a REQUIRED handle
 
-**Status**: open
+**Status**: FIXED 2026-08-25 (D49 rule 3) — the half-offer dedupe now UPGRADES a `future:` framing to the present one when the other half offers the same geometry as `immediate`, one-directionally. `eval-33`'s required `opp-key-line` now reads present-tense. The milder fork-pivot absorption noted below is unchanged; it is covered by OI-193. LLM re-measure pending.
 **Area**: `connect-four/server/scripts/reason_engine/zoneAnnotations.mjs` (`buildAnnotationOffer`'s `seen` dedupe)
 **Discovered**: 2026-08-21 post-fix subset re-measure (`eval-33`, 5/5 deterministic)
 
@@ -7147,7 +7147,7 @@ than raw cell codes, so the frame text obeys the rule the prompt states. Cross-r
 
 ## OI-195 — the L2 template names the wrong cell as the one the opponent occupies
 
-**Status**: open
+**Status**: PARTIALLY FIXED 2026-08-25 (D49 rule 4) — the conceded cell is now `tie.sharedCells[0]`, so `pin-L2-enabled-opponent` names `c3r1` (which the opponent actually took) instead of the empty `c2r1`. STILL OPEN: (a) the verb "occupy" over-claims on the other four L2 records, where the named square is also empty on the opponent's own line — deferred to the L1/L2/L4/L8 prose pass; (b) the decision-board Tactics line asserting a present double threat with only 2 of 3 discs, which is a board-tag defect, not a template one.
 **Area**: `connect-four/server/scripts/reason_engine/causalLinks.mjs` (L2 template) + the decision-board Tactics line
 **Discovered**: 2026-08-23 post-fix subset re-measure (`pin-L2-enabled-opponent`, 4/5 runs)
 
@@ -7164,7 +7164,7 @@ Cross-refs: OI-188, OI-191.
 
 ## OI-196 — the REQUIRED-handle block restates roles without the board disambiguator the Highlightable-regions block carries
 
-**Status**: open
+**Status**: FIXED 2026-08-25 (D49 rule 2) — `deriveRequiredSet` carries the alias's `truthBoard` and `requiredLines` appends `(on the … board)`. Verified on `eval-47`: `you-immediate` (afterBest) and `you-immediate-3` (afterPlayed) now restate distinctly. LLM re-measure pending.
 **Area**: `connect-four/server/scripts/renderReasonModel.mjs` (`assembleGroundedPrompt`, `requiredLines`)
 **Discovered**: 2026-08-23 post-fix subset re-measure (`eval-47`, 4/5 runs)
 

@@ -39,7 +39,12 @@ test('L1 (pin-L1-completes-your-tactic): completes YOUR tactic; opponent denial 
 test('L2 (pin-L2-enabled-opponent): played move handed the opponent the pattern', () => {
   const { link } = classifyById('pin-L2-enabled-opponent');
   assert.equal(link.id, 'L2');
-  assert.match(link.text, /let the opponent occupy c2r1/);
+  // OI-195: this assertion used to lock `c2r1` — the fork's remote winning square, still EMPTY on
+  // the half's own finalMovestring `33432`. The opponent actually landed on `c3r1`
+  // (= tie.sharedCells[0], the square the better move would have taken). The old expectation was
+  // part of the bug: it kept a board-false frame green across every earlier run.
+  assert.match(link.text, /let the opponent occupy c3r1/);
+  assert.doesNotMatch(link.text, /occupy c2r1/);
   assert.match(link.text, /double threat/i);              // double_threat slug -> plain C4 phrase
   assert.doesNotMatch(link.text, /double_threat/);        // raw slug must not leak
   assert.match(link.text, /better move \(col 3\)/);       // bestCol 2 -> display 3
@@ -134,3 +139,26 @@ for (const [linkId, boardId] of Object.entries(ONE_PER_LINK)) {
       `${linkId} must name the better column (${display}); got: ${link.text}`);
   });
 }
+
+
+// ── OI-195 — the conceded cell is the SHARED one, validated over the whole L2 case space ───────
+//
+// Only pin-L2-enabled-opponent and its branch-invariance twin have tie.sharedCells[0] !==
+// completingCell; the other three L2-routed records must render byte-identically, which is what
+// makes the next measurement attributable to this one change.
+test('OI-195: the three L2 records whose shared cell already equalled the completing cell are unchanged', () => {
+  for (const [id, cell] of [['eval-33', 'c5r6'], ['eval-44', 'c3r1'], ['eval-45', 'c4r6']]) {
+    const { fv, link } = classifyById(id);
+    assert.equal(link.id, 'L2', `${id} must still route to L2`);
+    assert.equal(fv.opponentPunishment.tie.sharedCells[0], fv.opponentPunishment.completingCell);
+    assert.match(link.text, new RegExp(`let the opponent occupy ${cell}`));
+  }
+});
+
+test('OI-195: a punishment half with no tie falls back to completingCell (no behaviour change)', () => {
+  const { fv } = classifyById('pin-L2-enabled-opponent');
+  const noTie = { ...fv, opponentPunishment: { ...fv.opponentPunishment, tie: undefined } };
+  const link = classifyCausalLink(noTie, { patternOnAfterBestBoard: false });
+  assert.equal(link.id, 'L2');
+  assert.match(link.text, /let the opponent occupy c2r1/);
+});

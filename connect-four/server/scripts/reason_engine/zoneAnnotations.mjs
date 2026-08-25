@@ -205,6 +205,11 @@ export function buildAnnotationOffer(pruned, boardDecisions, opts = {}) {
   // that exists now") is what keeps the model from reading a deep cell as a present threat, not
   // withholding the handle. `opts.openingHorizon` is kept as a caller-controlled override (unused
   // by either production caller) rather than removed outright.
+  // OI-192: the half-loop aliases indexed by their UNPREFIXED geometry, so a later half offering the
+  // same cells under a present-tense horizon can upgrade the framing in place instead of being
+  // silently dropped. Only half aliases are indexed — a structural alias is already board-true and
+  // present-tense on the near-term board it names, so it never needs upgrading.
+  const halfAliasByGeometry = new Map();
   const halfPairs = opts.openingHorizon
     ? []
     : [[pruned.lostResource, 'you'], [pruned.opponentPunishment, 'opp']];
@@ -251,13 +256,42 @@ export function buildAnnotationOffer(pruned, boardDecisions, opts = {}) {
     for (const [base, rawSpec, kind] of offers) {
       // Dedup on the UNPREFIXED geometry so a cell already offered as a present structural alias
       // is never re-offered under a future: framing (and vice versa) — first offer wins.
-      if (seen.has(rawSpec) || seen.has('future:' + rawSpec)) continue;
+      //
+      // OI-192: first-offer-wins is now HORIZON-AWARE. When the two halves reference the SAME
+      // geometry with different horizons, whichever half is iterated first used to claim it —
+      // including its tense — and a window that is a present threat on a shown board was described
+      // as "not a threat right now". Measured deterministically on eval-33 (5/5): the REQUIRED
+      // handle `opp-key-line` (windows:c4r6,c5r6,c6r6,c7r6) carried `lostResource`'s
+      // `forced_sequence` framing while `opponentPunishment` had `register: immediate` on that
+      // identical window, and the window is tagged `immediate at c5r6` on the afterPlayed board the
+      // prompt shows. All 5 runs read the board correctly and contradicted the handle's own role
+      // text — the model was right and the render was wrong.
+      //
+      // Present tense wins, in one direction only: a future framing may be UPGRADED to immediate,
+      // never the reverse. That is the board-truth direction (an immediate offer is board-true on a
+      // shown near-term board; the future framing is a horizon claim about the same cells), and it
+      // keeps the eval-3 present-threat trap closed — nothing here can turn a genuinely deep cell
+      // into a present threat. Handle, position and offer identity are preserved so `requiredSet`
+      // (which matches on the unprefixed spec, D43) and I13's display-⊆-offer contract are untouched.
+      if (seen.has(rawSpec) || seen.has('future:' + rawSpec)) {
+        if (isFuture) continue;                       // the retained offer is at least as present
+        const stale = halfAliasByGeometry.get(rawSpec);
+        if (!stale || !stale.spec.startsWith('future:')) continue;
+        stale.spec = rawSpec;
+        stale.role = roleText(owner, kind);
+        stale.truthBoard = 'decision';
+        zoneAliasMap[stale.handle] = rawSpec;
+        seen.add(rawSpec);
+        continue;
+      }
       const spec = pre + rawSpec;
       seen.add(rawSpec);
       seen.add(spec);
       const handle = mkHandle(base);
-      aliases.push({ handle, spec, role: roleText(owner, kind),
-                     truthBoard: isFuture ? 'projectedDeep' : 'decision', kbId: null });
+      const alias = { handle, spec, role: roleText(owner, kind),
+                      truthBoard: isFuture ? 'projectedDeep' : 'decision', kbId: null };
+      aliases.push(alias);
+      halfAliasByGeometry.set(rawSpec, alias);
       zoneAliasMap[handle] = spec;
     }
   }
@@ -284,7 +318,49 @@ export function buildAnnotationOffer(pruned, boardDecisions, opts = {}) {
     slug, kbId: TERM_KB[slug].kbId, canonicalPhrase: TAG_PHRASE[slug], description: TERM_KB[slug].description,
   }));
 
+  // OI-191 — sibling aliases must not restate byte-identically. `mkHandle` disambiguates the HANDLE
+  // (`you-key-square`, `you-key-square-2`) but roleText is a pure (owner, kind) function, so two
+  // different squares were described with the same words and the model had nothing to bind on.
+  // Measured on eval-9 (runs 1 and 3 swapped `future:c6r5` / `future:c3r5`) and on
+  // pin-L2-enabled-opponent (3/5 runs bound the wrong `opp-key-square` and never named the cell
+  // link.text says was denied); corpus-wide 48 of 63 records carried at least one collision.
+  //
+  // The collision key is (role, truthBoard), because that pair is exactly what the prompt prints —
+  // both `assembleGroundedPrompt`'s Highlightable-regions line and, since OI-196, its required
+  // block append "(on the <truthBoard> board)". Aliases separated by their board are already
+  // distinguishable and are left alone, so this fires only where the model genuinely cannot choose.
+  //
+  // The hint names the geometry in cNrM, the same coded form the Boards/Tactics blocks already use
+  // and the reading key already labels "for YOUR reading only. Never repeat …" — it is a reading
+  // aid, not new player-facing vocabulary.
+  disambiguateSiblingRoles(aliases);
   return { aliases, zoneAliasMap, terms };
+}
+
+// `future:` is a render-framing decorator (D43), not geometry — strip it before describing the spec.
+function specHint(spec) {
+  const raw = spec.startsWith('future:') ? spec.slice('future:'.length) : spec;
+  if (raw.startsWith('windows:')) {
+    const groups = raw.slice('windows:'.length).split('|').map((g) => g.split(',').join('\u00b7'));
+    return `the one through ${groups.join(' and ')}`;
+  }
+  if (/^col\d+$/.test(raw)) return null;          // columns never collide; nothing useful to add
+  return `the one at ${raw}`;
+}
+
+export function disambiguateSiblingRoles(aliases) {
+  const counts = new Map();
+  const key = (a) => `${a.role}|${a.truthBoard}`;
+  for (const a of aliases) counts.set(key(a), (counts.get(key(a)) ?? 0) + 1);
+  for (const a of aliases) {
+    if ((counts.get(key(a)) ?? 0) < 2) continue;
+    const hint = specHint(a.spec);
+    // Front-loaded, not appended: the LINE_STEER roles already END in a parenthetical, so a
+    // trailing hint reads as part of that aside. Leading with the geometry also puts the one
+    // distinguishing token first, where the model binds the handle.
+    if (hint) a.role = `${hint}: ${a.role}`;
+  }
+  return aliases;
 }
 
 // --- Post-LLM processing ---

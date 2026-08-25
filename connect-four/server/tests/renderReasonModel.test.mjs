@@ -259,7 +259,7 @@ test('assembled prompt includes the opening frame\'s own guardrail alongside the
 
 // ── deriveRequiredSet (spec 058, US2 — Derivation Rule, spec.md, verbatim from the epic) ────────
 
-test('deriveRequiredSet returns 1-3 {half,spec,handle,role} entries matched by exact spec equality (D2)', () => {
+test('deriveRequiredSet returns 1-3 {half,spec,handle,role,truthBoard} entries matched by exact spec equality (D2)', () => {
   const pruned = {
     lostResource: { completingCell: 'c6r5' },
     opponentPunishment: { completingCell: 'c3r3' },
@@ -272,7 +272,8 @@ test('deriveRequiredSet returns 1-3 {half,spec,handle,role} entries matched by e
   assert.ok(req.length >= 1 && req.length <= 3);
   assert.equal(req.length, 2);
   for (const g of req) {
-    assert.deepEqual(Object.keys(g).sort(), ['half', 'handle', 'role', 'spec']);
+    // truthBoard added by OI-196 so the required block can restate the board disambiguator.
+    assert.deepEqual(Object.keys(g).sort(), ['half', 'handle', 'role', 'spec', 'truthBoard']);
     assert.ok(['lostResource', 'opponentPunishment'].includes(g.half));
   }
   const lr = req.find((g) => g.half === 'lostResource');
@@ -1072,4 +1073,38 @@ test('fix 2: a term whose canonicalPhrase carries a parenthetical gloss (double_
     'the parenthetical gloss must not be dumped inline after "handed him"');
   assert.match(prompt, /handed him \[term:double_threat\]a double threat\[\/term:double_threat\]/,
     'the wrapped words must be a natural noun phrase ("a double threat"), still denoting double_threat');
+});
+
+// ── OI-196 — the REQUIRED-handle block must carry the same board disambiguator ─────────────────
+//
+// `:564` (Highlightable regions) appends "(on the <truthBoard> board)"; the required block at `:600`
+// dropped it, so two required handles differing ONLY by which board their role is true on restated
+// identically in the block the prompt calls mandatory. Measured on eval-47: `you-immediate` (c3r6,
+// afterBest) and `you-immediate-3` (c5r4, afterPlayed) became indistinguishable and 4/5 runs
+// conflated the two squares — two of them recommending the column the player had just blundered.
+test('OI-196: the required-set block carries the truthBoard disambiguator, like the regions block', () => {
+  const model = buildReasonRenderModel(NV);
+  model.requiredSet = [
+    { half: 'lostResource', spec: 'c3r6', handle: 'you-immediate', role: 'a square you can complete', truthBoard: 'afterBest' },
+    { half: 'opponentPunishment', spec: 'c5r4', handle: 'you-immediate-3', role: 'a square you can complete', truthBoard: 'afterPlayed' },
+  ];
+  const prompt = assembleGroundedPrompt(model);
+  assert.match(prompt, /\[zone:you-immediate\] = a square you can complete \(on the afterBest board\)/);
+  assert.match(prompt, /\[zone:you-immediate-3\] = a square you can complete \(on the afterPlayed board\)/);
+});
+
+test('OI-196: a required group with no truthBoard renders without a dangling suffix', () => {
+  const model = buildReasonRenderModel(NV);
+  model.requiredSet = [{ half: 'lostResource', spec: 'c6r5', handle: 'you-major', role: 'the square you needed' }];
+  const prompt = assembleGroundedPrompt(model);
+  assert.match(prompt, /- \[zone:you-major\] = the square you needed\n/);
+  assert.doesNotMatch(prompt, /on the undefined board/);
+});
+
+test('OI-196: deriveRequiredSet carries truthBoard through from the matched offered alias', () => {
+  const model = buildReasonRenderModel(NV);
+  for (const g of model.requiredSet) {
+    const alias = model.zones.aliases.find((a) => a.handle === g.handle);
+    assert.equal(g.truthBoard, alias.truthBoard);
+  }
 });

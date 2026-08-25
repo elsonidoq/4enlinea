@@ -77,7 +77,27 @@ export const CAUSAL_LINKS = [
                   && fv.case !== 'lose_to_faster_lose',
     covers: CODES_REALIZED,
     guardrail: 'The played move genuinely handed the opponent the pattern; name the conceded cell.',
-    template: (fv) => `Your move let the opponent occupy ${fv.opponentPunishment?.completingCell}, completing their ${plainTag(fv.opponentPunishment?.tag)} on ${cells(fv.opponentPunishment?.window)}; the better move (col ${col1(fv.bestCol)}) denied it${denialCell(fv.lostResource) ? ` at ${denialCell(fv.lostResource)}` : ''}.` },
+    // OI-195. The conceded square is the one the two halves SHARE — `tie.sharedCells` — not the
+    // punishment half's `completingCell`. For a `double_threat` the completing cell is one of the
+    // fork's two REMOTE winning squares, which the opponent has not taken and may never take;
+    // the shared cell is the square the better move would have occupied and the opponent got
+    // instead. Measured on pin-L2-enabled-opponent (and its branch-invariance twin): the template
+    // said the opponent occupied `c2r1`, which is still EMPTY on the half's own finalMovestring
+    // `33432`, while the opponent actually landed on `c3r1` = tie.sharedCells[0]; 4 of 5 runs
+    // repeated the board-false claim. Validated across the full L2 case space (the 5 L2-routed
+    // corpus records): in eval-33 / eval-44 / eval-45 `tie.sharedCells[0]` EQUALS the completing
+    // cell, so their frame text is byte-identical and only the two defective records move.
+    // The `?? completingCell` fallback keeps a half with no tie rendering exactly as before.
+    //
+    // Still open on this template and deliberately NOT changed here: the verb "occupy" over-claims
+    // on the other 4 records (the named square is empty on the opponent's own line there too), and
+    // the raw cNrM notation is OI-194. Both are wording, and L2's wording is owned by the separate
+    // prose pass — bundling them here would destroy the attribution this fix is measured on.
+    template: (fv) => {
+      const conceded = fv.opponentPunishment?.tie?.sharedCells?.[0]
+        ?? fv.opponentPunishment?.completingCell;
+      return `Your move let the opponent occupy ${conceded}, completing their ${plainTag(fv.opponentPunishment?.tag)} on ${cells(fv.opponentPunishment?.window)}; the better move (col ${col1(fv.bestCol)}) denied it${denialCell(fv.lostResource) ? ` at ${denialCell(fv.lostResource)}` : ''}.`;
+    } },
   // ── Family 2: sign (L9 refinement before L5/L6) ──
   { id: 'L7', family: 'sign', confidence: 'high',
     when: (fv) => fv.route !== 'realized_denied' && fv.lostResource?.kind === 'conditional_swindle',
