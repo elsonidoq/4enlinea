@@ -9,6 +9,7 @@ const API = import.meta.env.VITE_API_BASE_URL || '';
 export function AuthModal({ onClose, reason }) {
   const { t } = useTranslation();
   const { refetchSession } = useStore();
+  const [devError, setDevError] = useState(null);
 
   function handleDismiss() {
     clearReturnTo();
@@ -61,9 +62,28 @@ export function AuthModal({ onClose, reason }) {
               // handleDismiss does. Doing so silently discarded the import-offer accept's
               // stashReturnTo('settings') before App.jsx's session-effect could consume it,
               // stranding the user back on this screen after "signing in".
+              //
+              // fetch() only REJECTS on a network-level failure — a 400/503 from
+              // /api/auth/anonymous resolves normally. A bare try/catch therefore made a failed
+              // dev sign-in (e.g. local Supabase not running: 400 {"error":"fetch failed"})
+              // indistinguishable from a successful one: the modal closed, refetchSession()
+              // found no cookie, and the user stayed signed out with nothing on screen.
+              setDevError(null);
+              let failure = null;
               try {
-                await fetch(`${API}/api/auth/anonymous`, { method: 'POST', credentials: 'include' });
-              } catch { /* ignore */ }
+                const res = await fetch(`${API}/api/auth/anonymous`, { method: 'POST', credentials: 'include' });
+                if (!res.ok) {
+                  const body = await res.json().catch(() => ({}));
+                  failure = `${res.status} ${body.error || res.statusText}`;
+                }
+              } catch (err) {
+                failure = err?.message || 'network error';
+              }
+              if (failure) {
+                console.error('[dev skip-auth] POST /api/auth/anonymous failed:', failure);
+                setDevError(`Dev sign-in failed: ${failure}. Is local Supabase running? (supabase start)`);
+                return;
+              }
               onClose();
               refetchSession();
             }}
@@ -77,6 +97,11 @@ export function AuthModal({ onClose, reason }) {
           >
             🛠 Dev: skip auth
           </button>
+        )}
+        {import.meta.env.DEV && devError && (
+          <p style={{ marginTop: 8, color: 'var(--danger, #c0392b)', fontSize: 12, fontWeight: 600, textAlign: 'center' }}>
+            {devError}
+          </p>
         )}
       </div>
     </>
