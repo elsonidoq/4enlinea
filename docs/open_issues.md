@@ -7187,3 +7187,30 @@ Decision block's own "column 5".
 One-line fix: append the same `(on the … board)` suffix in `requiredLines`. This is the required-set
 sibling of OI-191 (identical role text on offered aliases) and probably the cheapest high-value fix in
 the current backlog. Cross-refs: OI-191, OI-193.
+
+## OI-197 — A4 fabrication is intermittent: the same board ships a false statement on some runs and not others
+
+**Status**: open
+**Area**: the annotation gate (`connect-four/server/mechanismExplainer.mjs` and the deep-reveal serving path) — NOT the prompt
+**Discovered**: 2026-08-06 grading; re-measured 2026-08-23. **Filed late** — the 2026-08-11 remediation plan's Deferred section instructed "file as an open issue after Task 10" and that was missed.
+
+A4 (no fabrication, zero tolerance) is a **reliability floor**, not a pass-rate problem: the same prompt
+on the same board produces a board-false claim on some runs and clean prose on others. Per-run A4 across
+the three graded runs: **86% → 87% → 81%**.
+
+Measured on the final run (A4 is sub-sampled to 2 runs/case, so these are out of 2):
+
+- **17 of 25 cases clean**, **6 intermittent**, **2 deterministic**.
+- Deterministic: `eval-11` (2/2) and `pin-L2-enabled-opponent` (2/2) — both trace to render defects
+  already filed (OI-190 and OI-195 respectively), so those two are expected to clear when those land.
+- Intermittent: `eval-6`, `eval-21`, `eval-35`, `eval-47`, `pin-L5-deep-fork`, `pin-L9-hedged-parity`.
+
+**Why the prompt is the wrong place to fix it.** The intermittent cases share a shape: the render supplies
+correct, unambiguous information and the model states something board-false anyway on a subset of runs.
+The eval is deliberately single-attempt, so no retry masks it — but production is not. The right catch is
+a **post-generation gate** that verifies each concrete cell/line claim against the board before serving,
+and retries or degrades when it fails, rather than further prompt instruction (which the 2026-08-23
+measurement showed is only weakly effective on this class).
+
+Interacts with the enforcement work: the same gate that could require an omitted handle could verify a
+fabricated cell. Cross-refs: OI-190, OI-195, OI-183 (no batch harness exercises the production retry path).

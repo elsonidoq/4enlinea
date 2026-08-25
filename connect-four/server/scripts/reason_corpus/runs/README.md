@@ -45,3 +45,21 @@ remediation. Model `gpt-5.4-mini`, n=2, condition D. Its `_grades.jsonl` was pro
 definition (a raw `cNrM` counted as a failure); the current definition follows production's
 `mentionsBetterColumn`, which moves 15 of its 126 runs from fail to pass. Do not compare its A6 number
 directly against the 2026-08-11 arms.
+
+## Grader rubric versions (added 2026-08-25)
+
+Judgment-axis numbers (A3–A5, A7, G1–G7's judgment half) are only comparable between runs graded with
+the **same rubric version**. The frozen rubric is `GRADER_INSTRUCTIONS_v1.md` in this directory.
+
+| run stem | rubric |
+|---|---|
+| `fv_suff_answers_boards_2026-08-06T16-04-29Z` | skill directly (unversioned) — **not comparable** to v1 |
+| `fv_suff_answers_arm1-baseline-mini-n5_2026-08-11T18-32-47Z` | skill directly (unversioned) — **not comparable** to v1 |
+| `fv_suff_answers_boards_subset_2026-08-21T21-19-32Z` | **v1** |
+| `fv_suff_answers_boards_subset_2026-08-23T15-16-19Z` | **v1** |
+
+Mechanical axes (A1, A2, A6, G7a/G7b membership) come from `grade_mechanical.mjs` and ARE comparable
+across all runs — that script did not change.
+
+**Record the rubric version here for every future run.** To change the rubric, add a `_v2.md`; never
+edit a frozen version in place.
