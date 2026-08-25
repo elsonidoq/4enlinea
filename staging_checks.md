@@ -2083,3 +2083,52 @@ browser pass on `/admin/grounding-diff`. What that cannot confirm is the deploye
     pre-change clip can persist after the text changes (see memory `project_tts_audio_cached_by_text`).
   - **Expected**: spoken text matches the served text; no stale clip from before D44.
   - **Source**: D44; staging feedback case 1a.
+
+### Added 2026-08-06 — better-column enforcement + non-collinear highlight fix
+
+- [ ] **A freshly generated staging deep reveal names the better column in its prose.**
+  - **What**: On staging, generate a *new* deep reveal (a board with no `explanation_cache` row —
+    play a fresh blunder rather than replaying a cached one). Read the served `explanation` text and
+    confirm it contains "column N" for the better move, in the prose, not only inside a `[zone:…]`
+    handle. Repeat once on the `es` locale and confirm it says "columna N".
+  - **Why staging**: `mentionsBetterColumn` is unit-proven to *fire* the retry, but whether the model
+    *complies* with the amended retry block is unproven — that needs real generations against the
+    production model and prompt. Locally we have no batch harness for the `computeMechanism` path at
+    all (OI-183), and the Spanish path has zero eval coverage (OI-176, OI-183). Cached rows will not
+    exercise it: pre-change explanations are served verbatim.
+  - **Expected**: the better column appears in the prose in both locales. If it does not, the retry
+    fired and the model ignored it — record the served text, because a column-only retry leaves **no**
+    `deep_reveal_failures` row (OI-181), so staging logs will be silent.
+  - **Source**: 2026-08-06 session; commit `20d18fb`; regression measured on 3 of the 4 spec-058
+    feedback boards.
+
+- [ ] **A fork's two finishing squares render as two separate dots, not one connecting bar.**
+  - **What**: On staging, open a deep reveal whose explanation highlights a double threat (the
+    `windows:` handle produced by `halfForkCellsSpec` for a `double_threat` half) and tap the
+    highlight. Confirm the board shows **separate markers** on the finishing squares with no capsule
+    drawn between them, and that a genuine four-in-a-row highlight still renders as one bar.
+  - **Why staging**: verified locally only on the four frozen `/admin/grounding-diff` cases, which are
+    a fixed historical sample. Whether real staging traffic produces a fork geometry the collinearity
+    predicate mis-handles — specifically a fork whose two squares happen to be adjacent *and*
+    collinear, which would still draw a false line (OI-180) — cannot be exercised from those four.
+  - **Expected**: no capsule spans squares that are not a real line; real lines still capsule.
+  - **Source**: 2026-08-06 session; commit `44820ef`; OI-180.
+
+
+## Epic 11 — Deep-Reveal Grounding (spec 058) — render remediation, added 2026-08-25
+
+- [ ] **Served deep reveals reflect the new render layer after the cache purge**
+  - **What**: after deploying the branch AND running the `explanation_cache` deep-reveal purge
+    (`docs/deployment_steps.md` → "Spec 058 render remediation — purge cached deep reveals…"), open a
+    past mistake that was viewed *before* the deploy, tap the deep reveal, and confirm the served text
+    (a) names the better move as a column in prose, (b) does not describe the opponent's line as the
+    player's, and (c) on a fork position, names the square that CREATES the fork, not only the two
+    finishing squares.
+  - **Why staging**: the defect is a *cache-state* condition, not a code condition. Locally the cache is
+    empty or freshly written, so every request regenerates and the stale path cannot be reproduced. Only
+    an environment that already holds rows written by the old render layer exercises it — and the purge
+    is a deploy-time action whose effect cannot be observed before it runs.
+  - **Expected**: post-purge, previously-viewed positions serve regenerated text meeting (a)–(c); the
+    audio follows automatically (TTS is keyed by text hash, so new text regenerates on demand).
+  - **Source**: 2026-08-25 session; branch `worktree-deep-reveal-grounding` (`0d6f818`..`2ef3ccb`);
+    D46/D47/D48; OI-182/OI-184.
