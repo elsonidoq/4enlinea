@@ -98,9 +98,14 @@ export function boardSelectionDecisions(fv) {
     const half = deepHalves.find((h) => h.finalMovestring === ms);
     out.push({ id: i === 0 ? 'projectedDeep' : 'projectedDeepOpp', shown: true, movestring: ms,
                tags: tagBoard(ms, you), ascii: renderBoardAscii(ms, you),
+               // The two-board suffix must be plain Connect Four English. The first version read
+               // "for your opponent's punishment" / "for the move you gave up" — and "opponent
+               // punishment" is on A5a's own banned-terminology list. Measured: render/board labels
+               // leaked into player-facing prose in 0/125 runs before the second board existed and
+               // 10/125 after, on exactly the seven records that gained one, costing A5 88 -> 76.
                reason: `where the deep ${half.register} resource resolves`
                  + (deepLines.length > 1
-                   ? ` for ${half === fv.lostResource ? 'the move you gave up' : "your opponent's punishment"}`
+                   ? (half === fv.lostResource ? ' — your line' : " — your opponent's line")
                    : '') });
   });
   return out;

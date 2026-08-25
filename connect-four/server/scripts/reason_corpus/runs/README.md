@@ -58,6 +58,7 @@ the **same rubric version**. The frozen rubric is `GRADER_INSTRUCTIONS_v1.md` in
 | `fv_suff_answers_boards_subset_2026-08-21T21-19-32Z` | **v1** |
 | `fv_suff_answers_boards_subset_2026-08-23T15-16-19Z` | **v1** |
 | `fv_suff_answers_boards_subset_2026-08-25T15-57-08Z` | **v1** |
+| `fv_suff_answers_boards_subset_2026-08-25T20-16-50Z` | **v1** |
 
 Mechanical axes (A1, A2, A6, G7a/G7b membership) come from `grade_mechanical.mjs` and ARE comparable
 across all runs — that script did not change.
@@ -99,3 +100,41 @@ evidence is not the problem).
 graded by a fresh fleet of 25 agents, and a judgment-axis delta of a few points is not attributable
 without a named deterministic mechanism. What IS attributable here is per-board, verified at source —
 see the write-up in `docs/superpowers/plans/2026-08-11-baseline-numbers.md`.
+
+
+## OI-190 re-measure, 2026-08-25 (second run of the day)
+
+`fv_suff_answers_boards_subset_2026-08-25T20-16-50Z` — condition D, `gpt-5.4-mini`, n=5, frozen
+25-board subset, 125/125 answers, 0 errors. Measures commit `c0b0d97` (**D50**: one projected board per
+deep half + board-truth alias binding). Graded with **v1**, 25 per-case agents.
+
+| axis | 08-23 | 08-25a (D49) | 08-25b (D50) |
+|---|---|---|---|
+| A3 | 98 | 100 | 100 |
+| A4 | 81 | 78 | 80 |
+| A5 | 94 | 88 | **76** |
+| A6 (mech) | 84 | 80 | 82 |
+| A7 | 81 | 74 | 73 |
+| G1 | 87 | 97 | 98 |
+| G2 | 91 | 86 | **96** |
+| G3 | 100 | 100 | 100 |
+| **G4** | 89 | 80 | **94** |
+| G5 | 96 | 84 | 80 |
+| G6 | 100 | 100 | 100 |
+| G7 | 66 | 85 | 82 |
+| G7b (mech) | 98 | 98 | 98 |
+
+**G4 +14 and G2 +10 are the OI-190 fix.** G4 is the axis defined as "verify every named cell against
+`render_decision.finalMovestring`" — exactly what a wrongly-labelled projected board breaks. Ten
+separate graders verified the fix cell-by-cell on their own board (eval-2, 5, 6, 11, 13, 20, 21, 35, 38,
+pin-L9); `eval-11` and `eval-20`, previously 5/5 deterministic failures, no longer reproduce it.
+
+**A5 −12 was a regression this same change introduced, since fixed.** The second board's caption read
+*"for your opponent's punishment"* — and "opponent punishment" is on A5a's own banned-terminology list —
+and the extra board gave the model board names to echo. Measured directly on the answers: runs leaking a
+render/board label went **0/125 → 10/125**, on exactly the seven records that gained a second board.
+Fixed after this run (plain-English caption + an explicit "never name a board" reading-key rule), so
+**this table's A5 number does not reflect shipped code**; the next run measures it.
+
+Cases fully passing 3/25 → 2/25; triage 16 `prompt_confusion`, 7 `render_bug`, **0 `vector_error`,
+0 `missing_info`**.

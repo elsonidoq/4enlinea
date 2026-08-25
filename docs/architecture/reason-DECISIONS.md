@@ -1601,3 +1601,27 @@ Evidence: `specs/058-deep-reveal-grounding/t043-attempt3-run{1,2,3}-results.json
 - **Status:** IMPLEMENTED, `test:fast` **1999 / 0**. Guarded by three corpus-wide tests in
   `zoneAnnotations.test.mjs` whose occupancy check is deliberately independent of the production board
   model the fix uses. Related: D43, D45, D49, OI-190, OI-196.
+
+---
+
+### D50 addendum — measured outcome, and the A5 regression it introduced
+
+Re-measured on the frozen 25-board subset (`fv_suff_answers_boards_subset_2026-08-25T20-16-50Z`,
+`gpt-5.4-mini`, n=5, rubric v1), against the D49 run graded the same way:
+
+- **G4 80 → 94, G2 86 → 96.** G4 is the axis defined as "verify every named cell against
+  `render_decision.finalMovestring`" — precisely what a wrongly-labelled projected board breaks. Ten
+  independent graders verified the fix cell-by-cell on their own board; `eval-11` and `eval-20`, both
+  previously 5/5 deterministic OI-190 failures, no longer reproduce it.
+- **A5 88 → 76 — a regression this change caused.** The second board's caption read *"for your
+  opponent's punishment"*, and "opponent punishment" is on A5a's banned-terminology list; the extra
+  board also gave the model board names to paraphrase ("the deep board", "the deep reply board").
+  Measured on the answers themselves: runs leaking a render/board label went **0/125 → 10/125**, on
+  exactly the seven records that gained a second board.
+- **Fixed immediately after that run:** the two-board suffix is now plain Connect Four (`— your line` /
+  `— your opponent's line`), and `READING_KEY` carries an explicit rule that board names and their
+  paraphrases are internal labels never to be written in `mechanism`. `test:fast` **1999 / 0**.
+  The A5 number above therefore does NOT reflect shipped code.
+
+**Lesson worth keeping:** adding a board adds VOCABULARY, not just information. Any new render surface
+that the model can see is a surface it can echo, and the never-repeat list has to grow with it.

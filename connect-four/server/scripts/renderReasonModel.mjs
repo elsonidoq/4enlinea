@@ -338,7 +338,8 @@ const READING_KEY = `# Reading key (the few coded fields shown below)
 - "deep on a forced line" / "deep, via a parity battle": the winning square is many plies away and EMPTY now — not a current threat.
 - Cells are cNrM: column then row, 1-indexed (c1r1 = bottom-left).
 - Every column number shown anywhere in this prompt is a 1-indexed display column (column 1 = leftmost). The move columns and their landing cells are given in the Decision block above — use them verbatim; do not re-derive move→cell→role.
-- These coded names are for YOUR reading only. Never repeat a field name, "histogram", "window", "completing cell", "solver", or "score" in your answer's \`mechanism\` — say it in plain Connect Four instead (threat, fork, double threat, four-in-a-row line, block, central).`;
+- These coded names are for YOUR reading only. Never repeat a field name, "histogram", "window", "completing cell", "solver", or "score" in your answer's \`mechanism\` — say it in plain Connect Four instead (threat, fork, double threat, four-in-a-row line, block, central).
+- The board NAMES above ("decision", "afterBest", "afterPlayed", "projectedDeep", "projectedDeepOpp") and any paraphrase of them ("the projected board", "the deep board", "the deep reply board") are internal labels for YOUR reading. Never name a board in your answer — describe WHEN it happens instead ("later, once the forced line runs out", "right after the better move").`;
 
 // Task 9d (spec 058 feedback remediation). Measured on eval-11 (O3 centrality frame — no
 // namedOpening, no defense, openingContext.lead has no book line at all): 3/5 runs fabricated
