@@ -57,9 +57,45 @@ the **same rubric version**. The frozen rubric is `GRADER_INSTRUCTIONS_v1.md` in
 | `fv_suff_answers_arm1-baseline-mini-n5_2026-08-11T18-32-47Z` | skill directly (unversioned) — **not comparable** to v1 |
 | `fv_suff_answers_boards_subset_2026-08-21T21-19-32Z` | **v1** |
 | `fv_suff_answers_boards_subset_2026-08-23T15-16-19Z` | **v1** |
+| `fv_suff_answers_boards_subset_2026-08-25T15-57-08Z` | **v1** |
 
 Mechanical axes (A1, A2, A6, G7a/G7b membership) come from `grade_mechanical.mjs` and ARE comparable
 across all runs — that script did not change.
 
 **Record the rubric version here for every future run.** To change the rubric, add a `_v2.md`; never
 edit a frozen version in place.
+
+
+## G7 render-fix re-measure, 2026-08-25
+
+`fv_suff_answers_boards_subset_2026-08-25T15-57-08Z` — condition D, `gpt-5.4-mini`, n=5, the frozen
+25-board subset, 125/125 answers, 0 call/parse errors. Measures commit `b9be303` (D49: OI-191, OI-192,
+OI-195, OI-196). Graded with **v1**, 25 independently dispatched per-case agents, one grade file each.
+
+Comparable to `…2026-08-23T15-16-19Z` (same rubric version, same rollup method: per-run, `null`
+excluded).
+
+| axis | 08-23 | 08-25 |
+|---|---|---|
+| A3 | 98 | 100 |
+| A4 | 81 | 78 |
+| A5 | 94 | 88 |
+| A6 (mech) | 84 | 80 |
+| A7 | 81 | 74 |
+| G1 | 87 | **97** |
+| G2 | 91 | 86 |
+| G3 | 100 | 100 |
+| G4 | 89 | 80 |
+| G5 | 96 | 84 |
+| G6 | 100 | 100 |
+| **G7** | 66 | **85** |
+| G7b (mech) | 98 | 98 |
+
+Cases fully passing: 5/25 → 3/25; 17 of 25 intermittent. Failure triage: 12 `render_bug`,
+10 `prompt_confusion`, **0 `vector_error`, 0 `missing_info`** (as in all prior runs — the engine's
+evidence is not the problem).
+
+**Read this table with the noise band in mind** (plan STATUS corrections #2 and #4). Every run is
+graded by a fresh fleet of 25 agents, and a judgment-axis delta of a few points is not attributable
+without a named deterministic mechanism. What IS attributable here is per-board, verified at source —
+see the write-up in `docs/superpowers/plans/2026-08-11-baseline-numbers.md`.

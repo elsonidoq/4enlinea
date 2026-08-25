@@ -7062,6 +7062,23 @@ G5/G7/A7b failures. It is the strongest single candidate for the next round's fi
 a per-half projected board, or make the alias's `truthBoard` name the half whose line it belongs to.
 Cross-refs: OI-186, OI-188.
 
+**RE-MEASURED 2026-08-25 — this is the dominant remaining defect in the subset.** The re-measure of
+commit `b9be303` reproduced it on **nine** of the 25 boards (`eval-5`, `eval-6`, `eval-11`, `eval-13`,
+`eval-20`, `eval-21`, `eval-35`, `eval-38`, `pin-L9-hedged-parity`), deterministically on several
+(`eval-6`, `eval-11`, `eval-20` all 5/5). Nineteen of the 25 grade records cite `projectedDeep`, up
+from 14.
+
+Root cause located precisely: `zoneAnnotations.mjs`'s half-resource loop hardcodes
+`truthBoard: isFuture ? 'projectedDeep' : 'decision'` for BOTH halves, so an `opponentPunishment`
+alias is labelled with a board built from `lostResource.finalMovestring`. Repeated finding across
+boards: the opponent's real four exists **only** on `opponentPunishment.finalMovestring`, for which no
+board is rendered at all — so the model is obliged to name a square that, on the board it was shown, is
+the player's own disc (`eval-11` c2r4, `eval-20` c5r2, `eval-13` c7r4).
+
+Note the interaction with **OI-196**: now that the required block restates `truthBoard`, a wrong one is
+stated one more time per prompt. That is not a regression (the Highlightable-regions block already
+asserted it) but it does mean OI-190 should land before its label gains further prominence.
+
 ## OI-191 — sibling aliases get byte-identical role text, so no model can bind handle → cell deterministically
 
 **Status**: FIXED 2026-08-25 (D49 rule 1) — `disambiguateSiblingRoles` front-loads the geometry into any role that collides on `(role, truthBoard)`. Corpus collisions 48/63 -> 0/63. LLM re-measure pending.
@@ -7260,3 +7277,76 @@ The reviewer's ruling: acceptable under that mandate, but export `TAG_PRIORITY` 
 follow-up rather than carrying a hand-synced duplicate. Adding a tag kind to the engine without updating
 the mirror silently reintroduces a raw-slug leak that I13's corpus test would then catch only for the
 slugs already listed. Cross-ref: I13 in `reason-INVARIANTS.md`, D48.
+
+## OI-201 — the `future-line` role text names no owner, so a line alias can be read as either player's
+
+**Status**: open
+**Area**: `connect-four/server/scripts/reason_engine/zoneAnnotations.mjs` (`roleText`, the `future-line` branch)
+**Discovered**: 2026-08-25 G7 re-measure (`eval-2` runs 2 and 4; `eval-6` run 3 independently)
+
+Every other line branch conjugates an owner — `line` returns *"the whole four-in-a-row line ${who}
+${owner === 'you' ? 'are' : 'is'} playing for"*. `future-line` does not:
+
+```js
+if (kind === 'future-line') return `the whole four-in-a-row line that decides this later, once the forced sequence reaches it — not a threat right now (${LINE_STEER})`;
+```
+
+Ownership then survives only in the handle NAME (`you-key-line` vs `opp-key-line`), which is exactly the
+signal OI-191 measured the model failing to read. On `eval-2`, runs 2 and 4 handed the player's own
+swindle line `c3r2·c4r2·c5r2·c6r2` — four of YOUR discs on the engine's own
+`lostResource.finalMovestring` `33023202260000211111132633444444666655` — to the opponent. The `eval-6`
+grader reached the same conclusion independently ("both line-alias roles are side-neutral").
+
+Model-independent: the information needed to choose is absent from the role text. Fix is the same shape
+as the `line` branch — conjugate the owner. Cross-refs: OI-191, D49 rule 1.
+
+## OI-202 — the reading key's `replyHistogram` rule, applied to the rendered values, says the BLUNDER was the tougher defense
+
+**Status**: open
+**Area**: `connect-four/server/scripts/renderReasonModel.mjs` (`READING_KEY`) + the rendered `replyHistogram` values
+**Discovered**: 2026-08-25 G7 re-measure (`eval-37`, runs 1 and 3)
+
+`READING_KEY` states: *"replyHistogram.afterBest / afterPlayed: how many ways your opponent still has to
+hold the result after each move — fewer means the tougher, more resilient defense."* On `eval-37` the
+rendered values are `afterBest = 2`, `afterPlayed = 1`. Applying the key's own rule to the numbers the
+prompt shows yields "the played move was the tougher defense" — the opposite of the explanation being
+asked for. (Solver: after col 7 the opponent has two winning replies at +2/+4; after col 1, exactly one
+at +5, i.e. fewer BUT faster.)
+
+Runs 1 and 3 duly asserted the false comparative *"column 7 leaves them fewer ways to keep the attack
+going"* (A4 fail run 1, A7d fail run 3). The model is being handed a contradiction, not misreading one.
+The count alone does not carry resilience — the reply SCORES do. Either state the rule in a form the
+values support, or stop offering the comparative when the histogram does not back it.
+
+## OI-203 — a terminal `afterBest` board is rendered with live threat entries and no statement that the better move ends the game
+
+**Status**: open
+**Area**: `connect-four/server/scripts/reasonBoardSelect.mjs` (board selection / tag rendering for a terminal position)
+**Discovered**: 2026-08-25 G7 re-measure (`eval-41`)
+
+On `eval-41` the better move WINS ON THE SPOT — `2345153551111014334` is `[GAME OVER]`, column 5
+completing `c3r1·c4r2·c5r3·c6r4`. The `afterBest` board is nevertheless rendered `shown: true` carrying
+six live major/double threat entries, and nothing in the assembled prompt says the game is over there.
+
+Runs 2 and 3 consequently deferred the win to a later turn (*"keep c5r3 … finish there on the next
+turn"*), failing A7d; G5 fails on runs 0–1 for the terminal board's threat list. A terminal board has no
+"threats" in the sense the tactics list means — they are already decided.
+
+## OI-204 — the vector-named double threat is appended to the DECISION board, where it is not yet board-true
+
+**Status**: open
+**Area**: `connect-four/server/scripts/reasonBoardTags.mjs` (overlay tag placement) — see also OI-195's second half
+**Discovered**: 2026-08-25 G7 re-measure (`pin-L2-enabled-opponent`; same shape on `eval-33`)
+
+On `pin-L2-enabled-opponent` the decision board is `334`, which `./visualize_board.sh` reports as
+**"Major threats: none"** — yet the rendered Tactics list for that board asserts the opponent's double
+threat. The fork only comes into existence after the played move. This is the second half of OI-195,
+which the D49 fix deliberately did not touch (that fix was confined to the L2 template).
+
+`eval-33` shows the same class of error from the other direction: its decision-board entry
+`double at c1r6 (opp, window c1r6·c5r6)` is board-false — the solver scores col 1 at 0 (draw) and the
+engine's own `lostResource.line` has YOU occupying both `c1r6` (ply 40) and `c5r6` (ply 42), so the
+opponent cannot hold two unblockable squares there.
+
+Both are G5 failures the grader is instructed to REPORT rather than narrate around, and both are
+model-independent. Cross-refs: OI-195, OI-190.
