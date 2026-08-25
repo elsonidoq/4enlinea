@@ -105,6 +105,71 @@ them as "unreached" rather than failing — missing bins are expected, not a bug
 no longer a blunder tag — and new `major_threat_parity:*`/`major_threat_nonparity:*`/`minor_threat:*`
 bins are now covered. The canonical bin enumeration is always `REASON_TEMPLATES.keys()`.)
 
+## The reason corpus (`server/scripts/reason_corpus/`) — one committed board set
+
+Five reason/render tests read a **committed, pre-computed evidence corpus** so they stay
+**solver-free and fast**. Since 2026-08-06 there is exactly one, at a **stable, non-timestamped path**:
+
+| file | content |
+|---|---|
+| `boards.jsonl` | 63 rows — `{ id, movestring, playedCol, strategy, selection }` |
+| `evidence.jsonl` | 63 rows — reason-engine evidence, **same ids in the same order** |
+| `README.md` | the contract below, kept next to the data |
+
+Produced by `select_boards.mjs --strategy coverage` → `compute.mjs --input … ` (no `--llm`).
+Never point a test at a timestamped filename: the next regeneration renames it and silently breaks
+every consumer. That is why the old `fv_suff/reason_evidence_boards_coverage_<ts>.jsonl` files were
+retired.
+
+**Two populations in one file, and they are graded differently:**
+
+- **`strategy: "coverage"`** (50 rows, `eval-N` ids) — a harvest against the closed predicate
+  universe. Consumed by tests that assert a property of *every* record and are therefore
+  **corpus-agnostic**: `renderCoverageCorpus` ("every record renders with zero uncovered fields and a
+  classified link"; "required ⊆ offered"), `renderCoverageUniverse` ("every `RENDER_REQUIRED`
+  predicate is exercised"), and the sweep tests in `reasonRenderFixes`.
+- **`strategy: "pin"`** (13 rows, semantic `pin-*` ids) — regression anchors: one worked board per
+  causal link L1–L9 plus four `patternOnAfterBestBoard` cases. Consumed by
+  `causalLinksComposers`, `branchInvariance` and the pin-specific tests in `reasonRenderFixes`.
+  **A pin's board identity IS the test.** Each row carries `selection.pinnedFrom` and
+  `selection.why` (the test that depends on it).
+
+**MUST**: reference a pinned board by its semantic id (`pin-L5-deep-fork`), never by a positional
+`eval-N`. `eval-N` is an index into whichever corpus is loaded — swap the corpus and the same id
+silently designates a *different board*, so the assertion keeps running and stops meaning anything.
+This is the failure mode the `pin-*` naming exists to prevent.
+
+**MUST**: regenerate `evidence.jsonl` whenever the reason **engine** changes, not only when boards
+change. Evidence is derived and expires; stale evidence pushed through new render code makes the
+suite assert against a snapshot of the old engine while looking green. Regenerating is also the
+cheap way to *detect* drift — the 13 pins passing after recomputation is positive evidence that
+L1–L9 routing is unchanged.
+
+## Corpus-wide invariant tests (render layer)
+
+For a property that must hold on **every** record — not just a motivating board — assert it by
+sweeping the whole reason corpus through the **production** entry point, rather than adding one
+fixture per case. Pattern (see `server/tests/renderReasonModel.test.mjs`):
+
+```js
+const prompt = assembleGroundedPrompt(buildReasonRenderModel(pruneVector(toNarratorVector(row.evidence))));
+// then assert the invariant over every row of reason_corpus/evidence.jsonl
+```
+
+Two rules learned the expensive way:
+
+- **Sweep the closed set, not a sample of it.** A test that looped only the 4 `TERM_KB` slugs missed
+  the same defect in the other 11 redactable slugs; widening the loop to the exported
+  `REDACTABLE_TAG_SLUGS` caught a live leak the narrow loop could not. Import the set from its owning
+  module — never mirror it as a literal in the test.
+- **Assert through the production path, never the helper alone.** A unit test on a display helper
+  passed against a version whose fallback branch was dead code (`??` does not fall through on a
+  truthy identity value), while the assembled prompt was still wrong. If the invariant is about what
+  the model receives, build what the model receives.
+
+A latent path with no corpus coverage still needs a test — construct the object explicitly and say so
+in a comment (e.g. an immediate-register fork half, which no corpus record exercises).
+
 ## What Gets Each Test Type
 
 | Concern | Test type |
@@ -361,6 +426,8 @@ const supabase = {
 };
 ```
 Three tests cover: auth gate (null `user_id` skips insert), tag guard (invalid tag → `'suboptimal_move'`), and 23505-as-success (unique violation does not throw).
+
+- **A supabase mock signals failure by resolving, never by throwing.** The stub client above returns `{ error: null }` on success; on failure it resolves `{ error: {...} }` — it never rejects/throws. So an injection test for a webhook or blunder DB-write path must stub `insert()`/`update()` to *resolve* with an error object, not throw. A test that throws exercises a path production never takes, and it cannot exercise the contract in `server-conventions.md` that a non-`23505` ledger-insert failure must **throw** (FR-009).
 
 ### Source-parse assertions — when there is no seam at all
 

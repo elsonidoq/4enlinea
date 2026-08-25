@@ -7214,3 +7214,49 @@ measurement showed is only weakly effective on this class).
 
 Interacts with the enforcement work: the same gate that could require an omitted handle could verify a
 fabricated cell. Cross-refs: OI-190, OI-195, OI-183 (no batch harness exercises the production retry path).
+
+## OI-198 — `roleText`'s `major` fallback renders ungrammatical text into the prompt ("you's four-in-a-row line")
+
+**Status**: open (pre-existing; confirmed unchanged by the 2026-08-11 remediation branch)
+**Area**: `connect-four/server/scripts/reason_engine/zoneAnnotations.mjs` (`roleText`, the `major` fallback)
+**Discovered**: 2026-08-21 Checkpoint A review; still present 2026-08-23
+
+The fallback returns ``a single square completing ${who}'s four-in-a-row line``, so when `who` is the
+literal `you` it renders **"a single square completing you's four-in-a-row line"**. It reaches the
+prompt's Highlightable-regions block and the required-set block on the same 20 records at base and at
+HEAD. The sibling branches conjugate explicitly (the `line` branch uses `${owner === 'you' ? 'are' : 'is'}`),
+so the fix is the same one-line treatment already applied to the `fork-pivot` branches.
+
+Low severity (the model does not echo it verbatim), but it is player-adjacent text and trivially fixable.
+
+## OI-199 — an O3 opening record can be told to explain via centrality while simultaneously forbidden to compare centrality
+
+**Status**: open (pre-existing composition; made more visible by the 2026-08-23 book-line gating)
+**Area**: `connect-four/server/scripts/reason_engine/openingFrame.mjs` (`GUARDRAIL_*` composition in `mk`)
+**Discovered**: 2026-08-23, live on `eval-11`
+
+On an O3 (centrality-fallback) record whose centrality clause is suppressed, the guardrail now reads
+*"Explain the blunder through the opening — centrality, parity."* immediately followed by
+`GUARDRAIL_NO_CENTRALITY`: *"The two landing cells are NOT stated to differ in centrality … do not say
+one column is 'more central' …"*.
+
+Before the book-line gating the first sentence also offered "book line", so the contradiction was
+diluted; now centrality is one of only two framings offered and is then prohibited. The two clauses are
+independently correct (the eval-21 gate exists for a real reason — see D-log) but compose badly. Fix
+direction: when the centrality clause is suppressed, drop centrality from the admissible-framings
+sentence too, leaving parity.
+
+## OI-200 — `REDACTABLE_TAG_SLUGS` mirrors `reasonEngine.mjs`'s `TAG_PRIORITY` instead of importing it
+
+**Status**: open (accepted tech debt, adjudicated 2026-08-21)
+**Area**: `connect-four/server/scripts/renderReasonModel.mjs`
+**Discovered**: 2026-08-21 Checkpoint C review
+
+The render layer needs the closed set of engine tag kinds in order to redact unoffered ones (I13). It
+mirrors `TAG_PRIORITY`'s 15 slugs as a literal with a keep-in-sync comment, because the remediation plan
+forbade touching `reasonEngine.mjs`. The mirror was verified element-by-element at the time.
+
+The reviewer's ruling: acceptable under that mandate, but export `TAG_PRIORITY` and import it in a
+follow-up rather than carrying a hand-synced duplicate. Adding a tag kind to the engine without updating
+the mirror silently reintroduces a raw-slug leak that I13's corpus test would then catch only for the
+slugs already listed. Cross-ref: I13 in `reason-INVARIANTS.md`, D48.

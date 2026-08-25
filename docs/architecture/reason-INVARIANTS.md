@@ -32,6 +32,26 @@
 - This has been conceded-then-retracted before. It is now locked: agents must not relitigate it, and
   must not raise solver-call cost as a design objection. See `reason-DECISIONS.md` D1.
 
+### I0b. Engine soundness precedes render — a render constraint must never narrow what the engine stores
+
+The same principle on a second axis (owner directive, 2026-07-02). The engine's job is to store the
+**soundest, most complete** evidence; deciding *what* and *how* to feed the LLM — prompt pruning, not
+printing a 25-ply line — is a **separate downstream preprocessing step** (`toNarratorVector`; see
+`reason-DECISIONS.md` D21). If a rendering concern is allowed to decide what the engine *stores*, you
+throw away sound evidence you cannot get back.
+
+Two corollaries, both realized by D26:
+
+- **Do not restrict an engine mechanism to "short/tactical" cases just because the deep case would be
+  awkward to render.** The occupation-witness denial applies to **all** non-fork `win_to_draw` boards,
+  deep parity wins included — not only `immediate` / `forced_sequence` ones.
+- **Do not null or drop a field to match a render rule.** D26's `denial` halves keep the **full** `line`
+  even at `parity` register, deliberately bypassing `renderHalf`'s null-for-parity rule. On such paths
+  `register` becomes a *label*, not a data gate.
+
+Where a value like `register` is derived from `fwd` on a non-walked half, treat it as descriptive
+metadata; the load-bearing evidence (`line`, `finalMovestring`, witness cell) is stored regardless.
+
 ## I1. The vector is the artifact — the LLM narrates, it does not reason
 
 Every fact needed to justify "this move is worse than the best move" must be **present in, or
@@ -153,3 +173,35 @@ generalizes:
 
 This is the enforced, local form of `feedback_eval_design_methodology` (counterexamples, not
 averages) and `feedback_process_and_agent_preferences` (prework discipline).
+
+---
+
+## I13. The prompt may DISPLAY only what it OFFERS — and an unoffered tag leaves a record
+
+The render layer hands the model a closed set of `[zone:<handle>]` / `[term:<slug>]` handles it is
+permitted to point at. **Anything the prompt shows, it must also offer.** Concretely:
+
+- A tactic name renders through its canonical plain-language phrase (`TAG_PHRASE`, plus the
+  render-only `RENDER_DISPLAY_PHRASE` for slugs whose phrase is missing or equals the slug) whenever
+  that slug is not in this record's `zones.terms`. Never print a raw tag slug the record does not offer.
+- Every worked example draws its handles from the record's OWN offer set, falling back to an abstract
+  `<handle>` / `<line-handle>` / `<square-handle>` placeholder — never a real-but-unrelated handle,
+  and never a fabricated one. When a record offers no terms, the prompt does not demonstrate
+  `[term:]` syntax at all.
+- `dropUnoffered` RECORDS every strip as `unoffered_zone:<handle>` / `unoffered_term:<slug>` in the
+  same `repairs` array as `stripUnclosedTags`, so an invented slug is visible downstream instead of
+  vanishing silently.
+
+**Why it is an invariant and not a preference.** Measured over 125 graded runs: prompts that displayed
+an unoffered slug passed the term-fidelity axis 74/90 (82%); prompts that did not passed 35/35 (100%).
+*Every* failure sat in the "taught but not offered" condition. Corpus-wide the defect stood at 49/63
+records for term slugs and 44/63 for zone handles; after the fix, 0/63 and 0/63, and the axis moved
+87% → 98% and held across two independent runs.
+
+**Do NOT satisfy this by widening `zones.terms`** — a term with no KB entry renders an empty glossary
+popup, which is why `conditional_swindle` is deliberately absent from `TERM_KB`. The fix is always on
+the DISPLAY side.
+
+Guarded by a corpus-wide test that sweeps every `REDACTABLE_TAG_SLUGS` entry across all 63 records
+through the production `assembleGroundedPrompt` path. Full rationale and the measurement: **D48**.
+
