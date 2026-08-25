@@ -5,7 +5,8 @@
 
 import { expandSpec } from '../../zoneParser.js';
 import { TAG_PHRASE } from './causalLinks.mjs';   // single source of truth for canonical phrases (M1)
-import { horizonForRegister } from '../reasonCellGrounding.mjs';
+import { horizonForRegister, statusOf } from '../reasonCellGrounding.mjs';
+import { parseBoardState } from '../../classifier.js';
 
 // Boards whose tags may become highlights: near-term only (spec decision #5 — the projected-deep board
 // stays horizon prose so an empty deep cell never reads as a present threat).
@@ -123,6 +124,62 @@ export function buildAnnotationOffer(pruned, boardDecisions, opts = {}) {
   const seen = new Set();           // dedup key: spec (first board wins => stable, board-true truthBoard)
   const handleCounts = new Map();   // for unique handle suffixes
 
+  // OI-190. A deep alias used to be labelled with whichever projected board was built first, so on
+  // the 38 corpus records where both halves are deep (and, measured, ALL 38 have different lines) one
+  // half's cells named a continuation they are not true on. `boardSelectionDecisions` now renders one
+  // projected board per deep line; this picks which of them an alias should name.
+  //
+  // The rule is BOARD TRUTH, not provenance: pick the deep board on which this alias's OWNER actually
+  // occupies the geometry. Provenance alone is wrong for a flipped half — `halfOwner` re-owns a
+  // `denial`/`neutralization` half to the other player, so e.g. eval-9's `you-key-square-2` (c3r5)
+  // comes from `opponentPunishment` but is one of YOUR line's squares, and it is your disc only on
+  // `lostResource`'s line. Binding it to its producing half's board would put an OPPONENT disc under a
+  // `you-` handle — the exact contradiction OI-190 is about, reintroduced from the other side.
+  //
+  // Decided ONCE PER HALF over all that half's candidate cells (not per alias) so siblings never split
+  // across boards, using the production board model (`parseBoardState` + `statusOf`) rather than a
+  // hand-rolled occupancy proxy. Ties and a no-evidence result fall back to the half's own line, and
+  // with fewer than two deep boards the answer is the single `projectedDeep` — so every pre-OI-190
+  // single-board shape is byte-identical.
+  const deepBoards = (boardDecisions ?? []).filter(
+    (b) => b.shown && typeof b.id === 'string' && b.id.startsWith('projectedDeep') && b.movestring);
+  const specCells = (raw) => (raw.startsWith('windows:')
+    ? raw.slice('windows:'.length).split('|').flatMap((g) => g.split(','))
+    : [raw]).filter((c) => /^c\d+r\d+$/.test(c));
+  const ownLineBoard = (half) =>
+    deepBoards.find((b) => b.movestring === half?.finalMovestring)?.id ?? 'projectedDeep';
+  const deepBoardFor = (half, owner, rawSpecs) => {
+    const own = ownLineBoard(half);
+    if (deepBoards.length < 2) return own;
+    const cells = [...new Set(rawSpecs.flatMap(specCells))];
+    if (!cells.length) return own;
+    const want = owner === 'you' ? 'occupied-you' : 'occupied-opp';
+    let best = own, bestScore = 0;
+    for (const b of deepBoards) {
+      const { board, colHeights } = parseBoardState(b.movestring);
+      const score = cells.filter(
+        (c) => statusOf(c, board, colHeights, pruned.player) === want).length;
+      if (score > bestScore || (score === bestScore && b.id === own)) { bestScore = score; best = b.id; }
+    }
+    return bestScore > 0 ? best : own;
+  };
+
+  // Resolved ONCE PER HALF, up front, over every cell that half can contribute — the deep-fork loop
+  // below and the half-resource loop further down must agree, or one half's fork alias ends up on a
+  // different board from its own key square and the two describe one idea from two continuations
+  // (measured on eval-13/22/23 while the two loops each decided for themselves).
+  const halfCellSpecs = (half) => [
+    half?.completingCell,
+    ...(half?.forkCells ?? []),
+    ...(Array.isArray(half?.window) && half.window.length ? ['windows:' + half.window.join(',')] : []),
+    ...(half?.forkWindows ?? []).map((w) => 'windows:' + w.join(',')),
+  ].filter(Boolean);
+  const deepBoardByHalf = new Map();
+  for (const [half, side] of [[pruned.lostResource, 'you'], [pruned.opponentPunishment, 'opp']]) {
+    if (!half) continue;
+    deepBoardByHalf.set(half, deepBoardFor(half, halfOwner(half, side), halfCellSpecs(half)));
+  }
+
   const mkHandle = (base) => {
     const n = (handleCounts.get(base) ?? 0) + 1;
     handleCounts.set(base, n);
@@ -185,7 +242,7 @@ export function buildAnnotationOffer(pruned, boardDecisions, opts = {}) {
     seen.add(spec);
     const handle = mkHandle(`${owner}-future-fork`);
     const forkKind = half.forkCells.length === 1 ? 'future' : 'future-fork';
-    aliases.push({ handle, spec, role: roleText(owner, forkKind), truthBoard: 'projectedDeep',
+    aliases.push({ handle, spec, role: roleText(owner, forkKind), truthBoard: deepBoardByHalf.get(half) ?? 'projectedDeep',
                    kbId: TERM_KB.double_threat ? 'double_threat' : null });
     zoneAliasMap[handle] = spec;
   }
@@ -253,6 +310,9 @@ export function buildAnnotationOffer(pruned, boardDecisions, opts = {}) {
     if (pivot && !otherCells.has(pivot)) {
       offers.push([`${owner}-fork-pivot`, pivot, isFuture ? 'fork-pivot' : 'fork-pivot-now']);
     }
+    // OI-190: the per-half decision resolved above — never re-derived here, so this half's fork alias
+    // and its key square always name the same continuation.
+    const halfDeepBoard = isFuture ? (deepBoardByHalf.get(half) ?? 'projectedDeep') : null;
     for (const [base, rawSpec, kind] of offers) {
       // Dedup on the UNPREFIXED geometry so a cell already offered as a present structural alias
       // is never re-offered under a future: framing (and vice versa) — first offer wins.
@@ -289,7 +349,7 @@ export function buildAnnotationOffer(pruned, boardDecisions, opts = {}) {
       seen.add(spec);
       const handle = mkHandle(base);
       const alias = { handle, spec, role: roleText(owner, kind),
-                      truthBoard: isFuture ? 'projectedDeep' : 'decision', kbId: null };
+                      truthBoard: isFuture ? halfDeepBoard : 'decision', kbId: null };
       aliases.push(alias);
       halfAliasByGeometry.set(rawSpec, alias);
       zoneAliasMap[handle] = spec;

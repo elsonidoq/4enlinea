@@ -1562,3 +1562,42 @@ Evidence: `specs/058-deep-reveal-grounding/t043-attempt3-run{1,2,3}-results.json
   records.
 - **Status:** IMPLEMENTED, `test:fast` **1990 / 0**. Related: D43, D45, D48, I13, OI-191, OI-192,
   OI-195, OI-196.
+
+---
+
+### D50 — One projected board PER DEEP HALF, and a deep alias names the board its owner's geometry is true on
+
+- **Decision (two rules, render-layer only; no `computeReason` change):**
+  1. **`boardSelectionDecisions` renders one `projectedDeep*` board per deep line.** It used to `.find()`
+     the FIRST deep half and build a single shared board from its `finalMovestring`. Now each deep half
+     contributes a board; halves sharing one line still share one board, the first keeps the plain
+     `projectedDeep` id, and a second (`projectedDeepOpp`) appears only when both halves are deep with
+     different lines. Every pre-existing single-board shape is byte-identical.
+  2. **A deep alias's `truthBoard` is chosen by BOARD TRUTH, not provenance** — the projected board on
+     which that alias's OWNER actually occupies the geometry, resolved **once per half** over all the
+     cells that half contributes, using the production board model (`parseBoardState` + `statusOf`).
+     Ties and a no-evidence result fall back to the half's own line; with fewer than two deep boards the
+     answer is the single `projectedDeep`.
+- **Why provenance alone is wrong.** `halfOwner` re-owns a `denial` / `neutralization` half to the other
+  player, so an alias can be produced by one half while belonging to the other's line. `eval-9`'s
+  `you-key-square-2` (`c3r5`) comes from `opponentPunishment` but is one of YOUR line's squares and is
+  your disc only on `lostResource`'s line. Binding by producing half put an OPPONENT disc under a `you-`
+  handle — OI-190 reintroduced from the other side. Measured: binding by provenance fixed 14 aliases and
+  broke 9; binding by board truth fixed them without that trade.
+- **Why once per half.** The deep-fork loop and the half-resource loop originally decided independently,
+  which split `eval-13` / `eval-22` / `eval-23` — a half's fork alias on one board and its key square on
+  the other, describing one idea from two continuations. One resolution, both loops.
+- **Measured, corpus-wide (63 records, 89 deep single-cell aliases):**
+  **contradictions — an alias whose cell holds the OTHER player's disc on the board it names — went
+  17 across 16 records → 0 across 0 records.** Owner-correct went 54% → 67%. The remainder are cells
+  that are EMPTY on their stated board, which is not a contradiction: a `future:` cell is expected to be
+  unplayed and the role text says so. A per-ALIAS rule scored marginally higher (72%) but split
+  siblings; the per-half rule was preferred for coherence.
+- **Cost, stated.** 38 of 63 records now render a second projected board (mean assembled prompt 10,076
+  chars). This is I0 — correctness over optimization: the alternative is an alias pointing at a board
+  its cells are false on, which is what the graders charged 5/5 on `eval-11` and `eval-20`.
+- **What this decision does NOT claim.** No LLM number yet. The 2026-08-25 graded run measured the code
+  BEFORE this change; whether G4/G5/A7b move is the next measurement's question.
+- **Status:** IMPLEMENTED, `test:fast` **1999 / 0**. Guarded by three corpus-wide tests in
+  `zoneAnnotations.test.mjs` whose occupancy check is deliberately independent of the production board
+  model the fix uses. Related: D43, D45, D49, OI-190, OI-196.

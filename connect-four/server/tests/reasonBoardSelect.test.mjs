@@ -106,3 +106,62 @@ test('selectBoards equals the shown subset of boardSelectionDecisions', () => {
   const selIds = selectBoards(fv).map((b) => b.id);
   assert.deepEqual(selIds, shownIds);
 });
+
+// ── OI-190 — a per-half projected board ────────────────────────────────────────────────────────
+//
+// `deepHalf` used to `.find()` the FIRST deep half and build ONE shared `projectedDeep` board from
+// its line. Any alias belonging to the OTHER half was then verified — and, since OI-196, restated in
+// the required block — against a continuation it does not belong to. Measured corpus-wide: 38 of 63
+// records have two deep halves, and in ALL 38 their `finalMovestring`s differ, so one half's cells
+// were being pointed at a board they are not true on. Graded symptom on eval-11 / eval-20 (5/5):
+// the opponent's completing cell is the PLAYER's own disc on the board actually shown, and the
+// opponent's real four exists only on a line no board rendered at all.
+test('OI-190: two deep halves with different lines get one projected board EACH', () => {
+  const fv = { movestring: '34', bestCol: 3, playedCol: 4, player: 2, opponent: 1,
+    lostResource: { register: 'forced_sequence', finalMovestring: '3433221100' },
+    opponentPunishment: { register: 'forced_sequence', finalMovestring: '3444556611' } };
+  const d = boardSelectionDecisions(fv);
+  const deep = d.filter((b) => b.id.startsWith('projectedDeep'));
+  assert.equal(deep.length, 2);
+  assert.deepEqual(deep.map((b) => b.id), ['projectedDeep', 'projectedDeepOpp']);
+  assert.equal(deep[0].movestring, '3433221100');   // lostResource's own line
+  assert.equal(deep[1].movestring, '3444556611');   // opponentPunishment's own line
+  for (const b of deep) { assert.equal(b.shown, true); assert.ok(b.ascii); }
+});
+
+test('OI-190: two deep halves sharing ONE line still render a single board', () => {
+  const fv = { movestring: '34', bestCol: 3, playedCol: 4, player: 2, opponent: 1,
+    lostResource: { register: 'forced_sequence', finalMovestring: '3433221100' },
+    opponentPunishment: { register: 'parity', finalMovestring: '3433221100' } };
+  const deep = boardSelectionDecisions(fv).filter((b) => b.id.startsWith('projectedDeep'));
+  assert.equal(deep.length, 1);
+  assert.equal(deep[0].id, 'projectedDeep');
+});
+
+test('OI-190: a single deep half is unchanged — still exactly one `projectedDeep`', () => {
+  const fv = { movestring: '3', bestCol: 3, playedCol: 4, player: 2, opponent: 1,
+    lostResource: { register: 'parity', finalMovestring: '3333302' },
+    opponentPunishment: { register: 'immediate' } };
+  const deep = boardSelectionDecisions(fv).filter((b) => b.id.startsWith('projectedDeep'));
+  assert.equal(deep.length, 1);
+  assert.equal(deep[0].id, 'projectedDeep');
+  assert.equal(deep[0].movestring, '3333302');
+});
+
+test('OI-190: when only the opponent half is deep, its line owns the plain `projectedDeep` id', () => {
+  const fv = { movestring: '3', bestCol: 3, playedCol: 4, player: 2, opponent: 1,
+    lostResource: { register: 'immediate' },
+    opponentPunishment: { register: 'forced_sequence', finalMovestring: '3444556611' } };
+  const deep = boardSelectionDecisions(fv).filter((b) => b.id.startsWith('projectedDeep'));
+  assert.equal(deep.length, 1);
+  assert.equal(deep[0].id, 'projectedDeep');
+  assert.equal(deep[0].movestring, '3444556611');
+});
+
+test('OI-190: no deep half still emits the single unshown placeholder', () => {
+  const fv = { movestring: '3', bestCol: 3, playedCol: 4, player: 2, opponent: 1,
+    lostResource: { register: 'immediate' }, opponentPunishment: { register: 'immediate' } };
+  const deep = boardSelectionDecisions(fv).filter((b) => b.id.startsWith('projectedDeep'));
+  assert.equal(deep.length, 1);
+  assert.equal(deep[0].shown, false);
+});

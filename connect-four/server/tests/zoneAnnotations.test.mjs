@@ -563,3 +563,103 @@ test('OI-192: a deep-only geometry keeps its future framing (the eval-3 present-
   assert.equal(line.truthBoard, 'projectedDeep');
   assert.match(line.role, /not a threat right now/);
 });
+
+// ── OI-190 — a deep alias names the board its OWNER's geometry is true on ──────────────────────
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+import { dirname, join } from 'node:path';
+import { toNarratorVector } from '../scripts/reasonNarratorVector.mjs';
+import { buildReasonRenderModel } from '../scripts/renderReasonModel.mjs';
+
+const __dirname190 = dirname(fileURLToPath(import.meta.url));
+const CORPUS190 = join(__dirname190, '../scripts/reason_corpus/evidence.jsonl');
+
+// Occupancy straight off the movestring — deliberately INDEPENDENT of the production board model the
+// fix itself uses (parseBoardState/statusOf), so this test cannot pass by sharing a bug with it.
+function occupantOf(cell, movestring) {
+  const heights = [0, 0, 0, 0, 0, 0, 0];
+  const seen = new Map();
+  [...String(movestring ?? '')].forEach((d, i) => {
+    const c = Number(d);
+    if (!Number.isInteger(c) || c < 0 || c > 6) return;
+    const r = heights[c]++;
+    seen.set(`c${c + 1}r${r + 1}`, i % 2 === 0 ? 1 : 2);
+  });
+  return seen.get(cell) ?? null;
+}
+
+// THE invariant this fix exists for. Before it: 17 contradictions across 16 of the 63 records — a
+// square wrapped in a `you-` handle holding the OPPONENT's disc on the very board the alias names, or
+// vice versa. That is what eval-11 (c2r4) and eval-20 (c5r2) failed 5/5 on, model-independently.
+// "Empty" is NOT charged here: a `future:` cell is expected to be unplayed, and the role text says so.
+test('OI-190: no deep alias names a board where its cell holds the OTHER player’s disc (corpus-wide)', () => {
+  const rows = readFileSync(CORPUS190, 'utf8').trim().split('\n').map((l) => JSON.parse(l));
+  const violations = [];
+  for (const row of rows) {
+    if (!row.evidence || row.error) continue;
+    const nv = toNarratorVector(row.evidence);
+    const model = buildReasonRenderModel(nv);
+    const byId = Object.fromEntries(model.boards.map((b) => [b.id, b.movestring]));
+    for (const a of model.zones.aliases) {
+      if (!String(a.truthBoard).startsWith('projectedDeep')) continue;
+      const spec = a.spec.replace(/^future:/, '');
+      if (spec.startsWith('windows:') || spec.startsWith('col')) continue;
+      const wanted = a.handle.startsWith('you-') ? nv.player : (nv.player === 1 ? 2 : 1);
+      const other = wanted === 1 ? 2 : 1;
+      if (occupantOf(spec, byId[a.truthBoard]) === other) {
+        violations.push(`${row.id}: ${a.handle} (${spec}) on ${a.truthBoard}`);
+      }
+    }
+  }
+  assert.deepEqual(violations, [], `deep aliases contradicted by their own board:\n${violations.join('\n')}`);
+});
+
+test('OI-190: every deep alias names a board that is actually rendered', () => {
+  const rows = readFileSync(CORPUS190, 'utf8').trim().split('\n').map((l) => JSON.parse(l));
+  const violations = [];
+  for (const row of rows) {
+    if (!row.evidence || row.error) continue;
+    const model = buildReasonRenderModel(toNarratorVector(row.evidence));
+    const ids = new Set(model.boards.map((b) => b.id));
+    for (const a of model.zones.aliases) {
+      if (!ids.has(a.truthBoard)) violations.push(`${row.id}: ${a.handle} -> ${a.truthBoard}`);
+    }
+  }
+  assert.deepEqual(violations, [], violations.join('\n'));
+});
+
+test('OI-190: same-owner deep aliases never split across two projected boards', () => {
+  // The board is resolved once per half, so `you-key-square` and `you-key-line` cannot land on
+  // different boards and describe one idea from two continuations. Stated per OWNER because that is
+  // what the render model exposes; it holds corpus-wide, and it caught the real inconsistency this
+  // fix originally had (the deep-fork loop and the half loop each deciding for themselves, splitting
+  // eval-13 / eval-22 / eval-23).
+  const rows = readFileSync(CORPUS190, 'utf8').trim().split('\n').map((l) => JSON.parse(l));
+  const violations = [];
+  for (const row of rows) {
+    if (!row.evidence || row.error) continue;
+    const model = buildReasonRenderModel(toNarratorVector(row.evidence));
+    const byOwner = {};
+    for (const a of model.zones.aliases) {
+      if (!String(a.truthBoard).startsWith('projectedDeep')) continue;
+      const owner = a.handle.startsWith('you-') ? 'you' : 'opp';
+      (byOwner[owner] ??= new Set()).add(a.truthBoard);
+    }
+    for (const [owner, boards] of Object.entries(byOwner)) {
+      if (boards.size > 1) violations.push(`${row.id}: ${owner} -> ${[...boards].join(',')}`);
+    }
+  }
+  assert.deepEqual(violations, [], violations.join('\n'));
+});
+
+test('OI-190: with a single deep board the binding is unchanged (pre-fix shape preserved)', () => {
+  const p = { bestCol: 2, playedCol: 3, player: 1, opponent: 2,
+    lostResource: { kind: 'winning_line', register: 'forced_sequence', completingCell: 'c6r5',
+                    finalMovestring: '3333221100' },
+    opponentPunishment: { kind: 'winning_line', register: 'immediate', completingCell: 'c1r1' } };
+  const boards = [{ id: 'projectedDeep', shown: true, movestring: '3333221100', tags: [] }];
+  const { aliases } = buildAnnotationOffer(p, boards);
+  const deep = aliases.filter((a) => a.spec.startsWith('future:'));
+  assert.ok(deep.length > 0);
+  for (const a of deep) assert.equal(a.truthBoard, 'projectedDeep');
+});

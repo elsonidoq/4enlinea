@@ -7041,7 +7041,7 @@ deliberately absent from `TERM_KB`).
 
 ## OI-190 — the shared `projectedDeep` board is built from ONE half's line, so the other half's aliases are verified against a continuation they do not belong to
 
-**Status**: open
+**Status**: FIXED 2026-08-25 (D50) — `boardSelectionDecisions` renders one projected board per deep line, and a deep alias's `truthBoard` is chosen by board truth (the board where its OWNER occupies the geometry), resolved once per half. Measured corpus-wide: contradictions 17 across 16 records -> **0**. LLM re-measure pending.
 **Area**: `connect-four/server/scripts/reasonBoardSelect.mjs` (`deepHalf` picker) + every alias carrying `truthBoard: "projectedDeep"`
 **Discovered**: 2026-08-21 post-fix subset re-measure (graded runs on `eval-5`, `eval-21`)
 

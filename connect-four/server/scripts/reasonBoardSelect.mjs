@@ -71,14 +71,38 @@ export function boardSelectionDecisions(fv) {
                              : `${why} — tag-set identical to the decision board, omitted` });
   }
 
-  const deepHalf = [fv.lostResource, fv.opponentPunishment].find(
+  // OI-190. This used to `.find()` the FIRST deep half and build ONE shared `projectedDeep` board
+  // from its line, so any alias belonging to the OTHER half was verified — and, since OI-196,
+  // restated in the required block — against a continuation it does not belong to. Measured over the
+  // 63-record corpus: 38 records carry two deep halves and in ALL 38 the two `finalMovestring`s
+  // differ, so one half's cells were always pointed at a board they are not true on. The graded
+  // symptom (eval-11, eval-20, both 5/5) is that the opponent's completing cell is the PLAYER's own
+  // disc on the board actually shown, while the opponent's real four completes only on a line that
+  // no board rendered at all.
+  //
+  // Each deep half now gets its OWN board. Ordering and ids are chosen so every existing single-board
+  // shape is byte-identical: the first deep half keeps the plain `projectedDeep` id (whichever half
+  // it is), and a SECOND board appears only when both halves are deep AND their lines differ. Halves
+  // that share one line still share one board. `zoneAnnotations` binds an alias to its board by
+  // matching the half's own `finalMovestring` against these `movestring`s, so the two stay in sync
+  // without a second source of truth.
+  const deepHalves = [fv.lostResource, fv.opponentPunishment].filter(
     (h) => h && DEEP.has(h.register) && h.finalMovestring);
-  out.push(deepHalf
-    ? { id: 'projectedDeep', shown: true, movestring: deepHalf.finalMovestring,
-        tags: tagBoard(deepHalf.finalMovestring, you), ascii: renderBoardAscii(deepHalf.finalMovestring, you),
-        reason: `where the deep ${deepHalf.register} resource resolves` }
-    : { id: 'projectedDeep', shown: false, movestring: null, tags: [], ascii: null,
-        reason: 'the resource is not deep (register is immediate) — no projected board' });
+  const deepLines = [...new Set(deepHalves.map((h) => h.finalMovestring))];
+  if (!deepLines.length) {
+    out.push({ id: 'projectedDeep', shown: false, movestring: null, tags: [], ascii: null,
+               reason: 'the resource is not deep (register is immediate) — no projected board' });
+    return out;
+  }
+  deepLines.forEach((ms, i) => {
+    const half = deepHalves.find((h) => h.finalMovestring === ms);
+    out.push({ id: i === 0 ? 'projectedDeep' : 'projectedDeepOpp', shown: true, movestring: ms,
+               tags: tagBoard(ms, you), ascii: renderBoardAscii(ms, you),
+               reason: `where the deep ${half.register} resource resolves`
+                 + (deepLines.length > 1
+                   ? ` for ${half === fv.lostResource ? 'the move you gave up' : "your opponent's punishment"}`
+                   : '') });
+  });
   return out;
 }
 
