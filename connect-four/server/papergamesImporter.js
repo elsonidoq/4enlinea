@@ -32,8 +32,66 @@ async function fetchWithTimeout(url, timeoutMs = 20000) {
 async function fetchRooms(accountId, start) {
   const url = `https://papergames.io/api/profile/${accountId}/rooms?accountId=${accountId}&start=${start}&limit=${ROOMS_PAGE_SIZE}&gameType=Connect4&_t=${Date.now()}`;
   const res = await fetchWithTimeout(url);
-  if (!res.ok) throw new Error(`fetchRooms HTTP ${res.status}`);
+  if (!res.ok) {
+    // Carry the status so callers can tell "this account does not exist" (404) apart from
+    // "Papergames is having a bad day" (5xx/timeout) — see classifyPapergamesFetchError.
+    const err = new Error(`fetchRooms HTTP ${res.status}`);
+    err.status = res.status;
+    throw err;
+  }
   return res.json();
+}
+
+/**
+ * Classify a failed Papergames fetch.
+ *
+ * Papergames answers 404 for an account id that does not resolve to a profile
+ * (`GET /api/profile/<id>` → `{"message":"User with this email does not exist"}`), on exactly
+ * the same route it serves 200 for a real one. Reporting that as "API unreachable" sends the
+ * reader hunting for an outage — the 2026-08-23 production incident — and retrying it is
+ * pointless: a 404 here is deterministic.
+ *
+ * @param {Error & { status?: number }} err
+ * @param {string} accountId
+ * @returns {{ kind: 'account_not_found'|'unreachable', retryable: boolean, message: string }}
+ */
+export function classifyPapergamesFetchError(err, accountId) {
+  if (err?.status === 404) {
+    return {
+      kind: 'account_not_found',
+      retryable: false,
+      message: `Papergames account not found: ${accountId} — check your Papergames account ID`,
+    };
+  }
+  return {
+    kind: 'unreachable',
+    retryable: true,
+    message: `Papergames API unreachable: ${err?.message ?? String(err)}`,
+  };
+}
+
+/**
+ * Does this Papergames account id resolve to a profile?
+ *
+ * Deliberately fail-open: only a definite 404 answers 'not_found'. A 5xx, a timeout or an
+ * offline network answers 'unknown', so a Papergames outage can never block a user from
+ * saving a perfectly good account id.
+ *
+ * @param {string} accountId
+ * @param {{ fetchImpl?: Function, timeoutMs?: number }} [opts]
+ * @returns {Promise<'ok'|'not_found'|'unknown'>}
+ */
+export async function verifyPapergamesAccount(accountId, { fetchImpl, timeoutMs = 5000 } = {}) {
+  const url = `https://papergames.io/api/profile/${encodeURIComponent(accountId)}`;
+  try {
+    const res = fetchImpl
+      ? await fetchImpl(url)
+      : await fetchWithTimeout(url, timeoutMs);
+    if (res.ok) return 'ok';
+    return res.status === 404 ? 'not_found' : 'unknown';
+  } catch {
+    return 'unknown';
+  }
 }
 
 async function fetchReplay(uid) {
@@ -270,14 +328,17 @@ export async function importForUser(supabase, userId, papergamesId, gameLimit, l
     let total = null;
     let stopEarly = false;
 
-    // Verify API reachable before entering the loop (one attempt with retry)
+    // Verify the account is fetchable before entering the loop (one attempt with retry).
+    // A 404 is NOT retried: it means the configured account id does not exist upstream, which
+    // no amount of waiting fixes (2026-08-23 incident).
     let apiOk = false;
     for (let attempt = 0; attempt < 3 && !apiOk; attempt++) {
       try {
         await fetchRooms(papergamesId, 0);
         apiOk = true;
       } catch (e) {
-        if (attempt === 2) throw new Error(`Papergames API unreachable: ${e.message}`);
+        const { retryable, message } = classifyPapergamesFetchError(e, papergamesId);
+        if (!retryable || attempt === 2) throw new Error(message);
         console.log('[importForUser] API probe attempt', attempt, 'failed, retrying:', e.message);
         await new Promise(r => setTimeout(r, 1000));
       }

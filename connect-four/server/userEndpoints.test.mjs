@@ -15,7 +15,7 @@ import { registerUserRoutes } from './userRoutes.js';
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
 /** Create a minimal Express app with user routes registered and optional middleware. */
-function createApp(supabase, userMiddleware) {
+function createApp(supabase, userMiddleware, deps) {
   const app = express();
   app.use(express.json());
   if (userMiddleware) {
@@ -24,7 +24,12 @@ function createApp(supabase, userMiddleware) {
       next();
     });
   }
-  registerUserRoutes(app, supabase);
+  // Default the Papergames existence probe to 'unknown' (its fail-open verdict) so no test
+  // reaches the real papergames.io. Tests that care pass their own verdict.
+  registerUserRoutes(app, supabase, {
+    verifyPapergamesAccount: async () => 'unknown',
+    ...deps,
+  });
   return app;
 }
 
@@ -176,6 +181,59 @@ describe('GET /api/user/* endpoints', () => {
       });
       assert.equal(status, 400);
       assert.ok(body.error.includes('papergames_id'));
+    });
+
+    // 2026-08-23 production incident: a papergames_id that does not exist upstream was stored
+    // happily here and only failed minutes later, deep inside a background import job, as
+    // "Papergames API unreachable: fetchRooms HTTP 404". Reject it at the point the user can
+    // still fix it — but only on a definite 404.
+    it('rejects a papergames_id that does not exist on Papergames (404) with 400', async () => {
+      const captured = {};
+      const app = createApp(makeUsersUpdateSupabase(captured), authMiddleware, {
+        verifyPapergamesAccount: async () => 'not_found',
+      });
+      const { status, body } = await request(app, 'PUT', '/api/user/profile', {
+        body: { papergames_id: '69e77229f8f489b51eabd6eb' },
+      });
+      assert.equal(status, 400);
+      assert.match(body.error, /papergames/i);
+      assert.equal(captured.data, undefined, 'a non-existent account id must not be written');
+    });
+
+    it('accepts a papergames_id that resolves upstream', async () => {
+      const captured = {};
+      const app = createApp(makeUsersUpdateSupabase(captured), authMiddleware, {
+        verifyPapergamesAccount: async () => 'ok',
+      });
+      const { status } = await request(app, 'PUT', '/api/user/profile', {
+        body: { papergames_id: '69e773d36bf9938bffc1509a' },
+      });
+      assert.equal(status, 204);
+      assert.deepEqual(captured.data, { papergames_id: '69e773d36bf9938bffc1509a' });
+    });
+
+    it('saves anyway when the check is inconclusive — a Papergames outage must not block a save', async () => {
+      const captured = {};
+      const app = createApp(makeUsersUpdateSupabase(captured), authMiddleware, {
+        verifyPapergamesAccount: async () => 'unknown',
+      });
+      const { status } = await request(app, 'PUT', '/api/user/profile', {
+        body: { papergames_id: 'pg-123' },
+      });
+      assert.equal(status, 204);
+      assert.deepEqual(captured.data, { papergames_id: 'pg-123' });
+    });
+
+    it('does not probe Papergames when the request carries no papergames_id', async () => {
+      let probed = false;
+      const app = createApp(makeUsersUpdateSupabase({}), authMiddleware, {
+        verifyPapergamesAccount: async () => { probed = true; return 'not_found'; },
+      });
+      const { status } = await request(app, 'PUT', '/api/user/profile', {
+        body: { onboarding_status: 'seen' },
+      });
+      assert.equal(status, 204);
+      assert.equal(probed, false);
     });
 
     it('onboarding_status-only request is accepted', async () => {
