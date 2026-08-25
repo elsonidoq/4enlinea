@@ -87,8 +87,14 @@ Full analysis: `connect-four/server/scripts/reason_corpus/runs/fv_suff_answers_b
    (item 5 below, now item 3½) is what decides whether the axis moves.** Two pieces of OI-195 remain
    open by design: L2's "occupy" verb and its raw `cNrM` notation (OI-194) are *wording* and belong to
    the prose pass, so bundling them here would have destroyed the attribution.
-4. **Rewrite L1/L2/L4/L8 to prose** — the deferral's own trigger has fired (see below). Spends the
-   control group, so it must land in a pass where nothing else touches A6.
+4. ~~**Rewrite L1/L2/L4/L8 to prose** — the deferral's own trigger has fired (see below). Spends the
+   control group, so it must land in a pass where nothing else touches A6.~~ **DONE 2026-08-25.**
+   All nine links now state the better column as prose; 0 of 63 records carry a parenthetical column.
+   Verified single-variable: the composed text of the 19 affected records was diffed against the
+   pre-change module and, after normalising ONLY the column-mention surface form, there are **zero**
+   residual differences — every cell, tag, window, horizon and clause order is byte-identical. The
+   control group is now SPENT: no untreated parenthetical templates remain, so a future A6 comparison
+   has no internal control and must be made against the recorded runs. `test:fast` 1999 / 0.
 5. **Task 10 Step 4**, the 63-board sweep — after 3 and 4, so it measures fixed code.
 6. **Enforcement / retry design** — trigger fired, but undesigned. Brainstorm before coding.
 
@@ -1979,7 +1985,7 @@ git commit -m "docs(058): render remediation results + D-log entries"
 >
 > | deferral | its condition | measured | verdict |
 > |---|---|---|---|
-> | parenthetical → prose (L1/L2/L4/L8) | "fails materially above prose" | **16% fail vs 0%** mid/late (was 9% vs 0%) | 🔴 **FIRED** — gap widened |
+> | parenthetical → prose (L1/L2/L4/L8) | "fails materially above prose" | **16% fail vs 0%** mid/late (was 9% vs 0%) | ✅ **ACTED 2026-08-25** — converted |
 > | retry / enforcement | "the flaky pile dominating" | **15 of 20 failing cases intermittent** | 🔴 **FIRED** |
 > | A4 fabrication variance | "file as an open issue after Task 10" | A4 86→87→**81%** | 🔴 **NOT DONE — still owed** |
 > | G5 board-truth overlay | independent; would confound | re-found as OI-188 / OI-195; `reasonBoardSelect.mjs` root cause not filed | 🟡 partial |

@@ -43,13 +43,27 @@ export const TAG_PHRASE = {
 };
 const plainTag = (t) => TAG_PHRASE[t] ?? 'threat';
 
+// Parenthetical -> prose, 2026-08-25 (L1, L2, L4, L8 — the last four still using `(col N)`).
+//
+// These four were held back DELIBERATELY as a control group when L5/L6/L9 were converted, on the
+// measurement that `(col N)` failed A6 on only ~9% of mid/late runs against 0% for prose — too small
+// to justify rewriting four working templates. The control group did its job and returned the
+// OPPOSITE answer: on the final 25-board run the gap had WIDENED to 16% vs 0%, i.e. the parenthetical
+// form was costing 7 of 45 mid/late runs against 0 of 15 for prose. That fired the deferral's own
+// revisit condition, so the control group is now spent and all nine links state the column as prose.
+//
+// Only the COLUMN MENTION changed. Every cell, tag, window, horizon and clause order in these four
+// templates is byte-identical, so the next measurement reads one variable. In particular the raw
+// `cNrM` notation these templates carry (OI-194) is deliberately NOT touched here: it is an A5a
+// defect, and A5 already carries the D50 caption fix in the same upcoming run.
 export const CAUSAL_LINKS = [
   // ── Family 1: realized_denied (checked first; L3 before L2) ──
   { id: 'L1', family: 'realized_denied', confidence: 'high',
     when: (fv) => fv.route === 'realized_denied' && fv.direction === 'missed_own',
     covers: CODES_REALIZED,
     guardrail: 'The correct move builds/completes YOUR pattern; do not attribute it to the opponent.',
-    template: (fv) => `The better move (col ${col1(fv.bestCol)}) completes your ${plainTag(fv.lostResource?.tag)} at ${fv.lostResource?.completingCell}; the played move let the opponent take ${denialCell(fv.opponentPunishment)}, denying it.` },
+    // Parenthetical -> prose (2026-08-25). See the block comment above CAUSAL_LINKS.
+    template: (fv) => `Column ${col1(fv.bestCol)} was the better move: it completes your ${plainTag(fv.lostResource?.tag)} at ${fv.lostResource?.completingCell}; the played move let the opponent take ${denialCell(fv.opponentPunishment)}, denying it.` },
   // L4 guardrail is case-gated (task 9c): on lose_to_faster_lose both moves lose, so the plain
   // missed-defense framing must gain L3's hold-the-line clause to avoid implying the played move
   // caused the loss or that the player is lost. Every other case keeps the original text verbatim.
@@ -59,7 +73,7 @@ export const CAUSAL_LINKS = [
     guardrail: (fv) => fv.case === 'lose_to_faster_lose'
       ? 'The better move blocks the opponent pattern; frame it as a missed defense. MUST NOT say the played move caused or enabled the pattern, and MUST NOT tell the player they are lost; both moves lose, but the better one makes the opponent work hardest — frame it as the toughest defense. Do not add a closing caveat like "but the position is still lost," "both lines end poorly," "the result still goes against you," or "you still lose either way" — the practical-resistance framing must stand on its own, with no defeatist final clause.'
       : 'The better move blocks the opponent pattern; frame it as a missed defense.',
-    template: (fv) => `The better move (col ${col1(fv.bestCol)}) occupies ${fv.lostResource?.completingCell}, blocking the opponent's threat on ${cells(fv.opponentPunishment?.window)}; the played move skipped that defense.` },
+    template: (fv) => `Column ${col1(fv.bestCol)} was the better move: it occupies ${fv.lostResource?.completingCell}, blocking the opponent's threat on ${cells(fv.opponentPunishment?.window)}; the played move skipped that defense.` },
   // L3/L2 discriminator: the SIGN `case` gates the OUTCOME sentence (D30, supersedes D28 sub-decision 3).
   // L3 asserts "you were already losing, both moves lose" — an OUTCOME claim, valid ONLY when both moves
   // lose (lose_to_faster_lose). patternOnAfterBestBoard is a GEOMETRIC fact (opponent threat cell present
@@ -96,7 +110,7 @@ export const CAUSAL_LINKS = [
     template: (fv) => {
       const conceded = fv.opponentPunishment?.tie?.sharedCells?.[0]
         ?? fv.opponentPunishment?.completingCell;
-      return `Your move let the opponent occupy ${conceded}, completing their ${plainTag(fv.opponentPunishment?.tag)} on ${cells(fv.opponentPunishment?.window)}; the better move (col ${col1(fv.bestCol)}) denied it${denialCell(fv.lostResource) ? ` at ${denialCell(fv.lostResource)}` : ''}.`;
+      return `Your move let the opponent occupy ${conceded}, completing their ${plainTag(fv.opponentPunishment?.tag)} on ${cells(fv.opponentPunishment?.window)}; column ${col1(fv.bestCol)} was the better move and would have denied it${denialCell(fv.lostResource) ? ` at ${denialCell(fv.lostResource)}` : ''}.`;
     } },
   // ── Family 2: sign (L9 refinement before L5/L6) ──
   { id: 'L7', family: 'sign', confidence: 'high',
@@ -118,7 +132,7 @@ export const CAUSAL_LINKS = [
     when: (fv) => fv.route !== 'realized_denied' && fv.case === 'draw_to_lose',
     covers: CODES_SIGN,
     guardrail: 'The position was a draw; the played move abandoned a defensive resource.',
-    template: (fv) => `The position was a draw; the better move (col ${col1(fv.bestCol)}) holds it by occupying ${fv.lostResource?.completingCell}. The played move abandons it — the opponent now has a forced win (${horizonPhrase(fv.opponentPunishment?.register)}${pliesTail(fv)}, completing at ${fv.opponentPunishment?.completingCell}).` },
+    template: (fv) => `The position was a draw; column ${col1(fv.bestCol)} was the better move and holds it by occupying ${fv.lostResource?.completingCell}. The played move abandons it — the opponent now has a forced win (${horizonPhrase(fv.opponentPunishment?.register)}${pliesTail(fv)}, completing at ${fv.opponentPunishment?.completingCell}).` },
   { id: 'L9', family: 'sign', confidence: 'low',
     when: (fv) => fv.route !== 'realized_denied' && fv.lostResource?.kind === 'winning_line'
                   && fv.lostResource?.register === 'parity' && !hasSharedCell(fv),

@@ -29,7 +29,7 @@ test('L5 (pin-L5-deep-fork): deep fork framed as deep, not immediate', () => {
 test('L1 (pin-L1-completes-your-tactic): completes YOUR tactic; opponent denial named', () => {
   const { link } = classifyById('pin-L1-completes-your-tactic');
   assert.equal(link.id, 'L1');
-  assert.match(link.text, /better move \(col 3\)/);       // bestCol 2 -> display 3
+  assert.match(link.text, /[Cc]olumn 3 was the better move/);   // bestCol 2 -> display 3, prose form
   assert.match(link.text, /double threat/i);              // double_threat slug -> plain C4 phrase
   assert.doesNotMatch(link.text, /double_threat/);        // raw slug must not leak
   assert.match(link.text, /c2r1/);                        // your completing cell
@@ -47,7 +47,7 @@ test('L2 (pin-L2-enabled-opponent): played move handed the opponent the pattern'
   assert.doesNotMatch(link.text, /occupy c2r1/);
   assert.match(link.text, /double threat/i);              // double_threat slug -> plain C4 phrase
   assert.doesNotMatch(link.text, /double_threat/);        // raw slug must not leak
-  assert.match(link.text, /better move \(col 3\)/);       // bestCol 2 -> display 3
+  assert.match(link.text, /[Cc]olumn 3 was the better move/);   // bestCol 2 -> display 3, prose form
 });
 
 test('L3 (pin-L3-no-causation): no-causation, hold-the-line wording; names the branch-invariant pattern', () => {
@@ -64,7 +64,7 @@ test('L3 (pin-L3-no-causation): no-causation, hold-the-line wording; names the b
 test('L4 (pin-L4-missed-defense): missed defense; occupies the block, names the opponent window', () => {
   const { link } = classifyById('pin-L4-missed-defense');
   assert.equal(link.id, 'L4');
-  assert.match(link.text, /better move \(col 5\)/);       // bestCol 4 -> display 5
+  assert.match(link.text, /[Cc]olumn 5 was the better move/);   // bestCol 4 -> display 5, prose form
   assert.match(link.text, /occupies c5r4/);
   assert.match(link.text, /skipped that defense/i);
 });
@@ -132,11 +132,15 @@ for (const [linkId, boardId] of Object.entries(ONE_PER_LINK)) {
     const { fv, link } = classifyById(boardId);
     assert.equal(link.id, linkId);
     const display = fv.bestCol + 1;
-    // Either surface form is acceptable: measured as SERVED (through the guard's cNrM -> "column N"
-    // rewrite), "(col N)" fails A6 on only 9% of mid/late runs vs 0% for prose — while templates
-    // naming no column at all fail 58%. The invariant is that the column is named, not how.
-    assert.match(link.text, new RegExp(`(?:[Cc]olumn ${display}\\b|\\(col ${display}\\))`),
-      `${linkId} must name the better column (${display}); got: ${link.text}`);
+    // Prose ONLY, as of the 2026-08-25 conversion. The parenthetical form was kept as a deliberate
+    // control group and the control returned the OPPOSITE of the plan's expectation: measured on the
+    // final 25-board run, `(col N)` failed A6 on 16% of mid/late runs against 0% for prose (the gap
+    // WIDENED from the 9%-vs-0% figure that had justified leaving it alone). L1/L2/L4/L8 were
+    // converted; nothing may reintroduce a parenthetical column.
+    assert.match(link.text, new RegExp(`[Cc]olumn ${display}\\b`),
+      `${linkId} must name the better column (${display}) as prose; got: ${link.text}`);
+    assert.doesNotMatch(link.text, /\(col \d+\)/,
+      `${linkId} must not name the column parenthetically; got: ${link.text}`);
   });
 }
 
