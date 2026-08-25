@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect, Suspense, lazy } from 'react';
+import React, { useState, useCallback, useEffect, useRef, Suspense, lazy } from 'react';
 import { ProfileStoreProvider, useStore } from './store/ProfileStore.jsx';
 import { CheckoutReturnBanner } from './store/CheckoutReturnBanner.jsx';
 import { DebugProvider } from './context/DebugContext.jsx';
@@ -9,7 +9,7 @@ import { setActiveScreen, track } from './lib/track.js';
 import { buildUrl, parseUrl, SESSION_ONLY_SCREENS } from './lib/urlMapping.js';
 import { readDevBoardParam } from './lib/devBoardParam.js';
 import { consumeReturnTo } from './lib/postLoginReturn.js';
-import { shouldAutoRouteToOnboarding } from './lib/onboardingRouting.js';
+import { shouldAutoRouteToOnboarding, shouldRouteHomeAfterSignIn } from './lib/onboardingRouting.js';
 import { isLocalhostOrigin } from './lib/isLocalhostOrigin.js';
 import { hasFreshPendingSetResults } from './lib/pendingSetResults.js';
 import AdminBlockedPage from './pages/AdminBlockedPage.jsx';
@@ -20,6 +20,12 @@ const AdminCuratePage = lazy(() => import('./pages/AdminCuratePage.jsx'));
 function Navigator() {
   const [screen, setScreen] = useState('home');
   const [params, setParams] = useState({});
+  // Current screen, readable from effects that must NOT re-run on navigation.
+  // Synced in its own effect (not during render — that trips react-hooks' ref rule);
+  // effects run in declaration order, so this lands before the [session] effect below
+  // reads it in the same commit.
+  const screenRef = useRef(screen);
+  useEffect(() => { screenRef.current = screen; }, [screen]);
   const { store, session, sessionChecked } = useStore();
 
   // Mount effect: parse the current URL and initialise screen state.
@@ -135,7 +141,20 @@ function Navigator() {
   useEffect(() => {
     if (!session) return;
     const dest = consumeReturnTo();
-    if (dest) go(dest.screenKey, dest.params);
+    if (dest) {
+      go(dest.screenKey, dest.params);
+      return;
+    }
+    // Nothing stashed: a sign-in completed from an anonymous-only screen's own AuthModal
+    // (the auto-route above lands a signed-out user on 'onboardingMission', including right
+    // after signOut(), whose fresh IndexedDBStore has no onboarding_status). Without this the
+    // screen is byte-identical before and after a *successful* sign-in, so it reads as "log in
+    // does not work". screenRef, not `screen`, keeps this effect keyed to the session
+    // transition alone — adding `screen` would also fire on Replay intro's deliberate
+    // signed-in navigation into onboarding.
+    if (shouldRouteHomeAfterSignIn({ screenKey: screenRef.current, hasStashedDestination: false })) {
+      go('home');
+    }
   }, [session]);
 
   // Epic 8 — Onboarding Experience, US1 (T018, FR-001/FR-002/FR-014, research.md R3).

@@ -6,7 +6,7 @@
 // All DB-accessing routes also require supabase to be initialized.
 
 import { CHALLENGE_SETS } from './challengeSets.js';
-import { importForUser, saveLiveGame, extractAndSaveBlunders } from './papergamesImporter.js';
+import { importForUser, saveLiveGame, extractAndSaveBlunders, verifyPapergamesAccount as defaultVerifyPapergamesAccount } from './papergamesImporter.js';
 import { randomUUID } from 'node:crypto';
 import { logError } from './logger.js';
 import {
@@ -38,7 +38,9 @@ function requireUser(req, res) {
  * @param {import('express').Express} app
  * @param {object|null} supabase — Supabase client (service-role key), or null
  */
-export function registerUserRoutes(app, supabase) {
+export function registerUserRoutes(app, supabase, deps = {}) {
+  // Injectable so endpoint tests never reach papergames.io.
+  const verifyPapergamesAccount = deps.verifyPapergamesAccount ?? defaultVerifyPapergamesAccount;
   // ── GET endpoints ──────────────────────────────────────────────────────────
 
   // T017 (spec 053 US2): deliberately NOT gated by requireUser — this is a
@@ -133,6 +135,17 @@ export function registerUserRoutes(app, supabase) {
     if (papergames_id !== undefined) {
       if (typeof papergames_id !== 'string' || !papergames_id || papergames_id.length > 64) {
         return res.status(400).json({ error: 'papergames_id must be a non-empty string (max 64 chars)' });
+      }
+      // 2026-08-23 incident: an account id that does not exist upstream used to be stored
+      // silently and only surfaced minutes later, from inside a background import job, as
+      // "Papergames API unreachable: fetchRooms HTTP 404". Reject it here, where the user is
+      // still looking at the field. Fail-open by design — only a definite 404 blocks the save
+      // (see verifyPapergamesAccount), so a Papergames outage never traps a valid id.
+      const verdict = await verifyPapergamesAccount(papergames_id);
+      if (verdict === 'not_found') {
+        return res.status(400).json({
+          error: `No Papergames account found with ID ${papergames_id} — check your Papergames account ID`,
+        });
       }
       update.papergames_id = papergames_id;
     }

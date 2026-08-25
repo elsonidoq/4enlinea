@@ -28,3 +28,31 @@ export function shouldAutoRouteToOnboarding({ sessionChecked, session, onboardin
   if (!sessionChecked || session) return false;
   return onboardingStatus === 'not_encountered' || onboardingStatus == null;
 }
+
+/**
+ * Screens that only make sense for an anonymous user. Reached by the first-run auto-route
+ * above (and only that way — Settings "Replay intro" (FR-010) routes a signed-in user into
+ * the onboarding *game*, not here), so a user who completes sign-in while standing on one
+ * must be moved off it.
+ */
+export const ANONYMOUS_ONLY_SCREENS = new Set(['onboardingMission']);
+
+/**
+ * Decide whether a session that just transitioned falsy→truthy should route the user home.
+ *
+ * The auto-route effect deliberately never fires for a signed-in user, which left a gap: a
+ * user who signed in from an anonymous-only screen's own AuthModal stayed on that screen with
+ * no visible change, making a *successful* sign-in indistinguishable from a failed one. This
+ * is the complement of that guard — it only fires on the session transition, so a signed-in
+ * user navigating into onboarding on purpose (Replay intro) is unaffected.
+ *
+ * A stashed post-login destination always wins: FR-013's consumeReturnTo() remains the single
+ * named consumption point, and this is only the fallback for when nothing was stashed.
+ *
+ * @param {{ screenKey: string, hasStashedDestination: boolean }} args
+ * @returns {boolean}
+ */
+export function shouldRouteHomeAfterSignIn({ screenKey, hasStashedDestination }) {
+  if (hasStashedDestination) return false;
+  return ANONYMOUS_ONLY_SCREENS.has(screenKey);
+}

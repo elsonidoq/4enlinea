@@ -18,7 +18,7 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { shouldAutoRouteToOnboarding, ONBOARDING_GAME_PARAMS } from '../../src/lib/onboardingRouting.js';
+import { shouldAutoRouteToOnboarding, shouldRouteHomeAfterSignIn, ONBOARDING_GAME_PARAMS } from '../../src/lib/onboardingRouting.js';
 
 describe('shouldAutoRouteToOnboarding', () => {
   it('fires for a confirmed-anonymous first-time visitor (not_encountered)', () => {
@@ -74,5 +74,29 @@ describe('shouldAutoRouteToOnboarding', () => {
 
   it('ONBOARDING_GAME_PARAMS matches the spec-mandated route (Easy difficulty, first side, onboarding flag)', () => {
     assert.deepEqual(ONBOARDING_GAME_PARAMS, { difficulty: 'easy', side: 'first', onboarding: true });
+  });
+});
+
+// 2026-08-23 regression: "I logged out, then when I try to log in, it does not work."
+//
+// Verified chain: signOut() resets to a fresh IndexedDBStore whose profile row carries no
+// onboarding_status (the account's copy lives in Supabase) → the auto-route effect re-fires on
+// session→null and lands the user on 'onboardingMission' → signing in from that screen's own
+// AuthModal DID succeed (200 + session state set) but nothing routed away from it, because
+// App.jsx's [session] effect only navigates when consumeReturnTo() returns a stash. The screen
+// was byte-identical before and after a successful sign-in, so sign-in looked broken.
+describe('shouldRouteHomeAfterSignIn — never strand a freshly signed-in user on an anonymous-only screen', () => {
+  it('routes home when sign-in completes on the anonymous onboarding mission screen', () => {
+    assert.equal(shouldRouteHomeAfterSignIn({ screenKey: 'onboardingMission', hasStashedDestination: false }), true);
+  });
+
+  it('defers to a stashed post-login destination (FR-013 stays the single consumption point)', () => {
+    assert.equal(shouldRouteHomeAfterSignIn({ screenKey: 'onboardingMission', hasStashedDestination: true }), false);
+  });
+
+  it('leaves every other screen where it is — signing in from Home/Stats/a game must not navigate', () => {
+    for (const screenKey of ['home', 'stats', 'game', 'settings', 'onboardingImportOffer']) {
+      assert.equal(shouldRouteHomeAfterSignIn({ screenKey, hasStashedDestination: false }), false, screenKey);
+    }
   });
 });

@@ -47,3 +47,23 @@ test('AuthModal: dismiss still clears the stash (dismiss-without-signing-in must
     'dismissing the sign-in prompt without completing sign-in must still clear any stash, per ' +
     'postLoginReturn.js\'s clearReturnTo() contract.');
 });
+
+// 2026-08-23: the Dev skip-auth button "did nothing" when local Supabase was down —
+// POST /api/auth/anonymous answered 400 {"error":"fetch failed"}, which `fetch` RESOLVES
+// (it only rejects on network-level failure), so the old `try { await fetch(...) } catch {}`
+// swallowed it: the modal closed, refetchSession() found no cookie, and the user was left
+// signed out with no message anywhere. Guard the response check so a failed sign-in is
+// visible instead of indistinguishable from a successful one.
+test('AuthModal: Dev skip-auth checks the response and surfaces failure instead of closing silently', () => {
+  const skipAuthMatch = authModalSrc.match(/import\.meta\.env\.DEV[\s\S]*?onClick=\{async \(\) => \{([\s\S]*?)\n\s*\}\}/);
+  assert.ok(skipAuthMatch, 'expected to find the Dev skip-auth button onClick handler body');
+  const handlerBody = skipAuthMatch[1];
+
+  assert.ok(/res\.ok/.test(handlerBody),
+    'the handler must inspect res.ok — a 4xx/5xx from /api/auth/anonymous resolves the ' +
+    'promise, so a bare try/catch treats a failed sign-in as a successful one.');
+  assert.ok(/setDevError/.test(handlerBody),
+    'a failed dev sign-in must be surfaced in the UI, not only in the console.');
+  assert.ok(/return;/.test(handlerBody),
+    'on failure the handler must bail out before onClose() so the modal stays open.');
+});
