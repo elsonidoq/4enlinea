@@ -6845,9 +6845,33 @@ failure, not a context-sufficiency failure. Cross-refs: D45, OI-178, OI-180.
 
 ## OI-183 — no batch harness exercises the production deep-reveal path, so the retry layer cannot be measured
 
-**Status**: open (missing capability — this is why quality regressions reach staging unmeasured)
+**Status**: open — **QUANTIFIED 2026-08-26; owner decided to leave the harness as-is for now** (see below)
 **Area**: `connect-four/server/mechanismExplainer.mjs`, `connect-four/server/scripts/compute.mjs`, `.claude/skills/judge-deep-reveals/`
 **Discovered**: deep-reveal learner-quality evaluation, 2026-08-06
+
+**2026-08-26 — how big this is, measured.** Replaying the 125 condition-D runs of
+`fv_suff_answers_boards_subset_2026-08-25T20-16-50Z` through production's OWN trigger functions
+(`missingRequiredGroups` and `mentionsBetterColumn`, imported from `mechanismExplainer.mjs`, not
+reimplemented):
+
+| production retry trigger | runs of 125 |
+|---|---|
+| a required handle was omitted | 34 (27%) |
+| the better column was never named | 22 (18%) |
+| **either — production would have retried** | **48 (38%)** |
+
+So **38% of every graded run is first-attempt output that production would never have served.** Every
+A6, A7c and G7 figure in `reason_corpus/runs/README.md` is therefore a FLOOR, not shipped behaviour.
+
+This also means the recurring "the model ignores the required set" failure family in the 2026-08-25
+gradings is substantially an **instrument artifact**. Two sessions in a row concluded from it that
+enforcement was missing and needed designing; it has existed all along
+(`computeMechanism` folds both misses into one amended retry prompt, with a single shared budget, and
+`deepRevealFailuresRow.js` raises an admin row when a required square is still missing afterwards).
+Do not re-derive that conclusion from a graded run — check this issue first.
+
+**Owner decision, 2026-08-26:** leave the harness unchanged for now and carry the caveat in the docs
+rather than spending a measurement arm on it. Revisit when the retry's own effect needs a number.
 
 `grep -rn computeMechanism connect-four/server` returns only `index.js` (the live endpoint),
 `mechanismExplainer.mjs` itself, `reasonRenderGuard.mjs` and the unit test. **Nothing drives the

@@ -96,7 +96,15 @@ Full analysis: `connect-four/server/scripts/reason_corpus/runs/fv_suff_answers_b
    control group is now SPENT: no untreated parenthetical templates remain, so a future A6 comparison
    has no internal control and must be made against the recorded runs. `test:fast` 1999 / 0.
 5. **Task 10 Step 4**, the 63-board sweep — after 3 and 4, so it measures fixed code.
-6. **Enforcement / retry design** — trigger fired, but undesigned. Brainstorm before coding.
+6. ~~**Enforcement / retry design** — trigger fired, but undesigned.~~ **RESOLVED 2026-08-26 — it was
+   already built.** `computeMechanism` (which `index.js` serves from) has carried the whole design
+   since spec 058: a required-set post-check (`missingRequiredGroups`), an A6 post-check
+   (`mentionsBetterColumn`), both folded into ONE amended retry prompt on a single shared budget, and
+   an admin failure row when a required square is still missing after it. The deferral's "trigger
+   fired" reading came from graded runs — and **the harness does not exercise that retry** (OI-183):
+   measured, **48 of 125 runs (38%) would have been retried in production**. The eval numbers are a
+   floor. Owner decision 2026-08-26: leave the harness as-is and carry the caveat in
+   `reason_corpus/runs/README.md`. **Nothing to build here.**
 
 Filed backlog: **OI-190…OI-196** in `docs/open_issues.md`. Decision record: **D48** in
 `docs/architecture/reason-DECISIONS.md`.

@@ -4,6 +4,23 @@ Answers + grades for the feature-vector sufficiency experiment. Read by
 `GET /api/admin/fv-suff` (`server/index.js`'s `FV_SUFF_RUNS_DIR`) and written by
 `server/scripts/compute.mjs --llm`.
 
+> ## ⚠️ Every score in this directory is a FLOOR, not shipped behaviour
+>
+> `compute.mjs --llm --condition D` calls the model **once**. Production (`computeMechanism`) gets a
+> second attempt whenever the answer omits a required square/line or never names the better column —
+> both misses folded into one amended retry prompt. The harness does not exercise that path (**OI-183**).
+>
+> Measured 2026-08-26 by replaying the 125 runs of `…2026-08-25T20-16-50Z` through production's own
+> trigger functions: **48 of 125 runs (38%) would have been retried** — 34 for a missing required
+> handle, 22 for an unnamed better column. A6, A7c and G7 are the axes this understates most.
+>
+> **Consequence for readers:** a graded failure of the form "the model ignored the required set" or
+> "never named the column" may already be handled in production. Two sessions concluded from these
+> tables that enforcement was missing and needed building; it has existed all along. Check OI-183
+> before acting on that failure family.
+>
+> Owner decision 2026-08-26: harness left unchanged deliberately; carry this caveat instead.
+
 **File families**, all sharing one stem:
 
 | file | producer |
