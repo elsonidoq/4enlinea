@@ -1972,6 +1972,14 @@ teach book-line vocabulary when there is a book line, L4 carries the hold-the-li
 25-board subset: the axis for "names the better column in prose" moved 68% → 84% and term fidelity
 87% → 98%. One purge clears all of it; nothing here changes the command or the verification below.
 
+**Updated 2026-08-26 — the change set grew again** (`b9be303`..`086b8ea`), and all of it changes served
+text: sibling alias roles are disambiguated and the required block now names the board each handle is
+true on (D49); **the projected board is split into one per deep half and every deep alias is re-bound to
+the board its owner's geometry is actually true on** (D50 — this changed the offered/required set on 38
+of 63 records and removed 17 board-false alias labels); the second board's caption and the reading key
+changed; and L1/L2/L4/L8 now name the better column as prose rather than "(col N)". Measured on the
+frozen subset: the cell-verification axis moved 80% → 94%. Still one purge, same command below.
+
 `GET /api/user/blunder/:id/deep-reveal` checks `explanation_cache` **before** any producer runs
 (`server/index.js` ~:1308): the key is `sha256(movestring:col)` plus locale, and a hit returns the
 stored `deep_reveal_json` directly, bypassing `computeMechanism` entirely. **The key contains nothing

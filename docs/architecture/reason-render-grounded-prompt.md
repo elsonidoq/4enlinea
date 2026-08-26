@@ -1003,3 +1003,83 @@ implementation map.
    "single", the Highlightable-regions block carries a worked bad/good pair for shape-matching, and
    the KB-terms block positively requires a `[term:...]` to be paired with an **adjacent** (never
    overlapping — the client parser cannot nest) `[zone:...]`.
+
+---
+
+## 12. Projected boards are PER DEEP HALF, and a deep alias names the board its owner's geometry is true on (D50, 2026-08-25)
+
+This section supersedes the single-`projectedDeep` model assumed by §3c, §10 and §11b.
+
+### 12a. The board set
+
+`boardSelectionDecisions` emits `decision`, `afterBest`, `afterPlayed`, and now **one projected board
+per deep line**:
+
+| situation | boards emitted |
+|---|---|
+| neither half deep | one `projectedDeep`, `shown: false` |
+| exactly one half deep | one `projectedDeep` from that half's `finalMovestring` |
+| both halves deep, same `finalMovestring` | one `projectedDeep` |
+| both halves deep, different lines | **`projectedDeep` (lostResource) + `projectedDeepOpp` (opponentPunishment)** |
+
+The last row is the common case, not an edge case: **38 of the 63 corpus records have two deep halves,
+and in all 38 the lines differ.** Board captions carry a plain-English suffix (`— your line` /
+`— your opponent's line`) only when two boards are emitted.
+
+### 12b. Which board an alias names
+
+`truthBoard` for a deep alias is chosen by **board truth, not provenance**: the projected board on
+which that alias's OWNER actually occupies the geometry, resolved **once per half** over every cell
+that half contributes, using `parseBoardState` + `statusOf`. Ties and a no-evidence result fall back to
+the half's own line; with fewer than two deep boards the answer is the single `projectedDeep`.
+
+**Provenance is the wrong rule and will look right.** `halfOwner` re-owns a `denial` /
+`neutralization` half to the other player, so an alias can be produced by one half while belonging to
+the other's line — binding it to its producing half puts an opponent disc under a `you-` handle. This
+was measured: provenance binding fixed 14 aliases and broke 9; board truth fixed them without the
+trade.
+
+Invariant, guarded corpus-wide in `zoneAnnotations.test.mjs`: **no deep alias may name a board on which
+its cell holds the other player's disc** (17 such contradictions across 16 records before D50, 0 after).
+"Empty" is deliberately not a violation — a `future:` cell is expected to be unplayed and its role text
+says so.
+
+### 12c. The required block restates the board (D49)
+
+`deriveRequiredSet` carries the matched alias's `truthBoard`, and the required block appends
+`(on the … board)` exactly as `# Highlightable regions` does. Two required handles differing only by
+which board they are true on previously restated identically in the one block the prompt calls
+mandatory.
+
+### 12d. Sibling roles must differ (D49)
+
+`roleText` is a pure `(owner, kind)` function, so same-kind siblings used to restate byte-identically
+while only their HANDLE differed. `buildAnnotationOffer` now runs `disambiguateSiblingRoles` last: any
+aliases sharing a `(role, truthBoard)` pair — exactly the pair the prompt prints — get their geometry
+front-loaded into the role (`the one at c3r1: …`, `the one through c4r6·c5r6·…: …`). The `future:`
+decorator is stripped from the hint (D43: framing, not geometry). Collisions were 48/63 records before,
+0 after; an alias with no sibling is left byte-identical.
+
+### 12e. Alias offers are horizon-aware (D49)
+
+When both halves reference the same geometry at different horizons, a `future:` framing may be
+**upgraded** to the present one, never the reverse. Present tense is the board-truth direction, and the
+one-directional rule keeps the present-threat trap closed.
+
+### 12f. Every causal template names the better column as PROSE
+
+All of L1–L9 now say "Column N …", never "(col N)". The parenthetical form was retained on L1/L2/L4/L8
+as a control group and the control returned the opposite of the expectation it was kept for: 16% of
+mid/late runs failed the names-the-better-column axis against 0% for prose. **The control group is
+spent** — no untreated template remains, so a future comparison on that axis has no internal control
+and must be made against the recorded runs in `reason_corpus/runs/README.md`. A parametric per-link test
+requires prose and forbids a parenthetical.
+
+### 12g. Adding a board adds VOCABULARY, not just information
+
+Every render surface the model can see is a surface it can echo. The second projected board's first
+caption read "for your opponent's punishment" — and "opponent punishment" is on the coach-voice axis's
+own banned-terminology list. Measured: runs leaking a render/board label went **0/125 → 10/125**, on
+exactly the seven records that gained a second board. `READING_KEY` now states that board names and
+their paraphrases ("the projected board", "the deep board") are internal labels never to be written.
+**When adding anything to the prompt, extend the never-repeat list in the same change.**

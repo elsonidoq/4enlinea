@@ -7356,6 +7356,12 @@ Runs 2 and 3 consequently deferred the win to a later turn (*"keep c5r3 … fini
 turn"*), failing A7d; G5 fails on runs 0–1 for the terminal board's threat list. A terminal board has no
 "threats" in the sense the tactics list means — they are already decided.
 
+**Re-measured 2026-08-26: now DETERMINISTIC, 5/5.** The second graded run reproduced it on every run and
+found a second half to the defect: the composed causal frame (L1) calls the game-*ending* move
+*"completes your threat to make four next move"* — future tense for a move that wins on the spot. So
+both the board rendering AND the frame text describe a terminal position as ongoing. A fix has to cover
+the frame, not just the tactics list.
+
 ## OI-204 — the vector-named double threat is appended to the DECISION board, where it is not yet board-true
 
 **Status**: open
@@ -7374,3 +7380,28 @@ opponent cannot hold two unblockable squares there.
 
 Both are G5 failures the grader is instructed to REPORT rather than narrate around, and both are
 model-independent. Cross-refs: OI-195, OI-190.
+
+## OI-205 — `better-col` is offered on every record but can never be REQUIRED, so the one block the model reliably obeys never asks for the better column
+
+**Status**: open
+**Area**: `connect-four/server/scripts/renderReasonModel.mjs` (`deriveRequiredSet`)
+**Discovered**: 2026-08-25 G7 re-measure (flagged independently by the `eval-33` and `eval-47` graders)
+
+`buildAnnotationOffer` offers `better-col` (`colN`) unconditionally on every record. `deriveRequiredSet`
+can never select it: it derives its groups from the two halves' geometry — `halfForkCellsSpec`,
+`denialCell`, `forkPivotCell`, `halfLineSpec` — none of which ever resolves to a `colN` spec. So the
+better column is stated in the Decision block and offered as a handle, but is absent from
+**"# You MUST build the explanation around these"**.
+
+Why that matters: the required block is empirically the instruction the model actually follows (D48's
+measurement: prompt wording moved the axis 0/12, the required-set retry moved it 12/12), and A6 —
+"does the prose name the better column" — is the axis that has drifted every run (84 → 80 → 82). The
+two graders put it the same way: *"better-col is offered but absent from requiredSet"*, alongside runs
+that paraphrase the column as "the central move" instead of naming it.
+
+Fix direction: give `better-col` a slot in the required set. Note FR-005 caps the set at three groups,
+so this trades against a geometry slot — decide deliberately rather than appending a fourth.
+
+**Measure it against the retry, not the raw axis.** Production already re-asks when the column is
+missing (`mentionsBetterColumn`, see OI-183), so the honest question is whether this removes a retry,
+not whether it moves the harness's A6 number — the harness never retries. Cross-refs: OI-183, D48, D49.
