@@ -7405,3 +7405,81 @@ so this trades against a geometry slot — decide deliberately rather than appen
 **Measure it against the retry, not the raw axis.** Production already re-asks when the column is
 missing (`mentionsBetterColumn`, see OI-183), so the honest question is whether this removes a retry,
 not whether it moves the harness's A6 number — the harness never retries. Cross-refs: OI-183, D48, D49.
+
+## OI-206 — a fully-`transformed` object array renders as `[{},{},{},{}]` instead of being dropped
+
+**Status**: open
+**Area**: `connect-four/server/scripts/renderReasonModel.mjs` (`renderedFields`, the `pruneArray` branch)
+**Discovered**: 2026-08-26 prose-conversion re-measure (flagged by the `eval-33` grader, confirmed at source)
+
+`renderedFields` prunes the vector by field disposition. Its **object branch** drops a child that
+prunes to nothing:
+
+```js
+const child = prune(val, path);
+if (Object.keys(child).length) copy[key] = child;
+```
+
+Its **array branch** has no such guard — it assigns unconditionally:
+
+```js
+copy[key] = pruneArray(val, path);
+```
+
+`lostResource.line[]`'s element fields (`ply`, `mover`, `col`, `cell`) are all disposition
+`transformed`, so every element prunes to `{}` and the key survives as an array of empty objects. On
+`eval-33` the vector carries four populated plies and the assembled prompt shows:
+
+```json
+"lostResource": { "line": [ {}, {}, {} , {} ], "completingCell": "c5r6", … }
+```
+
+**Scope**: 13 of the 25 subset records — i.e. **100% of records that have a populated `line[]`**
+(`eval-9, 11, 13, 16, 20, 33, 34, 36, 38, 41, 47, 50, pin-L5-deep-fork`).
+
+**Severity: low, and narrower than it first looks.** `lostResource.line` is disposition `transformed`,
+not `render` — the board is *supposed* to carry it, so no information the contract promised is being
+suppressed. The defect is that the prompt advertises an empty structure where the contract says the key
+should simply be absent, which reads to the model as "there was something here and it is gone". The
+`eval-33` grader reported this as information suppression against `fieldPartition.rendered`; that
+framing is wrong, the observation is right.
+
+**Fix**: mirror the object branch's empty-drop guard in `pruneArray` — drop elements that prune to `{}`
+and omit the key when nothing survives. Guard it with a corpus-wide assertion that no rendered JSON
+contains an empty object literal.
+
+## OI-207 — a causal frame can contradict its own required set ("too far to pin to a single square", then two squares are mandatory)
+
+**Status**: open
+**Area**: `connect-four/server/scripts/reason_engine/causalLinks.mjs` (L5/O1), `connect-four/server/scripts/renderReasonModel.mjs` (`deriveRequiredSet`)
+**Discovered**: 2026-08-26 subset re-measure (`eval-9`, deterministic 5/5)
+
+On `eval-9` the assembled prompt tells the model the win is *"too far to pin to a single square"* while
+the REQUIRED block — the one the prompt calls mandatory — obliges it to name **two** single squares
+(`c6r5` and `c3r5`). Every one of the 5 runs fails the coach-voice axis; the model is obeying one
+instruction by violating the other.
+
+This is the same **class** as OI-199 (a frame inviting what its guardrail forbids) but a different
+template pair, and neither issue's fix would catch the other. The durable fix is a single
+consistency check asserted corpus-wide: **no frame text may deny the locatability of a cell that the
+record's own required set obliges the model to name.**
+
+Owned by Epic 12 task 3.11 (`docs/epics/deep-reveal-remediation-epic.md`). Cross-refs: OI-199, OI-205.
+
+## OI-208 — an `unclosed_tag` annotation repair silently rebinds a highlight to the wrong phrase
+
+**Status**: open
+**Area**: `connect-four/server/reasonRenderGuard.mjs` / `annotationGate.js` (the `annotationRepairs` path)
+**Discovered**: 2026-08-26 subset re-measure (`eval-33` run 3)
+
+When the model emits an unbalanced zone tag, the repair path closes it — but where it closes it is not
+checked against meaning. On `eval-33` run 3, `annotationRepairs = ['unclosed_tag:zone:played-col']`
+moved the `c5r6` highlight onto the phrase *"rather than play your chosen column"*, so the player is
+shown a square highlighted under text that does not describe it. The run also never named the better
+column, and the grading rubric treats a non-empty `annotationRepairs` as an automatic G7 failure.
+
+Measured incidence: **3 of 125 runs** on the 2026-08-26 subset carry a non-empty `annotationRepairs`.
+
+A repair that cannot be shown to preserve the handle→phrase binding should drop the span (the existing
+`stripFailingZoneSpans` behaviour) rather than emit a mis-anchored highlight — silently rebinding is
+the one outcome worse than losing the highlight. Cross-refs: OI-189, OI-140.

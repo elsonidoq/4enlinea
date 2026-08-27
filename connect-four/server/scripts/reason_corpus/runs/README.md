@@ -76,6 +76,7 @@ the **same rubric version**. The frozen rubric is `GRADER_INSTRUCTIONS_v1.md` in
 | `fv_suff_answers_boards_subset_2026-08-23T15-16-19Z` | **v1** |
 | `fv_suff_answers_boards_subset_2026-08-25T15-57-08Z` | **v1** |
 | `fv_suff_answers_boards_subset_2026-08-25T20-16-50Z` | **v1** |
+| `fv_suff_answers_boards_subset_2026-08-26T15-47-56Z` | **v1** (rubric file), but see the dispatch-wrapper caveat in the 08-26 section |
 
 Mechanical axes (A1, A2, A6, G7a/G7b membership) come from `grade_mechanical.mjs` and ARE comparable
 across all runs — that script did not change.
@@ -155,3 +156,130 @@ Fixed after this run (plain-English caption + an explicit "never name a board" r
 
 Cases fully passing 3/25 → 2/25; triage 16 `prompt_confusion`, 7 `render_bug`, **0 `vector_error`,
 0 `missing_info`**.
+
+
+## Prose-conversion + caption-fix re-measure, 2026-08-26
+
+`fv_suff_answers_boards_subset_2026-08-26T15-47-56Z` — condition D, `gpt-5.4-mini`, n=5, frozen
+25-board subset, 125/125 answers, 0 call/parse errors, `model` read back and verified. Measures commit
+`f6282be`, i.e. `cad8d55` (the A5 caption fix) + `086b8ea` (L1/L2/L4/L8 name the better column as
+prose). Graded with **v1**, 25 independently dispatched per-case agents, one private grade file each,
+concatenated by exact expected filenames into `<stem>_grades.jsonl`.
+
+| axis | 08-23 | 08-25a (D49) | 08-25b (D50) | **08-26** |
+|---|---|---|---|---|
+| A3 | 98 | 100 | 100 | 100 |
+| A4 | 81 | 78 | 80 | 70 |
+| A5 | 94 | 88 | 76 | **60 — see caveat** |
+| A6 (mech) | 84 | 80 | 82 | **78** |
+| A7 | 81 | 74 | 73 | 66 |
+| G1 | 87 | 97 | 98 | 94 |
+| G2 | 91 | 86 | 96 | 92 |
+| G3 | 100 | 100 | 100 | 100 |
+| G4 | 89 | 80 | 94 | 100 |
+| G5 | 96 | 84 | 80 | 84 |
+| G6 | 100 | 100 | 100 | 100 |
+| G7 | 66 | 85 | 82 | 88 |
+| G7b (mech) | 98 | 98 | 98 | 98 |
+
+Cases fully passing: 0/25; 17 of 25 intermittent. Triage: 12 `render_bug`, 13 `prompt_confusion`,
+**0 `vector_error`, 0 `missing_info`** — as in every prior run. The engine's evidence is still not the
+problem.
+
+### The A5 number is NOT comparable to the rows left of it — it is a grading artifact
+
+The caption fix worked, measured deterministically: render/board-label leak **0/125** (was 2/125 in
+08-25b under this regex; the D50 write-up's 10/125 used a broader one). The banned caption phrase is
+gone.
+
+**CORRECTED 2026-08-26 (second correction — the first one was also measured at the wrong layer).** An
+earlier version of this section reported raw-`cNrM` incidence as "flat: 123 → 121 → 120" and concluded
+that graders charged OI-194 *inconsistently within a run*. Both were artifacts of regexing the WHOLE
+raw string, `[zone:c6r2]` **tags included** — while A5's own rubric (`GRADER_INSTRUCTIONS_v1.md:116`)
+orders markup stripped before grading. Measured on prose only, with tags dropped:
+
+| run | prose `cNrM` incidence | of those, graders charged A5 | A5 fail rate | A5 |
+|---|---|---|---|---|
+| 08-25a | 109/125 | 15 (**14%**) | 15/125 | 88 |
+| 08-25b | 89/125 | 25 (**28%**) | 30/125 | 76 |
+| **08-26** | **62/125** | 49 (**79%**) | 50/125 | 60 |
+
+Two things follow, and they replace the earlier claims:
+
+1. **The defect roughly halved; it was never flat.** `086b8ea` (the prose conversion) cut prose-level
+   raw-cell leakage 89 → 62. The code improved on this axis.
+2. **Graders were largely CONSISTENT within each run** — at the prose layer, 49 of 50 A5 failures carry
+   a prose `cNrM` and only 13 of 75 passes do. What actually moved is the **charge rate across runs**:
+   14% → 28% → **79%**. A5 fell while the defect halved, which is only possible if the instrument
+   changed.
+
+**The instrument conclusion therefore survives, via a different mechanism than first stated.** The
+surviving explanation is dispatch-wrapper priming: this run's dispatch message listed the known-open
+issues including "OI-194 (raw cNrM notation)". Note also that
+**`GRADER_INSTRUCTIONS_v1.md` contains zero mentions of `cNrM`, coordinates, or notation** — so "the
+rubric charges raw cells" was never true either; graders imported that charge from outside the frozen
+file. A v2 must **add** an explicit "grade the post-guard prose" rule rather than narrow an existing one.
+
+**OI-194's player-facing severity is low but NOT zero.** Post-guard, raw `cNrM` reaching player-visible
+prose is 0/125 — but the guard reaches zero partly by destroying highlights: 5 of 125 runs lose exactly
+one `[zone:…]` span each to `P6:raw_coordinate` (5 of 340 spans). That measured cost, not a coordinate
+leak, is the correct justification for fixing OI-194.
+
+### What the prose conversion did to A6: nothing — and the first explanation here was WRONG
+
+A6 went 84 → 80 → 82 → **78**: flat inside the established noise band, with no internal control left
+(§12f — the control group is spent).
+
+**CORRECTION (same session, before this file was ever acted on).** This section first claimed "~70% of
+A6 failures are answers that named the better square as raw `cNrM`, so A6 is capped by OI-194". **That
+is false.** It came from regexing the RAW LLM `mechanism` string. Production's `mentionsBetterColumn`
+runs `stripInternalTokens` FIRST, which itself rewrites `cNrM`/`cN`/`colN` into "column N" — verified:
+`stripInternalTokens('you should have played c2r1 next')` → `'you should have played column 2 next'`.
+An answer naming the better column as `c4r3` therefore already PASSES A6. Measuring at the wrong layer
+manufactured a finding that does not exist.
+
+Decomposed through production's own function, the 27 A6 failures are:
+
+| category | n |
+|---|---|
+| names some OTHER column, not the better one | 12 |
+| names no column at all | 15 |
+| raw `cNrM` standing in for the better column | **0** |
+
+**All 27 fire `mentionsBetterColumn` = false, which is production's own retry trigger.** Per OI-183 the
+harness never retries, so 78% is a floor for this axis in the strictest sense — every single failure
+would have been re-asked in production.
+
+### The raw-`cNrM` figures in this file measure text that never ships
+
+Applying production's guard and dropping `[zone:…]` delimiters — highlight markup, not prose — gives
+**raw `cNrM` reaching player-visible prose: 0 / 125**, reproduced through `guardExplainMoveLlmPayload`
+with a real `board` + `allowedSet` (`reasonRenderGuard.mjs:418`, called from `index.js:1470`).
+Production defends it three deep: `humanizeGroundedCoordinates` → `promoteRawCoordinates` →
+`stripInternalTokens`.
+
+**The eval grades the PRE-guard string, so A5/A7b/G7 are not measuring shipped behaviour.** That is the
+instrument defect. See the corrected table above for what the graders actually did with it.
+
+### Deterministic failures (8 of 25, all `render_bug`)
+
+`eval-9`, `eval-21`, `eval-32`, `eval-37`, `eval-41`, `eval-47`, `eval-50`, `pin-L2-enabled-opponent`.
+Already-filed reproductions: OI-194 (dominant), OI-202, OI-203 (`eval-41`, 5/5), OI-204 (`eval-50`,
+`pin-L2`). `eval-21` and `eval-11` independently hit the same L7/opening centrality contradiction — the
+frame invites a centrality explanation while the guardrail forbids one.
+
+New this run: **OI-206** (below).
+
+### Grader claims checked at source
+
+- `eval-33`: "`lostResource.line` renders as four empty objects" — **TRUE**, and now filed as OI-206.
+  Its attached reasoning was wrong, though: the field's disposition is `transformed`, not `render`, so
+  nothing was *suppressed* that was meant to be shown. Right observation, wrong framing.
+- `eval-47`: "`you-immediate-3`'s role is `you-immediate`'s minus its disambiguator" — **textually true,
+  not a defect.** D49 scopes disambiguation to a shared `(role, truthBoard)` pair; `you-immediate-3` is
+  on `afterPlayed` with no same-role sibling there, so it is left byte-identical *by design*, and the
+  prompt prints the board alongside. This is the fourth grader report this week whose secondary claim
+  contradicted a committed change; checking at source is what separated it from OI-206.
+- `eval-47` secondary that DOES hold: `you-double`'s role reads "the single fork square" while its spec
+  is a 3-cell set (`windows:c3r6,c6r5,c7r2`) — a role/spec arity mismatch. Also cosmetic: several roles
+  read "you's four-in-a-row line".

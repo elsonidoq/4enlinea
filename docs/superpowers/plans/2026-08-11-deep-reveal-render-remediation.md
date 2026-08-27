@@ -96,6 +96,21 @@ Full analysis: `connect-four/server/scripts/reason_corpus/runs/fv_suff_answers_b
    control group is now SPENT: no untreated parenthetical templates remain, so a future A6 comparison
    has no internal control and must be made against the recorded runs. `test:fast` 1999 / 0.
 5. **Task 10 Step 4**, the 63-board sweep — after 3 and 4, so it measures fixed code.
+   **Gate run 2026-08-26**: the subset re-measure of items 3+4 is DONE — `fv_suff_answers_boards_subset_2026-08-26T15-47-56Z`, 125/125, v1, 25 per-case agents. Result: the
+   caption fix holds (board-label leak 0/125, verified deterministically), the prose conversion moved
+   A6 not at all (84→80→82→**78**, flat inside the noise band). A first reading of "A6 is capped by
+   OI-194" was **WRONG and retracted** — it regexed the raw LLM string, but `mentionsBetterColumn`
+   runs `stripInternalTokens` first, so a `cNrM` naming the better column already passes. Through
+   production's own function the 27 fails are: 12 name some OTHER column, 15 name no column, **0**
+   raw-`cNrM`. All 27 fire production's retry trigger, so 78% is a strict floor (OI-183). Separately,
+   raw `cNrM` reaching player-visible prose is **0/125** once the guard runs — the eval grades the
+   PRE-guard string, which is an instrument defect, not a deep-reveal one. Corrected again after a
+   subagent re-measure: prose-level `cNrM` incidence was NOT flat (109 → 89 → **62**; the prose
+   conversion halved it), and graders were consistent WITHIN each run — what moved is the cross-run
+   charge rate, 14% → 28% → **79%**. Full corrected table in `reason_corpus/runs/README.md`.
+   A4/A5/A7 are NOT comparable this run: the rubric file was v1 but the dispatch wrapper named
+   OI-194 explicitly and plausibly primed graders (all 50 A5 fails have a raw `cNrM`; 70 passing
+   runs have one too). New defect filed: **OI-206**. Sweep still NOT run — awaiting owner go-ahead.
 6. ~~**Enforcement / retry design** — trigger fired, but undesigned.~~ **RESOLVED 2026-08-26 — it was
    already built.** `computeMechanism` (which `index.js` serves from) has carried the whole design
    since spec 058: a required-set post-check (`missingRequiredGroups`), an A6 post-check
