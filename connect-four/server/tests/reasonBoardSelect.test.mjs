@@ -1,7 +1,15 @@
 // connect-four/server/tests/reasonBoardSelect.test.mjs
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+import { dirname, join } from 'node:path';
 import { renderBoardAscii, renderThreatList, selectBoards, boardSelectionDecisions } from '../scripts/reasonBoardSelect.mjs';
+import { toNarratorVector, pruneVector } from '../scripts/reasonNarratorVector.mjs';
+import { checkWin, parseBoardState } from '../classifier.js';
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const CORPUS = join(__dirname, '../scripts/reason_corpus/evidence.jsonl');
 
 test('renderBoardAscii labels You/Opp and states the mapping', () => {
   const ascii = renderBoardAscii('01020', 1);
@@ -36,23 +44,32 @@ test('selectBoards adds a projected-deep board when a half is deep', () => {
   assert.ok(boards.find((b) => b.id === 'projectedDeep'), 'deep resource => projected board present');
 });
 
+// T013 (FR-010, OI-204): the overlay is now gated on the PRODUCTION detector (detectFigure7 /
+// detectDoubleThreat) actually matching on the board being tagged — an empty/fabricated movestring
+// no longer surfaces a pattern that isn't board-true. These three fixtures were rewritten off a real,
+// legally-played movestring (self-play random-legal-move search, not hand-built) where the pattern
+// genuinely exists: '021220441263120' — detectFigure7(board, null, 1) matches, threat cells c4r3/c4r4.
 test('surfaces the vector-named fork pattern on the decision board, owner from the half', () => {
-  const fv = { movestring: '', bestCol: 3, playedCol: 4, player: 2, opponent: 1,
+  const fv = { movestring: '021220441263120', bestCol: 3, playedCol: 4, player: 2, opponent: 1,
     lostResource: { kind: 'denial', completingCell: 'c3r1', window: ['c2r1','c3r1','c4r1','c5r1'] },
     opponentPunishment: { kind: 'realized_pattern', tag: 'figure_7', completingCell: 'c4r3',
-                          window: ['c6r1','c5r2','c4r3','c3r4'] } };
+                          window: ['c4r3','c4r4'] } };
   const decision = selectBoards(fv).find((b) => b.id === 'decision');
   const fig = decision.tags.find((t) => t.kind === 'figure_7');
   assert.ok(fig, 'figure_7 tag present on decision board');
   assert.equal(fig.cell, 'c4r3');
   assert.equal(fig.owner, 'opp');                 // pattern on opponentPunishment => opponent's
-  assert.deepEqual(fig.window, ['c6r1','c5r2','c4r3','c3r4']);
+  assert.deepEqual(fig.window, ['c4r3','c4r4']);
 });
 
+// '21444411562322311656615' — the D16 Case-A fork board (reasonEngine.test.mjs, sourced from
+// computeReason('214444115623', 4).lostResource.finalMovestring). detectDoubleThreat(board, 1)
+// genuinely matches there (gravity-top majors at c4r3/c6r4), so from player 1's own perspective this
+// is a real 'you' double_threat overlay.
 test('a named pattern on lostResource is owned by you (missed_own)', () => {
-  const fv = { movestring: '', bestCol: 1, playedCol: 4, player: 1, opponent: 2,
-    lostResource: { kind: 'realized_pattern', tag: 'double_threat', completingCell: 'c2r1',
-                    window: ['c2r1','c3r1','c4r1','c5r1'] },
+  const fv = { movestring: '21444411562322311656615', bestCol: 0, playedCol: 2, player: 1, opponent: 2,
+    lostResource: { kind: 'realized_pattern', tag: 'double_threat', completingCell: 'c4r3',
+                    window: ['c4r3','c6r4'] },
     opponentPunishment: { kind: 'denial', completingCell: 'c3r1' } };
   const dbl = selectBoards(fv).find((b) => b.id === 'decision').tags.find((t) => t.kind === 'double_threat');
   assert.ok(dbl);
@@ -60,12 +77,14 @@ test('a named pattern on lostResource is owned by you (missed_own)', () => {
 });
 
 test('the named pattern does not corrupt Option-A board selection (baseline is structural)', () => {
-  // Empty decision board: no structural tactics; best/played add none either. Even though the
-  // decision board DISPLAYS a figure_7 overlay, afterBest must still be omitted because its
-  // structural tag-set matches the decision's structural tag-set.
-  const fv = { movestring: '', bestCol: 3, playedCol: 4, player: 2, opponent: 1,
+  // '021220441263120' carries a real figure_7 overlay on the decision board (opponent's, verified
+  // above), but Option-A selection compares STRUCTURAL tag sets only (tagBoard without opts) — col 0
+  // adds no new major/immediate/double structural tag there (verified: tagKey(afterBest) equals
+  // tagKey(decision)), so afterBest must still be omitted even though the decision board DISPLAYS
+  // the overlay.
+  const fv = { movestring: '021220441263120', bestCol: 0, playedCol: 4, player: 2, opponent: 1,
     opponentPunishment: { kind: 'realized_pattern', tag: 'figure_7', completingCell: 'c4r3',
-                          window: ['c6r1','c5r2','c4r3','c3r4'] } };
+                          window: ['c4r3','c4r4'] } };
   const boards = selectBoards(fv);
   assert.ok(boards.find((b) => b.id === 'decision').tags.some((t) => t.kind === 'figure_7'));
   assert.ok(!boards.find((b) => b.id === 'afterBest'), 'afterBest still omitted (structural unchanged)');
@@ -164,4 +183,46 @@ test('OI-190: no deep half still emits the single unshown placeholder', () => {
   const deep = boardSelectionDecisions(fv).filter((b) => b.id.startsWith('projectedDeep'));
   assert.equal(deep.length, 1);
   assert.equal(deep[0].shown, false);
+});
+
+// ── FR-008 / OI-203 / T012 / T018 — corpus-wide: a terminal afterBest never carries a live threat ──
+//
+// Deterministic, model-free, through the production render function — no LLM call (FR-031). Loads
+// the same 63-record `evidence.jsonl` corpus other US2/US3 tests use, runs each record through
+// toNarratorVector -> pruneVector -> boardSelectionDecisions (the real production path), and
+// independently re-derives terminality via the production `checkWin` — never trusting the `terminal`
+// flag `boardSelectionDecisions` itself sets, so this test cannot pass by construction.
+test('FR-008: a terminal afterBest board never carries a live threat entry (corpus-wide)', () => {
+  const rows = readFileSync(CORPUS, 'utf8').trim().split('\n').map((l) => JSON.parse(l));
+  assert.ok(rows.length >= 25, `expected the full corpus, got ${rows.length}`);
+  let checkedTerminal = 0;
+  const violations = [];
+  for (const row of rows) {
+    if (!row.evidence || row.error) continue;
+    let fv;
+    try { fv = pruneVector(toNarratorVector(row.evidence)); } catch { continue; }
+    if (fv.bestCol == null) continue;
+    const ms0 = fv.movestring ?? '';
+    const { colHeights } = parseBoardState(ms0);
+    const landingRow = colHeights[fv.bestCol];
+    if (landingRow == null || landingRow >= 6) continue; // column full — best move not applicable
+    const { board: afterBoard } = parseBoardState(ms0 + String(fv.bestCol));
+    const isTerminal = checkWin(afterBoard, landingRow, fv.bestCol, fv.player);
+    const boards = boardSelectionDecisions(fv);
+    const afterBest = boards.find((b) => b.id === 'afterBest');
+    if (!afterBest) continue;
+    if (isTerminal) {
+      checkedTerminal += 1;
+      if (afterBest.tags.length !== 0) {
+        violations.push(`${row.id}: terminal afterBest carries ${afterBest.tags.length} tag(s)`);
+      }
+      if (afterBest.terminal !== true) {
+        violations.push(`${row.id}: terminal afterBest not flagged terminal:true`);
+      }
+    } else if (afterBest.terminal === true) {
+      violations.push(`${row.id}: non-terminal afterBest incorrectly flagged terminal:true`);
+    }
+  }
+  assert.ok(checkedTerminal > 0, 'expected at least one corpus record with a terminal afterBest (e.g. eval-41)');
+  assert.deepEqual(violations, [], `FR-008 violations:\n${violations.join('\n')}`);
 });

@@ -63,26 +63,38 @@ definition (a raw `cNrM` counted as a failure); the current definition follows p
 `mentionsBetterColumn`, which moves 15 of its 126 runs from fail to pass. Do not compare its A6 number
 directly against the 2026-08-11 arms.
 
-## Grader rubric versions (added 2026-08-25)
+## Grader rubric versions (added 2026-08-25; dispatch-wrapper column added 2026-08-27, epic 059 T007)
 
 Judgment-axis numbers (A3–A5, A7, G1–G7's judgment half) are only comparable between runs graded with
-the **same rubric version**. The frozen rubric is `GRADER_INSTRUCTIONS_v1.md` in this directory.
+**both the same rubric version AND the same dispatch-wrapper identity** — the "methodology defect
+found the same day" (`docs/epics/deep-reveal-remediation-epic.md`, "The evidence") showed the dispatch
+message wrapping a frozen rubric is itself part of the instrument: the 08-26 run used rubric `v1`
+unchanged but a dispatch message that deviated from the skill's own fixed three-line format (it listed
+open issues by number), and that alone is the best-supported explanation for that run's A5 delta. The
+frozen rubric files are `GRADER_INSTRUCTIONS_v1.md` (superseded for new runs) and
+`GRADER_INSTRUCTIONS_v2.md` (current; adds the per-axis "which string is graded" statement — pre-guard
+`mechanism` vs post-guard `servedExplanation` — spec 059 US1 / T005) in this directory.
 
-| run stem | rubric |
-|---|---|
-| `fv_suff_answers_boards_2026-08-06T16-04-29Z` | skill directly (unversioned) — **not comparable** to v1 |
-| `fv_suff_answers_arm1-baseline-mini-n5_2026-08-11T18-32-47Z` | skill directly (unversioned) — **not comparable** to v1 |
-| `fv_suff_answers_boards_subset_2026-08-21T21-19-32Z` | **v1** |
-| `fv_suff_answers_boards_subset_2026-08-23T15-16-19Z` | **v1** |
-| `fv_suff_answers_boards_subset_2026-08-25T15-57-08Z` | **v1** |
-| `fv_suff_answers_boards_subset_2026-08-25T20-16-50Z` | **v1** |
-| `fv_suff_answers_boards_subset_2026-08-26T15-47-56Z` | **v1** (rubric file), but see the dispatch-wrapper caveat in the 08-26 section |
+| run stem | rubric | dispatch wrapper |
+|---|---|---|
+| `fv_suff_answers_boards_2026-08-06T16-04-29Z` | skill directly (unversioned) — **not comparable** to v1/v2 | pre-freeze, no fixed-three-line dispatch existed yet |
+| `fv_suff_answers_arm1-baseline-mini-n5_2026-08-11T18-32-47Z` | skill directly (unversioned) — **not comparable** to v1/v2 | pre-freeze, no fixed-three-line dispatch existed yet |
+| `fv_suff_answers_boards_subset_2026-08-21T21-19-32Z` | **v1** | legacy: full rubric text regenerated fresh to `<scratchpad>/GRADER_INSTRUCTIONS.md` each run (`SKILL.md`'s pre-T006 step 2) |
+| `fv_suff_answers_boards_subset_2026-08-23T15-16-19Z` | **v1** | legacy: same scratchpad regeneration |
+| `fv_suff_answers_boards_subset_2026-08-25T15-57-08Z` | **v1** | legacy: same scratchpad regeneration |
+| `fv_suff_answers_boards_subset_2026-08-25T20-16-50Z` | **v1** | legacy: same scratchpad regeneration |
+| `fv_suff_answers_boards_subset_2026-08-26T15-47-56Z` | **v1** (rubric file) | **deviated** from the skill's own fixed three-line dispatch — the dispatch message additionally listed known-open issues by number (including "OI-194 (raw cNrM notation)"); see the dispatch-wrapper-priming analysis in the 08-26 section below. This is the confounder T006/AC 4 exist to eliminate. |
+| *(any run graded after 2026-08-27, epic 059 T006 lands)* | **v2** (must be) | mandatory checked-in three-line dispatch pointing at `GRADER_INSTRUCTIONS_v2.md`, no out-of-rubric context (spec 059 T006/T006a) — no run graded with this dispatch wrapper exists yet as of this entry |
 
 Mechanical axes (A1, A2, A6, G7a/G7b membership) come from `grade_mechanical.mjs` and ARE comparable
 across all runs — that script did not change.
 
-**Record the rubric version here for every future run.** To change the rubric, add a `_v2.md`; never
-edit a frozen version in place.
+**Record the rubric version AND the dispatch-wrapper identity here for every future run.** To change
+the rubric, add a `_v2.md` (or higher); never edit a frozen version in place. As of epic 059 T006,
+`GRADER_INSTRUCTIONS_v2.md` is the skill's sole rubric source (`.claude/skills/grade-fv-sufficiency/
+SKILL.md`'s dispatch step no longer regenerates rubric text into a scratchpad copy) — so "dispatch
+wrapper" for any future run should normally just be "mandatory checked-in dispatch" unless someone
+deviates from the skill again, which is exactly the failure mode this column exists to catch.
 
 
 ## G7 render-fix re-measure, 2026-08-25

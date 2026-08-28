@@ -36,6 +36,8 @@ import { buildReasonRenderModel, assembleGroundedPrompt, buildRenderDecision } f
 import { processAnnotations } from './reason_engine/zoneAnnotations.mjs';
 import { loadEnv } from './reason_engine/lib/boardUtils.mjs';
 import { callOpenAIChat } from '../llmChat.js';
+import { Board } from '../classifier.js';
+import { guardExplainMoveLlmPayload, toAllowedSet } from '../reasonRenderGuard.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -311,6 +313,77 @@ export function postprocessAnswer(answer, render_decision) {
   return { answer, repairs, usedSpecs };
 }
 
+// FR-001/FR-002 (spec 059/Epic 12, US1, tasks 1.1/1.2): compute the string production would
+// ACTUALLY serve, by running the (already annotation-processed) mechanism through the real
+// production render guard — never a reimplementation of its logic. `mechanism` here is the
+// post-`processAnnotations` mechanism (`postprocessAnswer`'s output), matching what
+// `mechanismExplainer.mjs`/`index.js` pass into `guardExplainMoveLlmPayload` in production. Returns
+// null/null when there is no post-move board to construct (condition A/B/C, or a null render_decision
+// / empty movestring) — nothing to guard against.
+//
+// Q1 PROVISIONAL: both mechanism and servedExplanation stored; see spec.md Q1
+export function computeServedExplanation(mechanism, render_decision, movestring) {
+  if (typeof mechanism !== 'string' || !render_decision?.zones || !movestring) {
+    return { servedExplanation: null, guardDiagnostics: null };
+  }
+  let board;
+  try {
+    board = new Board(movestring);
+  } catch {
+    return { servedExplanation: null, guardDiagnostics: null };
+  }
+  const allowedSet = toAllowedSet(render_decision.zones.aliases);
+  const { explanation, diagnostics } = guardExplainMoveLlmPayload({
+    explanation: mechanism,
+    prompt: '',
+    terms: {},
+    board,
+    allowedSet,
+    diagnostics: true,
+  });
+  return { servedExplanation: explanation, guardDiagnostics: diagnostics };
+}
+
+// FR-007 (epic task 1.6): code -> open-issue attribution for every guard-action failure code
+// `guardDiagnostics.failures` can surface. This names WHICH issue a given code's loss belongs to;
+// it does not fix any of them (OI-140/OI-170/OI-172/OI-208 stay `open`, narrowed-not-closed — see
+// docs/open_issues.md, updated by a later batch). A code not present in this table is presumed to
+// belong to the general OI-194 (raw-coordinate) bucket unless/until a future failure code demonstrates
+// otherwise.
+//
+// Prefix match: `validateAnnotation`'s failure strings are `"<code>:<detail>:<spec>"` — attribution
+// keys on the leading `<code>` (and, for P5strong, the specific sub-reason after the first colon,
+// since P5strong carries two independently-attributed failure shapes).
+export const GUARD_FAILURE_CODE_TO_OI = {
+  // P6 runs before token-stripping in the pipeline ordering (annotationGate.js), so a P6 rejection
+  // can fire on text that later stripping would have made valid — an ordering defect, not a
+  // grounding defect.
+  P6: 'OI-140',
+  // checkP5Strong's admission is whole-window-only: a `P5strong:cell_not_allowed` rejection fires
+  // when a cell-shaped reference isn't offered as its own alias, even though the containing window
+  // is offered.
+  'P5strong:cell_not_allowed': 'OI-172',
+  // A `P5strong:tg` rejection's span is never stripped by `stripFailingZoneSpans` (SPAN_CARRYING_CODES
+  // includes 'P5strong' generically, but the `tg` sub-case's span shape is not matched by the spec
+  // extracted from the failure string), so the annotation nominally "fails" but its span survives.
+  'P5strong:tg': 'OI-170',
+  // `unclosed_tag` repair (processAnnotations, pre-guard) runs before the guard sees the text; its
+  // placement can leave a residual guard-visible artifact for the guard to react to.
+  unclosed_tag: 'OI-208',
+};
+
+// Returns the OI this failure code is attributed to, or null if it falls into the general
+// (unattributed / OI-194-adjacent) bucket. Matches on the longest known key first (e.g.
+// "P5strong:cell_not_allowed" before the bare "P5strong" code, since P5strong has no bare-code entry
+// here — every P5strong failure this table has observed carries a sub-reason).
+export function attributeGuardFailureCode(failure) {
+  const [code, detail] = failure.split(':');
+  const withDetail = detail ? `${code}:${detail}` : null;
+  if (withDetail && GUARD_FAILURE_CODE_TO_OI[withDetail]) return GUARD_FAILURE_CODE_TO_OI[withDetail];
+  if (GUARD_FAILURE_CODE_TO_OI[code]) return GUARD_FAILURE_CODE_TO_OI[code];
+  return null;
+}
+
 async function runLlm(evidenceRows) {
   if (!process.env.OPENAI_API_KEY) throw new Error('OPENAI_API_KEY not set in environment');
   if (!model) throw new Error('EXPLAIN_MODEL not set (and no --model given)');
@@ -383,6 +456,12 @@ async function runLlm(evidenceRows) {
         }
         const { answer: postAnswer, repairs: annotationRepairs } = postprocessAnswer(answer, render_decision);
         answer = postAnswer;
+        // FR-001/FR-002: the served string production would actually show, plus the guard's own
+        // diagnostics — computed via the REAL guardExplainMoveLlmPayload, never a reimplementation.
+        // Q1 PROVISIONAL: both mechanism (pre-guard, above) and servedExplanation stored; see spec.md Q1
+        const { servedExplanation, guardDiagnostics } = computeServedExplanation(
+          answer?.mechanism, render_decision, nv.movestring,
+        );
         const line = {
           id: row.id,
           pattern_category: row.evidence.case,
@@ -396,6 +475,8 @@ async function runLlm(evidenceRows) {
           call_error,
           render_decision,
           annotationRepairs,
+          servedExplanation,
+          guardDiagnostics,
         };
         appendFileSync(answersOut, JSON.stringify(line) + '\n');
         if (call_error || parse_error) {

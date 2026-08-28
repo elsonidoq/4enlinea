@@ -30,12 +30,28 @@ each eval record's `feature_vector`.
 
 ## Core principle: the feature vector + glossary are the artifact under test, not the model
 
-The model is a strong model (`gpt-5.4`) running a **floor test**: if even it cannot make a case
-crystal-clear from the vector, the deficiency is a **context blindspot** — a missing or ambiguous
-**feature field** or a **glossary ambiguity** — not a capability gap. So when an explanation fails
-A3/A4, do not stop at "the model was wrong." Trace the failure to *what the vector did not carry or
-the glossary did not disambiguate*. That attribution is the deliverable: the **counterexample
-list** drives the next vector/glossary improvement. The pass-rate number is secondary.
+When an explanation fails A3/A4, do not stop at "the model was wrong." Trace the failure to *what the
+vector did not carry or the glossary did not disambiguate*. That attribution is the deliverable: the
+**counterexample list** drives the next vector/glossary improvement. The pass-rate number is secondary.
+
+**But whether "not a capability gap" is a licensed conclusion depends on WHICH MODEL produced the
+answers — read the `model` field off the answers rows before you assume it.** Two regimes:
+
+- **Floor test** — a model STRONGER than production (e.g. `gpt-5.4` when production ships
+  `gpt-5.4-mini`). Here the premise holds: if even it cannot make the case crystal-clear from the
+  vector, the deficiency is a **context blindspot** — a missing or ambiguous **feature field** or a
+  **glossary ambiguity** — and `prompt_confusion` genuinely means the prompt/render is at fault.
+- **Production-fidelity run** — the SAME model production ships. Here `prompt_confusion` is
+  **ambiguous between prompt design and model capability**, and this rubric cannot separate them.
+  Say so explicitly in the report's triage section rather than reporting the bucket as if it were a
+  prompt defect. (Measured 2026-08-06: an entire 126-run corpus was graded under the floor-test
+  premise while every row read `"model": "gpt-5.4-mini"` — the production model. The premise was
+  simply false for that run, and the `prompt_confusion` count was over-claimed as a result.)
+
+What is model-INDEPENDENT, and therefore safe to conclude in either regime: a defect that makes
+compliance impossible for any model — a cell or line that is **absent from the assembled prompt**, a
+board-false rendered region, a handle that was never offered. Prefer these attributions; they survive
+a change of model.
 
 ## Core principle: an honest "couldn't tell" is a feature-gap signal, not a fabrication
 
@@ -87,7 +103,7 @@ Two files, joined by `id`:
 
 1. **Answers jsonl** (the argument): one line per `(id, run_index, condition)`. Shape:
    ```json
-   { "id":"wd-0", "run_index":0, "condition":"A", "model":"gpt-5.4",
+   { "id":"wd-0", "run_index":0, "condition":"A", "model":"<read this — it decides the floor-test premise>",
      "pattern_category":"win_to_draw",
      "answer": { "better_move":2, "played_outcome":"draw", "best_outcome":"win",
                  "mechanism":"…", "key_cells":["c1r1",…], "fields_relied_on":["case","lostResource.tacticTag",…],
@@ -155,7 +171,8 @@ playedCol`); each returns the opponent's scores after the move, so your outcome 
 legal opponent score)` (>0 win, =0 draw, <0 loss). For `lose_to_faster_lose` both outcomes are
 `loss`, so A2 only checks the model didn't claim a win/draw.
 
-**Per-run vs per-case.** Score each axis on **every run** in the group. The **case passes iff A1–A7
+**Per-run vs per-case.** Score each judgment axis on every run it is scored on (see the run-sub-sampling
+rule above — A5/A7 on all runs, A3/A4/G2/G4/G5 on 2; A1/A2/A6/G7 come pre-computed for all runs). The **case passes iff A1–A7
 hold on ALL N runs** (spec §5). Intermittent success = **fail** — it exposes latent ambiguity in the
 context. Record which runs failed and how they differed (e.g. run 0 named the fork, run 2 didn't).
 
@@ -242,15 +259,29 @@ player can act on. **A6 grades the `mechanism` prose only** — the same field A
 field production actually serves. `better_move` is a separate JSON key that the answer schema forces
 the model to fill on every run; it is grader-facing, never shown to a player. A1 already covers it.
 
-**How to score.** Strip all `[zone:…]…[/zone:…]` and `[term:…]…[/term:…]` markup from `mechanism`
-first (same preprocessing as A5), then check whether the cleaned prose names the better column in
-player-facing form — `column N` where `N = feature_vector.bestCol + 1` (or the localized equivalent,
-e.g. `columna N`, if the run was generated in another locale).
+**How to score: A6 is decided by `grade_mechanical.mjs`, not by you.** It calls production's own
+`mentionsBetterColumn(attempt, bestCol, locale)` (`server/mechanismExplainer.mjs`), which tests the
+mechanism through the guard's `stripInternalTokens` — **the closest available prediction of the text
+the player is actually served**. Copy its verdict through.
 
-- **Pass:** "the better move was column 6", "you should have dropped in column 4 instead".
-- **Fail:** the column appears only inside a `[zone:…]` handle or as a raw `cNrM` / `colN` token with
-  no column word in the prose; or the prose refers to it only as "the better move" / "the move that
-  preserves…" without ever naming it.
+**The standard is what the PLAYER receives, not what the eval artifact literally contains.** The guard
+rewrites a bare `cNrM` / `colN` in prose into "column N" (locale-aware) before serving, so
+"the blocking square at c6r2" reaches the player as "the blocking square at column 6" and **passes**.
+An earlier revision of this rubric failed that form; re-graded against production's own function it
+moved 15 of 126 runs from fail to pass on the 2026-08-06 corpus, and it collapsed the measured gap
+between the parenthetical "(col N)" and prose "Column N" template forms from 50%→9% to 9%→0%. Grading
+the raw artifact instead of the served text was measurably the wrong standard and drove a plan toward
+rewriting templates that were not broken.
+
+- **Pass:** "the better move was column 6"; "you should have dropped in column 4 instead"; and also
+  "you had to take c4r1" — the guard serves that as "column 4".
+- **Fail:** the column survives ONLY as a `[zone:…]` handle or spec (the guard skips zone delimiters
+  byte-for-byte, so no column word reaches the player); or the prose refers to it only as "the better
+  move" / "the move that preserves…" without ever naming it; or the mechanism is empty
+  (`mentionsBetterColumn` returns `true` there because it is a retry trigger — for grading that is a
+  fail, and `grade_mechanical.mjs` already inverts it).
+- **Whether "the blocking square at column 6" is GOOD coach prose is an A5/A7 question, not A6's.**
+  A6 asks only whether the player is told which column. Do not re-litigate it here.
 - **Fail:** the prose names a *different* column as the better move than `feature_vector.bestCol + 1`.
   (If it names the right one somewhere and a wrong one elsewhere, that is an A6 fail *and* likely an
   A4 fabrication — record both.)
@@ -453,9 +484,36 @@ its `guardrail` text, and what its `covers` list names). Grading a case against 
 meaning is the same error class as an alternate PV — read the actual docs, don't reconstruct the
 taxonomy from memory.
 
-**Consume `render_decision` as GROUND TRUTH; never re-derive it.** Do NOT re-run
+### `render_decision` is the ROUTING record, NOT the prompt — never claim the model "ignored" it
+
+**`render_decision.link.text` is not necessarily in the prompt the model saw.** `assembleGroundedPrompt`
+prints `model.frames.map(f => f.text)` — and on an **opening-phase record** `frames` is `[openingFrame]`
+ONLY, so the L1–L9 `link.text`, and every cell it names, is **absent from the prompt entirely**
+(`renderReasonModel.mjs`, the opening branch of `buildReasonRenderModel` + `assembleGroundedPrompt`).
+`pruneOpeningResidue` additionally strips both halves down to `{register, pliesToEnd}`.
+
+So before writing any finding of the form *"the model ignored / dropped / failed to use X, which
+`render_decision` states verbatim"*, you MUST confirm X is actually in the assembled prompt:
+
+```js
+const { buildReasonRenderModel, assembleGroundedPrompt } =
+  await import('<abs>/connect-four/server/scripts/renderReasonModel.mjs');
+const prompt = assembleGroundedPrompt(buildReasonRenderModel(row.feature_vector));
+prompt.includes('c2r5');            // is the cell you are about to blame even THERE?
+prompt.includes(row.render_decision.link.text);   // false on every opening record
+```
+
+If X is absent from `prompt`, the failure is **`render_bug` / information suppression, never
+`prompt_confusion`** — no model can name what it was not shown. Measured 2026-08-06: 11 of 41
+`prompt_confusion` triages (eval-1, 5, 6, 8, 13, 14, 24, 27, 35, 38, 44) blamed `link.text` the model
+provably never saw; on eval-12 both `prompt.includes(link.text)` and `prompt.includes('c2r5')` are
+`false`. Reading a field off `render_decision` and assuming it reached the model is the same error
+class as trusting the vector to verify itself.
+
+**Consume `render_decision` as GROUND TRUTH for ROUTING; never re-derive it.** Do NOT re-run
 `classifyCausalLink`, recompute branch-invariance, or re-select boards — that reintroduces exactly the
-drift the single catalog was built to prevent. Read `link.id`/`confidence`/`covers`/`guardrail`/`text`,
+drift the single catalog was built to prevent. Its routing decisions are settled; its *text* is a
+claim about the prompt that you verify with the snippet above. Read `link.id`/`confidence`/`covers`/`guardrail`/`text`,
 the `boards` shown/omitted list + reasons, `patternOnAfterBestBoard`, `fieldPartition`,
 `finalMovestring`, and `zones` (the offered `[zone:]`/`[term:]` alias/term set) straight off the record
 and treat them as the pipeline's settled decisions — `zones` is consumed as GROUND TRUTH exactly like
@@ -537,17 +595,120 @@ naming the culprit field and the board/solver finding (e.g. *"Named the win comp
 engine's own `finalMovestring` line never reaches that square — `parityAttribution.completingCell` is junk on a
 move-1 board (`vector_error`)."*). This sentence is surfaced verbatim after grading (see Output).
 
+### Before dispatching: run the deterministic grader
+
+**A1, A2, A6 and G7's offered-set half are decidable by code and MUST NOT be graded by a sub-agent.**
+An LLM judging "does this prose contain `column 4`" is strictly worse than a regex, and A6 is usually
+the headline measurement.
+
+**G7 is only PARTLY mechanical — do not hand the whole check to the script.** Measured on the
+2026-08-06 corpus the script and the agents agreed on 122 of 126 runs; the 4 disagreements were all the
+judgment half. Split it:
+- **Script decides `G7a_offered` / `G7b_offered`** — was every emitted handle/slug in the offered set?
+  Pure membership, decidable.
+- **The agent still decides the rest** — does each handle wrap a phrase whose meaning matches its
+  `role`, is anything over-wrapped, and is `annotationRepairs` non-empty (G7c auto-fail).
+- **G7 overall = pass iff BOTH halves pass.** The agent combines them.
+
+Run this first, from `connect-four/`:
+
+```bash
+node server/scripts/grade_mechanical.mjs <answers.jsonl> [--locale en]
+```
+
+It writes `<answers-stem>_mechanical.json`, keyed `"<id>|<condition>|<run_index>"` →
+`{A1, A2, A6, G7a_offered, G7b_offered, notes}`. It reuses production's own `mentionsBetterColumn`
+(`server/mechanismExplainer.mjs`) for A6, and reads the row's `raw` field for G7 (the stored
+`answer.mechanism` is already post-`processAnnotations`, so unoffered tags have been stripped from it
+and it cannot show a violation).
+
+Paste each case's rows into that case's dispatch prompt (see the template's "Pre-computed mechanical
+axes" block). The sub-agent then grades **only the judgment axes** and copies the mechanical verdicts
+through verbatim into `per_run`. If the file is missing for a case, say so in `notes` and have the
+agent grade all axes rather than silently omitting them.
+
+### Two cost rules — both measured, both non-negotiable
+
+1. **One case per sub-agent. Never batch.** Agent input cost is **superlinear in turns** because the
+   whole conversation is re-sent each turn — measured across 65 agents on the 2026-08-06 run:
+   58k tokens/turn at 10–15 turns, 67k at 15–20, 76k at 20–30, **97k at 30+**. Four separate ~25-turn
+   agents cost ~7.3M; one ~100-turn agent grading the same four cases extrapolates higher AND
+   concentrates the cross-case contamination that per-case isolation exists to prevent.
+2. **Sub-sample runs for the DEFERRED axes only.** Grade **every run** for the axis under measurement
+   (usually A7 — its deterministic-vs-flaky split is the signal, and it needs full resolution), and at
+   most **2 runs** for axes that only need a regression signal (A3, A4, G2, G4, G5 — the ones needing
+   `visualize_board.sh` + solver work). Never sub-sample the axis you are trying to move: it collapses
+   the flakiness resolution the measurement depends on.
+
 ### Scoring via sub-agents
 
 For each `(id, condition)` group, spawn a fresh `general-purpose` sub-agent (it runs in the repo
 root with shell access, so it can use `./visualize_board.sh` and the solver directly, and can read the
-answers/vectors jsonl itself). Process groups **sequentially, one at a time** — there can be many, and
-this is required, not just a suggestion: sub-agents append their grade to a shared `_grades.jsonl`
-file (Step 3 below), and concurrent appends from parallel sub-agents can interleave and corrupt lines.
+answers/vectors jsonl itself).
+
+**Run the groups in PARALLEL, one sub-agent per case, each writing to its OWN file.** A real run is
+50–70 cases; graded one at a time they take hours. Never have two sub-agents append to one shared
+`_grades.jsonl` — concurrent appends interleave and corrupt lines. The fan-out is safe only because
+each sub-agent owns a private output path and YOU concatenate at the end:
+
+1. **Before dispatching**, create a parts directory in your scratchpad:
+   `<scratchpad>/fv-suff-parts/` (`mkdir -p`). Nothing else writes there.
+2. **MANDATORY — do NOT write a fresh rubric to the scratchpad.** The rubric a dispatched sub-agent
+   reads is the checked-in
+   `connect-four/server/scripts/reason_corpus/runs/GRADER_INSTRUCTIONS_v2.md` — full path from the
+   repo root, in full, and nothing else. Never regenerate, paraphrase, excerpt, or copy any part of
+   the axis-definition template that used to live below in this file (the "whole prompt template"
+   this step formerly wrote to `<scratchpad>/GRADER_INSTRUCTIONS.md`) into any scratchpad file or
+   dispatch message — that template is a SUPERSEDED, drifted copy (~452 lines different from the
+   checked-in rubric) and writing it fresh each run is exactly the methodology defect spec 059/epic
+   059 US1 exists to close (a rubric that is not a checked-in, version-frozen file is not comparable
+   across runs). The checked-in file already fills in every `<answers file>`-equivalent detail a
+   grader needs via its own Step 0/Step 0b; nothing needs to be templated in.
+   Every dispatch prompt is **exactly** these three lines, verbatim except for `<id>`, `<condition>`
+   and the output path — no other line, and no additional context (no open-issue lists, no
+   hypotheses, no "known traps", no rationale for why this case was picked, nothing beyond what these
+   three lines say):
+   *"Read `connect-four/server/scripts/reason_corpus/runs/GRADER_INSTRUCTIONS_v2.md` in full and
+   follow it exactly. Your case: id = `<id>`, condition = `<condition>`. Your grade output file:
+   `<scratchpad>/fv-suff-parts/<id>__<condition>.json`."*
+   Carrying anything beyond these three lines primes the sub-agent's judgment axes with material
+   outside the frozen rubric — this is a measured methodology defect (`docs/epics/
+   deep-reveal-remediation-epic.md`, "The evidence" / "A methodology defect found the same day": the
+   2026-08-26 run's dispatch message listed open issues by number, contaminating A4/A5/A7 deltas for
+   that run). This keeps every dispatch small no matter how verbose the rubric or the
+   `render_decision` block is.
+3. **Dispatch in waves up to the harness's concurrent-subagent cap** (currently 20 — you will get a
+   `Concurrent subagent limit reached` error past it; that error means *wait*, not *retry*). Launch a
+   full wave in ONE message with multiple tool calls, then launch one replacement sub-agent per
+   completion notification until every case is dispatched. Do not dispatch the same case twice.
+4. **Each sub-agent writes exactly ONE JSON object** (a single line, `JSON.stringify(obj)`) to its own
+   `<id>__<condition>.json` with the Write tool — it never touches the shared grades file, and never
+   appends to anything.
+5. **After the last sub-agent returns, YOU concatenate.** Read every file in the parts directory,
+   `JSON.parse` each one, and write them as JSONL to
+   `<answers-dir>/<answers-stem>_grades.jsonl` — one line per case, ordered by first appearance of
+   `id` in the answers file (so the file reads in eval order, not `readdir` order). Assert the count
+   equals the number of dispatched groups and that every `(id, condition)` you dispatched is present;
+   a missing or unparseable part gets a `case_pass:false, notes:"sub-agent error"` line written by
+   you, exactly as in the malformed-response rule below. Use a real `node -e` script for this, not a
+   shell `cat` — a part file with a trailing newline or a stray blank line would otherwise produce a
+   malformed JSONL.
+
+If an `<id>` contains characters awkward in a filename, sanitize it for the part path only (e.g.
+`pin-L1-completes-your-tactic` → `pin-L1__D.json`) — the `id` inside the JSON object stays verbatim,
+and that is what the concatenation and the UI join on.
 
 Give the sub-agent ONLY a locator — the file paths, the `id`, and the `condition` — never the record
-contents. The sub-agent locates and reads its own data. This keeps your dispatch prompt small
-regardless of how verbose a condition-D `render_decision` block is. Sub-agent prompt template:
+contents. The sub-agent locates and reads its own data.
+
+**SUPERSEDED — do not dispatch the template below.** The block that follows is the historical
+in-skill rubric text this skill used to write fresh to `<scratchpad>/GRADER_INSTRUCTIONS.md` each run
+(see step 2 above). It is kept here only as a reference for how this skill's own long-form axis
+sections (`:179` A5, `:255` A6, `:298` A7, `:464` G1–G7) relate to the frozen per-case template — it
+has drifted ~452 lines from the checked-in
+`connect-four/server/scripts/reason_corpus/runs/GRADER_INSTRUCTIONS_v2.md` and MUST NOT be used as, or
+folded into, an actual dispatch. The real dispatch is the mandatory three-line message in step 2
+above, pointing at the checked-in `GRADER_INSTRUCTIONS_v2.md`.
 
 ---
 ```
@@ -558,7 +719,35 @@ condition) across N independent runs. You are an AGENT with shell access, run fr
 - answers file: <path to the answers jsonl>
 - vectors file: <path — same as answers file unless --vectors was passed>
 - id: <id>   condition: <condition>
-- grades output file: <answers-dir>/<answers-stem>_grades.jsonl
+- grade output file: <scratchpad>/fv-suff-parts/<id>__<condition>.json — YOURS ALONE. Write exactly
+  one JSON object to it with the Write tool. Do NOT append to any shared file; no other agent reads
+  or writes this path, and the orchestrator concatenates all parts after every case finishes.
+
+## Pre-computed mechanical axes — copy these through, do NOT re-derive
+A1, A2, A6 and G7 were already decided deterministically by `grade_mechanical.mjs` (A6 via
+production's own `mentionsBetterColumn`; `G7a_offered`/`G7b_offered` from the row's `raw` text against
+the offered zone/term sets). Their verdicts for THIS case, one line per run:
+
+<paste this case's rows from <answers-stem>_mechanical.json — "<id>|<condition>|<run_index>":
+{A1,A2,A6,G7a_offered,G7b_offered,notes}>
+
+Copy A1, A2 and A6 verbatim into the matching `per_run` entry. **Do NOT re-check them, do NOT overrule
+them, and do NOT spend a tool call on them** — a regex already decided them more reliably than you can.
+If a run is missing above, grade it yourself and say so in `notes`.
+
+**G7 is a COMBINATION, not a copy.** `G7a_offered`/`G7b_offered` above answer only "was every emitted
+handle/slug in the offered set". You still judge, per run: does each handle wrap a phrase whose meaning
+matches its `role`; is anything over-wrapped; is `annotationRepairs` non-empty (G7c auto-fail).
+Record `G7 = 'pass'` only when the script's membership checks passed AND your judgment checks pass.
+
+You are grading: **A3, A4, A5, A7, G1–G6, and G7's judgment half.**
+
+## Run sub-sampling — spend your tool calls where the signal is
+Grade **A5 and A7 on EVERY run** (A7's deterministic-vs-flaky split is the measurement; sub-sampling
+it destroys the resolution). Grade **A3, A4, G2, G4, G5 on the first 2 runs only** — these need
+`visualize_board.sh` + solver work and are deferred axes where a regression signal suffices. In
+`per_run`, set the ungraded runs' value for those axes to `null` (NOT `'pass'` — a skipped check is not
+a passing one) and note the sub-sampling once in `notes`.
 
 ## Step 0 — load your own record (do this first)
 Read the answers jsonl and collect every line matching this exact `id` and `condition` — these are
@@ -586,9 +775,26 @@ patternOnAfterBestBoard, link:{id,confidence,covers,guardrail,text}, boards:[{id
 resource:{completingCell,registerToHorizon}, fieldPartition:{rendered,covered,excluded},
 finalMovestring, zones:{aliases:[…],terms:[…]} }`. If it's present per-run, confirm it's identical
 across runs for this id (note any divergence in `notes` — that would itself be a bug). Consume every
-field as GROUND TRUTH — do NOT recompute `classifyCausalLink`, branch-invariance, board selection, or
-the offered zone/term set yourself. For G4, use `render_decision.finalMovestring` (not the raw
-feature_vector one) as the line to trace. Omit all condition-D steps below for condition A/B/C.
+field as GROUND TRUTH for ROUTING — do NOT recompute `classifyCausalLink`, branch-invariance, board
+selection, or the offered zone/term set yourself. For G4, use `render_decision.finalMovestring` (not
+the raw feature_vector one) as the line to trace. Omit all condition-D steps below for condition A/B/C.
+
+**Step 0b — build the ACTUAL PROMPT the model saw (condition D, mandatory).** `render_decision` is the
+routing record, NOT the prompt. On an opening-phase record the L1–L9 `link.text` is NOT printed at all
+(only the opening frame is), and `pruneOpeningResidue` strips both halves to `{register, pliesToEnd}`:
+
+```js
+const { buildReasonRenderModel, assembleGroundedPrompt } =
+  await import('/abs/path/connect-four/server/scripts/renderReasonModel.mjs');
+const PROMPT = assembleGroundedPrompt(buildReasonRenderModel(row.feature_vector));
+```
+
+Keep `PROMPT` at hand for the whole grading. Before you write ANY finding of the form "the model
+ignored / dropped X which render_decision states verbatim", check `PROMPT.includes(X)`. If X is not in
+`PROMPT`, the triage is **`render_bug` (information suppression), NEVER `prompt_confusion`** — no
+model can name what it was not shown. Also check the model field: if `row.model` is the SAME model
+production ships, a `prompt_confusion` verdict cannot distinguish prompt design from model capability
+— say so in `failure_summary` rather than asserting a prompt defect.
 
 ## Step 1 — observe the board
 For any board-level claim (A3/A4) you MUST OBSERVE the board, not infer it from the feature vector
@@ -653,14 +859,13 @@ cell BEFORE calling the field wrong. Never ground on an alternate optimal solver
         `causalLinks.mjs` rule / frame). If the render was clean and the model introduced the banned
         terminology or defeatist wording itself → `prompt_confusion`. If no hold-the-line frame exists for
         the board at all → `missing_info`.
-- A6 (ACTIONABLE BETTER MOVE — grade the `mechanism` prose only, markup STRIPPED exactly as for A5):
-      the cleaned prose names the better column as `column N` (or the locale equivalent) where
-      `N = feature_vector.bestCol + 1`. PASS: "the better move was column 6". FAIL: the column appears
-      only inside a `[zone:…]` handle, only as a raw `cNrM`/`colN` token, or only as "the better move"
-      / "the move that preserves…" with no column named. FAIL also if the prose names a DIFFERENT
-      column as the better move (that is usually an A4 fabrication too — record both).
-      Do NOT check `better_move` here — that JSON field is A1's job and is never shown to a player.
-      There is NO honest-abstention exception for A6: the vector always carries `bestCol`.
+- A6 (ACTIONABLE BETTER MOVE): **PRE-COMPUTED — copy it through, do not re-derive.** It was decided by
+      `grade_mechanical.mjs` via production's own `mentionsBetterColumn`, which tests the mechanism
+      through the guard's `stripInternalTokens` — the closest prediction of what the PLAYER is served.
+      A bare `cNrM` in prose PASSES (the guard rewrites it to "column N"); a column surviving only as a
+      `[zone:…]` handle/spec FAILS (the guard skips zone delimiters byte-for-byte). Whether the phrasing
+      is GOOD prose is A5/A7's question, not A6's. If the prose names a DIFFERENT column as the better
+      move, that is an A4 fabrication — record it under A4, not by overriding A6.
       A6 triage: default `prompt_confusion` — `renderDecision` states the better column in the prompt
       verbatim. Only call it `missing_info` if you can show the Decision block was absent or wrong.
 - A7 (UTILITY TO THE BLUNDERER — grade the `mechanism` prose against the board, markup STRIPPED):
@@ -721,8 +926,11 @@ offered zone/term set.
   (`prompt_confusion`) regardless of the above — the model emitted at least one unclosed tag, even
   though the pipeline already bare-stripped it before the player saw it.
 
-Pass rule: the CASE passes iff A1, A2, A3, A4, A5, A6, A7 all hold on ALL runs (condition D: **and** G1–G7 all
-hold on all runs). Any run failing any axis/check → case fails. Note intermittency explicitly.
+Pass rule: the CASE passes iff A1, A2, A3, A4, A5, A6, A7 all hold on every run where they were SCORED
+(condition D: **and** G1–G7). Any scored run failing any axis/check → case fails. A `null` from run
+sub-sampling is "not scored" — it never counts as a pass and never as a fail. Note intermittency
+explicitly, and note in `notes` that the sub-sampled axes saw only 2 runs, so their intermittency is
+measured at lower resolution than A5/A7's.
 
 ## Counterexample attribution (the deliverable)
 If the case fails A3, A4, A5, A6 or A7 (condition D: or any of G1–G7), OR any run has a non-empty
@@ -760,7 +968,7 @@ Pick the DECISIVE cause; mention secondaries in failure_summary. failure_summary
 field (or, for condition D render bugs, the `render_decision` element / `causalLinks.mjs` rule) and
 the board/solver finding.
 
-## Step 3 — write your grade line to the grades file, THEN return a one-liner
+## Step 3 — write your grade file, THEN return a one-liner
 
 Build the full grade object (add the `G1`-`G7` keys inside each `per_run` entry ONLY for condition D;
 omit them for A/B/C):
@@ -784,9 +992,10 @@ omit them for A/B/C):
      render_decision element / causalLinks.mjs rule>", "evidence":"<board finding proving it>" } ]
 }
 
-Append this object as exactly one JSON line to `<grades output file>` (`JSON.stringify(obj) + "\n"`,
-appended — do not overwrite the file, other sub-agents' lines may already be in it). This write MUST
-complete before you return. Only after the write succeeds, return ONLY this one-line JSON to the
+Write this object as exactly one JSON line (`JSON.stringify(obj)`) to `<grade output file>` with the
+Write tool. That path is yours alone — overwrite it freely; never append to it, and never write to
+the shared `_grades.jsonl` (the orchestrator builds that by concatenating all part files). This write
+MUST complete before you return. Only after the write succeeds, return ONLY this one-line JSON to the
 caller — no prose, no fences, no full grade object:
 { "id":"<id>", "condition":"<condition>", "case_pass":true|false, "intermittent":true|false,
   "failure_triage":"vector_error|missing_info|prompt_confusion|render_bug|null",
@@ -795,16 +1004,20 @@ caller — no prose, no fences, no full grade object:
 ---
 
 Collect each sub-agent's one-line summary as it completes — this is just a progress signal, the full
-grade already lives in the grades file. A malformed/no response, or a response whose `id`+`condition`
-line is missing from the grades file → append a `case_pass:false, notes:"sub-agent error"` line to the
-grades file yourself before moving to the next group.
+grade already lives in that case's part file. Each completion also frees a concurrency slot: dispatch
+the next undispatched case immediately. A malformed/no response, or a response whose part file is
+missing or unparseable → write that case's part file yourself with `case_pass:false,
+notes:"sub-agent error"` so the concatenation still yields one line per dispatched group.
 
 ## Output — the structured grades + the report
 
-**1. Structured grades (for the `/admin/fv-suff` "Eval answers" browser).** Each sub-agent already
-appended its own full grade JSON line to `<answers-dir>/<answers-stem>_grades.jsonl` in Step 3 above —
-you do not assemble this file yourself. Before writing the report, read it back in full to confirm one
-line per dispatched `(id, condition)` group (recover any gap per the paragraph above). Each line is
+**1. Structured grades (for the `/admin/fv-suff` "Eval answers" browser).** YOU assemble this file,
+once every sub-agent has returned: read every part file in `<scratchpad>/fv-suff-parts/`,
+`JSON.parse` each, order them by first appearance of `id` in the answers file, and write them as
+JSONL to `<answers-dir>/<answers-stem>_grades.jsonl`. Do it with a `node -e` script, not `cat` — a
+stray blank line or trailing newline in a part would corrupt the JSONL. Confirm the line count equals
+the number of dispatched `(id, condition)` groups and that no dispatched group is missing (recover any
+gap per the paragraph above) BEFORE writing the report. Each line is
 `{ id, condition, n_runs, per_run:[{run_index,A1,A2,A3,A4,A5,A6,A7,A7_failed_subtests,unsure_about}], case_pass, intermittent,
 failure_triage, failure_summary, notes, counterexamples }`. The server (`GET /api/admin/fv-suff`)
 derives this filename from the answers file (`gradesFilenameFor`) and joins it by `id`+`condition`, so
@@ -816,6 +1029,8 @@ the UI shows the axis chips + pass/fail next to each board+vector+answer.
 # Feature-Vector Sufficiency Report — <answers filename>
 
 ## Summary
+- Model: <the `model` field, verbatim> — <"floor test (stronger than production)" | "PRODUCTION-FIDELITY
+  run: `prompt_confusion` cannot be separated from model capability here">
 - Answer rows: N   parse failures: N
 - Cases (id × condition): N   passed (A1–A7 on all runs): N   failed: N
 - Per-axis pass rate (over all gradeable runs): A1 x/y · A2 x/y · A3 x/y · A4 x/y · A5 x/y · A6 x/y · A7 x/y

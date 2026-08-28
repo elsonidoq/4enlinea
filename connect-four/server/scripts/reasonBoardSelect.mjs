@@ -1,6 +1,18 @@
 // Board selection (spec §3e Option A) + clean-board ASCII (You/Opp) + threat-list rendering (spec §7.10 (i)).
-import { parseBoardState } from '../classifier.js';
+import { parseBoardState, checkWin } from '../classifier.js';
 import { tagBoard } from './reasonBoardTags.mjs';
+
+// FR-008 / OI-203. `afterBest` is terminal when the better move itself completes four — checked via
+// the production `checkWin`, never reimplemented. `ms0` is the PRE-move movestring (the decision
+// board); the row is read from its own colHeights so the check is independent of any other board.
+function isTerminalMove(ms0, col, player) {
+  if (col == null) return false;
+  const { colHeights } = parseBoardState(ms0);
+  const row = colHeights[col];
+  if (row == null || row >= 6) return false;
+  const { board: afterBoard } = parseBoardState(ms0 + String(col));
+  return checkWin(afterBoard, row, col, player);
+}
 
 export function renderBoardAscii(movestring, perspectivePlayer) {
   const { board } = parseBoardState(movestring);
@@ -58,16 +70,21 @@ export function boardSelectionDecisions(fv) {
     ? tagBoard(fv.movestring ?? '', you, patternOpts)
     : decisionStructuralTags;
   const out = [{ id: 'decision', shown: true, movestring: fv.movestring ?? '', tags: decisionTags,
-                 ascii: renderBoardAscii(fv.movestring ?? '', you),
+                 terminal: false, ascii: renderBoardAscii(fv.movestring ?? '', you),
                  reason: 'the position under judgment' }];
 
   for (const [id, col, why] of [['afterBest', fv.bestCol, 'the better move'],
                                 ['afterPlayed', fv.playedCol, 'the move you played']]) {
     const ms = applyCol(fv.movestring ?? '', col);
-    const tags = tagBoard(ms, you);
-    const shown = tagKey(tags) !== decisionKey;
-    out.push({ id, shown, movestring: ms, tags, ascii: renderBoardAscii(ms, you),
-               reason: shown ? `${why} — changes the tactical picture`
+    // Q3 PROVISIONAL: keep the board, suppress tags — see spec.md Q3. A terminal `afterBest` has no
+    // live "threats" in the tactics-list sense — the game is already decided there — so its tags are
+    // suppressed rather than the board being dropped (D50-style: engine keeps the board, render mutes it).
+    const terminal = id === 'afterBest' && isTerminalMove(fv.movestring ?? '', col, you);
+    const tags = terminal ? [] : tagBoard(ms, you);
+    const shown = terminal || tagKey(tags) !== decisionKey;
+    out.push({ id, shown, movestring: ms, tags, terminal, ascii: renderBoardAscii(ms, you),
+               reason: terminal ? `${why} — wins outright; the game is over there`
+                             : shown ? `${why} — changes the tactical picture`
                              : `${why} — tag-set identical to the decision board, omitted` });
   }
 

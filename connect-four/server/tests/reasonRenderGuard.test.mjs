@@ -11,8 +11,14 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+import { dirname, join } from 'node:path';
+
 import { stripInternalTokens, sanitizeTermsMap, guardExplainMoveLlmPayload, buildTtsSpeechText, promoteRawCoordinates, humanizeGroundedCoordinates, toAllowedSet } from '../reasonRenderGuard.mjs';
 import { Board } from '../classifier.js';
+
+const __dirname059 = dirname(fileURLToPath(import.meta.url));
 
 // T024 fixture: the REAL served explanation string that reproduced OI-126, harvested from
 // `explanation_cache` (position_hash da31d46690710a996abe5dd37d9bb2b28e115e67918790d59fe1dcc92a68cc31,
@@ -643,5 +649,113 @@ describe('guardExplainMoveLlmPayload — RC-H end to end', () => {
     });
     assert.ok(!out.explanation.includes('[zone:'), `no ungrounded highlight may survive: ${out.explanation}`);
     assert.ok(!/\bc\d+r\d+\b/i.test(visible(out.explanation)), `no raw coordinate may reach the user: ${out.explanation}`);
+  });
+});
+
+// Spec 059 (Deep-Reveal Remediation, Epic 12), US1 / T011, FR-004 / contract:
+// contracts/guard-diagnostics-contract.md. Extends this existing file (per plan.md's Source Code
+// map) rather than creating a new one.
+describe('guardExplainMoveLlmPayload — diagnostics field (T011, FR-004, AC 2a)', () => {
+  const EMPTY_BOARD = new Board('');
+
+  it('(a) diagnostics is ABSENT from the return when the flag is omitted — byte-identical to the pre-epic shape', () => {
+    const out = guardExplainMoveLlmPayload({
+      explanation: 'Watch [zone:col9]that far column[/zone:col9] carefully.',
+      prompt: '',
+      terms: {},
+      board: EMPTY_BOARD,
+    });
+    assert.ok(!('diagnostics' in out), 'diagnostics key must not be present at all when the flag is omitted');
+    assert.deepEqual(Object.keys(out).sort(), ['explanation', 'prompt', 'terms'].sort());
+  });
+
+  it('(a) diagnostics is ABSENT when the flag is explicitly false too', () => {
+    const out = guardExplainMoveLlmPayload({
+      explanation: 'Watch [zone:col9]that far column[/zone:col9] carefully.',
+      prompt: '',
+      terms: {},
+      board: EMPTY_BOARD,
+      diagnostics: false,
+    });
+    assert.ok(!('diagnostics' in out));
+  });
+
+  it('(b) diagnostics.failures/.strippedSpecs are present and correctly populated for a real corpus record known to strip a span', () => {
+    // Harvested, not invented: read the recorded 2026-08-26T15-47-56Z 125-row run (the same fixture
+    // T009's regression test replays) and use the first row that actually loses a `[zone:...]` span
+    // through the real guard — one of the 5 SC-001 span-losing rows.
+    const corpusPath = join(
+      __dirname059,
+      '../scripts/reason_corpus/runs/fv_suff_answers_boards_subset_2026-08-26T15-47-56Z.jsonl',
+    );
+    const rows = readFileSync(corpusPath, 'utf8').trim().split('\n').map((l) => JSON.parse(l));
+    let spanLosingRow = null;
+    let spanLosingOut = null;
+    for (const row of rows) {
+      if (!row.render_decision?.zones || typeof row.answer?.mechanism !== 'string') continue;
+      const board = new Board(row.feature_vector.movestring);
+      const allowedSet = toAllowedSet(row.render_decision.zones.aliases);
+      const out = guardExplainMoveLlmPayload({
+        explanation: row.answer.mechanism,
+        prompt: '',
+        terms: {},
+        board,
+        allowedSet,
+        diagnostics: true,
+      });
+      if (out.diagnostics.strippedSpecs.length > 0) {
+        spanLosingRow = row;
+        spanLosingOut = out;
+        break;
+      }
+    }
+    assert.ok(spanLosingRow, 'expected at least one row in the recorded corpus to lose a zone span');
+    assert.ok(Array.isArray(spanLosingOut.diagnostics.failures) && spanLosingOut.diagnostics.failures.length > 0);
+    assert.ok(Array.isArray(spanLosingOut.diagnostics.strippedSpecs) && spanLosingOut.diagnostics.strippedSpecs.length > 0);
+    // Only the specific stripped spec's own [zone:<spec>] wrapper must be gone — other, unrelated
+    // zone spans in the same explanation (that did NOT fail validation) are expected to survive.
+    for (const spec of spanLosingOut.diagnostics.strippedSpecs) {
+      assert.ok(
+        !spanLosingOut.explanation.includes(`[zone:${spec}]`),
+        `the stripped span [zone:${spec}] must actually be gone from the served explanation`,
+      );
+    }
+  });
+
+  it('(c) no third key (promotedCoordinates, humanizedCoordinates, or anything else) appears in diagnostics', () => {
+    const out = guardExplainMoveLlmPayload({
+      explanation: 'Watch [zone:col9]that far column[/zone:col9] carefully.',
+      prompt: '',
+      terms: {},
+      board: EMPTY_BOARD,
+      diagnostics: true,
+    });
+    assert.deepEqual(Object.keys(out.diagnostics).sort(), ['failures', 'strippedSpecs']);
+  });
+
+  it('(c) no third key appears in diagnostics on a run with NO failures either (valid annotation)', () => {
+    const out = guardExplainMoveLlmPayload({
+      explanation: 'Play [zone:col4]the center column[/zone:col4] to stay strong.',
+      prompt: '',
+      terms: {},
+      board: EMPTY_BOARD,
+      diagnostics: true,
+    });
+    assert.deepEqual(Object.keys(out.diagnostics).sort(), ['failures', 'strippedSpecs']);
+    assert.deepEqual(out.diagnostics, { failures: [], strippedSpecs: [] });
+  });
+
+  it('(d) the live /explain endpoint (index.js) still omits the diagnostics flag at all three guardExplainMoveLlmPayload call sites (static source check)', () => {
+    const indexPath = join(__dirname059, '../index.js');
+    const indexSrc = readFileSync(indexPath, 'utf8');
+    // Every call site of guardExplainMoveLlmPayload(...) up to its matching closing paren must not
+    // mention `diagnostics` — a source-level check (not a live HTTP call) that the production
+    // response shape is unaffected by this contract's opt-in addition.
+    const callSiteRe = /guardExplainMoveLlmPayload\(\s*\{[\s\S]*?\}\s*\)\s*\)?;/g;
+    const callSites = indexSrc.match(callSiteRe) ?? [];
+    assert.ok(callSites.length >= 3, `expected at least 3 guardExplainMoveLlmPayload call sites in index.js, found ${callSites.length}`);
+    for (const site of callSites) {
+      assert.ok(!/\bdiagnostics\s*:/.test(site), `a live index.js call site must not pass the diagnostics flag: ${site}`);
+    }
   });
 });

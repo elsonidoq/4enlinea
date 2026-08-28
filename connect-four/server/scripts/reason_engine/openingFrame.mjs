@@ -2,6 +2,7 @@
 // the opening IS the teachable reason; the deep two halves demote to a horizon tail. No deep-cell grounding.
 import { parseBoardState } from '../../classifier.js';
 import { winProbability, playerFavorsRow } from './winningCellHeatmap.mjs';
+import { denialCell } from './causalLinks.mjs';
 
 export const MUCH_EASIER_RATIO = 2;
 export const EASIER_RATIO = 1.15;
@@ -17,7 +18,10 @@ function landing(movestring, col) {
   if (row0 == null || row0 >= 6) return null;
   return { row0, col0: col };
 }
-const cellStr = (l) => (l ? `c${l.col0 + 1}r${l.row0 + 1}` : null);
+// B2 (same OI-194 class as T022/B1): the opening frame's own centrality clause used to interpolate a
+// raw `cNrM` cell (e.g. "through c4r4 than through c7r1") into prose the reading key forbids the model
+// to echo. Column-only prose, matching causalLinks.mjs's cellColumn/windowColumns treatment.
+const columnPhrase = (l) => (l ? `column ${l.col0 + 1}` : 'that column');
 
 // Compare the mover's winning-cell mass on the better vs played landing cell.
 export function centralityQualitative(fv) {
@@ -40,7 +44,7 @@ function centralityClause(fv, winningFraming) {
   const b = landing(fv.movestring, fv.bestCol);
   const p = landing(fv.movestring, fv.playedCol);
   const adverb = qual === 'much_easier' ? 'much easier' : 'easier';
-  let clause = ` It'll be ${adverb} to build a connected four through ${cellStr(b)} than through ${cellStr(p)}.`;
+  let clause = ` It'll be ${adverb} to build a connected four through ${columnPhrase(b)} than through ${columnPhrase(p)}.`;
   // Parity rider only when the better cell's row favors the mover and the played cell's does not.
   if (playerFavorsRow(fv.player, b.row0) && !playerFavorsRow(fv.player, p.row0)) {
     const rows = fv.player === 1 ? 'odd' : 'even';
@@ -51,14 +55,39 @@ function centralityClause(fv, winningFraming) {
   return clause;
 }
 
+// T034 (FR-025, OI-207): the tail used to assert "too far to pin to a single square"
+// unconditionally — but `deriveRequiredSet` (renderReasonModel.mjs) derives its own required cells
+// from these SAME halves via `denialCell` (`h.cell ?? h.completingCell`), so a half that DOES carry a
+// nameable cell (eval-9's lostResource.completingCell=c6r5, opponentPunishment.cell=c3r5) gets told
+// "too far to pin" while the record's own required block goes on to obligate naming that exact
+// square — the frame denying what its own data (and the block built from it) requires (same class as
+// OI-199: a guardrail/frame inviting or denying what the record itself contradicts). `denialCell` is
+// imported from causalLinks.mjs rather than re-derived, so this stays in lockstep with
+// deriveRequiredSet's own precedence without duplicating it. Only the FALSE DENIAL is dropped, never
+// asserted the opposite way (I0: no overclaim either).
 function horizonTail(fv) {
   const half = fv.case && fv.case.startsWith('win_') ? fv.lostResource : fv.opponentPunishment;
   const battle = half?.register === 'parity' ? 'a parity battle'
     : half?.register === 'forced_sequence' ? 'a deep forced line' : 'a deep line';
-  return ` This one only settles a long way out, through ${battle} — too far to pin to a single square; the lesson is the opening.`;
+  const pinnable = denialCell(half) != null;
+  return pinnable
+    ? ` This one only settles a long way out, through ${battle} — the lesson is the opening.`
+    : ` This one only settles a long way out, through ${battle} — too far to pin to a single square; the lesson is the opening.`;
 }
 
-const nameTag = (oc) => `the ${oc.family}${oc.id ? ` (${oc.id})` : ''}`;
+// FR-023 / OI-189 / T032. Traced from eval-13 (subset re-measure runs 1/3): the O2 lead sentence
+// used to name every opening as `the ${family}` regardless of whether `id` is set. With no `id` to
+// anchor it as a specific book-opening citation (a defense fallback where `id` is null — the "family
+// only" case), the bare "the central-column opening" phrase reads exactly like offerable KB jargon —
+// the model wrapped it in an unoffered `[term:central-column opening]` tag even though `zones.terms`
+// never carries opening-family names (only the four KB-backed slugs: double_threat / figure_7 /
+// immediate_threat / claimeven). This is the causal frame's OWN prose introducing vocabulary outside
+// its own offer set (FR-023) — not a display-path leak (that class is D48/I13, already fixed). O1
+// (namedOpening) always carries an `id`, so its parenthetical book-opening citation already anchors
+// the phrase as specific and does not reproduce this; only the id-less O2 fallback does. Swapping the
+// definite article for an indefinite one when there is no id to anchor it keeps the same information
+// (the family name still prints) while dropping the "the X" proper-noun-shaped signal.
+const nameTag = (oc) => (oc.id ? `the ${oc.family} (${oc.id})` : `a ${oc.family}`);
 
 // Task 9d fix round 1 (spec 058 feedback remediation). The first sentence enumerates the admissible
 // framings for the blunder explanation; on an O3 (centrality-fallback) record there is no book line
@@ -69,7 +98,9 @@ const nameTag = (oc) => `the ${oc.family}${oc.id ? ` (${oc.id})` : ''}`;
 // deep-resource "matters LATER" text) is D46's settled substance and stays BYTE-IDENTICAL across
 // both variants — this fix does not touch it.
 const GUARDRAIL_ADMISSIBLE_FRAMINGS_BOOK_LINE = 'Explain the blunder through the opening — book line, centrality, parity. ';
+const GUARDRAIL_ADMISSIBLE_FRAMINGS_BOOK_LINE_NO_CENTRALITY = 'Explain the blunder through the opening — book line, parity. ';
 const GUARDRAIL_ADMISSIBLE_FRAMINGS_CENTRALITY_ONLY = 'Explain the blunder through the opening — centrality, parity. ';
+const GUARDRAIL_ADMISSIBLE_FRAMINGS_PARITY_ONLY = 'Explain the blunder through the opening — parity. ';
 const GUARDRAIL_DEEP_RESOURCE = 'The deep resource resolves a long way out: when you name its square or line, say plainly that it '
   + 'matters LATER, once the forced sequence reaches it — never describe it as a threat that exists now.';
 
@@ -85,12 +116,31 @@ export function composeOpeningFrame(fv) {
   // non-null, which previously dropped both the clause and its prohibition (eval-21). Composes with
   // the book-line/centrality-only split above: GUARDRAIL_NO_CENTRALITY is appended after whichever
   // admissible-framings sentence applies, unchanged.
-  const mk = (id, kind, lead, clause) => ({
-    id, kind, confidence: 'high', covers: [],
-    guardrail: (kind === 'centrality' ? GUARDRAIL_ADMISSIBLE_FRAMINGS_CENTRALITY_ONLY : GUARDRAIL_ADMISSIBLE_FRAMINGS_BOOK_LINE)
-      + GUARDRAIL_DEEP_RESOURCE + (clause === '' ? GUARDRAIL_NO_CENTRALITY : ''),
-    text: lead + clause + horizonTail(fv),
-  });
+  //
+  // Q5 PROVISIONAL / T029 (FR-020, OI-199): the admissible-framings sentence used to invite
+  // "centrality" unconditionally by `kind`, independent of whether the clause was actually emitted —
+  // so a record with clause==='' (eval-11, eval-21) was told BOTH "explain via centrality" and,
+  // one sentence later, "do not say one column is more central" — the guardrail inviting what it
+  // itself forbids (OI-199's class). Gate the admissible-framings choice on the SAME `clause === ''`
+  // condition GUARDRAIL_NO_CENTRALITY already uses: when the clause is suppressed, drop "centrality"
+  // from the invitation and offer parity alone (still naming "book line" for O1/O2, since that half
+  // of the invitation is untouched by centrality data). The guardrail itself (GUARDRAIL_NO_CENTRALITY,
+  // GUARDRAIL_DEEP_RESOURCE, the eval-21 gate) is UNCHANGED — this only drops the invitation.
+  const mk = (id, kind, lead, clause) => {
+    const centralityOffered = clause !== '';
+    const admissibleFramings = kind === 'centrality'
+      ? (centralityOffered ? GUARDRAIL_ADMISSIBLE_FRAMINGS_CENTRALITY_ONLY : GUARDRAIL_ADMISSIBLE_FRAMINGS_PARITY_ONLY)
+      : (centralityOffered ? GUARDRAIL_ADMISSIBLE_FRAMINGS_BOOK_LINE : GUARDRAIL_ADMISSIBLE_FRAMINGS_BOOK_LINE_NO_CENTRALITY);
+    return {
+      id, kind, confidence: 'high', covers: [],
+      // B3 (same class as OI-199/T029): exposed so renderReasonModel.mjs's OPENING_READING_KEY_*
+      // gating can agree with the guardrail's own admissible-framings choice above, instead of
+      // re-deriving (or worse, hardcoding) whether centrality was actually offered this record.
+      centralityOffered,
+      guardrail: admissibleFramings + GUARDRAIL_DEEP_RESOURCE + (clause === '' ? GUARDRAIL_NO_CENTRALITY : ''),
+      text: lead + clause + horizonTail(fv),
+    };
+  };
 
   if (oc.namedOpening) {
     const o = oc.namedOpening;

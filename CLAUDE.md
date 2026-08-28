@@ -107,6 +107,20 @@ If the user asks you to 'write a prompt' or 'draft a prompt' for use in another 
 ## Answering Questions
 If the user asks a question, answer the question first before editing any files or running any tools.
 
+## Don't let a stated motive rewrite the analysis
+
+Answer the question asked; do not infer *why* it was asked. If the motive matters, ask.
+
+State findings independently of who asked or why. **If a finding changes when only the user's stated
+preference changes, it was never a finding.**
+
+When the user corrects your model of what they want, **reconcile — never silently replace**. Say
+explicitly what survives from the prior analysis and what does not. Announce your own reversals: "this
+contradicts what I recommended earlier; here is what changed." A change in the user's preference is not
+a reason for the *facts* to change. Never open with "you're right".
+
+See memory: `feedback_dont_let_motive_rewrite_analysis.md` for the worked example.
+
 ## Knowledge base — mandatory reads
 
 `docs/knowledge-base/` is the source of truth for Connect Four strategic theory. Each file contains a `formal_predicate`, `worked_examples`, and `false_positives` for one concept — read the relevant entry before acting, not after.

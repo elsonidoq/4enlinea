@@ -209,7 +209,7 @@ args: movestring, rounds
 ```
 
 **Critical:** IMMEDIATE WIN and IMMEDIATE LOSS tiers are determined by **board logic only**, not solver scores. Solver scores have two failure modes at these boundaries:
-1. In forced-win terminal positions, all opponent scores are flat/identical — no signal to distinguish which column is the forced block (see `reference_cat5_forced_block_detection` memory).
+1. In forced-win terminal positions, all opponent scores are flat/identical — no signal to distinguish which column is the forced block (see memory `reference_c4solver` §"Scores at forced-win terminals are flat").
 2. `immediateWinScore(moveCount)` has an off-by-1 for odd `moveCount`.
 
 **Immediate-win columns skip explainSimulate** — c4solver rejects input positions reached through a winning alignment (it returns an error, not scores). These columns receive placeholder outcomes `{ winRate:1, drawRate:0, lossRate:0 }`.
@@ -235,6 +235,22 @@ args: movestring, rounds
 ## Output format         ← zone/term tag syntax; term instruction omitted when no KB terms
 ## Task                  ← 2–3 sentences; pattern-naming conditional on a grounded pattern being present
 ```
+
+**Perspective anchor — why `## Move context` is mandatory, not decorative.** A post-move board is
+rendered *after* the move, so its header reads `Next: <opponent>`. Given no explicit anchor, the LLM
+adopts that label as the subject of its explanation — silently answering about the opponent even when
+the task asks about the mover, because the "Next:" label is the most salient player signal in the
+prompt. **Every prompt that passes a post-move board MUST carry a `## Move context` section that names
+the player who made the move and states that all analysis is from that player's perspective**, e.g.:
+
+```
+## Move context
+**Green** just played **col 3**. The board below shows the position after this move;
+it is now Gray's turn. All pattern data and your explanation must be from **Green's perspective**.
+```
+
+This applies to any coach/explanation prompt that hands a board position to an LLM — not only
+`explain_move`.
 
 **No empty sections (structural invariant):** the final prompt is assembled by `sections.join('\n\n')` in `buildBlunderExplainPrompt`, but first passes a filter that drops any section whose body — everything after its `## Heading` line, ignoring blank lines — is whitespace-only. This is a property of *every* section, not a per-section special case: an informationally-empty section conveys nothing and primes the model to invent content. Sections that render labels but no data (notably `## Threat comparison`, whose sub-labels are non-whitespace) must additionally be set to `undefined` at build time — the whitespace filter cannot catch them. (Added 2026-06-25; the empty `## Threat comparison` was a confirmed fabrication trigger.)
 

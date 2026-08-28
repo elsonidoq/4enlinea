@@ -9,16 +9,16 @@ import { classifyCausalLink } from '../scripts/reason_engine/causalLinks.mjs';
 import { buildReasonRenderModel } from '../scripts/renderReasonModel.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const CORPUS = join(__dirname, '../scripts/fv_suff/reason_evidence_boards_coverage_2026-07-02T11-37-56Z.jsonl');
+const CORPUS = join(__dirname, '../scripts/reason_corpus/evidence.jsonl');
 const rows = readFileSync(CORPUS, 'utf8').trim().split('\n').map((l) => JSON.parse(l));
 const pv = (id) => pruneVector(toNarratorVector(rows.find((r) => r.id === id).evidence));
 
 test('computation: pattern NOT on after-best for genuinely-causal L2 records', () => {
-  for (const id of ['eval-17', 'eval-21']) assert.equal(patternOnAfterBestBoard(pv(id)), false, id);
+  for (const id of ['pin-branch-invariance-false', 'pin-L2-enabled-opponent']) assert.equal(patternOnAfterBestBoard(pv(id)), false, id);
 });
 
 test('computation: pattern IS on after-best for L3 records', () => {
-  for (const id of ['eval-18', 'eval-19', 'eval-20', 'eval-23']) assert.equal(patternOnAfterBestBoard(pv(id)), true, id);
+  for (const id of ['pin-branch-invariance-true-1', 'pin-branch-invariance-true-2', 'pin-branch-invariance-true-3', 'pin-L3-no-causation']) assert.equal(patternOnAfterBestBoard(pv(id)), true, id);
 });
 
 // D30 (supersedes D28 sub-decision 3): patternOnAfterBestBoard is a GEOMETRIC fact and is retired as
@@ -40,12 +40,12 @@ test('routing (D30): lose_to_faster_lose enabled_opponent routes to L3 (both mov
   assert.equal(classifyCausalLink(fv, { patternOnAfterBestBoard: false }).id, 'L3');
 });
 
-test('integration: eval-23 routes to L3 through buildReasonRenderModel', () => {
-  const m = buildReasonRenderModel(toNarratorVector(rows.find((r) => r.id === 'eval-23').evidence));
+test('integration: pin-L3-no-causation routes to L3 through buildReasonRenderModel', () => {
+  const m = buildReasonRenderModel(toNarratorVector(rows.find((r) => r.id === 'pin-L3-no-causation').evidence));
   assert.equal(m.link.id, 'L3');
 });
 
-test('integration: eval-21 routes to L2 (pattern absent on after-best)', () => {
-  const m = buildReasonRenderModel(toNarratorVector(rows.find((r) => r.id === 'eval-21').evidence));
+test('integration: pin-L2-enabled-opponent routes to L2 (pattern absent on after-best)', () => {
+  const m = buildReasonRenderModel(toNarratorVector(rows.find((r) => r.id === 'pin-L2-enabled-opponent').evidence));
   assert.equal(m.link.id, 'L2');
 });

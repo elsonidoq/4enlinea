@@ -7,24 +7,26 @@ import { toNarratorVector } from '../scripts/reasonNarratorVector.mjs';
 import { buildPromptForCondition } from '../scripts/compute.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const CORPUS = join(__dirname, '../scripts/fv_suff/reason_evidence_boards_coverage_2026-07-02T11-37-56Z.jsonl');
+const CORPUS = join(__dirname, '../scripts/reason_corpus/evidence.jsonl');
 const rows = readFileSync(CORPUS, 'utf8').trim().split('\n').map((l) => JSON.parse(l));
 const dPrompt = (id) => buildPromptForCondition('GLOSSARY', toNarratorVector(rows.find((r) => r.id === id).evidence), 'D');
 
-test('eval-3: the deep fork is framed as deep, never as a near-term threat', () => {
-  const p = dPrompt('eval-3');
+test('pin-L5-deep-fork: the deep fork is framed as deep, never as a near-term threat', () => {
+  const p = dPrompt('pin-L5-deep-fork');
   assert.match(p, /causal link L5/);
   // Scope the horizon checks to the composed reason (frame text + guardrail), between the reason
   // heading and the reading key — the generic reading key legitimately quotes both "deep on a forced
   // line" and "not a current threat", so asserting on the whole prompt would be meaningless.
   const reason = p.split('# Why this move was a blunder')[1].split('# Reading key')[0];
   assert.match(reason, /deep on a forced line/);   // the FRAME frames it deep
-  assert.match(reason, /c4r3/);                     // fork completing cell named in the reason
+  // B1 (FR-014/SC-011): fork completing cell (c4r3) now renders as "column N" prose.
+  assert.match(reason, /completing at column 4/);   // fork completing cell named in the reason
+  assert.doesNotMatch(reason, /\bc\d+r\d+\b/);       // no raw coordinate leaks (OI-194)
   assert.doesNotMatch(reason, /immediate threat|current threat|right now/i);
 });
 
-test('eval-23: routes to L3 and forbids the causation claim', () => {
-  const p = dPrompt('eval-23');
+test('pin-L3-no-causation: routes to L3 and forbids the causation claim', () => {
+  const p = dPrompt('pin-L3-no-causation');
   assert.match(p, /causal link L3/);
   assert.match(p, /didn't create it/i);                       // player-facing, hold-the-line
   assert.match(p, /caused or enabled the pattern/i);          // causation forbidden via the guardrail

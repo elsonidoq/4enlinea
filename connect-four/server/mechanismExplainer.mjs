@@ -27,8 +27,9 @@ import {
   postprocessAnswer,
 } from './scripts/compute.mjs';
 import { callOpenAIChat } from './llmChat.js';
-import { stripInternalTokens } from './reasonRenderGuard.mjs';
+import { stripInternalTokens, guardExplainMoveLlmPayload, toAllowedSet } from './reasonRenderGuard.mjs';
 import { serverT } from './locale.mjs';
+import { Board } from './classifier.js';
 
 // ── OpenAI call (thin wrapper around the unified, instrumented helper; spec 047 US5) ─────────
 // Preserves the pre-existing bare-string-content contract for computeMechanism's callers.
@@ -218,7 +219,20 @@ export async function computeMechanism(movestring, col, { solver, model, callLLM
     // the column and then having none left for a missing required square (or vice versa) would just
     // move the regression.
     const requiredSet = renderDecision?.requiredSet ?? [];
-    const missing = missingRequiredGroups(requiredSet, attempt1);
+    // FR-013 / OI-177 / Design Decision 1 (plan.md): `attempt1.usedSpecs` is derived by
+    // `processAnnotations` from the model's `[zone:…]` tags BEFORE the guard runs — a spec can be
+    // "successfully offered-and-resolved" there and still have its span stripped later by
+    // `guardExplainMoveLlmPayload` (served text, index.js) for an unrelated reason (e.g. a raw
+    // coordinate the guard's P6 check rejects). Re-run the guard here, guard-aware, on `attempt1`
+    // BEFORE the existing retry check — this is a NEW, first invocation used only to decide the
+    // retry; the endpoint's own guard call on `finalAttempt.mechanism` (index.js) is unaffected.
+    const board = new Board(movestring);
+    const allowedSet = toAllowedSet(renderDecision?.zones?.aliases ?? []);
+    const { diagnostics } = guardExplainMoveLlmPayload({
+      explanation: attempt1.mechanism, board, allowedSet, diagnostics: true,
+    });
+    const survivedSpecs = (attempt1.usedSpecs ?? []).filter((s) => !diagnostics.strippedSpecs.includes(s));
+    const missing = missingRequiredGroups(requiredSet, { usedSpecs: survivedSpecs });
     // bestCol is 0-indexed on the narrator vector, exactly as on the evidence it came from.
     const bestCol = nv?.bestCol ?? null;
     const missingBetterColPhrase = mentionsBetterColumn(attempt1, bestCol, locale)

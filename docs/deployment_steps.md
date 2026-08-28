@@ -1980,6 +1980,31 @@ of 63 records and removed 17 board-false alias labels); the second board's capti
 changed; and L1/L2/L4/L8 now name the better column as prose rather than "(col N)". Measured on the
 frozen subset: the cell-verification axis moved 80% → 94%. Still one purge, same command below.
 
+**Updated 2026-08-28 — epic 059 (Deep-Reveal Remediation, worktree `worktree-deep-reveal-grounding`,
+spec 059) grows the change set again.** The commit range is not yet known (this epic has not merged),
+so it cannot be named the way the two prior updates named theirs — say so explicitly rather than
+inventing a range. The files changed all change served text: `reasonRenderGuard.mjs`,
+`mechanismExplainer.mjs`, `renderReasonModel.mjs`, `zoneAnnotations.mjs`, `causalLinks.mjs`,
+`openingFrame.mjs`, `reasonBoardSelect.mjs`, `reasonBoardTags.mjs`. Together they: run the required-set
+retry guard-aware so more records get their compliance retry (OI-177); reserve a slot for the better
+column in the required set (OI-187/OI-205, partial by design); keep a terminal `afterBest` board with
+tags suppressed and a game-over sentence instead of stale live-threat tags (OI-203); gate vector-named
+board-tag overlays on the production detectors actually matching the board, corpus-wide (OI-188/OI-204,
+part of OI-195); drop the `replyHistogram` comparative when the data doesn't support it (OI-202); fix
+`roleText` possessive/verb agreement and owner attribution as a class (OI-198/OI-201/OI-184); convert
+every remaining causal-link template to "column N" prose, removing all raw `cNrM` from `link.text`
+(OI-194); replace raw-coordinate sibling disambiguation with a plain-English ordinal locator
+(OI-193/D49 addendum); drop a suppressed opening's centrality invitation from both the guardrail and
+the reading key (OI-199); drop a causal frame's false "too far to pin to a single square" denial when
+the record's own required set names a cell (OI-207); and stop a fully-`transformed` object array from
+rendering as `[{},{},{},{}]` (OI-206). Same mechanism as the two prior updates: the cache key is
+`sha256(movestring:col)` plus locale and contains nothing about the render layer, so none of this is
+invalidated automatically. One purge still clears all of it; nothing here changes the command or the
+verification below. **If this entry was already marked DONE before Epic 12 merged, it must be run
+again** — the same failure precedent already on record on this file (`docs/deployment_steps.md:1826`:
+"Staging's 058 TRUNCATE is already marked DONE 2026-08-04 — i.e. it ran BEFORE this code — so on
+staging it must be run again").
+
 `GET /api/user/blunder/:id/deep-reveal` checks `explanation_cache` **before** any producer runs
 (`server/index.js` ~:1308): the key is `sha256(movestring:col)` plus locale, and a hit returns the
 stored `deep_reveal_json` directly, bypassing `computeMechanism` entirely. **The key contains nothing

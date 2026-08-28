@@ -30,6 +30,27 @@ Note: N differs from run 1 (3 vs 2), so case-pass counts are not directly compar
 run-level axis rates.
 **Created:** 2026-06-26
 
+> **CORRECTION (2026-08-06) — `run_eval.mjs` is DEPRECATED; §1.1 and §3 below are historical.**
+> `server/scripts/run_eval.mjs` was retired 2026-07-01 (its own line 1: *"the old LLM-explanation
+> eval is retired — it is no longer evaluated … Do not build new work on this file"*). It imports
+> `buildExplainContext` + `callLLM` — the retired explain path — and **never** imports
+> `computeMechanism`, so running it measures code that is not shipped. Its default input
+> `eval_set_small.json` does not exist and its `--help` is unimplemented (the flag is ignored and a
+> real run starts). §1's numbered history and §3's `run_eval --no-llm` data-flow describe how this
+> experiment *began*, not how it runs now.
+>
+> **Current apparatus:** boards come from `select_boards.mjs --strategy coverage`; evidence and
+> answers from `compute.mjs` (`--llm --condition D` is the production-faithful condition — it shares
+> `buildPromptForCondition` with production by import, not by resemblance); grading from the
+> `grade-fv-sufficiency` skill. Since 2026-08-06 the single committed board set lives at
+> **`connect-four/server/scripts/reason_corpus/`** (`boards.jsonl` + `evidence.jsonl`); the
+> `fv_suff/` corpora and every historical answers/grade artifact were deleted.
+>
+> **What no harness covers:** `computeMechanism`'s single shared retry (required-set miss and/or
+> unnamed better column). `compute.mjs` calls the model directly, so only attempt-1 behaviour is
+> measurable. `compute.mjs` also passes no `locale` (defaults `'en'`) while production threads it, so
+> Spanish output has no eval coverage. See OI-183.
+
 ## 1. Background / why this exists
 
 The deep-reveal coach explains *why a move was a blunder*. The journey so far:
@@ -179,6 +200,29 @@ the model could not even *read* the vector → a glossary problem). The **substa
 - Diagnostic read-outs: per-axis failure breakdown; A vs B vs C deltas; `fields_relied_on`
   distribution (are the engineered fields actually load-bearing?).
 
+## 7b. Adding a new reason case or evidence field — the eval + grader obligation
+
+Owner requirement (2026-07-04): *"adding cases to the reason engine has to also make `select_boards`
+cover those conditions... and the grader skill must be aware."* A new case, evidence field, or
+predicate in the blunder-reason engine (`computeReason` / `reason_engine/`) is **not complete** when
+the engine emits it. Treat **engine field → `select_boards` predicate → glossary → grader skill** as
+one atomic unit of work in the plan.
+
+1. **Add the predicate derivation case in `select_boards.mjs`** — in the reason-vector
+   predicate-derivation block (near where it does `preds.add('phase_' + r.boardState)`), map the new
+   vector field to a predicate name, and **register that name in `REASON_UNIVERSE`**, partitioned
+   REQUIRED vs PROVISIONAL. The names must round-trip, or the coverage strategy's
+   "emitted-but-unlisted predicate = bug" self-check fires. Skip this and the new case is **never
+   harvested**, so it is never evaluated.
+2. **Update `.claude/skills/grade-fv-sufficiency/SKILL.md` and `feature-vector-glossary.md`** so the
+   grader knows the new field: how to verify its claim against the board, and how to attribute a
+   failure (`vector_error` vs `missing_info`). Skip this and the grader mis-scores the new case —
+   typically by blaming an existing field for the new one's gap.
+
+A reason field that is in neither the coverage universe nor the glossary/grader is invisible to the
+whole eval loop. See `api-conventions.md` §Admin Blunder-Reason Browser Endpoints and memory
+`project_reason_render_layer`.
+
 ## 8. Reuse / do-not-reuse
 
 - **Reuse:** `run_eval --no-llm` (vector generation), the OpenAI call pattern in
@@ -248,3 +292,35 @@ in memory `project_feature_vector_content_traps.md` (null lookahead outcomes on 
 `patternsOpponent` snapshot ambiguity).
 
 **Browser (manual inspection).** `/admin/fv-suff` (`AdminFvSuffPage.jsx`, backed by `GET /api/admin/fv-suff`) is a read-only viewer mirroring `/admin/deep-reveal-eval`: per frozen record it shows the board (played/best/answer `key_cells` overlays), the pruneable feature vector as a collapsible JSON tree, and **one** structured LLM answer at a time, selected by condition + run dropdowns. The answers-file dropdown lists `fv_suff_answers_*.jsonl`. This is for eyeballing, not grading — grading is the skill above.
+
+## 12. WHICH STRING the harness records, and which one each axis grades (2026-08-26)
+
+The single most misread property of this experiment. `answer.mechanism` in an
+`fv_suff_answers_*.jsonl` row exists at three layers, and a count is meaningless without naming one.
+
+| layer | how to obtain it | what it is |
+|---|---|---|
+| **raw** | `answer.mechanism` as stored | post-`processAnnotations` (`compute.mjs`'s `postprocessAnswer`), **pre-guard**; still carries `[zone:…]`/`[term:…]` markup. **This is NOT what a player receives.** |
+| **prose** | raw, minus `/\[\/?(zone\|term):[^\]]*\]/g` | the layer the coach-voice axis actually grades — the rubric orders markup stripped before grading |
+| **served** | raw, through `guardExplainMoveLlmPayload` (`server/reasonRenderGuard.mjs`) with a real `board` + `allowedSet` | what `GET /api/user/blunder/:id/deep-reveal` returns |
+
+**As built, the harness records the RAW layer and the agent-graded judgment axes grade it.** That is a
+known instrument defect, not a design choice: production runs a three-stage guard
+(`humanizeGroundedCoordinates` → `promoteRawCoordinates` → `stripInternalTokens`) over the string
+before serving, so those axes charge text no player ever sees. Measured 2026-08-26 on the 25-board
+subset: raw internal `cNrM` coordinates appear in 120 of 125 raw strings, 62 of 125 at the prose layer,
+and **0 of 125 at the served layer**. Moving the judgment axes to the served string is Epic 12 / US1
+(`docs/epics/deep-reveal-remediation-epic.md`).
+
+**One axis is already post-guard.** `grade_mechanical.mjs`'s A6 imports production's
+`mentionsBetterColumn`, which runs `stripInternalTokens` internally — so an answer naming the better
+column as `c4r3` already passes A6. Do not "fix" A6 for raw-coordinate handling; it is not broken.
+
+**Two related facts that bound how any number here should be read:**
+
+- The harness calls the model **once**; production retries on a missing required handle or an unnamed
+  better column. 48 of 125 runs (38%) would have been retried, so every A6/A7c/G7 figure is a **floor**
+  (OI-183; owner decided 2026-08-26 to leave the harness single-attempt).
+- Judgment-axis numbers are comparable only within a rubric version **and** a frozen dispatch wrapper.
+  Three runs on an identical rubric charged one defect at 14% → 28% → 79% purely because the dispatch
+  message changed. See `reason_corpus/runs/README.md`.

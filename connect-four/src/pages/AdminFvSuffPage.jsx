@@ -407,13 +407,41 @@ function ReasonViewer() {
 //  Data from GET /api/admin/fv-suff?answers=<file>&set=<file> → { set, answers, grades }.
 //  set row = { id, pattern_category, feature_vector }; answer = { id, condition, run_index,
 //  answer:{ better_move, played_outcome, best_outcome, mechanism, key_cells, unsure_about,
-//  confidence } }; grade = { id, condition, per_run:[{A1..A4}], case_pass }.
+//  confidence } }; grade = { id, condition, case_pass, intermittent, failure_triage,
+//  failure_summary, counterexamples:[{axis, field_or_glossary, evidence}],
+//  per_run:[{ A1..A7, A7_failed_subtests, G1..G7 (condition D only), unsure_about }] }.
+//  A5 = coach voice, A6 = names the better column in prose, A7 = utility to the blunderer;
+//  G1..G7 are the condition-D render-decision checks. Axes absent from a row render as '–',
+//  so older grades files written before an axis existed still display.
 // ════════════════════════════════════════════════════════════════════════════════
 
 const OUTCOME_COLOR = { win: '#16a34a', draw: '#a16207', loss: '#dc2626' };
 const AX = (v) => v === 'pass'
   ? <Chip text="✓" bg="#dcfce7" fg="#15803d" />
   : v === 'fail' ? <Chip text="✗" bg="#fee2e2" fg="#b91c1c" /> : <Chip text="–" bg="#f1f5f9" fg="#94a3b8" />;
+
+// The grader's axes (A1-A7) and the condition-D render checks (G1-G7). Rendered from these lists so
+// adding an axis to the rubric is a one-line change here, not a new hand-written JSX chip.
+const A_AXES = ['A1', 'A2', 'A3', 'A4', 'A5', 'A6', 'A7'];
+const G_CHECKS = ['G1', 'G2', 'G3', 'G4', 'G5', 'G6', 'G7'];
+// Fix owner for a failing case, straight off the grader's triage bucket.
+const TRIAGE_COLOR = {
+  vector_error: ['#fee2e2', '#b91c1c'],
+  missing_info: ['#fef3c7', '#92400e'],
+  prompt_confusion: ['#e0e7ff', '#3730a3'],
+  render_bug: ['#fae8ff', '#86198f'],
+};
+
+function AxisRow({ label, keys, perRun }) {
+  // Only render the G row when the row actually carries those keys (condition A/B/C grades omit them).
+  if (!keys.some((k) => perRun[k] != null)) return null;
+  return (
+    <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap', fontFamily: 'monospace', fontSize: 11 }}>
+      <span style={{ color: '#94a3b8', fontWeight: 700 }}>{label}</span>
+      {keys.map((k) => <span key={k} style={{ display: 'inline-flex', alignItems: 'center', gap: 2 }}>{k} {AX(perRun[k])}</span>)}
+    </div>
+  );
+}
 
 function AnswerPanel({ answer, grade, runIdx }) {
   if (!answer) {
@@ -435,11 +463,40 @@ function AnswerPanel({ answer, grade, runIdx }) {
         {answer.parse_error && <Chip text="parse_error" bg="#fee2e2" fg="#b91c1c" />}
       </div>
       {perRun && (
-        <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap', fontFamily: 'monospace', fontSize: 11 }}>
-          <span style={{ color: '#94a3b8', fontWeight: 700 }}>GRADE</span>
-          A1 {AX(perRun.A1)} A2 {AX(perRun.A2)} A3 {AX(perRun.A3)} A4 {AX(perRun.A4)}
-          <Chip text={grade.case_pass ? 'PASS' : 'FAIL'} bg={grade.case_pass ? '#dcfce7' : '#fee2e2'} fg={grade.case_pass ? '#15803d' : '#b91c1c'} />
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+          <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap', fontFamily: 'monospace', fontSize: 11 }}>
+            <span style={{ color: '#94a3b8', fontWeight: 700 }}>GRADE</span>
+            {A_AXES.map((k) => <span key={k} style={{ display: 'inline-flex', alignItems: 'center', gap: 2 }}>{k} {AX(perRun[k])}</span>)}
+            <Chip text={grade.case_pass ? 'PASS' : 'FAIL'} bg={grade.case_pass ? '#dcfce7' : '#fee2e2'} fg={grade.case_pass ? '#15803d' : '#b91c1c'} />
+            {grade.intermittent && <Chip text="intermittent" bg="#fef3c7" fg="#92400e" />}
+          </div>
+          <AxisRow label="RENDER" keys={G_CHECKS} perRun={perRun} />
+          {perRun.A7_failed_subtests?.length > 0 && (
+            <div style={{ fontFamily: 'monospace', fontSize: 11, color: '#b91c1c' }}>
+              A7 failed: {perRun.A7_failed_subtests.join(', ')}
+            </div>
+          )}
         </div>
+      )}
+      {grade?.failure_triage && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 4, padding: '6px 8px', background: '#fff7ed', border: '1px solid #fed7aa', borderRadius: 6 }}>
+          <div><Chip text={grade.failure_triage} bg={(TRIAGE_COLOR[grade.failure_triage] || ['#f1f5f9', '#475569'])[0]} fg={(TRIAGE_COLOR[grade.failure_triage] || ['#f1f5f9', '#475569'])[1]} /></div>
+          {grade.failure_summary && (
+            <div style={{ fontFamily: 'monospace', fontSize: 11, lineHeight: 1.5, color: '#7c2d12' }}>{grade.failure_summary}</div>
+          )}
+        </div>
+      )}
+      {grade?.counterexamples?.length > 0 && (
+        <Field label="counterexamples (axis → the field / render element to fix)">
+          <ul style={{ margin: 0, paddingLeft: 16, fontSize: 11, lineHeight: 1.5 }}>
+            {grade.counterexamples.map((c, i) => (
+              <li key={i}>
+                <b>{c.axis}</b> — <span style={{ color: '#7c3aed' }}>{c.field_or_glossary}</span>
+                {c.evidence && <div style={{ color: '#64748b' }}>{c.evidence}</div>}
+              </li>
+            ))}
+          </ul>
+        </Field>
       )}
       <Field label="mechanism (the LLM's load-bearing reason)">
         <span style={{ fontSize: 12, lineHeight: 1.5, whiteSpace: 'pre-wrap' }}>{a.mechanism}</span>

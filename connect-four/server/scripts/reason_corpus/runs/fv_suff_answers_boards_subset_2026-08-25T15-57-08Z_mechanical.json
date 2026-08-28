@@ -1,0 +1,1002 @@
+{
+ "eval-2|D|0": {
+  "A1": "pass",
+  "A2": "pass",
+  "A6": "pass",
+  "G7a_offered": "pass",
+  "G7b_offered": "pass",
+  "notes": ""
+ },
+ "eval-2|D|1": {
+  "A1": "pass",
+  "A2": "pass",
+  "A6": "pass",
+  "G7a_offered": "pass",
+  "G7b_offered": "pass",
+  "notes": ""
+ },
+ "eval-2|D|2": {
+  "A1": "pass",
+  "A2": "pass",
+  "A6": "pass",
+  "G7a_offered": "pass",
+  "G7b_offered": "pass",
+  "notes": ""
+ },
+ "eval-2|D|3": {
+  "A1": "pass",
+  "A2": "pass",
+  "A6": "pass",
+  "G7a_offered": "pass",
+  "G7b_offered": "pass",
+  "notes": ""
+ },
+ "eval-2|D|4": {
+  "A1": "pass",
+  "A2": "pass",
+  "A6": "pass",
+  "G7a_offered": "pass",
+  "G7b_offered": "pass",
+  "notes": ""
+ },
+ "eval-5|D|0": {
+  "A1": "pass",
+  "A2": "pass",
+  "A6": "fail",
+  "G7a_offered": "pass",
+  "G7b_offered": "pass",
+  "notes": "A6: prose never names column 3"
+ },
+ "eval-5|D|1": {
+  "A1": "pass",
+  "A2": "pass",
+  "A6": "pass",
+  "G7a_offered": "pass",
+  "G7b_offered": "pass",
+  "notes": ""
+ },
+ "eval-5|D|2": {
+  "A1": "pass",
+  "A2": "pass",
+  "A6": "fail",
+  "G7a_offered": "pass",
+  "G7b_offered": "pass",
+  "notes": "A6: prose never names column 3"
+ },
+ "eval-5|D|3": {
+  "A1": "pass",
+  "A2": "pass",
+  "A6": "pass",
+  "G7a_offered": "pass",
+  "G7b_offered": "pass",
+  "notes": ""
+ },
+ "eval-5|D|4": {
+  "A1": "pass",
+  "A2": "pass",
+  "A6": "pass",
+  "G7a_offered": "pass",
+  "G7b_offered": "pass",
+  "notes": ""
+ },
+ "eval-6|D|0": {
+  "A1": "pass",
+  "A2": "pass",
+  "A6": "pass",
+  "G7a_offered": "pass",
+  "G7b_offered": "pass",
+  "notes": ""
+ },
+ "eval-6|D|1": {
+  "A1": "pass",
+  "A2": "pass",
+  "A6": "pass",
+  "G7a_offered": "pass",
+  "G7b_offered": "pass",
+  "notes": ""
+ },
+ "eval-6|D|2": {
+  "A1": "pass",
+  "A2": "pass",
+  "A6": "pass",
+  "G7a_offered": "pass",
+  "G7b_offered": "pass",
+  "notes": ""
+ },
+ "eval-6|D|3": {
+  "A1": "pass",
+  "A2": "pass",
+  "A6": "pass",
+  "G7a_offered": "pass",
+  "G7b_offered": "pass",
+  "notes": ""
+ },
+ "eval-6|D|4": {
+  "A1": "pass",
+  "A2": "pass",
+  "A6": "pass",
+  "G7a_offered": "pass",
+  "G7b_offered": "pass",
+  "notes": ""
+ },
+ "eval-9|D|0": {
+  "A1": "pass",
+  "A2": "pass",
+  "A6": "pass",
+  "G7a_offered": "pass",
+  "G7b_offered": "pass",
+  "notes": ""
+ },
+ "eval-9|D|1": {
+  "A1": "pass",
+  "A2": "pass",
+  "A6": "pass",
+  "G7a_offered": "pass",
+  "G7b_offered": "pass",
+  "notes": ""
+ },
+ "eval-9|D|2": {
+  "A1": "pass",
+  "A2": "pass",
+  "A6": "pass",
+  "G7a_offered": "pass",
+  "G7b_offered": "pass",
+  "notes": ""
+ },
+ "eval-9|D|3": {
+  "A1": "pass",
+  "A2": "pass",
+  "A6": "pass",
+  "G7a_offered": "pass",
+  "G7b_offered": "pass",
+  "notes": ""
+ },
+ "eval-9|D|4": {
+  "A1": "pass",
+  "A2": "pass",
+  "A6": "pass",
+  "G7a_offered": "pass",
+  "G7b_offered": "pass",
+  "notes": ""
+ },
+ "eval-11|D|0": {
+  "A1": "pass",
+  "A2": "pass",
+  "A6": "pass",
+  "G7a_offered": "pass",
+  "G7b_offered": "pass",
+  "notes": ""
+ },
+ "eval-11|D|1": {
+  "A1": "pass",
+  "A2": "pass",
+  "A6": "pass",
+  "G7a_offered": "pass",
+  "G7b_offered": "pass",
+  "notes": ""
+ },
+ "eval-11|D|2": {
+  "A1": "pass",
+  "A2": "pass",
+  "A6": "pass",
+  "G7a_offered": "pass",
+  "G7b_offered": "pass",
+  "notes": ""
+ },
+ "eval-11|D|3": {
+  "A1": "pass",
+  "A2": "pass",
+  "A6": "pass",
+  "G7a_offered": "pass",
+  "G7b_offered": "pass",
+  "notes": ""
+ },
+ "eval-11|D|4": {
+  "A1": "pass",
+  "A2": "pass",
+  "A6": "pass",
+  "G7a_offered": "pass",
+  "G7b_offered": "pass",
+  "notes": ""
+ },
+ "eval-13|D|0": {
+  "A1": "pass",
+  "A2": "pass",
+  "A6": "pass",
+  "G7a_offered": "pass",
+  "G7b_offered": "pass",
+  "notes": ""
+ },
+ "eval-13|D|1": {
+  "A1": "pass",
+  "A2": "pass",
+  "A6": "fail",
+  "G7a_offered": "pass",
+  "G7b_offered": "fail",
+  "notes": "A6: prose never names column 4; G7b: unoffered term slug(s) central-column opening"
+ },
+ "eval-13|D|2": {
+  "A1": "pass",
+  "A2": "pass",
+  "A6": "pass",
+  "G7a_offered": "pass",
+  "G7b_offered": "pass",
+  "notes": ""
+ },
+ "eval-13|D|3": {
+  "A1": "pass",
+  "A2": "pass",
+  "A6": "pass",
+  "G7a_offered": "pass",
+  "G7b_offered": "pass",
+  "notes": ""
+ },
+ "eval-13|D|4": {
+  "A1": "pass",
+  "A2": "pass",
+  "A6": "fail",
+  "G7a_offered": "pass",
+  "G7b_offered": "pass",
+  "notes": "A6: prose never names column 4"
+ },
+ "eval-16|D|0": {
+  "A1": "pass",
+  "A2": "pass",
+  "A6": "fail",
+  "G7a_offered": "pass",
+  "G7b_offered": "pass",
+  "notes": "A6: prose never names column 7"
+ },
+ "eval-16|D|1": {
+  "A1": "pass",
+  "A2": "pass",
+  "A6": "fail",
+  "G7a_offered": "pass",
+  "G7b_offered": "fail",
+  "notes": "A6: prose never names column 7; G7b: unoffered term slug(s) central-column opening"
+ },
+ "eval-16|D|2": {
+  "A1": "pass",
+  "A2": "pass",
+  "A6": "pass",
+  "G7a_offered": "pass",
+  "G7b_offered": "pass",
+  "notes": ""
+ },
+ "eval-16|D|3": {
+  "A1": "pass",
+  "A2": "pass",
+  "A6": "pass",
+  "G7a_offered": "pass",
+  "G7b_offered": "pass",
+  "notes": ""
+ },
+ "eval-16|D|4": {
+  "A1": "pass",
+  "A2": "pass",
+  "A6": "pass",
+  "G7a_offered": "pass",
+  "G7b_offered": "pass",
+  "notes": ""
+ },
+ "eval-20|D|0": {
+  "A1": "pass",
+  "A2": "pass",
+  "A6": "fail",
+  "G7a_offered": "pass",
+  "G7b_offered": "pass",
+  "notes": "A6: prose never names column 6"
+ },
+ "eval-20|D|1": {
+  "A1": "pass",
+  "A2": "pass",
+  "A6": "fail",
+  "G7a_offered": "pass",
+  "G7b_offered": "pass",
+  "notes": "A6: prose never names column 6"
+ },
+ "eval-20|D|2": {
+  "A1": "pass",
+  "A2": "pass",
+  "A6": "pass",
+  "G7a_offered": "pass",
+  "G7b_offered": "pass",
+  "notes": ""
+ },
+ "eval-20|D|3": {
+  "A1": "pass",
+  "A2": "pass",
+  "A6": "fail",
+  "G7a_offered": "pass",
+  "G7b_offered": "pass",
+  "notes": "A6: prose never names column 6"
+ },
+ "eval-20|D|4": {
+  "A1": "pass",
+  "A2": "pass",
+  "A6": "pass",
+  "G7a_offered": "pass",
+  "G7b_offered": "fail",
+  "notes": "G7b: unoffered term slug(s) central-column opening"
+ },
+ "eval-21|D|0": {
+  "A1": "pass",
+  "A2": "pass",
+  "A6": "pass",
+  "G7a_offered": "pass",
+  "G7b_offered": "pass",
+  "notes": ""
+ },
+ "eval-21|D|1": {
+  "A1": "pass",
+  "A2": "pass",
+  "A6": "fail",
+  "G7a_offered": "pass",
+  "G7b_offered": "pass",
+  "notes": "A6: prose never names column 6"
+ },
+ "eval-21|D|2": {
+  "A1": "pass",
+  "A2": "pass",
+  "A6": "pass",
+  "G7a_offered": "pass",
+  "G7b_offered": "pass",
+  "notes": ""
+ },
+ "eval-21|D|3": {
+  "A1": "pass",
+  "A2": "pass",
+  "A6": "pass",
+  "G7a_offered": "pass",
+  "G7b_offered": "pass",
+  "notes": ""
+ },
+ "eval-21|D|4": {
+  "A1": "pass",
+  "A2": "pass",
+  "A6": "pass",
+  "G7a_offered": "pass",
+  "G7b_offered": "pass",
+  "notes": ""
+ },
+ "eval-32|D|0": {
+  "A1": "pass",
+  "A2": "pass",
+  "A6": "pass",
+  "G7a_offered": "pass",
+  "G7b_offered": "pass",
+  "notes": ""
+ },
+ "eval-32|D|1": {
+  "A1": "pass",
+  "A2": "pass",
+  "A6": "pass",
+  "G7a_offered": "pass",
+  "G7b_offered": "pass",
+  "notes": ""
+ },
+ "eval-32|D|2": {
+  "A1": "pass",
+  "A2": "pass",
+  "A6": "pass",
+  "G7a_offered": "pass",
+  "G7b_offered": "pass",
+  "notes": ""
+ },
+ "eval-32|D|3": {
+  "A1": "pass",
+  "A2": "pass",
+  "A6": "pass",
+  "G7a_offered": "pass",
+  "G7b_offered": "pass",
+  "notes": ""
+ },
+ "eval-32|D|4": {
+  "A1": "pass",
+  "A2": "pass",
+  "A6": "pass",
+  "G7a_offered": "pass",
+  "G7b_offered": "pass",
+  "notes": ""
+ },
+ "eval-33|D|0": {
+  "A1": "pass",
+  "A2": "pass",
+  "A6": "pass",
+  "G7a_offered": "pass",
+  "G7b_offered": "pass",
+  "notes": ""
+ },
+ "eval-33|D|1": {
+  "A1": "pass",
+  "A2": "pass",
+  "A6": "fail",
+  "G7a_offered": "pass",
+  "G7b_offered": "pass",
+  "notes": "A6: prose never names column 1"
+ },
+ "eval-33|D|2": {
+  "A1": "pass",
+  "A2": "pass",
+  "A6": "fail",
+  "G7a_offered": "pass",
+  "G7b_offered": "pass",
+  "notes": "A6: prose never names column 1"
+ },
+ "eval-33|D|3": {
+  "A1": "pass",
+  "A2": "pass",
+  "A6": "fail",
+  "G7a_offered": "pass",
+  "G7b_offered": "pass",
+  "notes": "A6: prose never names column 1"
+ },
+ "eval-33|D|4": {
+  "A1": "pass",
+  "A2": "pass",
+  "A6": "fail",
+  "G7a_offered": "pass",
+  "G7b_offered": "pass",
+  "notes": "A6: prose never names column 1"
+ },
+ "eval-34|D|0": {
+  "A1": "pass",
+  "A2": "pass",
+  "A6": "fail",
+  "G7a_offered": "pass",
+  "G7b_offered": "pass",
+  "notes": "A6: prose never names column 5"
+ },
+ "eval-34|D|1": {
+  "A1": "pass",
+  "A2": "pass",
+  "A6": "pass",
+  "G7a_offered": "pass",
+  "G7b_offered": "pass",
+  "notes": ""
+ },
+ "eval-34|D|2": {
+  "A1": "pass",
+  "A2": "pass",
+  "A6": "pass",
+  "G7a_offered": "pass",
+  "G7b_offered": "pass",
+  "notes": ""
+ },
+ "eval-34|D|3": {
+  "A1": "pass",
+  "A2": "pass",
+  "A6": "pass",
+  "G7a_offered": "pass",
+  "G7b_offered": "pass",
+  "notes": ""
+ },
+ "eval-34|D|4": {
+  "A1": "pass",
+  "A2": "pass",
+  "A6": "pass",
+  "G7a_offered": "pass",
+  "G7b_offered": "pass",
+  "notes": ""
+ },
+ "eval-35|D|0": {
+  "A1": "pass",
+  "A2": "pass",
+  "A6": "fail",
+  "G7a_offered": "pass",
+  "G7b_offered": "pass",
+  "notes": "A6: prose never names column 4"
+ },
+ "eval-35|D|1": {
+  "A1": "pass",
+  "A2": "pass",
+  "A6": "pass",
+  "G7a_offered": "pass",
+  "G7b_offered": "pass",
+  "notes": ""
+ },
+ "eval-35|D|2": {
+  "A1": "pass",
+  "A2": "pass",
+  "A6": "pass",
+  "G7a_offered": "pass",
+  "G7b_offered": "pass",
+  "notes": ""
+ },
+ "eval-35|D|3": {
+  "A1": "pass",
+  "A2": "pass",
+  "A6": "pass",
+  "G7a_offered": "pass",
+  "G7b_offered": "pass",
+  "notes": ""
+ },
+ "eval-35|D|4": {
+  "A1": "pass",
+  "A2": "pass",
+  "A6": "pass",
+  "G7a_offered": "pass",
+  "G7b_offered": "pass",
+  "notes": ""
+ },
+ "eval-36|D|0": {
+  "A1": "pass",
+  "A2": "pass",
+  "A6": "pass",
+  "G7a_offered": "pass",
+  "G7b_offered": "pass",
+  "notes": ""
+ },
+ "eval-36|D|1": {
+  "A1": "pass",
+  "A2": "pass",
+  "A6": "fail",
+  "G7a_offered": "pass",
+  "G7b_offered": "pass",
+  "notes": "A6: prose never names column 3"
+ },
+ "eval-36|D|2": {
+  "A1": "pass",
+  "A2": "pass",
+  "A6": "pass",
+  "G7a_offered": "pass",
+  "G7b_offered": "pass",
+  "notes": ""
+ },
+ "eval-36|D|3": {
+  "A1": "pass",
+  "A2": "pass",
+  "A6": "pass",
+  "G7a_offered": "pass",
+  "G7b_offered": "pass",
+  "notes": ""
+ },
+ "eval-36|D|4": {
+  "A1": "pass",
+  "A2": "pass",
+  "A6": "pass",
+  "G7a_offered": "pass",
+  "G7b_offered": "pass",
+  "notes": ""
+ },
+ "eval-37|D|0": {
+  "A1": "pass",
+  "A2": "pass",
+  "A6": "pass",
+  "G7a_offered": "pass",
+  "G7b_offered": "pass",
+  "notes": ""
+ },
+ "eval-37|D|1": {
+  "A1": "pass",
+  "A2": "pass",
+  "A6": "pass",
+  "G7a_offered": "pass",
+  "G7b_offered": "pass",
+  "notes": ""
+ },
+ "eval-37|D|2": {
+  "A1": "pass",
+  "A2": "pass",
+  "A6": "pass",
+  "G7a_offered": "pass",
+  "G7b_offered": "pass",
+  "notes": ""
+ },
+ "eval-37|D|3": {
+  "A1": "pass",
+  "A2": "pass",
+  "A6": "pass",
+  "G7a_offered": "pass",
+  "G7b_offered": "pass",
+  "notes": ""
+ },
+ "eval-37|D|4": {
+  "A1": "pass",
+  "A2": "pass",
+  "A6": "pass",
+  "G7a_offered": "pass",
+  "G7b_offered": "pass",
+  "notes": ""
+ },
+ "eval-38|D|0": {
+  "A1": "pass",
+  "A2": "pass",
+  "A6": "pass",
+  "G7a_offered": "pass",
+  "G7b_offered": "pass",
+  "notes": ""
+ },
+ "eval-38|D|1": {
+  "A1": "pass",
+  "A2": "pass",
+  "A6": "pass",
+  "G7a_offered": "pass",
+  "G7b_offered": "pass",
+  "notes": ""
+ },
+ "eval-38|D|2": {
+  "A1": "pass",
+  "A2": "pass",
+  "A6": "fail",
+  "G7a_offered": "pass",
+  "G7b_offered": "pass",
+  "notes": "A6: prose never names column 3"
+ },
+ "eval-38|D|3": {
+  "A1": "pass",
+  "A2": "pass",
+  "A6": "pass",
+  "G7a_offered": "pass",
+  "G7b_offered": "pass",
+  "notes": ""
+ },
+ "eval-38|D|4": {
+  "A1": "pass",
+  "A2": "pass",
+  "A6": "fail",
+  "G7a_offered": "pass",
+  "G7b_offered": "pass",
+  "notes": "A6: prose never names column 3"
+ },
+ "eval-39|D|0": {
+  "A1": "pass",
+  "A2": "pass",
+  "A6": "pass",
+  "G7a_offered": "pass",
+  "G7b_offered": "pass",
+  "notes": ""
+ },
+ "eval-39|D|1": {
+  "A1": "pass",
+  "A2": "pass",
+  "A6": "pass",
+  "G7a_offered": "pass",
+  "G7b_offered": "pass",
+  "notes": ""
+ },
+ "eval-39|D|2": {
+  "A1": "pass",
+  "A2": "pass",
+  "A6": "pass",
+  "G7a_offered": "pass",
+  "G7b_offered": "pass",
+  "notes": ""
+ },
+ "eval-39|D|3": {
+  "A1": "pass",
+  "A2": "pass",
+  "A6": "pass",
+  "G7a_offered": "pass",
+  "G7b_offered": "pass",
+  "notes": ""
+ },
+ "eval-39|D|4": {
+  "A1": "pass",
+  "A2": "pass",
+  "A6": "pass",
+  "G7a_offered": "pass",
+  "G7b_offered": "pass",
+  "notes": ""
+ },
+ "eval-41|D|0": {
+  "A1": "pass",
+  "A2": "pass",
+  "A6": "pass",
+  "G7a_offered": "pass",
+  "G7b_offered": "pass",
+  "notes": ""
+ },
+ "eval-41|D|1": {
+  "A1": "pass",
+  "A2": "pass",
+  "A6": "pass",
+  "G7a_offered": "pass",
+  "G7b_offered": "pass",
+  "notes": ""
+ },
+ "eval-41|D|2": {
+  "A1": "pass",
+  "A2": "pass",
+  "A6": "pass",
+  "G7a_offered": "pass",
+  "G7b_offered": "pass",
+  "notes": ""
+ },
+ "eval-41|D|3": {
+  "A1": "pass",
+  "A2": "pass",
+  "A6": "pass",
+  "G7a_offered": "pass",
+  "G7b_offered": "pass",
+  "notes": ""
+ },
+ "eval-41|D|4": {
+  "A1": "pass",
+  "A2": "pass",
+  "A6": "pass",
+  "G7a_offered": "pass",
+  "G7b_offered": "pass",
+  "notes": ""
+ },
+ "eval-47|D|0": {
+  "A1": "pass",
+  "A2": "pass",
+  "A6": "fail",
+  "G7a_offered": "pass",
+  "G7b_offered": "pass",
+  "notes": "A6: prose never names column 5"
+ },
+ "eval-47|D|1": {
+  "A1": "pass",
+  "A2": "pass",
+  "A6": "pass",
+  "G7a_offered": "pass",
+  "G7b_offered": "pass",
+  "notes": ""
+ },
+ "eval-47|D|2": {
+  "A1": "pass",
+  "A2": "pass",
+  "A6": "pass",
+  "G7a_offered": "pass",
+  "G7b_offered": "pass",
+  "notes": ""
+ },
+ "eval-47|D|3": {
+  "A1": "pass",
+  "A2": "pass",
+  "A6": "pass",
+  "G7a_offered": "pass",
+  "G7b_offered": "pass",
+  "notes": ""
+ },
+ "eval-47|D|4": {
+  "A1": "pass",
+  "A2": "pass",
+  "A6": "pass",
+  "G7a_offered": "pass",
+  "G7b_offered": "pass",
+  "notes": ""
+ },
+ "eval-50|D|0": {
+  "A1": "pass",
+  "A2": "pass",
+  "A6": "pass",
+  "G7a_offered": "pass",
+  "G7b_offered": "pass",
+  "notes": ""
+ },
+ "eval-50|D|1": {
+  "A1": "pass",
+  "A2": "pass",
+  "A6": "pass",
+  "G7a_offered": "pass",
+  "G7b_offered": "pass",
+  "notes": ""
+ },
+ "eval-50|D|2": {
+  "A1": "pass",
+  "A2": "pass",
+  "A6": "pass",
+  "G7a_offered": "pass",
+  "G7b_offered": "pass",
+  "notes": ""
+ },
+ "eval-50|D|3": {
+  "A1": "pass",
+  "A2": "pass",
+  "A6": "pass",
+  "G7a_offered": "pass",
+  "G7b_offered": "pass",
+  "notes": ""
+ },
+ "eval-50|D|4": {
+  "A1": "pass",
+  "A2": "pass",
+  "A6": "pass",
+  "G7a_offered": "pass",
+  "G7b_offered": "pass",
+  "notes": ""
+ },
+ "pin-L2-enabled-opponent|D|0": {
+  "A1": "pass",
+  "A2": "pass",
+  "A6": "pass",
+  "G7a_offered": "pass",
+  "G7b_offered": "pass",
+  "notes": ""
+ },
+ "pin-L2-enabled-opponent|D|1": {
+  "A1": "pass",
+  "A2": "pass",
+  "A6": "pass",
+  "G7a_offered": "pass",
+  "G7b_offered": "pass",
+  "notes": ""
+ },
+ "pin-L2-enabled-opponent|D|2": {
+  "A1": "pass",
+  "A2": "pass",
+  "A6": "pass",
+  "G7a_offered": "pass",
+  "G7b_offered": "pass",
+  "notes": ""
+ },
+ "pin-L2-enabled-opponent|D|3": {
+  "A1": "pass",
+  "A2": "pass",
+  "A6": "pass",
+  "G7a_offered": "pass",
+  "G7b_offered": "pass",
+  "notes": ""
+ },
+ "pin-L2-enabled-opponent|D|4": {
+  "A1": "pass",
+  "A2": "pass",
+  "A6": "pass",
+  "G7a_offered": "pass",
+  "G7b_offered": "pass",
+  "notes": ""
+ },
+ "pin-L5-deep-fork|D|0": {
+  "A1": "pass",
+  "A2": "pass",
+  "A6": "pass",
+  "G7a_offered": "pass",
+  "G7b_offered": "pass",
+  "notes": ""
+ },
+ "pin-L5-deep-fork|D|1": {
+  "A1": "pass",
+  "A2": "pass",
+  "A6": "fail",
+  "G7a_offered": "pass",
+  "G7b_offered": "pass",
+  "notes": "A6: prose never names column 1"
+ },
+ "pin-L5-deep-fork|D|2": {
+  "A1": "pass",
+  "A2": "pass",
+  "A6": "fail",
+  "G7a_offered": "pass",
+  "G7b_offered": "pass",
+  "notes": "A6: prose never names column 1"
+ },
+ "pin-L5-deep-fork|D|3": {
+  "A1": "pass",
+  "A2": "pass",
+  "A6": "fail",
+  "G7a_offered": "pass",
+  "G7b_offered": "pass",
+  "notes": "A6: prose never names column 1"
+ },
+ "pin-L5-deep-fork|D|4": {
+  "A1": "pass",
+  "A2": "pass",
+  "A6": "pass",
+  "G7a_offered": "pass",
+  "G7b_offered": "pass",
+  "notes": ""
+ },
+ "pin-L9-hedged-parity|D|0": {
+  "A1": "pass",
+  "A2": "pass",
+  "A6": "fail",
+  "G7a_offered": "pass",
+  "G7b_offered": "pass",
+  "notes": "A6: prose never names column 4"
+ },
+ "pin-L9-hedged-parity|D|1": {
+  "A1": "pass",
+  "A2": "pass",
+  "A6": "pass",
+  "G7a_offered": "pass",
+  "G7b_offered": "pass",
+  "notes": ""
+ },
+ "pin-L9-hedged-parity|D|2": {
+  "A1": "pass",
+  "A2": "pass",
+  "A6": "pass",
+  "G7a_offered": "pass",
+  "G7b_offered": "pass",
+  "notes": ""
+ },
+ "pin-L9-hedged-parity|D|3": {
+  "A1": "pass",
+  "A2": "pass",
+  "A6": "pass",
+  "G7a_offered": "pass",
+  "G7b_offered": "pass",
+  "notes": ""
+ },
+ "pin-L9-hedged-parity|D|4": {
+  "A1": "pass",
+  "A2": "pass",
+  "A6": "pass",
+  "G7a_offered": "pass",
+  "G7b_offered": "pass",
+  "notes": ""
+ },
+ "pin-branch-invariance-true-1|D|0": {
+  "A1": "pass",
+  "A2": "pass",
+  "A6": "fail",
+  "G7a_offered": "pass",
+  "G7b_offered": "pass",
+  "notes": "A6: prose never names column 1"
+ },
+ "pin-branch-invariance-true-1|D|1": {
+  "A1": "pass",
+  "A2": "pass",
+  "A6": "pass",
+  "G7a_offered": "pass",
+  "G7b_offered": "pass",
+  "notes": ""
+ },
+ "pin-branch-invariance-true-1|D|2": {
+  "A1": "pass",
+  "A2": "pass",
+  "A6": "pass",
+  "G7a_offered": "pass",
+  "G7b_offered": "pass",
+  "notes": ""
+ },
+ "pin-branch-invariance-true-1|D|3": {
+  "A1": "pass",
+  "A2": "pass",
+  "A6": "pass",
+  "G7a_offered": "pass",
+  "G7b_offered": "pass",
+  "notes": ""
+ },
+ "pin-branch-invariance-true-1|D|4": {
+  "A1": "pass",
+  "A2": "pass",
+  "A6": "pass",
+  "G7a_offered": "pass",
+  "G7b_offered": "pass",
+  "notes": ""
+ },
+ "pin-branch-invariance-true-2|D|0": {
+  "A1": "pass",
+  "A2": "pass",
+  "A6": "pass",
+  "G7a_offered": "pass",
+  "G7b_offered": "pass",
+  "notes": ""
+ },
+ "pin-branch-invariance-true-2|D|1": {
+  "A1": "pass",
+  "A2": "pass",
+  "A6": "pass",
+  "G7a_offered": "pass",
+  "G7b_offered": "pass",
+  "notes": ""
+ },
+ "pin-branch-invariance-true-2|D|2": {
+  "A1": "pass",
+  "A2": "pass",
+  "A6": "pass",
+  "G7a_offered": "pass",
+  "G7b_offered": "pass",
+  "notes": ""
+ },
+ "pin-branch-invariance-true-2|D|3": {
+  "A1": "pass",
+  "A2": "pass",
+  "A6": "pass",
+  "G7a_offered": "pass",
+  "G7b_offered": "pass",
+  "notes": ""
+ },
+ "pin-branch-invariance-true-2|D|4": {
+  "A1": "pass",
+  "A2": "pass",
+  "A6": "pass",
+  "G7a_offered": "pass",
+  "G7b_offered": "pass",
+  "notes": ""
+ }
+}

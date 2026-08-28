@@ -1,0 +1,14 @@
+{
+  "worktree_setup_done": true,
+  "worktree_path": "/Users/elsonidoq/prog/cuatro_en_linea/.claude/worktrees/deep-reveal-grounding",
+  "epic_file": "docs/epics/deep-reveal-remediation-epic.md",
+  "epic_heading": "Epic 12 \u2014 Deep-Reveal Remediation: measure the served text, then fix the render defects it exposes",
+  "spec_dir": "specs/059-deep-reveal-remediation",
+  "stage": "done",
+  "pending_brainstorm": null,
+  "pending_brainstorm_answers": null,
+  "pending_critique": null,
+  "pending_answers": null,
+  "pending_handoff": null,
+  "pending_deferrals": []
+}

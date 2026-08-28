@@ -376,7 +376,7 @@ function stripFailingZoneSpans(text, failures) {
     const re = new RegExp(`\\[zone:${escaped}\\]([\\s\\S]*?)\\[/zone:${escaped}\\]`, 'gi');
     result = result.replace(re, '$1');
   }
-  return result;
+  return { result, specs: [...specs] };
 }
 
 /**
@@ -415,8 +415,9 @@ function stripFailingZoneSpans(text, failures) {
  *
  * @param {{explanation: string, prompt?: string, terms?: Record<string, unknown>, locale?: string, board?: object|null, allowedSet?: Array|null}} payload
  */
-export function guardExplainMoveLlmPayload({ explanation, prompt, terms, locale = 'en', board = null, allowedSet = null, ...rest }) {
+export function guardExplainMoveLlmPayload({ explanation, prompt, terms, locale = 'en', board = null, allowedSet = null, diagnostics = false, ...rest }) {
   let sanitizedExplanation = explanation;
+  let diagnosticsOut = null;
   if (board && typeof explanation === 'string' && explanation.length > 0) {
     sanitizedExplanation = promoteRawCoordinates(sanitizedExplanation, locale);
     // RC-H (attempt 2): rewrite-then-check. A coordinate a zone's own spec vouches for becomes
@@ -427,19 +428,25 @@ export function guardExplainMoveLlmPayload({ explanation, prompt, terms, locale 
     sanitizedExplanation = humanizeGroundedCoordinates(sanitizedExplanation, locale);
     const { valid, failures } = validateAnnotation(sanitizedExplanation, board, allowedSet);
     if (!valid) {
-      sanitizedExplanation = stripFailingZoneSpans(sanitizedExplanation, failures);
+      const stripped = stripFailingZoneSpans(sanitizedExplanation, failures);
+      sanitizedExplanation = stripped.result;
       // Intentional console.warn (not console.log) — distinct from, and NOT a reintroduction of,
       // annotationGate.js's deleted unconditional debug logs (T028 correction (a)). Fires only on
       // an actual failure, not on every request.
       console.warn('[annotation gate] stripped failing zone annotation(s) from a served explanation:', failures);
+      if (diagnostics) diagnosticsOut = { failures, strippedSpecs: stripped.specs };
+    } else if (diagnostics) {
+      diagnosticsOut = { failures: [], strippedSpecs: [] };
     }
   }
-  return {
+  const out = {
     ...rest,
     explanation: stripInternalTokens(sanitizedExplanation, locale),
     prompt,
     terms: sanitizeTermsMap(terms),
   };
+  if (diagnostics) out.diagnostics = diagnosticsOut ?? { failures: [], strippedSpecs: [] };
+  return out;
 }
 
 /**

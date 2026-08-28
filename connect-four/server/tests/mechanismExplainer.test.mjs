@@ -331,3 +331,47 @@ test('locale "en" (and the default) omit the Spanish output directive — unchan
   assert.doesNotMatch(seenPromptEn, /Argentinian Spanish/);
   assert.doesNotMatch(seenPromptDefault, /Argentinian Spanish/);
 });
+
+// ── FR-013 / OI-177 / T017 — the required-set post-check is guard-aware, on a REAL span-losing
+// run harvested from the US1 fixture ────────────────────────────────────────────────────────────
+//
+// Board/answer harvested verbatim (not hand-written) from
+// `scripts/reason_corpus/runs/fv_suff_answers_boards_subset_2026-08-26T15-47-56Z.jsonl`, row
+// `id: "eval-5", run_index: 0` — one of the 5 real span-losing rows T009/computePostGuard.test.mjs
+// pins (all 5 fail `P6:raw_coordinate`). The model's raw text wraps `[zone:you-key-square]` around
+// the words "the square at c6r6" — a raw coordinate ("c6r6") that does NOT match the tag's own
+// promoted cell (`future:c6r4`), so `guardExplainMoveLlmPayload`'s P6 check strips that span from
+// the served text. `future:c6r4` is a REQUIRED spec (`you-key-square`, half `lostResource`) on
+// this board. Before T017, `future:c6r4` still counted as "used" (pre-guard `usedSpecs` includes
+// it — processAnnotations resolved the tag successfully), so no retry fired (verified live via
+// `git stash` on mechanismExplainer.mjs: calls === 1, missingHandles === []). After T017, the
+// guard-aware `survivedSpecs` filter drops `future:c6r4` (its span was stripped), so
+// `missingRequiredGroups` now reports it missing and the single retry fires (calls === 2).
+const MOVESTRING5 = '33322';
+const PLAYED_COL5 = 0;
+const SPAN_LOSING_RAW = `{
+  "better_move": 3,
+  "played_outcome": "loss",
+  "best_outcome": "loss",
+  "mechanism": "You should keep the [zone:better-col]central column 3[/zone:better-col] instead of giving ground with [zone:played-col]column 1[/zone:played-col]; that opening choice is the tougher defense because it keeps your shape connected and makes the later parity fight harder to unravel. Much later, once the forced line reaches it, [zone:you-key-line]your four-in-a-row line on c3-c6[/zone:you-key-line] and [zone:you-key-square]the square at c6r6[/zone:you-key-square] are the practical swindle you want to keep alive, while your opponent's matching later resource on [zone:opp-key-square]c2r3[/zone:opp-key-square] shows how the reply pressure lands on the other side of the board.",
+  "key_cells": ["c6r6", "c2r3"],
+  "fields_relied_on": ["openingContext.defense.family", "openingContext.defense.matchedPrefixLen", "openingContext.defense.centralityGrounded", "case", "lostResource.parityAttribution", "opponentPunishment.parityAttribution", "replyHistogram.afterBest", "replyHistogram.afterPlayed", "lostResource.tacticTag", "opponentPunishment.tacticTag"],
+  "unsure_about": "",
+  "confidence": "high"
+}`;
+
+test('FR-013/OI-177: a required spec whose zone span the guard strips is treated as missing and triggers the retry (real span-losing corpus row, eval-5 run 0)', async () => {
+  let calls = 0;
+  const res = await computeMechanism(MOVESTRING5, PLAYED_COL5, {
+    solver, callLLM: async () => { calls++; return SPAN_LOSING_RAW; },
+  });
+  // `future:c6r4` (handle `you-key-square`) is a required group on this board.
+  assert.ok(res.renderDecision.requiredSet.some((g) => g.spec === 'future:c6r4' && g.handle === 'you-key-square'));
+  // Pre-guard: processAnnotations DID resolve the tag — the spec is genuinely in usedSpecs.
+  assert.ok(res.attempt1.usedSpecs.includes('future:c6r4'));
+  // Guard-aware: the retry fires anyway, because the guard strips that spec's span (P6 raw
+  // coordinate mismatch), and missingHandles names exactly that required group.
+  assert.equal(calls, 2, 'the guard-aware post-check must trigger exactly one retry');
+  assert.ok(res.missingHandles.some((g) => g.spec === 'future:c6r4' && g.handle === 'you-key-square'),
+    'missingHandles must name the required group whose span the guard stripped');
+});

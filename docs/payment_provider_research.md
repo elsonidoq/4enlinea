@@ -7,7 +7,7 @@
 
 **Paddle**, a merchant of record (MoR). It is the only evaluated provider that is both (a) documented as accepting Argentine sole traders without foreign incorporation and (b) **observed** offering a USD wire to an Argentine bank.
 
-Native **Stripe is not an option** — Argentina is absent from Stripe's supported countries. This is why the project's existing Stripe integration cannot ship as-is, and why `project_stripe_traps.md` describes a path that is only viable behind Stripe Atlas / foreign incorporation.
+Native **Stripe is not an option** — Argentina is absent from Stripe's supported countries. This is why the project's earlier Stripe integration could not ship as-is: that path is only viable behind Stripe Atlas / foreign incorporation. (The integration itself was removed in spec 050; see git history.)
 
 ## Read this first: the evidence-layer rule
 
@@ -170,4 +170,4 @@ Full run: 24 sources fetched; the ~5 not listed were URL-dupes or returned no us
 
 - `docs/open_issues.md` — **OI-41** (pricing page is static; prices hardcoded, will drift)
 - `connect-four/server/{terms,privacy,pricing}.html` — the Paddle domain-review requirements (legal name, refund policy, MoR clause, public pricing)
-- Memory: `project_stripe_traps.md` — describes the Stripe path, which **is not viable from Argentina** without foreign incorporation
+- The removed Stripe integration (spec 050; see git history) — that path **is not viable from Argentina** without foreign incorporation

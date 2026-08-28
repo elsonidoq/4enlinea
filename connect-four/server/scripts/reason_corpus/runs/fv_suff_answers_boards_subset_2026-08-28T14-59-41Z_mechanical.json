@@ -1,0 +1,130 @@
+{
+ "eval-2|D|0": {
+  "A1": "pass",
+  "A2": "pass",
+  "A6": "fail",
+  "G7a_offered": "pass",
+  "G7b_offered": "pass",
+  "notes": "A6: prose never names column 4"
+ },
+ "eval-2|D|1": {
+  "A1": "pass",
+  "A2": "pass",
+  "A6": "pass",
+  "G7a_offered": "pass",
+  "G7b_offered": "pass",
+  "notes": ""
+ },
+ "eval-9|D|0": {
+  "A1": "pass",
+  "A2": "pass",
+  "A6": "pass",
+  "G7a_offered": "pass",
+  "G7b_offered": "pass",
+  "notes": ""
+ },
+ "eval-9|D|1": {
+  "A1": "pass",
+  "A2": "pass",
+  "A6": "pass",
+  "G7a_offered": "pass",
+  "G7b_offered": "pass",
+  "notes": ""
+ },
+ "eval-11|D|0": {
+  "A1": "pass",
+  "A2": "pass",
+  "A6": "pass",
+  "G7a_offered": "pass",
+  "G7b_offered": "pass",
+  "notes": ""
+ },
+ "eval-11|D|1": {
+  "A1": "pass",
+  "A2": "pass",
+  "A6": "pass",
+  "G7a_offered": "pass",
+  "G7b_offered": "pass",
+  "notes": ""
+ },
+ "eval-13|D|0": {
+  "A1": "pass",
+  "A2": "pass",
+  "A6": "pass",
+  "G7a_offered": "pass",
+  "G7b_offered": "pass",
+  "notes": ""
+ },
+ "eval-13|D|1": {
+  "A1": "pass",
+  "A2": "pass",
+  "A6": "pass",
+  "G7a_offered": "pass",
+  "G7b_offered": "pass",
+  "notes": ""
+ },
+ "eval-37|D|0": {
+  "A1": "pass",
+  "A2": "pass",
+  "A6": "pass",
+  "G7a_offered": "pass",
+  "G7b_offered": "pass",
+  "notes": ""
+ },
+ "eval-37|D|1": {
+  "A1": "pass",
+  "A2": "pass",
+  "A6": "pass",
+  "G7a_offered": "pass",
+  "G7b_offered": "pass",
+  "notes": ""
+ },
+ "eval-41|D|0": {
+  "A1": "pass",
+  "A2": "pass",
+  "A6": "pass",
+  "G7a_offered": "pass",
+  "G7b_offered": "pass",
+  "notes": ""
+ },
+ "eval-41|D|1": {
+  "A1": "pass",
+  "A2": "pass",
+  "A6": "pass",
+  "G7a_offered": "pass",
+  "G7b_offered": "pass",
+  "notes": ""
+ },
+ "eval-47|D|0": {
+  "A1": "pass",
+  "A2": "pass",
+  "A6": "pass",
+  "G7a_offered": "pass",
+  "G7b_offered": "pass",
+  "notes": ""
+ },
+ "eval-47|D|1": {
+  "A1": "pass",
+  "A2": "pass",
+  "A6": "pass",
+  "G7a_offered": "pass",
+  "G7b_offered": "pass",
+  "notes": ""
+ },
+ "pin-L2-enabled-opponent|D|0": {
+  "A1": "pass",
+  "A2": "pass",
+  "A6": "pass",
+  "G7a_offered": "pass",
+  "G7b_offered": "pass",
+  "notes": ""
+ },
+ "pin-L2-enabled-opponent|D|1": {
+  "A1": "pass",
+  "A2": "pass",
+  "A6": "pass",
+  "G7a_offered": "pass",
+  "G7b_offered": "pass",
+  "notes": ""
+ }
+}

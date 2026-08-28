@@ -546,7 +546,7 @@ Multi-puzzle challenge sessions (`ChallengeScreen`) follow a three-phase state m
 
 Transitions: `loading → pre-move` (on draw response), `pre-move → post-move` (on column tap, immediately — no confirmation step), `post-move → pre-move` (on "Next →", advance `currentIdx`) or `post-move → summary` (on "Next →" when all puzzles exhausted).
 
-New challenge-type screens MUST follow this phase machine. Do not add a `'confirm'` phase — the project uses commit-first with no confirmation step (see project memory `project_commit_first_no_confirm.md`).
+New challenge-type screens MUST follow this phase machine. Do not add a `'confirm'` phase — the project uses commit-first with no confirmation step (a settled convention, not a gap to fill).
 
 ### Forbidden Columns branch (`category === 'forbidden_columns'`)
 

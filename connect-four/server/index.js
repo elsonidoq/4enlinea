@@ -826,11 +826,17 @@ app.post('/api/admin/eval-feedback', requireLocalhost, requireAdmin, (req, res) 
 // <stem>_grades.jsonl side-output). Lets you read board + vector + LLM answer +
 // grade together to spot reason-engine / glossary defects. Read-only, localhost-admin.
 // (Validators/derivers are in evalResultsHelpers.js, unit-tested.)
+//
+// Answers + grades live in the reason corpus' runs/ directory — where compute.mjs writes them and
+// grade-fv-sufficiency writes the `<stem>_grades.jsonl` sidecar. This is NOT server/scripts/: no
+// fv_suff_answers_*.jsonl has been written there (the `scripts/fv_suff` entry is a directory).
+// The sibling /api/admin/reason evidence browser still reads server/scripts/ — different feature,
+// different files (reason_evidence_*.jsonl), deliberately untouched.
+const FV_SUFF_RUNS_DIR = join(dirname(fileURLToPath(import.meta.url)), 'scripts', 'reason_corpus', 'runs');
 
 app.get('/api/admin/fv-suff/files', requireLocalhost, requireAdmin, (req, res) => {
-  const scriptsDir = join(dirname(fileURLToPath(import.meta.url)), 'scripts');
   try {
-    const all = readdirSync(scriptsDir);
+    const all = readdirSync(FV_SUFF_RUNS_DIR);
     res.json({ answers: all.filter((f) => isFvSuffAnswersFile(f) && !f.endsWith('_grades.jsonl')).sort() });
   } catch {
     res.json({ answers: [] });
@@ -838,17 +844,16 @@ app.get('/api/admin/fv-suff/files', requireLocalhost, requireAdmin, (req, res) =
 });
 
 app.get('/api/admin/fv-suff', requireLocalhost, requireAdmin, (req, res) => {
-  const scriptsDir = join(dirname(fileURLToPath(import.meta.url)), 'scripts');
   const answersName = req.query.answers || 'fv_suff_answers_all.jsonl';
   if (!isFvSuffAnswersFile(answersName)) return res.status(400).json({ error: 'invalid answers filename' });
   const parseJsonl = (path) => readFileSync(path, 'utf-8').trim().split('\n').filter(Boolean).map((l) => JSON.parse(l));
   try {
-    const answers = parseJsonl(join(scriptsDir, basename(answersName)));
+    const answers = parseJsonl(join(FV_SUFF_RUNS_DIR, basename(answersName)));
     const set = deriveSetFromAnswers(answers);
     let grades = [];
     const gradesName = gradesFilenameFor(basename(answersName));
     if (gradesName) {
-      try { grades = parseJsonl(join(scriptsDir, gradesName)); }
+      try { grades = parseJsonl(join(FV_SUFF_RUNS_DIR, gradesName)); }
       catch (e) { if (e.code !== 'ENOENT') throw e; }
     }
     res.json({ set, answers, grades });

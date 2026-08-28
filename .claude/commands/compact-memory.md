@@ -183,7 +183,7 @@ check.
 Once the pass is executed, **spawn a fresh critique subagent** to independently verify nothing was lost
 or garbled. Do NOT self-review — a fresh context catches what the executor rationalizes away. Use an
 **Opus** model for this (independent judgment on an unfamiliar diff — the project rule is
-`Opus for critique, Sonnet for apply`; see memory `feedback_agent_and_ui_workflow`).
+`Opus for critique, Sonnet for apply`; see memory `feedback_process_and_agent_preferences`).
 
 Give the critique agent, in its prompt:
 - The exact change list (every DROPPED slug + its claimed destination, every MERGE `sources → target`,

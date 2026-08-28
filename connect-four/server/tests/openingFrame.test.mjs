@@ -1,6 +1,14 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+import { dirname, join } from 'node:path';
 import { composeOpeningFrame, centralityQualitative } from '../scripts/reason_engine/openingFrame.mjs';
+import { toNarratorVector, pruneVector } from '../scripts/reasonNarratorVector.mjs';
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const CORPUS = join(__dirname, '../scripts/reason_corpus/evidence.jsonl');
+const corpusRows = readFileSync(CORPUS, 'utf8').trim().split('\n').map((l) => JSON.parse(l));
 
 // eval-9 namedOpening: player 1, win_to_draw, movestring 33322226, played 5 best 6
 const namedFv = {
@@ -108,4 +116,52 @@ test('a frame that DOES state centrality does not also forbid it', () => {
   if (/easier to build a connected four/.test(f.text)) {
     assert.doesNotMatch(f.guardrail, /do not say one column is "more central"/);
   }
+});
+
+// ══════════════════════════════════════════════════════════════════════════════════════════════
+// US3 (spec 059) — T037. FR-020 (T029, OI-199).
+// ══════════════════════════════════════════════════════════════════════════════════════════════
+
+// ── FR-020 / OI-199 / T029 — when the centrality clause is suppressed, "centrality" MUST NOT ─────
+// appear in the admissible-framings sentence (the guardrail's own first sentence) — it still must
+// appear in GUARDRAIL_NO_CENTRALITY's prohibition, which is a DIFFERENT sentence forbidding the
+// same word the invitation must now avoid.
+function admissibleFramingsSentence(guardrail) {
+  return guardrail.split('. ')[0] + '.';
+}
+
+test('FR-020 (eval-11, O3): centrality clause suppressed -> admissible-framings sentence drops "centrality"', () => {
+  const row = corpusRows.find((r) => r.id === 'eval-11');
+  const fv = pruneVector(toNarratorVector(row.evidence));
+  const frame = composeOpeningFrame(fv);
+  assert.equal(frame.id, 'O3');
+  assert.doesNotMatch(admissibleFramingsSentence(frame.guardrail), /centrality/i);
+  assert.match(frame.guardrail, /not stated to differ in centrality/i);   // prohibition still present
+});
+
+test('FR-020 (eval-21, O2): centrality clause suppressed -> admissible-framings sentence drops "centrality" but keeps "book line"', () => {
+  const row = corpusRows.find((r) => r.id === 'eval-21');
+  const fv = pruneVector(toNarratorVector(row.evidence));
+  const frame = composeOpeningFrame(fv);
+  assert.equal(frame.id, 'O2');
+  const lead = admissibleFramingsSentence(frame.guardrail);
+  assert.doesNotMatch(lead, /centrality/i);
+  assert.match(lead, /book line/i);
+  assert.match(frame.guardrail, /not stated to differ in centrality/i);
+});
+
+test('FR-020 corpus-wide: no opening frame both invites and forbids centrality in the same guardrail', () => {
+  let checked = 0;
+  const violations = [];
+  for (const row of corpusRows) {
+    if (!row.evidence || row.error || !row.evidence.openingContext) continue;
+    checked += 1;
+    const fv = pruneVector(toNarratorVector(row.evidence));
+    const frame = composeOpeningFrame(fv);
+    const invites = /centrality/i.test(admissibleFramingsSentence(frame.guardrail));
+    const forbids = /not stated to differ in centrality/i.test(frame.guardrail);
+    if (invites && forbids) violations.push(`${row.id} (${frame.id}): invites AND forbids centrality`);
+  }
+  assert.ok(checked >= 20, `expected at least 20 opening-context corpus records, got ${checked}`);
+  assert.deepEqual(violations, [], `FR-020 violations:\n${violations.join('\n')}`);
 });

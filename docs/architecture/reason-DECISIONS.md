@@ -1625,3 +1625,212 @@ Re-measured on the frozen 25-board subset (`fv_suff_answers_boards_subset_2026-0
 
 **Lesson worth keeping:** adding a board adds VOCABULARY, not just information. Any new render surface
 that the model can see is a surface it can echo, and the never-repeat list has to grow with it.
+
+---
+
+### D51 — FR-013's seam: the guard-aware required-set check runs BEFORE the existing single retry, on `attempt1`
+
+- **Decision:** `mechanismExplainer.mjs`'s `computeMechanism` now builds `board = new Board(movestring)`
+  and `allowedSet = toAllowedSet(renderDecision?.zones?.aliases ?? [])`, then calls a NEW, first,
+  in-process invocation of `guardExplainMoveLlmPayload({ explanation: attempt1.mechanism, board,
+  allowedSet, diagnostics: true })` immediately before the existing `missing =
+  missingRequiredGroups(requiredSet, attempt1)` call. `survivedSpecs = attempt1.usedSpecs.filter(s =>
+  !diagnostics.strippedSpecs.includes(s))` is passed into the existing `missingRequiredGroups` call in
+  place of the raw `attempt1.usedSpecs` — `missingRequiredGroups` itself is unchanged. The retry's
+  BUDGET and TRIGGER SET are untouched (D-log precedent narrowing retry scope); this only changes which
+  specs count as "used" for the existing `missing.length > 0` check, so more records retry: the 5 runs
+  that lose a `[zone:…]` span become retry candidates that did not retry before. The live `/explain`
+  endpoint's own guard call (on `finalAttempt.mechanism`) is unaffected — this is a second, separate
+  invocation used only to decide the retry.
+- **Rejected alternative — restructure the seam so the guard runs once and its result threads
+  through**, instead of a second invocation. Rejected because: (a) the guard is provably free (no I/O:
+  `promoteRawCoordinates`, `humanizeGroundedCoordinates`, `validateAnnotation`,
+  `stripFailingZoneSpans`, `stripInternalTokens` are all synchronous string/regex/board-lookup
+  functions) — no performance case for the restructure; (b) it would couple `index.js`'s three
+  `guardExplainMoveLlmPayload` call sites (cache-hit, not-a-blunder, fresh-generation) to a
+  `computeMechanism`-shaped result even on the two paths that never call `computeMechanism` — a larger,
+  riskier diff for zero measured benefit; (c) it would guard `attempt1`'s text against a request context
+  that has not yet decided whether a retry happens, conflating the retry-decision diagnostics with the
+  endpoint's real guard call on `finalAttempt.mechanism`.
+- **Rejected alternative — moving the endpoint's guard call earlier.** Also rejected for reason (c)
+  above: the endpoint's real guard call belongs on the FINAL served text, not on an intermediate
+  attempt.
+- **Measured:** in all 5 of the corpus's span-losing rows, the stripped spec is one of that row's own
+  `requiredSet` specs; `eval-5` replayed end-to-end goes from `calls === 1` (no retry) to `calls === 2`
+  (retry fires).
+- **Status:** IMPLEMENTED, epic 059 (Deep-Reveal Remediation) T017. Resolves OI-177. `test:fast`
+  2041 / 0.
+
+---
+
+### D52 — `renderedFields`'s array/object emptiness-guard asymmetry, and the board-selection-aware `.line`-path consistency test
+
+- **Decision:**
+  1. The array branch of `renderedFields`'s `prune` (`pruneArray`'s caller) now mirrors the object
+     branch's existing empty-drop guard: after `pruneArray(val, path)` runs, if every element is `{}`,
+     `key` is dropped from `copy` entirely, exactly as the object branch already dropped a child that
+     pruned to `{}`. Measured: empty `[{},{},...]` array literals went 36/63 → 0/63 corpus-wide.
+  2. `fieldPartition`'s existing disposition-only classification is left alone for `TRANSFORMED_LEAVES`
+     (`movestring`/`finalMovestring`/`bestCol`/`playedCol`) — unconditionally shown via the Decision
+     block, so the carve-out holds there without qualification; this is NOT reclassified (the over-broad
+     reading FR-019 explicitly forbids). For the `.line`-pattern subset specifically, a new corpus-wide
+     test (`renderFieldPartitionLineCarveout.test.mjs`, T028) checks: for every record, if a
+     `.line`-typed path is non-empty in the pruned vector, either (a) its owning half's board is among
+     that record's selected/rendered boards, or (b) an alias derived from `.line` is present in
+     `zones.aliases`. This is model-free and runs the production `fieldPartition`/`selectBoards`
+     functions directly.
+- **Empirical deviation from the plan, found while implementing (record what was found, not what the
+  plan predicted):** the plan's Decision 2 named `eval-33`/`lostResource.line` as a genuine violation
+  requiring a named exemption, and read condition (b) narrowly (fork-pivot aliases only). Implementing
+  T028 found: `eval-33` turns out **not** to be a genuine violation — its `lostResource` is
+  deep/`forced_sequence` and gets its own `projectedDeep` board matching its `finalMovestring`, so
+  condition (a) holds for it directly. Under the plan's narrow reading of (b), **7 other records** would
+  go RED instead: `eval-34/41/47/48/49/50` and `pin-L1-completes-your-tactic`, all
+  `opponentPunishment` denial/`immediate`-register halves whose one-ply reply lands on a square with no
+  board of its own but which IS separately offered as that half's ordinary load-bearing-cell alias.
+  **Resolution:** read condition (b) literally as the plan's own "OR" wording allows — any offered alias
+  whose spec cell is one of the half's own `.line` cells, not fork-pivot aliases specifically — under
+  which all 63 records pass with 0 real violations measured corpus-wide, `eval-33` included (its
+  `lostResource` half is deep/`forced_sequence` and gets its own `projectedDeep` board matching
+  `lostResource.finalMovestring`, satisfying condition (a) directly). The `KNOWN_EXEMPTIONS` set naming
+  `eval-33` is **kept in the test anyway, inert** — Design Decision 2 names it explicitly and forbids
+  removing it without revisiting the deferred board-selection remedy question, so the code carries a
+  now-unexercised safety net rather than a required exemption. The `TRANSFORMED_LEAVES` carve-out is
+  unchanged, not reclassified; `eval-33`'s underlying board-selection question remains deferred out of
+  the epic.
+- **Status:** IMPLEMENTED, epic 059 (Deep-Reveal Remediation) T027/T028. Resolves OI-206. `test:fast`
+  2041 / 0.
+
+---
+
+### D53 — Q1 pick (PROVISIONAL, not resolved by this epic): the harness stores BOTH the pre-guard `mechanism` and the post-guard `servedExplanation`
+
+- **Decision:** `compute.mjs` exports `computeServedExplanation(...)` → `{ servedExplanation,
+  guardDiagnostics }`; answers rows now carry both the raw `mechanism` (pre-guard) and
+  `servedExplanation` (post-guard) fields, rather than one replacing the other. The v2 grading rubric
+  (`GRADER_INSTRUCTIONS_v2.md`) instructs graders which field each axis is graded against, so the risk
+  Q1 flags (a grader charging the pre-guard string) is mitigated at the dispatch layer, not by
+  destroying the pre-guard data at storage time.
+- **This is a PROVISIONAL answer to `[NEEDS CLARIFICATION: Q1]` — not resolved by this epic.** If a
+  future `/clarify` pass picks a different storage shape (e.g. served-only to graders, pre-guard kept
+  entirely out of the grading prompt), only the v2 rubric's dispatch wording changes; `FR-001`'s storage
+  shape does not need to change to accommodate it.
+- **Status:** IMPLEMENTED, epic 059 (Deep-Reveal Remediation) T003. `test:fast` 2041 / 0.
+
+---
+
+### D54 — Q2 pick (PROVISIONAL, not resolved by this epic): `better-col` gets a reserved lowest-priority slot outside the geometry cap, not a competing one
+
+- **Decision:** `deriveRequiredSet` pushes `better-col` as a candidate into an already-free slot only —
+  it never displaces a geometry group derived from the two halves. Measured corpus-wide (63 records):
+  offered to 21/63; 42/63 remain at-cap and unresolved by design (Q2's PROVISIONAL choice deliberately
+  does not compete with the FR-005 3-slot geometry cap).
+- **This is a PROVISIONAL answer to `[NEEDS CLARIFICATION: Q2]` — not resolved by this epic.** A future
+  session could instead widen the cap or reprioritize geometry vs. better-column; this decision commits
+  to neither, only to "never displace, only fill a free slot."
+- **Status:** IMPLEMENTED, epic 059 (Deep-Reveal Remediation) T026. Closes OI-187 (near-duplicate);
+  leaves OI-205 PARTIALLY RESOLVED for the 42/63 residual. `test:fast` 2041 / 0.
+
+---
+
+### D55 — Q3 pick (PROVISIONAL, not resolved by this epic): a terminal `afterBest` board keeps the board, drops the tags, and gets one game-over sentence
+
+- **Decision:** `reasonBoardSelect.mjs` keeps the terminal `afterBest` board (`shown: true`) but assigns
+  it `tags: []` and `terminal: true`, instead of either hiding the board or leaving stale live-threat
+  tags on an already-decided position. `causalLinks.mjs`'s L1 template renders a single completed,
+  present-tense game-over sentence ("wins on the spot", "the game is over there") for this case, never
+  future tense for a move that already ended the game.
+- **This is a PROVISIONAL answer to `[NEEDS CLARIFICATION: Q3]` — not resolved by this epic.** An
+  alternative (hide the board entirely, or synthesize a different visual treatment) was not built; this
+  decision commits only to "keep the board, silence the tags, say it's over."
+- **Status:** IMPLEMENTED, epic 059 (Deep-Reveal Remediation) T012. Resolves OI-203. `test:fast`
+  2041 / 0.
+
+---
+
+### D56 — Q4 pick (PROVISIONAL, not resolved by this epic): drop the `replyHistogram` comparative rather than restate a rule the data contradicts
+
+- **Decision:** `READING_KEY` was replaced by `readingKeyFor(replyHistogram)`, which omits the
+  `replyHistogram.afterBest`/`afterPlayed` comparative bullet entirely when
+  `replyHistogramSupportsStatedDirection` is false (i.e. `afterBest > afterPlayed`, contradicting the
+  key's own "fewer means tougher" rule), instead of restating the rule regardless of whether the
+  rendered numbers support it. Measured: 6/63 records now omit it; 57/63 still render it.
+- **This is a PROVISIONAL answer to `[NEEDS CLARIFICATION: Q4]` — not resolved by this epic.** The
+  smaller-surface choice (omit the sentence) was taken over the count-AND-score-aware fix, which needs
+  reply scores and new prompt surface — out of scope here.
+- **Status:** IMPLEMENTED, epic 059 (Deep-Reveal Remediation) T014. Resolves OI-202. `test:fast`
+  2041 / 0.
+
+---
+
+### D57 — Q5 pick (PROVISIONAL, not resolved by this epic): drop the centrality invitation when the clause is suppressed; the guardrail's denial is untouched
+
+- **Decision:** `GUARDRAIL_ADMISSIBLE_FRAMINGS_*` in `openingFrame.mjs` is split into 4 variants gated
+  on `clause === ''` — when the centrality clause is suppressed, the admissible-framings line no longer
+  invites "centrality" as something to explain through, while `GUARDRAIL_NO_CENTRALITY`'s existing
+  denial ("do not say one column is more central") is left exactly as it was. Gap closure (T038/T039,
+  batch 5b) found the same B3 contradiction class, previously un-gated, in
+  `renderReasonModel.mjs`'s `OPENING_READING_KEY_*` constants and applied the identical fix there,
+  gated on `openingFrame.centralityOffered`; three tests now assert it.
+- **This is a PROVISIONAL answer to `[NEEDS CLARIFICATION: Q5]` — not resolved by this epic.**
+- **Status:** IMPLEMENTED, epic 059 (Deep-Reveal Remediation) T029 (+ T038/T039 gap closure). Resolves
+  OI-199. `test:fast` 2041 / 0.
+
+---
+
+### D58 — `reasonBoardTags.mjs` gates every vector-named overlay on the production detectors actually matching the board (corpus-wide consequence beyond the two records that motivated it)
+
+- **Decision:** `reasonBoardTags.mjs`'s overlay tag placement is now gated on the production detectors
+  actually matching the board being rendered, instead of asserting a pattern named by the feature
+  vector regardless of whether it is board-true yet. `grainOf(...)` is newly exported to support this.
+- **Measured, corpus-wide — a bigger effect than either motivating issue named:** this suppresses the
+  overlay on **100% of the 13 corpus records** carrying a vector-named fork half — each half's pattern
+  only becomes board-true on a LATER board, never the decision board it was attached to. OI-188 and
+  OI-204 each cited one or two motivating records (`pin-L2-enabled-opponent`, `eval-33`); the fix's
+  actual reach is the full 13-record set. This is a corpus-wide behavior change, not a two-record patch.
+- **Status:** IMPLEMENTED, epic 059 (Deep-Reveal Remediation) T013 (+T016). Resolves OI-188, OI-204, and
+  the second half of OI-195. `test:fast` 2041 / 0.
+
+---
+
+### D59 — Correction: T032/OI-189's remaining producer is `openingFrame.mjs`, not `causalLinks.mjs` — record this so a future reader doesn't search the wrong file
+
+- **What happened:** T032's own task text (`specs/059-deep-reveal-remediation/tasks.md`) and the
+  2026-08-25 graded run's report both identify the producer of the O2 lead-sentence term-slug leak as
+  `causalLinks.mjs` ("causalLinks L7 prose" in the report). **Both citations are wrong.** The actual
+  producer is `openingFrame.mjs`'s `nameTag` function — the O2 lead sentence — which used to name every
+  opening as `` `the ${family}` `` regardless of whether `oc.id` was set; with no `id` to anchor it as a
+  specific book-opening citation (the id-less "family only" defense fallback), the bare phrase read
+  exactly like offerable KB jargon and the model wrapped it in an unoffered `[term:…]` tag. The report's
+  own quoted evidence matches `openingFrame.mjs` verbatim, not `causalLinks.mjs`.
+- **Fix:** `nameTag` now uses an indefinite article (`` `a ${oc.family}` ``) when `id` is null, keeping
+  the same information while dropping the "the X" proper-noun-shaped signal that reads as a citable
+  term.
+- **Why this needs a D-log entry, not just a fixed test:** a future session grepping `causalLinks.mjs`
+  for this defect, trusting either the task text or the graded report, will not find it there and may
+  conclude the issue is unfixed or re-attempt the fix in the wrong file.
+- **Status:** IMPLEMENTED, epic 059 (Deep-Reveal Remediation) T032. Closes OI-189 (both halves; see
+  OI-189's own stale-status correction for the pre-epic display-path half). `test:fast` 2041 / 0.
+
+---
+
+### D49 addendum — Q8 pick (PROVISIONAL, not resolved by this epic): plain-English ordinal locator for sibling disambiguation, and the board-tag-pivot dedupe exception
+
+- **Decision (Q8):** Sibling disambiguation (D49 rule 1, `disambiguateSiblingRoles`) now uses a plain-
+  English ordinal locator instead of raw coordinates: **"the lower one" / "the higher one"** for a
+  2-member collision group; **"the Nth one, counting from the bottom of the board"** beyond that — keyed
+  to a deterministic sort (board, then row ascending, then column ascending, then original alias order).
+  Corpus max collision-group size observed: 5. The D49 property (0/63 `(role, truthBoard)` collisions)
+  still holds. Measured corpus-wide, all 63 records: raw coordinates in `zones.aliases[].role` went
+  32/63 → 0/63.
+- **This is a PROVISIONAL answer to `[NEEDS CLARIFICATION: Q8]` — not resolved by this epic.**
+- **Deliberate, documented exception found while implementing (OI-193's fix):** board-tag pivots
+  (`forkPivotCell`'s board-tag-only offers, T025) do NOT participate in the cross-board `seen` dedupe
+  every other alias family uses — only a same-board collision guard applies to them. Reason: on
+  `eval-47`, both candidate pivot cells are immediate-threat cells on the OTHER near-term board, so
+  applying the standard cross-board dedupe would leave the record with zero pivots, contradicting the
+  reason this fix exists. This is a narrower guard than the rest of the alias system deliberately
+  carries, not an oversight.
+- **Status:** IMPLEMENTED, epic 059 (Deep-Reveal Remediation) T023 (Q8), T025 (dedupe exception).
+  Resolves OI-193 (dedupe exception); Q8 itself is cross-cutting (T024, T030, T031, T033 all build on
+  `roleText`/`disambiguateSiblingRoles`). `test:fast` 2041 / 0.

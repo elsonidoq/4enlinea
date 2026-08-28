@@ -108,6 +108,30 @@ Registering a new category slug touches all of these files; omitting any one cau
 7. `server/candidate-generator.js` — register in `checkPredicateRaw`'s dispatch AND add a `computeHighlightCells` case AND add an `isClean` case (see below)
 8. `PATTERN_KB` (`server/llmCoachHelpers.js`) — add a one-line entry (or note reuse of an existing key)
 
+### Why there is no `opening` category (settled 2026-07-04 — do not relitigate)
+
+Opening theory is deliberately **not** a puzzle category, and adding one is not an oversight to fix.
+Openings do not fit the recognition-puzzle model on two independent counts:
+
+- The flagship "won position" opening boards — `333334444` (5-4), `3333311115555` (candlesticks),
+  `3332222` (3-4) — have the **losing side to move**, so there is no column for the learner to
+  recognize.
+- There is no generatable one-move opening signal for a classifier to detect. The only clean
+  unique-move opening boards are the gambit `3265533353553111` → col 4 and D3-D4 Diagram 231
+  `3332223362` → col 1, and both are singletons.
+
+Opening *interaction* is delivered through **Lessons** instead (one client-side Socratic per lesson:
+empty→3, imitation, gambit→4, D3-D4→1). The **reason engine** covers openings as a book-deviation
+reason — when a blunder's pre-move history is a mirror-normalized prefix of a KB opening line and the
+blundering player is the opening's beneficiary, it names the opening and states the book's next move;
+off-book openings fall back to centrality (`centerDominance.js`). See `reason-DECISIONS.md` D31–D34
+(prefix-match, beneficiary-only, book-move-is-best, name-specific-only-when-unique-else-family).
+
+Do **not** build an `opening` category or its wiring (above). A prior full implementation attempt
+(branch `feat/opening-aware-reason-engine`) was declared a FAILED attempt and deleted — do not
+resurrect it. If asked to "add openings to challenges/puzzles", push back with the recognition-task
+mismatch above.
+
 ### Retired category slugs
 
 Never reuse a retired category slug — reintroduce the concept under a new name if needed:
@@ -706,7 +730,7 @@ buildExplainContext(movestring, col, rounds = 1, solver)
 ## Solver Score Semantics (Critical Invariant)
 
 At forced-win terminal positions, all opponent columns score identically — the solver cannot identify which column blocks. Use direct `checkWin` board detection instead.
-Reference: memory `reference_c4solver.md` and `reference_cat5_forced_block_detection.md`.
+Reference: memory `reference_c4solver.md` §"Scores at forced-win terminals are flat" (carries the worked movestring and the `checkWin` recipe).
 
 ## Threat-Counting Invariant
 
@@ -919,6 +943,26 @@ This is acceptable in this monorepo because `en.json` is a build artifact that t
 
 Do not add more server→frontend imports. This single cross-boundary import is intentional and documented here so future maintainers don't generalise the pattern.
 
+## CLI script conventions — a meaningful `--help` is mandatory
+
+Every human-invoked CLI script under `connect-four/scripts/` and `connect-four/server/scripts/`
+(plus its shell wrapper, if it has one) MUST provide a **meaningful** `--help` / `-h` toggle: not a
+bare usage line, but the script's **purpose**, **each option with its default**, and any **required
+env/setup**. Print it and `process.exit(0)`.
+
+These scripts encode non-obvious pipelines (reason-eval, board selection, blunder reprocessing) whose
+flags are not otherwise discoverable — the `--help` text is the contract.
+
+- Define a `HELP` string near the arg parser; check `process.argv.includes('--help')` / `'-h'` and exit
+  **before** any required-arg validation, so `--help` never errors out on a missing `--input` (and still
+  exits 0 when other malformed flags are present).
+- If the file is **also imported** (e.g. `scripts/compute.mjs` exports `buildEvidenceRow` for tests), put
+  the help-exit **inside** the `process.argv[1] === fileURLToPath(import.meta.url)` entry guard — at
+  module scope it would call `process.exit` on import. Pure CLI-only files (e.g. `select_boards.mjs`)
+  may check at module scope.
+- Reference implementations: `connect-four/server/scripts/compute.mjs` and
+  `connect-four/server/scripts/select_boards.mjs`.
+
 ## LLM Explanation Scripts
 
 CLI scripts that call an LLM must load `connect-four/server/.env` via Node's built-in
@@ -1117,8 +1161,7 @@ does NOT add a bulk re-synthesize-approved command to the existing CLI").
 - **`--max-retries <n>`** (default `5`) — retries a `429` per (lesson, lang) job before giving up on that
   job and moving to the next (a give-up is reported in the final summary, not silently dropped).
 - **`--help` / `-h`** — exits 0 **before** any argument parsing/validation, even with other malformed
-  flags present (see the `feedback_scripts_meaningful_help` convention: purpose, options, defaults, exit
-  0 before required-arg validation).
+  flags present (see §"CLI script conventions — a meaningful `--help` is mandatory" above).
 
 **429 handling — two landmines this script exists to dodge**: (1) the shared limiter's `429` body is
 **plain text** ("Too many requests, please try again later."), not JSON — a bare `.json()` call throws an
@@ -1294,7 +1337,7 @@ Two things that follow from this:
 The `/api/explain-move-llm` endpoint enforces a weekly quota for free-tier users.
 
 - **Authentication**: Unauthenticated requests (no valid `Authorization` header) return `401 Unauthorized`. No quota logic is reached.
-- **Cap**: 5 Deep Reveals per week for free-tier users (hardcoded in `checkAndDecrementQuota`/`peekQuota` in `index.js` — no named constant; both must match).
+- **Cap**: 20 Deep Reveals per week for free-tier users (the `FREE_DEEP_REVEAL_WEEKLY_LIMIT` constant, exported from `quotaLimits.js` and imported by both `checkAndDecrementQuota` and `peekQuota` in `index.js`, so the two stay in sync by construction).
 - **Reset**: Monday 00:00 UTC. The `deep_reveal_reset_at` column stores the next reset timestamp. A `null` value is treated as "already expired" — the quota resets to next Monday and the request is allowed.
 - **Paid-tier**: No quota check; all requests are allowed unconditionally.
 - **429 response shape**: `{ error: 'quota_exceeded', resetsAt: <ISO string> }`.
@@ -1737,3 +1780,38 @@ rejected); only a genuine on-box loopback connection (an operator shell in the s
 which is exactly the intended "localhost-only" semantics. **Any new IP-based or localhost gate anywhere in
 the server must follow this rule**; reaching for `req.ip` reintroduces the spoof. (The original spec-047
 planning wrongly assumed `trust proxy` made `req.ip` safe; the bug was reproduced and fixed in QA.)
+
+## Deep-reveal mechanism retry (`mechanismExplainer.mjs`)
+
+`computeMechanism` owns **exactly one retry, shared across every trigger**. Do not add a second
+pass; a new trigger must fold into the existing one.
+
+Triggers:
+1. **LLM-level failure** — call error or unparseable response → resend the identical prompt once.
+2. **Content miss** on an otherwise-successful attempt. Two are computed **together**, before the
+   retry, and folded into **one** amended prompt by `buildRetryPrompt(prompt, missing, phrase)`:
+   - a **required square/line** the answer failed to tag (`missingRequiredGroups`, matched on the
+     attempt's post-`processAnnotations` `usedSpecs` — a raw `[zone:{handle}]` string search is
+     wrong, the handles are already rewritten to expanded specs by then);
+   - the **better move's column never named in the prose** (`mentionsBetterColumn`).
+
+Spending the single retry on one and leaving the other unenforced just moves the regression, hence
+the fold. The retry prompt is a genuinely *amended* prompt (new blocks appended to the same
+evidence/instructions), never a bare resend.
+
+`mentionsBetterColumn(attempt, bestCol, locale)` tests the **post-`processAnnotations` `mechanism`**
+run through the guard's own `stripInternalTokens` — the closest available prediction of the text the
+player is served. Not the raw LLM string (zone handles are already expanded), and not a naive
+`/column N/` on `mechanism` (the guard rewrites raw `cN`/`cNrM`/`colN` prose into "column N" before
+serving, so a literal search would burn the retry on a false miss). It is locale-aware: under `es`
+it requires the Spanish phrase, because that is what the player reads.
+
+**Prompt wording alone does not enforce this class of instruction** — measured inert (0/12 runs)
+while the required-set retry moved it (12/12). Reach for a post-check on the shared retry, not more
+prompt text.
+
+**Note the module boundary inversion:** `mechanismExplainer.mjs` **imports**
+`buildPromptForCondition` and `renderDecisionForCondition` from `server/scripts/compute.mjs` — i.e.
+production server code depends on a script under `scripts/`. That coupling is deliberate: it is what
+makes `compute.mjs --llm --condition D` a faithful evaluator of the production prompt rather than a
+lookalike. Do not "clean it up" by forking the builder.

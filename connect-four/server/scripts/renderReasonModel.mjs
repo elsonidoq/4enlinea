@@ -36,7 +36,14 @@ function renderedFields(prunedFv, firedCovers = []) {
       const path = prefix ? `${prefix}.${key}` : key;
       if (Array.isArray(val)) {
         if (val.length && val[0] !== null && typeof val[0] === 'object') {
-          copy[key] = pruneArray(val, path);
+          const prunedArr = pruneArray(val, path);
+          // T027 (FR-018, OI-206): mirror the object branch's empty-drop guard here. Without it, an
+          // array whose every element prunes to {} (every subfield 'transformed'/'exclude') still got
+          // assigned unconditionally, producing a bare `[{},{},{},{}]` literal in the JSON residue.
+          const hasContent = prunedArr.some((el) => el !== null && typeof el === 'object'
+            ? Object.keys(el).length > 0
+            : true);
+          if (hasContent) copy[key] = prunedArr;
         } else if (keep(path)) {
           copy[key] = val;
         }
@@ -168,6 +175,16 @@ export function deriveRequiredSet(pruned, zones) {
   for (const half of HALVES) {
     if (groups.length >= 3) break;
     if (push(half, halfLineSpec(pruned?.[half]))) break;
+  }
+  // T026 (FR-017, OI-205/OI-187).
+  // Q2 PROVISIONAL: reserved 4th-priority push into a free slot only; the at-cap records are not
+  // obligated — see spec.md Q2. When the geometry derivation above leaves a slot free, offer
+  // 'better-col' (spec `col${bestCol+1}`, always offered by buildAnnotationOffer whenever bestCol is
+  // known) so the reader can request the better column itself — but only into an already-free slot,
+  // never displacing a cell/pivot/line group derived above. Records that filled all 3 slots already
+  // are left unresolved by design; this is a partial answer to OI-205/OI-187, not a full one.
+  if (groups.length < 3 && pruned?.bestCol != null) {
+    push('decision', `col${pruned.bestCol + 1}`);
   }
   return groups.slice(0, 3);
 }
@@ -329,17 +346,40 @@ export function buildRenderDecision(nv) {
   };
 }
 
-const READING_KEY = `# Reading key (the few coded fields shown below)
+// Q4 PROVISIONAL: drop rather than restate — see spec.md Q4. The `replyHistogram` bullet below
+// asserts a fixed direction ("fewer means the tougher, more resilient defense") that the engine's own
+// framing elsewhere (causalLinks.mjs L2/L4 guardrails: "the better one makes the opponent work
+// hardest — frame it as the toughest defense") always applies to the BETTER move: afterBest is only
+// honestly "the tougher, more resilient defense" when afterBest <= afterPlayed. When the rendered
+// counts go the other way (measured on eval-37: afterBest=2 > afterPlayed=1), the bullet's stated
+// direction contradicts this record's own data, so FR-011 requires omitting the sentence rather than
+// restating a rule the data does not support (the smaller-surface PROVISIONAL choice; the
+// count-AND-score-aware fix is out of scope — it needs reply scores and new prompt surface).
+function replyHistogramSupportsStatedDirection(replyHistogram) {
+  if (!replyHistogram || typeof replyHistogram.afterBest !== 'number' || typeof replyHistogram.afterPlayed !== 'number') {
+    return false;
+  }
+  return replyHistogram.afterBest <= replyHistogram.afterPlayed;
+}
+
+function readingKeyFor(replyHistogram) {
+  const replyHistogramBullet = replyHistogramSupportsStatedDirection(replyHistogram)
+    ? '\n- replyHistogram.afterBest / afterPlayed: how many ways your opponent still has to hold the result after each move — fewer means the tougher, more resilient defense.'
+    : '';
+  return `# Reading key (the few coded fields shown below)
 - register: how far off the result is — "immediate" (now), "forced_sequence" (a deep forced line), "parity" (a deep zugzwang/parity battle).
 - pliesToEnd: plies until the line finishes, when known.
 - controllingGroup / parityAttribution: the group of four squares whose parity decides a deep win.
-- ownDiscs: how many of your discs already sit on the winning group.
-- replyHistogram.afterBest / afterPlayed: how many ways your opponent still has to hold the result after each move — fewer means the tougher, more resilient defense.
+- ownDiscs: how many of your discs already sit on the winning group.${replyHistogramBullet}
 - "deep on a forced line" / "deep, via a parity battle": the winning square is many plies away and EMPTY now — not a current threat.
 - Cells are cNrM: column then row, 1-indexed (c1r1 = bottom-left).
 - Every column number shown anywhere in this prompt is a 1-indexed display column (column 1 = leftmost). The move columns and their landing cells are given in the Decision block above — use them verbatim; do not re-derive move→cell→role.
 - These coded names are for YOUR reading only. Never repeat a field name, "histogram", "window", "completing cell", "solver", or "score" in your answer's \`mechanism\` — say it in plain Connect Four instead (threat, fork, double threat, four-in-a-row line, block, central).
-- The board NAMES above ("decision", "afterBest", "afterPlayed", "projectedDeep", "projectedDeepOpp") and any paraphrase of them ("the projected board", "the deep board", "the deep reply board") are internal labels for YOUR reading. Never name a board in your answer — describe WHEN it happens instead ("later, once the forced line runs out", "right after the better move").`;
+- The board NAMES above ("decision", "afterBest", "afterPlayed", "projectedDeep", "projectedDeepOpp") and any paraphrase of them ("the projected board", "the deep board", "the deep reply board") are internal labels for YOUR reading. Never name a board in your answer — describe WHEN it happens instead ("later, once the forced line runs out", "right after the better move").
+- When the better move wins outright, the frame says so as a completed, present fact ("wins on the spot", "the game is over there") — never future tense ("threat to make four next move", "keep it for the next turn") for a move that already ended the game.
+- A causal frame only says the opponent "occupies" a square when a disc is actually there; when the opponent instead now THREATENS that square (it is still empty), the frame says "open a path to" / "threatening" it — match the frame's own verb, do not upgrade an open threat into a claimed occupation.
+- A frame that names an "immediate threat" cell says "next move" ONLY when that cell is gravity-top on its named board; otherwise it says "four-in-a-row threat (not yet reachable — the column needs to fill first)" — match the frame's own grain, never upgrade a non-gravity-top threat into a "next move" claim.`;
+}
 
 // Task 9d (spec 058 feedback remediation). Measured on eval-11 (O3 centrality frame — no
 // namedOpening, no defense, openingContext.lead has no book line at all): 3/5 runs fabricated
@@ -349,10 +389,24 @@ const READING_KEY = `# Reading key (the few coded fields shown below)
 // (namedOpening) and O2 (defense) genuinely have a book/defense line to read those fields against;
 // O3 (centrality) does not — it only ever has centrality + parity. Gate the book-line bullets (and
 // the book-line clause of the third, shared bullet) on the frame kind instead of deleting them.
+// B3 (same class as OI-199/T029): these constants used to hardcode "centrality" into the reading key
+// unconditionally, regardless of whether openingFrame.mjs's own guardrail actually offered the
+// centrality clause this record (`clause === ''` suppresses it — see openingFrame.mjs's
+// GUARDRAIL_NO_CENTRALITY gating). A record whose clause was suppressed still got "The blunder is
+// explained through the opening (book line, centrality, parity)" in its reading key, contradicting the
+// guardrail's own "do not say one column is more central" one section later — FR-020/SC-012 require
+// "centrality" absent from that record's admissible-framings surface, and the reading key is part of
+// that surface. Four variants now, gated on BOTH frame kind AND `centralityOffered`.
 const OPENING_READING_KEY_BOOK_LINE = `# Opening reading key
 - family / id: the named opening line this position is on (id absent = shared prefix, family only).
 - matchedPrefixLen: how many opening plies matched the book line.
 - The blunder is explained through the opening (book line, centrality, parity), NOT a deep tactical cell.
+- The winning resolution is deep (many plies away) and is stated only as a horizon — there is no near-term threat cell to read.`;
+
+const OPENING_READING_KEY_BOOK_LINE_NO_CENTRALITY = `# Opening reading key
+- family / id: the named opening line this position is on (id absent = shared prefix, family only).
+- matchedPrefixLen: how many opening plies matched the book line.
+- The blunder is explained through the opening (book line, parity), NOT a deep tactical cell.
 - The winning resolution is deep (many plies away) and is stated only as a horizon — there is no near-term threat cell to read.`;
 
 const OPENING_READING_KEY_CENTRALITY_ONLY = `# Opening reading key
@@ -360,13 +414,20 @@ const OPENING_READING_KEY_CENTRALITY_ONLY = `# Opening reading key
 - The blunder is explained through the opening (centrality, parity), NOT a deep tactical cell.
 - The winning resolution is deep (many plies away) and is stated only as a horizon — there is no near-term threat cell to read.`;
 
+const OPENING_READING_KEY_PARITY_ONLY = `# Opening reading key
+- This position matches no named opening or defense line — do not name a family, id, or how many plies matched; none apply here.
+- The blunder is explained through the opening (parity), NOT a deep tactical cell.
+- The winning resolution is deep (many plies away) and is stated only as a horizon — there is no near-term threat cell to read.`;
+
 // Selects the opening reading key by frame kind (composeOpeningFrame's 'namedOpening' | 'defense' |
-// 'centrality') rather than re-deriving from openingContext — the frame already told us which case
-// this is.
+// 'centrality') AND by whether this record's centrality clause was actually offered
+// (openingFrame.centralityOffered, set by openingFrame.mjs's own mk() — the same signal its guardrail
+// gates on) rather than re-deriving from openingContext or hardcoding "centrality" unconditionally.
 function openingReadingKeyFor(openingFrame) {
-  return openingFrame.kind === 'centrality'
-    ? OPENING_READING_KEY_CENTRALITY_ONLY
-    : OPENING_READING_KEY_BOOK_LINE;
+  if (openingFrame.kind === 'centrality') {
+    return openingFrame.centralityOffered ? OPENING_READING_KEY_CENTRALITY_ONLY : OPENING_READING_KEY_PARITY_ONLY;
+  }
+  return openingFrame.centralityOffered ? OPENING_READING_KEY_BOOK_LINE : OPENING_READING_KEY_BOOK_LINE_NO_CENTRALITY;
 }
 
 // The outcome-defining half for the horizon summary.
@@ -616,7 +677,7 @@ export function assembleGroundedPrompt(model) {
     '',
     `Guardrail: ${combinedGuardrail(model)}`,
     '',
-    READING_KEY,
+    readingKeyFor(model.rendered?.replyHistogram),
     ...(model.openingReadingKey ? ['', model.openingReadingKey] : []),
     '',
     '# Highlightable regions',

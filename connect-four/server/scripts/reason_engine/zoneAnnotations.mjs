@@ -34,6 +34,28 @@ const TERM_KB = {
   claimeven:        { kbId: 'claimeven', description: 'controlling the even squares of a column to guarantee a threat' },
 };
 
+// T033 (FR-024, OI-184). TERM_KB.double_threat's static description silently assumes the fork
+// belongs to the reader's side ("the opponent cannot block both") — board-false whenever the
+// OPPONENT is the one holding the fork (eval-13: only `opponentPunishment.tacticTag ===
+// 'double_threat'` fires it, owner 'opp'). `describeTerm` re-derives the description from the actual
+// owner(s) that fired the slug in THIS record (tracked as a Set in `fired`, below) — a single owner
+// gets a directional description; a slug fired by BOTH owners in one record (ownership genuinely not
+// determinable from the term alone) falls back to a neutral, side-agnostic phrasing. Only
+// `double_threat` carries a directional claim today — `immediate_threat`/`figure_7`/`claimeven` are
+// already side-neutral and pass through unchanged.
+function describeTerm(slug, owners) {
+  if (slug === 'double_threat' && owners && owners.size === 1) {
+    const [owner] = owners;
+    return owner === 'you'
+      ? 'two winning squares at once — your opponent cannot block both'
+      : 'two winning squares at once — you cannot block both';
+  }
+  if (slug === 'double_threat') {
+    return 'two winning squares at once for whichever side holds it — the other side cannot block both';
+  }
+  return TERM_KB[slug].description;
+}
+
 // The closed set of slugs that can ever be OFFERED as a [term:...] (task 9b): the render layer needs
 // this to know which slugs are safe to display unconditionally vs which must be redacted/conditioned
 // on `zones.terms`. Exported so renderReasonModel.mjs has one source of truth instead of a mirrored
@@ -53,12 +75,34 @@ export const OFFERABLE_TERM_SLUGS = Object.keys(TERM_KB);
 const LINE_STEER = 'a LINE of four squares, not a single square — use this handle, not a single-square '
   + 'handle, whenever your words say "line", "strip" or "row of four"';
 
+// T030 (FR-021, OI-198). The possessive/verb-agreement defect is a CLASS, not one string: any branch
+// that interpolates `${who}` ("you" / "your opponent") into a verb or possessive position must
+// conjugate for BOTH — "you" takes the bare/plural verb form ("you get", "you play"), "your opponent"
+// takes third-person singular ("your opponent gets", "your opponent plays"), and "you" possessive is
+// "your" (never "you's"). These two helpers are the single conjugation point every branch below goes
+// through — no branch may interpolate `${who}` directly into a verb or possessive again.
+function possessive(owner) {
+  return owner === 'you' ? 'your' : "your opponent's";
+}
+function conj(owner, base) {
+  return owner === 'you' ? base : `${base}s`;
+}
+
 function roleText(owner, kind) {
   const who = owner === 'you' ? 'you' : 'your opponent';
   if (kind === 'immediate') return `the single square where ${who} can make four next move`;
-  if (kind === 'double') return `the single fork square where ${who} gets two winning squares at once`;
+  // T031 (FR-022, OI-180). The spec this role text describes (`window`) can carry more than 2 cells
+  // — a board-tag 'double' fires whenever one owner has majors in >=2 distinct columns, and
+  // `halfForkCellsSpec` (reasonBoardTags.mjs, OI-180, out of scope for this file) can bundle 3+
+  // disjoint endpoints into one `windows:` group (eval-47: `you-double` = 3 cells). This file cannot
+  // change the producer, so THIS side is the authoritative fix: the role text no longer claims a
+  // singular "fork square" — it names the squares generically, correct for 2 or more.
+  if (kind === 'double') return `the fork squares where ${who} ${conj(owner, 'get')} winning squares at once`;
   if (kind === 'line') return `the whole four-in-a-row line ${who} ${owner === 'you' ? 'are' : 'is'} playing for (${LINE_STEER})`;
-  if (kind === 'future-line') return `the whole four-in-a-row line that decides this later, once the forced sequence reaches it — not a threat right now (${LINE_STEER})`;
+  // T024 (FR-015, OI-201). This branch used to omit the owner entirely — the model then had to guess
+  // whose line it was reading and, measured on eval-2 (2/5 runs), handed the player's own winning
+  // line to the opponent. Name the owner the same way the 'line' branch above does.
+  if (kind === 'future-line') return `the whole four-in-a-row line ${who} ${owner === 'you' ? 'are' : 'is'} playing for — it decides this later, once the forced sequence reaches it, not a threat right now (${LINE_STEER})`;
   if (kind === 'future') return `this single square matters later, once the forced sequence reaches it — not a threat right now`;
   // D45: the multi-cell fork alias is now a REQUIRED group, so its role text is paraphrased on every
   // run — the singular 'future' wording made the model call a two-square fork "the later fork
@@ -68,14 +112,16 @@ function roleText(owner, kind) {
   // ungrammatical, and it reached the model twice per record (Highlightable regions AND the required
   // set) on 13 corpus records. The surrounding branches conjugate explicitly (see the 'line' branch
   // above); these two now do the same.
-  const plays = owner === 'you' ? 'you play' : 'your opponent plays';
+  const plays = `${who} ${conj(owner, 'play')}`;
   // Fix 1 (spec 058 post-measure remediation, pin-L5-deep-fork): every OTHER 'future*' branch above
   // carries an explicit "not right now" contrast (`not a threat right now` / `not right now`); this
   // branch omitted it, and the model conflated a fork-creating cell 28 plies away with the actual
   // immediate best move. The contrast must rule out "play this now", not merely omit a claim about it.
   if (kind === 'fork-pivot') return `the square ${plays} to CREATE the fork — the move that makes both winning squares live at once; it matters later, once the forced sequence reaches it — it is NOT the move to play right now`;
   if (kind === 'fork-pivot-now') return `the square ${plays} to CREATE the fork — the move that makes both winning squares live at once`;
-  return `a single square completing ${who}'s four-in-a-row line`; // major
+  // T030: was `${who}'s` — grammatical for "your opponent's" but produced "you's" for the owner
+  // side. `possessive()` handles both.
+  return `a single square completing ${possessive(owner)} four-in-a-row line`; // major
 }
 
 // Both tags are forks — figure_7's canonical phrase is literally '7-shaped double threat'
@@ -197,6 +243,30 @@ export function buildAnnotationOffer(pruned, boardDecisions, opts = {}) {
     zoneAliasMap[key] = spec;
   }
 
+  // T025 (FR-016, OI-193). `forkPivotCell` (below) only ever sees a TAGGED half — `eval-47` has
+  // neither half carrying a `tacticTag` at all, yet the board tags themselves carry a structural
+  // 'double' (a board-geometry fork: majors for one owner in >=2 distinct columns), and that fork
+  // gets NO pivot handle today. The pivot for a board-tag fork is the move that turned the board
+  // from "no fork" into "fork" — i.e. the move applied to reach THIS board from the decision board
+  // (the same `applyCol` construction `boardSelectionDecisions` itself uses: 'afterBest' <-
+  // `pruned.bestCol`, 'afterPlayed' <- `pruned.playedCol`; 'decision' has no creating move — abstain,
+  // I2). Verified on eval-47: bestCol lands at c5r4 (not in the afterBest double's own window
+  // c3r6/c6r5/c7r2) and playedCol lands at c3r6 (not in the afterPlayed double's window c5r4/c7r4) —
+  // in both cases the landing cell is genuinely the pivot, not one of the fork's own finishing
+  // squares.
+  const decisionMovestring = boardDecisions.find((b) => b.id === 'decision')?.movestring ?? '';
+  const pivotCreatingCol = (boardId) => (boardId === 'afterBest' ? pruned.bestCol
+    : boardId === 'afterPlayed' ? pruned.playedCol : null);
+  const boardTagPivotCell = (boardId) => {
+    const col = pivotCreatingCol(boardId);
+    if (col == null || !decisionMovestring) return null;
+    let colHeights;
+    try { ({ colHeights } = parseBoardState(decisionMovestring)); } catch { return null; }
+    const row = colHeights[col];
+    if (row == null || row >= 6) return null;
+    return rcToCellStr({ col, row });
+  };
+
   // Structural tag aliases from near-term boards, in board order so truthBoard = first appearance
   // (which, for a structural tag, is a board where the tactic is genuinely board-true).
   for (const board of boardDecisions) {
@@ -221,6 +291,31 @@ export function buildAnnotationOffer(pruned, boardDecisions, opts = {}) {
           aliases.push({ handle: lh, spec: lineSpec, role: roleText(tag.owner, 'line'),
                          truthBoard: board.id, kbId: null });
           zoneAliasMap[lh] = lineSpec;
+        }
+      }
+      // T025: only when this owner has no TAGGED-half fork of their own — that case already gets its
+      // pivot from the `halfPairs` loop below (forkPivotCell).
+      if (tag.kind === 'double') {
+        const ownerHalf = tag.owner === 'you' ? pruned.lostResource : pruned.opponentPunishment;
+        const hasTaggedFork = ownerHalf && FORK_TAGS.has(ownerHalf.tacticTag);
+        if (!hasTaggedFork) {
+          const pivot = boardTagPivotCell(board.id);
+          const windowCells = tag.window ?? [tag.cell];
+          // Guard is SAME-BOARD only — a cell can legitimately carry a different, non-contradictory
+          // role on a DIFFERENT board (exactly like a structural tag and a `future:` alias for the
+          // same geometry already coexist elsewhere in this file), so this deliberately does NOT
+          // consult the cross-board `seen` set or add to it. Measured on eval-47: BOTH candidate
+          // pivot cells (c5r4 for afterBest, c3r6 for afterPlayed) are themselves immediate-threat
+          // cells on the OTHER near-term board — a cross-board dedupe here would let whichever board
+          // is iterated first silently swallow the other's pivot, leaving eval-47 with zero again.
+          const sameBoardTaken = new Set((board.tags ?? []).flatMap((t) => t.window ?? [t.cell]));
+          const alreadyOnThisBoard = aliases.some((a) => a.spec === pivot && a.truthBoard === board.id);
+          if (pivot && !windowCells.includes(pivot) && !sameBoardTaken.has(pivot) && !alreadyOnThisBoard) {
+            const ph = mkHandle(`${tag.owner}-fork-pivot`);
+            aliases.push({ handle: ph, spec: pivot, role: roleText(tag.owner, 'fork-pivot-now'),
+                           truthBoard: board.id, kbId: null });
+            zoneAliasMap[ph] = pivot;
+          }
         }
       }
     }
@@ -357,25 +452,38 @@ export function buildAnnotationOffer(pruned, boardDecisions, opts = {}) {
   }
 
   // Fired term vocabulary: structural board tags that map to a KB slug + the two halves' tags,
-  // intersected with the KB-backed set (TERM_KB).
+  // intersected with the KB-backed set (TERM_KB). T033 (FR-024, OI-184): also track WHICH owner(s)
+  // fired each slug, so `describeTerm` can attribute a directional description (e.g. double_threat's
+  // "the opponent cannot block both") to whichever side actually holds it, rather than assuming it is
+  // always the reader's own pattern — `eval-13` fires `double_threat` from `opponentPunishment` only
+  // (owner 'opp'), and the un-attributed description handed the reader's own pattern to the opponent.
   const fired = new Set();
+  const firedOwners = new Map(); // slug -> Set<'you'|'opp'>
+  const noteFired = (slug, owner) => {
+    if (!slug || !TERM_KB[slug]) return;
+    fired.add(slug);
+    if (!firedOwners.has(slug)) firedOwners.set(slug, new Set());
+    if (owner) firedOwners.get(slug).add(owner);
+  };
   for (const board of boardDecisions) {
     if (!NEAR_TERM.has(board.id)) continue;
     for (const tag of board.tags ?? []) {
-      const slug = KIND_TO_SLUG[tag.kind];
-      if (slug && TERM_KB[slug]) fired.add(slug);
+      noteFired(KIND_TO_SLUG[tag.kind], tag.owner);
     }
   }
-  for (const half of [pruned.lostResource, pruned.opponentPunishment]) {
+  for (const [half, side] of [[pruned.lostResource, 'you'], [pruned.opponentPunishment, 'opp']]) {
     // `tacticTag`, not `tag` — halves have never had a `tag` field (measured Object.keys(half):
     // kind,register,completingCell,window,pliesToEnd,line,finalMovestring,entryCell,terminal,
     // forkCase,forkCells,forkWindows,tacticTag,tacticCells,tacticFromDiff,tie). This read was dead
     // from the day it was written; a fixture using the same wrong name kept the test green.
-    if (half?.tacticTag && TERM_KB[half.tacticTag]) fired.add(half.tacticTag);   // figure_7 fires here even though its
-    // overlay tag is not an alias — terms are independent of zones (design §3c).
+    // owner via halfOwner (not the raw `side`) — a denial/neutralization half is re-owned to the
+    // OTHER player, same as every other owner-determination in this file (D50, halfOwner).
+    if (half?.tacticTag) noteFired(half.tacticTag, halfOwner(half, side));   // figure_7 fires here even
+    // though its overlay tag is not an alias — terms are independent of zones (design §3c).
   }
   const terms = [...fired].sort().map((slug) => ({
-    slug, kbId: TERM_KB[slug].kbId, canonicalPhrase: TAG_PHRASE[slug], description: TERM_KB[slug].description,
+    slug, kbId: TERM_KB[slug].kbId, canonicalPhrase: TAG_PHRASE[slug],
+    description: describeTerm(slug, firedOwners.get(slug)),
   }));
 
   // OI-191 — sibling aliases must not restate byte-identically. `mkHandle` disambiguates the HANDLE
@@ -390,35 +498,112 @@ export function buildAnnotationOffer(pruned, boardDecisions, opts = {}) {
   // block append "(on the <truthBoard> board)". Aliases separated by their board are already
   // distinguishable and are left alone, so this fires only where the model genuinely cannot choose.
   //
-  // The hint names the geometry in cNrM, the same coded form the Boards/Tactics blocks already use
-  // and the reading key already labels "for YOUR reading only. Never repeat …" — it is a reading
-  // aid, not new player-facing vocabulary.
+  // T023 (FR-014b, OI-194, Q8 PROVISIONAL): the disambiguating hint used to be `"the one at c6r5: \u2026"`
+  // \u2014 a raw cNrM coordinate the model then had grounds to echo verbatim (OI-194's own class: the
+  // prompt forbids raw squares in the model's own prose, but the render layer was itself the source
+  // of one). `ordinalLocator` replaces it with a plain-English ordinal tied to a stable,
+  // board-then-row-then-column sort of the sibling group \u2014 never a coordinate. `alias.spec` /
+  // `requiredSet[].spec` are UNTOUCHED here (they are the `aliasBySpec` match key, never printed).
   disambiguateSiblingRoles(aliases);
   return { aliases, zoneAliasMap, terms };
 }
 
-// `future:` is a render-framing decorator (D43), not geometry — strip it before describing the spec.
-function specHint(spec) {
+// Q8 PROVISIONAL: ordinal locator, not raw coordinates \u2014 see spec.md Q8.
+//
+// `future:` is a render-framing decorator (D43), not geometry \u2014 strip it before sorting. A
+// `windows:`-bearing spec is a whole line: represent it by its LOWEST (row, then col) cell, so a
+// fork's two lines sort the same way a single completing cell would. `col\u2026` specs never collide
+// (their role text is always distinct \u2014 "the column of the better move" vs "the column you
+// played") and are never routed through this sort in practice.
+function specSortKey(spec) {
   const raw = spec.startsWith('future:') ? spec.slice('future:'.length) : spec;
-  if (raw.startsWith('windows:')) {
-    const groups = raw.slice('windows:'.length).split('|').map((g) => g.split(',').join('\u00b7'));
-    return `the one through ${groups.join(' and ')}`;
+  const cellStrs = raw.startsWith('windows:')
+    ? raw.slice('windows:'.length).split('|').flatMap((g) => g.split(','))
+    : [raw];
+  let best = null;
+  for (const c of cellStrs) {
+    const m = /^c(\d+)r(\d+)$/.exec(c);
+    if (!m) continue;
+    const col = Number(m[1]), row = Number(m[2]);
+    if (!best || row < best.row || (row === best.row && col < best.col)) best = { row, col };
   }
-  if (/^col\d+$/.test(raw)) return null;          // columns never collide; nothing useful to add
-  return `the one at ${raw}`;
+  return best ?? { row: 0, col: 0 };
+}
+
+const ORDINAL_WORDS = ['first', 'second', 'third', 'fourth', 'fifth', 'sixth', 'seventh', 'eighth'];
+const HEIGHT_WORDS = ['lowest', 'second-lowest', 'third-lowest', 'fourth-lowest', 'fifth-lowest'];
+
+// Regression fix (2026-08-28, post-Epic-12 review). The locator this replaces rendered a HEIGHT
+// claim ("the lower one" / "the higher one", or an ordinal "counting from the bottom of the board")
+// for every group, even when the sort that assigned positions was decided by the COLUMN tiebreak or
+// original array order, not by row — i.e. it asserted vertical position for cells that are not, in
+// fact, at different heights. Measured, real output before this fix: eval-9's `future:c3r5` /
+// `future:c6r5` (both row 5) rendered "the lower one" / "the higher one"; eval-19's `c3r5` / `c5r5`
+// (both row 5) rendered "the first one, counting from the bottom" / "the second one…".
+//
+// `locatorsForGroup` replaces the single ordinal function with a strategy ladder — each rung states
+// something TRUE of the group by construction; the first rung that makes every member's label
+// unique wins:
+//   1. COLUMN — "the one in column N". Always true of the representative cell, and (per
+//      `specSortKey`) the group members usually differ in column already, so this is the common case
+//      and needs no height claim at all.
+//   2. COLUMN + HEIGHT — "the lower one in column N" / "the upper one in column N" (or a
+//      lowest/second-lowest/… ladder for 3+), used ONLY for the subset of members that genuinely
+//      share a column with a sibling AND differ in row — the one case a height claim is true.
+//   3. LISTING ORDINAL, no geometry — "the first one listed" / "the second one listed" — the
+//      residual case where two members share their exact representative (column, row) (e.g. two
+//      different windows whose lowest cell coincides) and no spatial statement can distinguish them.
+function locatorsForGroup(sortedKeys) {
+  const colCounts = new Map();
+  for (const k of sortedKeys) colCounts.set(k.col, (colCounts.get(k.col) ?? 0) + 1);
+
+  // Rung 1: column alone.
+  const colOnly = sortedKeys.map((k) => `the one in column ${k.col}`);
+  if (new Set(colOnly).size === colOnly.length) return colOnly;
+
+  // Rung 2: column, with height disambiguation only where a column is genuinely shared.
+  const withHeight = sortedKeys.map((k) => {
+    if (colCounts.get(k.col) === 1) return `the one in column ${k.col}`;
+    const sameColRows = [...new Set(sortedKeys.filter((k2) => k2.col === k.col).map((k2) => k2.row))]
+      .sort((a, b) => a - b);
+    if (sameColRows.length === 1) return null; // exact (col,row) tie — rung 2 cannot distinguish
+    if (sameColRows.length === 2) {
+      return k.row === sameColRows[0] ? `the lower one in column ${k.col}` : `the upper one in column ${k.col}`;
+    }
+    const rank = sameColRows.indexOf(k.row);
+    const word = HEIGHT_WORDS[rank] ?? `${rank + 1}th-lowest`;
+    return `the ${word} one in column ${k.col}`;
+  });
+  if (withHeight.every(Boolean) && new Set(withHeight).size === withHeight.length) return withHeight;
+
+  // Rung 3: listing ordinal — asserts position in the list, never height or column.
+  return sortedKeys.map((_, idx) => `the ${ORDINAL_WORDS[idx] ?? `${idx + 1}th`} one listed`);
 }
 
 export function disambiguateSiblingRoles(aliases) {
-  const counts = new Map();
   const key = (a) => `${a.role}|${a.truthBoard}`;
-  for (const a of aliases) counts.set(key(a), (counts.get(key(a)) ?? 0) + 1);
-  for (const a of aliases) {
-    if ((counts.get(key(a)) ?? 0) < 2) continue;
-    const hint = specHint(a.spec);
+  const groups = new Map();
+  aliases.forEach((a, i) => {
+    const k = key(a);
+    if (!groups.has(k)) groups.set(k, []);
+    groups.get(k).push({ a, i });
+  });
+  for (const group of groups.values()) {
+    if (group.length < 2) continue;
+    // Stable, deterministic sort: board-then-row-then-column (the truthBoard is already fixed
+    // within a group by the collision key itself), with original alias order as the final tie-break
+    // so the order is total even when two siblings share a representative cell.
+    const sorted = [...group].sort((x, y) => {
+      const kx = specSortKey(x.a.spec), ky = specSortKey(y.a.spec);
+      return (kx.row - ky.row) || (kx.col - ky.col) || (x.i - y.i);
+    });
+    const locators = locatorsForGroup(sorted.map((item) => specSortKey(item.a.spec)));
     // Front-loaded, not appended: the LINE_STEER roles already END in a parenthetical, so a
     // trailing hint reads as part of that aside. Leading with the geometry also puts the one
     // distinguishing token first, where the model binds the handle.
-    if (hint) a.role = `${hint}: ${a.role}`;
+    sorted.forEach((item, idx) => {
+      item.a.role = `${locators[idx]}: ${item.a.role}`;
+    });
   }
   return aliases;
 }

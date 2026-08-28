@@ -475,7 +475,22 @@ test('fix 1: the fork-pivot role text carries an explicit "not right now" contra
 // (owner, kind) function and returned the same string for both, so the prompt described two
 // different squares identically and the model had nothing to bind on. Measured corpus-wide: 48 of
 // 63 records carried at least one (role, truthBoard) collision before this fix, 0 after.
-test('OI-191: two same-kind, same-board aliases get distinguishable role text', () => {
+//
+// T023 (FR-014b, OI-194, Q8 PROVISIONAL): the disambiguating hint used to be a raw coordinate
+// (`"the one at c6r5: …"`) — exactly the notation the prompt forbids the model's OWN prose from
+// echoing. It is now a plain-English locator tied to a stable board-then-row-then-column sort.
+//
+// Regression fix (2026-08-28, post-Epic-12 review): the ORIGINAL replacement rendered a HEIGHT claim
+// ("the lower one" / "the higher one") whenever the sort landed a group of 2, even when the sort was
+// actually decided by the COLUMN tiebreak (both members on the SAME row) — a false geometric claim.
+// `locatorsForGroup`'s strategy ladder now tries COLUMN ALONE first ("the one in column N"), which is
+// both true and (per `specSortKey`) the common case since siblings usually differ in column; height
+// wording ("the lower/upper one in column N") is used only for the subset that genuinely shares a
+// column. These two tests previously asserted the height-claim wording as correct even though both
+// fixtures below put their two cells on the SAME row (a real instance of the regression, not just a
+// hypothetical) — they are updated here (not weakened) to assert the new, TRUE wording plus the D49
+// property they were actually guarding.
+test('OI-191: two same-kind, same-board aliases get distinguishable role text (no raw coordinate)', () => {
   const p = {
     bestCol: 2, playedCol: 3,
     // `denial` flips the owner (halfOwner's OPPONENT_OWNED set), so BOTH halves offer an
@@ -488,11 +503,15 @@ test('OI-191: two same-kind, same-board aliases get distinguishable role text', 
   const squares = aliases.filter((a) => a.spec === 'c3r1' || a.spec === 'c2r1');
   assert.equal(squares.length, 2);
   assert.notEqual(squares[0].role, squares[1].role);
-  assert.match(squares.find((a) => a.spec === 'c3r1').role, /c3r1/);
-  assert.match(squares.find((a) => a.spec === 'c2r1').role, /c2r1/);
+  // c3r1 and c2r1 are both row 1 (SAME height) but different columns — column alone (rung 1)
+  // already distinguishes them, so neither gets a height claim.
+  assert.match(squares.find((a) => a.spec === 'c2r1').role, /^the one in column 2:/);
+  assert.match(squares.find((a) => a.spec === 'c3r1').role, /^the one in column 3:/);
+  // SC-011 / T023: no raw cNrM coordinate anywhere in the role text.
+  for (const a of squares) assert.doesNotMatch(a.role, /\bc\d+r\d+\b/);
 });
 
-test('OI-191: the hint strips the future: decorator and renders a window as its cells', () => {
+test('OI-191: the ordinal hint strips the future: decorator and never names a raw cell/window', () => {
   const p = {
     bestCol: 2, playedCol: 3,
     lostResource: { kind: 'winning_line', register: 'forced_sequence', completingCell: 'c6r5',
@@ -502,9 +521,15 @@ test('OI-191: the hint strips the future: decorator and renders a window as its 
   };
   const { aliases } = buildAnnotationOffer(p, []);
   const sq = aliases.find((a) => a.spec === 'future:c6r5');
-  assert.match(sq.role, /^the one at c6r5:/);          // no `future:` leaks into the role
+  // c6r5 and c3r5 are both row 5 (SAME height) but different columns (6 vs 3) — column alone
+  // distinguishes them, so this is "the one in column 6", never a height claim.
+  assert.match(sq.role, /^the one in column 6:/);
+  assert.doesNotMatch(sq.role, /\bc\d+r\d+\b/);
   const line = aliases.find((a) => a.spec === 'future:windows:c3r5,c4r5,c5r5,c6r5');
-  assert.match(line.role, /^the one through c3r5·c4r5·c5r5·c6r5:/);
+  // The line alias has no sibling of its own (its owner's OTHER offer is a plain future: cell, a
+  // different spec shape) — its role is untouched, still owner-conjugated per T024, still no
+  // coordinate.
+  assert.doesNotMatch(line.role, /\bc\d+r\d+\b/);
 });
 
 test('OI-191: a role with no sibling is left byte-identical (no gratuitous rewording)', () => {
@@ -662,4 +687,262 @@ test('OI-190: with a single deep board the binding is unchanged (pre-fix shape p
   const deep = aliases.filter((a) => a.spec.startsWith('future:'));
   assert.ok(deep.length > 0);
   for (const a of deep) assert.equal(a.truthBoard, 'projectedDeep');
+});
+
+// ── T035 (US3) — corpus-wide assertions for T023/T024/T025/T030/T031/T033 ──────────────────────
+//
+// All checks run through `buildReasonRenderModel` (the production pipeline: pruneVector ->
+// boardSelectionDecisions -> buildAnnotationOffer), never a hand-rolled proxy (FR-031, I12), against
+// the deterministic, solver-free, no-LLM corpus at reason_corpus/evidence.jsonl.
+
+test('T023/FR-014b (OI-194): no zones.aliases[].role ever carries a raw cNrM coordinate, corpus-wide', () => {
+  const rows = readFileSync(CORPUS190, 'utf8').trim().split('\n').map((l) => JSON.parse(l));
+  const violations = [];
+  let checked = 0;
+  for (const row of rows) {
+    if (!row.evidence || row.error) continue;
+    let model;
+    try { model = buildReasonRenderModel(toNarratorVector(row.evidence)); } catch { continue; }
+    checked += 1;
+    for (const a of model.zones.aliases) {
+      if (/\bc\d+r\d+\b/.test(a.role)) violations.push(`${row.id}: ${a.handle} role="${a.role}"`);
+    }
+  }
+  assert.ok(checked > 0, 'expected at least one corpus record to check');
+  assert.deepEqual(violations, [], `raw coordinates leaked into role text:\n${violations.join('\n')}`);
+});
+
+test('T023/D49: the sibling-disambiguation property still holds corpus-wide — no two aliases ' +
+     'sharing (role, truthBoard) restate identically', () => {
+  const rows = readFileSync(CORPUS190, 'utf8').trim().split('\n').map((l) => JSON.parse(l));
+  const violations = [];
+  let checked = 0;
+  for (const row of rows) {
+    if (!row.evidence || row.error) continue;
+    let model;
+    try { model = buildReasonRenderModel(toNarratorVector(row.evidence)); } catch { continue; }
+    checked += 1;
+    const seen = new Map();
+    for (const a of model.zones.aliases) {
+      const key = `${a.role}|${a.truthBoard}`;
+      if (seen.has(key)) violations.push(`${row.id}: ${seen.get(key)} and ${a.handle} restate "${key}"`);
+      seen.set(key, a.handle);
+    }
+  }
+  assert.ok(checked > 0, 'expected at least one corpus record to check');
+  assert.deepEqual(violations, [], `D49 sibling collisions reintroduced:\n${violations.join('\n')}`);
+});
+
+// ── Regression fix (2026-08-28, post-Epic-12 review) ────────────────────────────────────────────
+// `ordinalLocator` (now `locatorsForGroup`) previously stated a HEIGHT claim ("the lower one" /
+// "the higher one", or an ordinal "counting from the bottom of the board") for every sibling group,
+// even when the sort that assigned the position was decided by the COLUMN tiebreak or original
+// array order rather than by row — i.e. it asserted vertical position for cells that are NOT, in
+// fact, at different heights. Measured, real output before this fix: eval-9's `future:c3r5` /
+// `future:c6r5` (both row 5) rendered "the lower one" / "the higher one"; eval-19's `c3r5` / `c5r5`
+// (both row 5) rendered "the first one, counting from the bottom" / "the second one…".
+//
+// This is a GROUND-TRUTH check, not a text-pattern guess: for every sibling group in every corpus
+// record we independently re-derive each member's representative (column, row) straight off its OWN
+// `spec` string (never off the rendered locator text), and assert that a rendered height claim
+// ("lower"/"upper"/an ordinal-of-N "-lowest") is only ever made where the underlying rows actually
+// differ, and only within a genuinely shared column.
+function repCellIndependent(spec) {
+  const raw = spec.startsWith('future:') ? spec.slice('future:'.length) : spec;
+  const cellStrs = raw.startsWith('windows:')
+    ? raw.slice('windows:'.length).split('|').flatMap((g) => g.split(','))
+    : [raw];
+  let best = null;
+  for (const c of cellStrs) {
+    const m = /^c(\d+)r(\d+)$/.exec(c);
+    if (!m) continue;
+    const col = Number(m[1]), row = Number(m[2]);
+    if (!best || row < best.row || (row === best.row && col < best.col)) best = { row, col };
+  }
+  return best;
+}
+
+test('Regression fix corpus-wide: every sibling locator states something TRUE of its group — a ' +
+     'height claim only where the rows genuinely differ within a shared column, a column claim only ' +
+     'where that IS the representative column, and the no-geometry fallback only where nothing ' +
+     'spatial separates the members', () => {
+  const rows = readFileSync(CORPUS190, 'utf8').trim().split('\n').map((l) => JSON.parse(l));
+  const LOC_RE = /^(the (lower|upper) one in column (\d+)|the ([\w-]+) one in column (\d+)|the one in column (\d+)|the [\w-]+ one listed): /;
+  const violations = [];
+  let checked = 0;
+  let checkedGroups = 0;
+  for (const row of rows) {
+    if (!row.evidence || row.error) continue;
+    let model;
+    try { model = buildReasonRenderModel(toNarratorVector(row.evidence)); } catch { continue; }
+    checked += 1;
+    // Regroup by the PRE-locator collision key, i.e. the role text with the locator prefix
+    // stripped, paired with truthBoard — reconstructs disambiguateSiblingRoles' own grouping.
+    const groups = new Map();
+    for (const a of model.zones.aliases) {
+      const m = LOC_RE.exec(a.role);
+      if (!m) continue;
+      const base = a.role.slice(m[0].length);
+      const key = `${base}|${a.truthBoard}`;
+      if (!groups.has(key)) groups.set(key, []);
+      groups.get(key).push({ handle: a.handle, spec: a.spec, locator: m[1], rc: repCellIndependent(a.spec) });
+    }
+    for (const [key, members] of groups) {
+      if (members.length < 2) continue;
+      checkedGroups += 1;
+      // Every rendered locator must be UNIQUE within the group (that is the property the ladder
+      // exists to guarantee).
+      const locators = members.map((m) => m.locator);
+      if (new Set(locators).size !== locators.length) {
+        violations.push(`${row.id}: group "${key}" has non-unique locators ${JSON.stringify(locators)}`);
+      }
+      for (const m of members) {
+        const heightMatch = /^the (lower|upper|[\w-]+) one in column (\d+)$/.exec(m.locator);
+        if (!heightMatch || !/lower|upper|lowest|-lowest/.test(m.locator)) continue; // plain column claim, always true
+        const claimedCol = Number(heightMatch[2]);
+        if (m.rc?.col !== claimedCol) {
+          violations.push(`${row.id}: ${m.handle} locator "${m.locator}" names column ${claimedCol} but its own spec ${m.spec} is column ${m.rc?.col}`);
+          continue;
+        }
+        // A height claim requires at least one OTHER member in the group sharing this exact column
+        // with a DIFFERENT row.
+        const sameColOthers = members.filter((x) => x !== m && x.rc?.col === claimedCol);
+        const hasGenuineHeightDiff = sameColOthers.some((x) => x.rc?.row !== m.rc?.row);
+        if (!hasGenuineHeightDiff) {
+          violations.push(`${row.id}: ${m.handle} locator "${m.locator}" claims a height distinction but ` +
+            `no other group member shares column ${claimedCol} with a different row (group=${JSON.stringify(members.map((x) => ({ spec: x.spec, rc: x.rc })))})`);
+        }
+      }
+    }
+  }
+  assert.ok(checked > 0, 'expected at least one corpus record to check');
+  assert.ok(checkedGroups >= 50, `expected at least the 58 known sibling groups, got ${checkedGroups}`);
+  assert.deepEqual(violations, [], `false-geometry locator violations:\n${violations.join('\n')}`);
+});
+
+test('T024/FR-015 (OI-201): every future-line role text names its owner, corpus-wide', () => {
+  const rows = readFileSync(CORPUS190, 'utf8').trim().split('\n').map((l) => JSON.parse(l));
+  const violations = [];
+  let checkedFutureLine = 0;
+  for (const row of rows) {
+    if (!row.evidence || row.error) continue;
+    let model;
+    try { model = buildReasonRenderModel(toNarratorVector(row.evidence)); } catch { continue; }
+    for (const a of model.zones.aliases) {
+      // future-line role text is identifiable by its distinctive "decides this later" clause and
+      // the LINE_STEER parenthetical, without depending on handle naming.
+      if (!/decides this later, once the forced sequence reaches it/.test(a.role)) continue;
+      checkedFutureLine += 1;
+      const ownsIt = a.handle.startsWith('you-') ? /\byou are playing for\b/.test(a.role)
+        : /\byour opponent is playing for\b/.test(a.role);
+      if (!ownsIt) violations.push(`${row.id}: ${a.handle} role="${a.role}"`);
+    }
+  }
+  assert.ok(checkedFutureLine > 0, 'expected at least one corpus record with a future-line alias (e.g. eval-2)');
+  assert.deepEqual(violations, [], `future-line role missing/wrong owner:\n${violations.join('\n')}`);
+});
+
+test('T025/FR-016 (OI-193): eval-47\'s board-tag-only fork gets an offered pivot handle', () => {
+  const rows = readFileSync(CORPUS190, 'utf8').trim().split('\n').map((l) => JSON.parse(l));
+  const row = rows.find((r) => r.id === 'eval-47');
+  assert.ok(row, 'expected eval-47 in the corpus');
+  const model = buildReasonRenderModel(toNarratorVector(row.evidence));
+  const pivots = model.zones.aliases.filter((a) => a.handle.includes('fork-pivot'));
+  assert.ok(pivots.length > 0,
+    `eval-47 must offer at least one fork-pivot handle; got ${model.zones.aliases.map((a) => a.handle).join(', ')}`);
+  // Soundness, corpus-wide: a board-tag pivot must never equal one of its OWN fork's finishing
+  // cells (I2 — the abstain guard in zoneAnnotations.mjs must actually hold).
+  const violations = [];
+  for (const r of rows) {
+    if (!r.evidence || r.error) continue;
+    let model2;
+    try { model2 = buildReasonRenderModel(toNarratorVector(r.evidence)); } catch { continue; }
+    const doubles = model2.zones.aliases.filter((a) => a.spec.startsWith('windows:') && /fork squares/.test(a.role));
+    const pivotsHere = model2.zones.aliases.filter((a) => a.handle.includes('fork-pivot'));
+    for (const p of pivotsHere) {
+      for (const d of doubles) {
+        if (d.truthBoard !== p.truthBoard) continue;
+        const cells = d.spec.replace(/^future:/, '').replace(/^windows:/, '').split(',');
+        if (cells.includes(p.spec)) violations.push(`${r.id}: pivot ${p.handle}=${p.spec} is also a finishing cell of ${d.handle}`);
+      }
+    }
+  }
+  assert.deepEqual(violations, [], `pivot coincided with its own fork's finishing square:\n${violations.join('\n')}`);
+});
+
+test('T030/FR-021 (OI-198): no role text has the "you\'s" possessive or an un-conjugated ' +
+     '"you gets"/"you plays" verb, corpus-wide', () => {
+  const rows = readFileSync(CORPUS190, 'utf8').trim().split('\n').map((l) => JSON.parse(l));
+  const violations = [];
+  let checked = 0;
+  for (const row of rows) {
+    if (!row.evidence || row.error) continue;
+    let model;
+    try { model = buildReasonRenderModel(toNarratorVector(row.evidence)); } catch { continue; }
+    checked += 1;
+    for (const a of model.zones.aliases) {
+      if (/\byou's\b/.test(a.role)) violations.push(`${row.id}: ${a.handle} has "you's": "${a.role}"`);
+      if (/\byou (gets|plays|is)\b/.test(a.role)) violations.push(`${row.id}: ${a.handle} has an un-conjugated verb: "${a.role}"`);
+    }
+  }
+  assert.ok(checked > 0, 'expected at least one corpus record to check');
+  assert.deepEqual(violations, [], `grammar-agreement violations:\n${violations.join('\n')}`);
+});
+
+test('T031/FR-022 (OI-180): a `double`-kind role text never claims a singular "fork square" ' +
+     'regardless of its own spec\'s arity, corpus-wide (including eval-47\'s 3-cell you-double)', () => {
+  const rows = readFileSync(CORPUS190, 'utf8').trim().split('\n').map((l) => JSON.parse(l));
+  const violations = [];
+  let checkedDouble = 0;
+  for (const row of rows) {
+    if (!row.evidence || row.error) continue;
+    let model;
+    try { model = buildReasonRenderModel(toNarratorVector(row.evidence)); } catch { continue; }
+    for (const a of model.zones.aliases) {
+      if (!/(fork squares? where)/.test(a.role)) continue;
+      checkedDouble += 1;
+      if (/\bthe single fork square\b/.test(a.role)) violations.push(`${row.id}: ${a.handle} still claims singular: "${a.role}"`);
+    }
+  }
+  assert.ok(checkedDouble > 0, 'expected at least one corpus record with a double-kind alias');
+  assert.deepEqual(violations, [], `singular arity claim survived:\n${violations.join('\n')}`);
+  // eval-47's own 3-cell you-double, named in the task, explicitly checked.
+  const row47 = rows.find((r) => r.id === 'eval-47');
+  const model47 = buildReasonRenderModel(toNarratorVector(row47.evidence));
+  const youDouble = model47.zones.aliases.find((a) => a.spec === 'windows:c3r6,c6r5,c7r2');
+  assert.ok(youDouble, 'expected eval-47\'s 3-cell you-double alias');
+  assert.doesNotMatch(youDouble.role, /\bthe single fork square\b/);
+});
+
+test('T033/FR-024 (OI-184): double_threat term description attributes ownership to the ' +
+     'actual firing side, not always "your opponent" — eval-13 goes GREEN', () => {
+  const rows = readFileSync(CORPUS190, 'utf8').trim().split('\n').map((l) => JSON.parse(l));
+  const row13 = rows.find((r) => r.id === 'eval-13');
+  assert.ok(row13, 'expected eval-13 in the corpus');
+  const model13 = buildReasonRenderModel(toNarratorVector(row13.evidence));
+  const term13 = model13.zones.terms.find((t) => t.slug === 'double_threat');
+  assert.ok(term13, 'expected eval-13 to fire the double_threat term');
+  // eval-13's double_threat fires ONLY from `opponentPunishment` (owner 'opp') — the description
+  // must say the READER cannot block both, never hand the opponent's own fork back to them as
+  // "the opponent cannot block both".
+  assert.match(term13.description, /you cannot block both/);
+  assert.doesNotMatch(term13.description, /your opponent cannot block both/);
+
+  // Corpus-wide soundness: whichever description variant is chosen must be internally consistent
+  // (never both directional claims in the same description).
+  let checked = 0;
+  const violations = [];
+  for (const row of rows) {
+    if (!row.evidence || row.error) continue;
+    let model;
+    try { model = buildReasonRenderModel(toNarratorVector(row.evidence)); } catch { continue; }
+    const term = model.zones.terms.find((t) => t.slug === 'double_threat');
+    if (!term) continue;
+    checked += 1;
+    const sawOpp = /your opponent cannot block both/.test(term.description);
+    const sawYou = /\byou cannot block both\b/.test(term.description);
+    if (sawOpp && sawYou) violations.push(`${row.id}: description asserts both directions: "${term.description}"`);
+  }
+  assert.ok(checked > 0, 'expected at least one corpus record firing double_threat');
+  assert.deepEqual(violations, [], violations.join('\n'));
 });

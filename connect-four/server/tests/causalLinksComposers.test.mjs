@@ -21,8 +21,11 @@ test('L5 (pin-L5-deep-fork): deep fork framed as deep, not immediate', () => {
   assert.equal(link.id, 'L5');
   assert.match(link.text, /forced win/i);
   assert.match(link.text, /deep on a forced line/);      // horizon-honest (pin-L5-deep-fork fix)
-  assert.match(link.text, /c4r3/);                        // fork completing cell named
-  assert.match(link.text, /c6r5/);                        // opponent denial cell named
+  // B1 (FR-014/SC-011): fork completing cell (c4r3) and opponent denial cell (c6r5) now render as
+  // "column N" prose, not raw cNrM.
+  assert.match(link.text, /completing at column 4/);      // fork completing cell named
+  assert.match(link.text, /deny it at column 6/);          // opponent denial cell named
+  assert.doesNotMatch(link.text, /\bc\d+r\d+\b/);          // no raw coordinate leaks (OI-194)
   assert.doesNotMatch(link.text, /immediate|right now|current threat/i);
 });
 
@@ -32,8 +35,11 @@ test('L1 (pin-L1-completes-your-tactic): completes YOUR tactic; opponent denial 
   assert.match(link.text, /[Cc]olumn 3 was the better move/);   // bestCol 2 -> display 3, prose form
   assert.match(link.text, /double threat/i);              // double_threat slug -> plain C4 phrase
   assert.doesNotMatch(link.text, /double_threat/);        // raw slug must not leak
-  assert.match(link.text, /c2r1/);                        // your completing cell
-  assert.match(link.text, /c3r1/);                        // opponent denial cell
+  // T022 (FR-014a, OI-194): completingCell/denial cell now render as "column N" prose, not a raw
+  // cNrM token — c2r1 -> column 2 (your completing cell), c3r1 -> column 3 (opponent denial cell).
+  assert.match(link.text, /completes your .* in column 2/);   // your completing cell
+  assert.match(link.text, /opponent take column 3/);          // opponent denial cell
+  assert.doesNotMatch(link.text, /\bc\d+r\d+\b/);              // no raw coordinate leaks (OI-194)
 });
 
 test('L2 (pin-L2-enabled-opponent): played move handed the opponent the pattern', () => {
@@ -43,18 +49,22 @@ test('L2 (pin-L2-enabled-opponent): played move handed the opponent the pattern'
   // the half's own finalMovestring `33432`. The opponent actually landed on `c3r1`
   // (= tie.sharedCells[0], the square the better move would have taken). The old expectation was
   // part of the bug: it kept a board-false frame green across every earlier run.
-  assert.match(link.text, /let the opponent occupy c3r1/);
-  assert.doesNotMatch(link.text, /occupy c2r1/);
+  // T022 (FR-014a, OI-194): the conceded cell now renders as "column N" prose — c3r1 -> column 3,
+  // c2r1 -> column 2.
+  assert.match(link.text, /let the opponent occupy column 3/);
+  assert.doesNotMatch(link.text, /occupy column 2\b/);
   assert.match(link.text, /double threat/i);              // double_threat slug -> plain C4 phrase
   assert.doesNotMatch(link.text, /double_threat/);        // raw slug must not leak
   assert.match(link.text, /[Cc]olumn 3 was the better move/);   // bestCol 2 -> display 3, prose form
+  assert.doesNotMatch(link.text, /\bc\d+r\d+\b/);         // no raw coordinate leaks (OI-194)
 });
 
 test('L3 (pin-L3-no-causation): no-causation, hold-the-line wording; names the branch-invariant pattern', () => {
   const { link } = classifyById('pin-L3-no-causation');
   assert.equal(link.id, 'L3');
   assert.match(link.text, /7-shaped double threat/);      // figure_7 slug -> plain C4 phrase
-  assert.match(link.text, /c4r3/);
+  assert.match(link.text, /column 4/);                    // T022 (OI-194): c4r3 -> "column 4" prose
+  assert.doesNotMatch(link.text, /\bc\d+r\d+\b/);         // no raw coordinate leaks (OI-194)
   assert.match(link.text, /didn't create it/i);           // no causation, player-facing
   assert.match(link.text, /work hardest|speeds up the finish/i);
   assert.doesNotMatch(link.text, /already losing|neither move wins/i);  // A5b: no defeatist framing
@@ -65,7 +75,8 @@ test('L4 (pin-L4-missed-defense): missed defense; occupies the block, names the 
   const { link } = classifyById('pin-L4-missed-defense');
   assert.equal(link.id, 'L4');
   assert.match(link.text, /[Cc]olumn 5 was the better move/);   // bestCol 4 -> display 5, prose form
-  assert.match(link.text, /occupies c5r4/);
+  assert.match(link.text, /occupies column 5/);           // T022 (OI-194): c5r4 -> "column 5" prose
+  assert.doesNotMatch(link.text, /\bc\d+r\d+\b/);         // no raw coordinate leaks (OI-194)
   assert.match(link.text, /skipped that defense/i);
 });
 
@@ -89,8 +100,15 @@ test('L4 (pin-L4-missed-defense): non-lose_to_faster_lose case keeps the origina
 test('L6 (pin-L6-lost-win-and-gave-one): gave up a win AND handed the opponent one', () => {
   const { link } = classifyById('pin-L6-lost-win-and-gave-one');
   assert.equal(link.id, 'L6');
-  assert.match(link.text, /forced win via c2r5/);
-  assert.match(link.text, /opponent force their own win via c2r6/);
+  // B1 (FR-014/SC-011) named both completing cells (c2r5, c2r6) as "column N" prose — but they are
+  // TWO DIFFERENT squares sharing that column, so bare "column 2" for both was self-contradictory
+  // ("you had a win via column 2 ... opponent forces their own win via column 2"). Regression fix
+  // (2026-08-28): `cellPhrase` now disambiguates genuinely different same-column cells by height
+  // (row 1 = bottom); c2r5 sorts lower than c2r6, so the fixture reads "the lower square in column 2"
+  // for the player's own win and "the upper square in column 2" for the opponent's.
+  assert.match(link.text, /forced win via the lower square in column 2/);
+  assert.match(link.text, /opponent force their own win via the upper square in column 2/);
+  assert.doesNotMatch(link.text, /\bc\d+r\d+\b/);
 });
 
 test('L7 (pin-L7-practical-swindle): practical swindle framed as toughest defense, no defeatist wording', () => {
@@ -106,7 +124,8 @@ test('L8 (pin-L8-draw-abandoned): a draw abandoned; opponent now has a forced wi
   const { link } = classifyById('pin-L8-draw-abandoned');
   assert.equal(link.id, 'L8');
   assert.match(link.text, /position was a draw/i);
-  assert.match(link.text, /occupying c4r4/);
+  assert.match(link.text, /occupying column 4/);          // T022 (OI-194): c4r4 -> "column 4" prose
+  assert.doesNotMatch(link.text, /\bc\d+r\d+\b/);          // no raw coordinate leaks (OI-194)
   assert.match(link.text, /forced win/i);
 });
 
@@ -148,21 +167,38 @@ for (const [linkId, boardId] of Object.entries(ONE_PER_LINK)) {
 // ── OI-195 — the conceded cell is the SHARED one, validated over the whole L2 case space ───────
 //
 // Only pin-L2-enabled-opponent and its branch-invariance twin have tie.sharedCells[0] !==
-// completingCell; the other three L2-routed records must render byte-identically, which is what
-// makes the next measurement attributable to this one change.
-test('OI-195: the three L2 records whose shared cell already equalled the completing cell are unchanged', () => {
-  for (const [id, cell] of [['eval-33', 'c5r6'], ['eval-44', 'c3r1'], ['eval-45', 'c4r6']]) {
+// completingCell; the CELL CHOICE for the other three L2-routed records is unchanged by D49 (still
+// `tie.sharedCells[0]`, which happens to equal `completingCell` for these three). The VERB is no
+// longer unchanged: spec 059 T015 (FR-012, OI-195 remaining half a) found the named square is empty
+// on the punishment half's own `finalMovestring` for all three — "occupy" was a board-false
+// over-claim (the cell is a live gravity-top THREAT, not yet taken). The template now checks
+// occupancy and says "open a path to" instead; see causalLinks.test.mjs's FR-012 corpus test for the
+// full invariant this asserts.
+// T022 (FR-014a, OI-194) update: the conceded cell now renders as "column N" prose, not the raw
+// cNrM token — the column-number checks below replace the old raw-cell regexes; the underlying
+// occupied/open-path invariant (T015/FR-012) is unchanged.
+test('OI-195: the three L2 records whose shared cell already equalled the completing cell name the same cell (verb now occupancy-checked, T015)', () => {
+  for (const [id, col] of [['eval-33', 5], ['eval-44', 3], ['eval-45', 4]]) {
     const { fv, link } = classifyById(id);
     assert.equal(link.id, 'L2', `${id} must still route to L2`);
     assert.equal(fv.opponentPunishment.tie.sharedCells[0], fv.opponentPunishment.completingCell);
-    assert.match(link.text, new RegExp(`let the opponent occupy ${cell}`));
+    // T015: the cell is empty on the punishment half's own finalMovestring — "open a path to", not "occupy".
+    assert.match(link.text, new RegExp(`let the opponent open a path to column ${col}\\b`));
+    assert.doesNotMatch(link.text, new RegExp(`let the opponent occupy column ${col}\\b`));
+    assert.doesNotMatch(link.text, /\bc\d+r\d+\b/, `${id}: no raw coordinate leaks (OI-194)`);
   }
 });
 
-test('OI-195: a punishment half with no tie falls back to completingCell (no behaviour change)', () => {
+test('OI-195: a punishment half with no tie falls back to completingCell (T015: verb reflects that cell\'s own occupancy)', () => {
   const { fv } = classifyById('pin-L2-enabled-opponent');
   const noTie = { ...fv, opponentPunishment: { ...fv.opponentPunishment, tie: undefined } };
   const link = classifyCausalLink(noTie, { patternOnAfterBestBoard: false });
   assert.equal(link.id, 'L2');
-  assert.match(link.text, /let the opponent occupy c2r1/);
+  // Falls back to completingCell = c2r1 (column 2), which is EMPTY on this half's own
+  // finalMovestring ('33432') — tie.sharedCells[0] ('c3r1') is the one actually taken (D49). T015's
+  // occupancy check therefore correctly says "open a path to", not "occupy", once the tie (and its
+  // correct cell choice) is gone. T022 (OI-194): rendered as "column 2" prose, not the raw token.
+  assert.match(link.text, /let the opponent open a path to column 2\b/);
+  assert.doesNotMatch(link.text, /let the opponent occupy column 2\b/);
+  assert.doesNotMatch(link.text, /\bc\d+r\d+\b/);
 });

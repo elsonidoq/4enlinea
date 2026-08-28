@@ -1083,3 +1083,36 @@ own banned-terminology list. Measured: runs leaking a render/board label went **
 exactly the seven records that gained a second board. `READING_KEY` now states that board names and
 their paraphrases ("the projected board", "the deep board") are internal labels never to be written.
 **When adding anything to the prompt, extend the never-repeat list in the same change.**
+
+### 12h. Epic 059 (Deep-Reveal Remediation) additions to the never-repeat list
+
+Three more bullets were added to `readingKeyFor()`'s reading key (`renderReasonModel.mjs`), mirrored
+here per §12g's own rule:
+
+- **Terminal framing.** When the better move wins outright, the frame states it as a completed,
+  present fact — "wins on the spot", "the game is over there" — never future tense ("threat to make
+  four next move", "keep it for the next turn") for a move that already ended the game. (Q3 pick, D55,
+  T012.)
+- **Occupancy-aware verb.** A causal frame only says the opponent "occupies" a square when a disc is
+  actually there; when the opponent instead THREATENS that square (still empty), the frame says "open
+  a path to" / "threatening" it instead — never upgrade an open threat into a claimed occupation.
+  (T015/T013 — closes OI-195's remaining half.)
+- **Grain-aware immediate-threat framing.** A frame that names an "immediate threat" cell says "next
+  move" ONLY when that cell is gravity-top on its named board; otherwise it says "four-in-a-row threat
+  (not yet reachable — the column needs to fill first)" — never upgrade a non-gravity-top threat into
+  a "next move" claim. (Batch 3a, `grainOf(...)`, T013.)
+
+**Q8's ordinal-locator phrasing** ("the lower one" / "the higher one" / "the Nth one, counting from the
+bottom of the board") is the opposite direction — it is new REPLACEMENT vocabulary for sibling
+disambiguation (D49 addendum, T023), not new prohibited vocabulary — so it does not itself add a
+never-repeat bullet; the raw-coordinate form it replaces (`"the one at c6r5: …"`) was already covered
+by the existing `cNrM` never-repeat rule two bullets up in the same reading key.
+
+**Batches 5a/5b (T022, T029, T034, plus the B1–B3 gap closures) verified, not merely asserted, to add
+no genuinely new vocabulary**: `causalLinks.mjs`'s `cellColumn`/`windowColumns` helpers (checked at
+source) produce only `` `column ${N}` `` / `` `columns ${...} and ${...}` `` — the same "column N" form
+`col1()`-based `bestCol`/`playedCol` mentions already used, already covered by §12f. `openingFrame.mjs`'s
+`nameTag` (indefinite article) and `horizonTail` (dropping the false "too far to pin" denial) reuse
+existing phrases ("a parity battle", "a deep forced line", "the lesson is the opening") and change
+which half gets which existing sentence, not the sentence vocabulary itself. No new never-repeat entry
+was needed for these.

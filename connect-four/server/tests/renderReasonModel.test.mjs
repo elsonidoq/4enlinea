@@ -50,7 +50,9 @@ test('assembled prompt renders composed frame text + guardrail + reading key', (
   assert.ok(m.frames && m.frames[0].text.length > 0);
   const prompt = assembleGroundedPrompt(m);
   assert.match(prompt, /causal link L6/);          // machine marker preserved (computeConditionD test)
-  assert.match(prompt, /forced win via c6r5/);     // composed L6 text present (NV's actual completingCell)
+  // B1 (FR-014/SC-011): L6 now names the completing cell as column prose (NV's completingCell
+  // c6r5 -> column 6), not the raw cNrM token.
+  assert.match(prompt, /forced win via column 6/);
   assert.match(prompt, /Guardrail:/);
   assert.match(prompt, /# Reading key/);
   assert.match(prompt, /register:/);               // key explains a residual coded field
@@ -452,9 +454,10 @@ test('buildReasonRenderModel and buildRenderDecision both expose requiredSet (re
   assert.ok(Array.isArray(model.requiredSet));
   assert.ok(Array.isArray(rd.requiredSet));
   // NV's two halves are both deep (register 'forced_sequence'), so each contributes a future:-framed
-  // group (D43). Both builders must agree exactly — research.md D1, identical routing.
-  assert.deepEqual(model.requiredSet.map((g) => g.handle), ['you-key-square', 'opp-key-square']);
-  assert.deepEqual(model.requiredSet.map((g) => g.spec), ['future:c6r5', 'future:c3r3']);
+  // group (D43), leaving one free slot that T026's better-col push (FR-017) now fills. Both builders
+  // must agree exactly — research.md D1, identical routing.
+  assert.deepEqual(model.requiredSet.map((g) => g.handle), ['you-key-square', 'opp-key-square', 'better-col']);
+  assert.deepEqual(model.requiredSet.map((g) => g.spec), ['future:c6r5', 'future:c3r3', 'col4']);
   assert.deepEqual(rd.requiredSet, model.requiredSet);
 });
 
@@ -473,8 +476,10 @@ test('assembled prompt includes the "You MUST build the explanation around these
 
 test('the required-set prompt block states explicitly when there is nothing required, without inventing one', () => {
   // A record whose halves carry neither a cell nor a window abstains (FR-006) — the prompt must SAY
-  // so rather than silently omitting the block.
-  const model = buildReasonRenderModel({ ...NV,
+  // so rather than silently omitting the block. T026's better-col push (FR-017) only fires when
+  // bestCol is known, so bestCol is nulled here to isolate the genuine-empty case from that push —
+  // a record WITH a bestCol is covered separately below.
+  const model = buildReasonRenderModel({ ...NV, bestCol: null,
     lostResource: { kind: 'winning_line', register: 'forced_sequence' },
     opponentPunishment: { kind: 'winning_line', register: 'forced_sequence',
                           tie: { kind: 'tied', sharedCells: ['c4r5'] } } });
@@ -482,6 +487,18 @@ test('the required-set prompt block states explicitly when there is nothing requ
   const prompt = assembleGroundedPrompt(model);
   assert.match(prompt, /# You MUST build the explanation around these/);
   assert.match(prompt, /none for this explanation/i);
+});
+
+test('the required-set falls back to better-col (T026, FR-017) when geometry derivation leaves every slot free', () => {
+  // Same "no cell/window" halves as above, but WITH a bestCol — Q2 PROVISIONAL: the free slot(s)
+  // left by geometry derivation are filled by the always-offered better-col handle rather than left
+  // empty, even though the prompt block still fires "none for this explanation" only when truly empty.
+  const model = buildReasonRenderModel({ ...NV,
+    lostResource: { kind: 'winning_line', register: 'forced_sequence' },
+    opponentPunishment: { kind: 'winning_line', register: 'forced_sequence',
+                          tie: { kind: 'tied', sharedCells: ['c4r5'] } } });
+  assert.deepEqual(model.requiredSet.map((g) => g.handle), ['better-col']);
+  assert.deepEqual(model.requiredSet.map((g) => g.spec), ['col4']);
 });
 
 // ── Spec 058 feedback remediation, attempt 2 — prompt fixes 2 & 3 ───────────────────────────────
@@ -730,7 +747,15 @@ test('O3 centrality opening record (eval-11, harvested/verified): prompt must no
 // Fix round 2 (task 9b, IMPORTANT 4). The three doesNotMatch checks above prove what an O3 record
 // does NOT receive; nothing previously asserted what it DOES positively receive. Assert the actual
 // centrality-only reading key content (OPENING_READING_KEY_CENTRALITY_ONLY, renderReasonModel.mjs).
-test('O3 centrality opening record (eval-11): the reading key positively states no book line applies', async () => {
+//
+// B3 update (same class as OI-199/T029): eval-11's own openingFrame.mjs guardrail already says
+// "Explain the blunder through the opening — parity." (centralityOffered: false — its
+// centrality clause is suppressed, same as eval-21) — this test's ORIGINAL assertion of
+// "centrality, parity" in the reading key was inconsistent with that guardrail (the exact
+// contradiction B3 fixes: the reading key taught "centrality" for a record whose own guardrail
+// never offers it). Corrected to assert the parity-only reading key that now agrees with the
+// guardrail; see openingReadingKeyFor's OPENING_READING_KEY_PARITY_ONLY branch.
+test('O3 centrality opening record (eval-11): the reading key agrees with the guardrail on parity-only (B3)', async () => {
   const { readFileSync } = await import('node:fs');
   const { fileURLToPath } = await import('node:url');
   const { dirname, join } = await import('node:path');
@@ -747,8 +772,10 @@ test('O3 centrality opening record (eval-11): the reading key positively states 
   const readingKeySection = prompt.slice(prompt.indexOf('# Opening reading key'), prompt.indexOf('# Highlightable regions'));
   assert.match(readingKeySection, /matches no named opening or defense line/i,
     'O3 reading key must positively state that no book/defense line applies to this record');
-  assert.match(readingKeySection, /centrality, parity/i,
-    'O3 reading key must still teach the centrality/parity vocabulary it DOES need');
+  assert.match(readingKeySection, /\(parity\)/i,
+    'O3 reading key must teach parity vocabulary');
+  assert.doesNotMatch(readingKeySection, /centrality/i,
+    'B3: eval-11\'s centrality clause is suppressed (same as eval-21) — the reading key must not invite what the guardrail forbids');
 });
 
 // Positive counterpart (gating, not blanket deletion): an O1 namedOpening record still DOES teach
@@ -1107,4 +1134,144 @@ test('OI-196: deriveRequiredSet carries truthBoard through from the matched offe
     const alias = model.zones.aliases.find((a) => a.handle === g.handle);
     assert.equal(g.truthBoard, alias.truthBoard);
   }
+});
+
+// ══════════════════════════════════════════════════════════════════════════════════════════════
+// Batch 3b (T021a) starts here. Next batch (T038, FR-017/FR-018) appends AFTER this banner's tests
+// — do not interleave; see tasks.md's file-collision note (T021a before T038, sequential not [P]).
+// ══════════════════════════════════════════════════════════════════════════════════════════════
+
+// ── FR-011 / OI-202 / SC-008 / T014 — replyHistogram comparative must match its own stated
+// direction, corpus-wide ──────────────────────────────────────────────────────────────────────
+//
+// The READING_KEY's replyHistogram bullet ("fewer means the tougher, more resilient defense") is
+// always applied by the engine's own framing (causalLinks.mjs L2/L4 guardrails) to the BETTER move
+// — so the bullet is only honest when afterBest <= afterPlayed. T014 gates the bullet on that
+// direction (Q4 PROVISIONAL: drop rather than restate). Measured directly against the corpus's own
+// raw evidence.jsonl replyHistogram counts (not re-deriving the guard's own logic, per I12): of the
+// 63 corpus records, all 63 carry a replyHistogram, 57 support the stated direction (afterBest <=
+// afterPlayed) and 6 do not (eval-29, eval-37, eval-44, eval-45, pin-branch-invariance-true-2,
+// pin-branch-invariance-true-3).
+test('FR-011/SC-008: replyHistogram comparative, when rendered, matches the direction the raw counts support (corpus-wide)', async () => {
+  const { readFileSync } = await import('node:fs');
+  const { fileURLToPath } = await import('node:url');
+  const { dirname, join } = await import('node:path');
+  const { toNarratorVector, pruneVector } = await import('../scripts/reasonNarratorVector.mjs');
+  const here = dirname(fileURLToPath(import.meta.url));
+  const rows = readFileSync(join(here, '../scripts/reason_corpus/evidence.jsonl'), 'utf8')
+    .trim().split('\n').map((l) => JSON.parse(l));
+
+  const REPLY_HISTOGRAM_RE = /replyHistogram\.afterBest \/ afterPlayed: how many ways your opponent/;
+  const violations = [];
+  let sawSupported = false;
+  let sawUnsupported = false;
+  for (const r of rows) {
+    // Ground truth taken independently from the corpus's OWN raw evidence, not from the render
+    // model's internal guard function — I12 requires validating against a real counterexample per
+    // case through the production detector, not a proxy that could share the bug it is checking for.
+    const rawReplyHistogram = r.evidence?.replyHistogram;
+    const fv = pruneVector(toNarratorVector(r.evidence));
+    const model = buildReasonRenderModel(fv);
+    const prompt = assembleGroundedPrompt(model);
+    const sentenceEmitted = REPLY_HISTOGRAM_RE.test(prompt);
+
+    if (!rawReplyHistogram) {
+      if (sentenceEmitted) violations.push(`${r.id}: no replyHistogram in evidence but sentence rendered`);
+      continue;
+    }
+    const supportsStatedDirection = rawReplyHistogram.afterBest <= rawReplyHistogram.afterPlayed;
+    if (supportsStatedDirection) sawSupported = true; else sawUnsupported = true;
+
+    if (sentenceEmitted && !supportsStatedDirection) {
+      violations.push(`${r.id}: comparative rendered but afterBest=${rawReplyHistogram.afterBest} > `
+        + `afterPlayed=${rawReplyHistogram.afterPlayed} contradicts the stated direction`);
+    }
+    if (!sentenceEmitted && supportsStatedDirection) {
+      violations.push(`${r.id}: direction is supported (afterBest=${rawReplyHistogram.afterBest} <= `
+        + `afterPlayed=${rawReplyHistogram.afterPlayed}) but the comparative was omitted`);
+    }
+    // For a record where the sentence is omitted, no OTHER comparative claim about reply counts
+    // may leak into the prompt either — the field itself must not appear bare (FR-011's "otherwise
+    // it MUST NOT be offered" applies to the claim, not just this one exact bullet sentence).
+    if (!sentenceEmitted && !supportsStatedDirection && /fewer means the tougher/.test(prompt)) {
+      violations.push(`${r.id}: an unsupported record still contains the "fewer means the tougher" claim`);
+    }
+  }
+  assert.ok(sawSupported, 'corpus fixture sanity: expected at least one record with a supported direction');
+  assert.ok(sawUnsupported, 'corpus fixture sanity: expected at least one record with an unsupported direction (regression guard against a no-op corpus)');
+  assert.deepEqual(violations, [], `replyHistogram comparative direction mismatches:\n${violations.join('\n')}`);
+});
+
+// ══════════════════════════════════════════════════════════════════════════════════════════════
+// T038 (FR-017/FR-018) starts here — appended after the T021a banner per tasks.md's file-collision
+// note (same file, sequential, not [P]).
+// ══════════════════════════════════════════════════════════════════════════════════════════════
+
+// ── FR-017 / T026 / OI-205/OI-187 — deriveRequiredSet's better-col push, corpus-wide ─────────────
+test('FR-017/T026: deriveRequiredSet\'s better-col push never breaks required ⊆ offered or the 3-slot cap (corpus-wide)', async () => {
+  const { readFileSync } = await import('node:fs');
+  const { fileURLToPath } = await import('node:url');
+  const { dirname, join } = await import('node:path');
+  const { toNarratorVector, pruneVector } = await import('../scripts/reasonNarratorVector.mjs');
+  const here = dirname(fileURLToPath(import.meta.url));
+  const rows = readFileSync(join(here, '../scripts/reason_corpus/evidence.jsonl'), 'utf8')
+    .trim().split('\n').map((l) => JSON.parse(l));
+
+  let offeredBetterCol = 0;
+  let atCapUnresolved = 0;
+  const violations = [];
+  for (const r of rows) {
+    if (!r.evidence || r.error) continue;
+    const fv = pruneVector(toNarratorVector(r.evidence));
+    const model = buildReasonRenderModel(fv);
+    const req = model.requiredSet ?? [];
+    if (req.length > 3) violations.push(`${r.id}: requiredSet has ${req.length} groups (cap is 3)`);
+    const offeredSpecs = new Set((model.zones.aliases ?? []).map((a) => a.spec));
+    for (const g of req) {
+      if (!offeredSpecs.has(g.spec)) violations.push(`${r.id}: required spec ${g.spec} not in offered set (required ⊆ offered broken)`);
+    }
+    const betterColGroup = req.find((g) => g.handle === 'better-col');
+    if (betterColGroup) {
+      offeredBetterCol++;
+      assert.equal(betterColGroup.spec, `col${fv.bestCol + 1}`, `${r.id}: better-col spec must be col${fv.bestCol + 1}`);
+    } else if (req.length >= 3) {
+      atCapUnresolved++;
+    }
+  }
+  assert.deepEqual(violations, [], `FR-017 violations:\n${violations.join('\n')}`);
+  // Q2 PROVISIONAL sanity: some records get the push, some stay at-cap and unresolved by design.
+  assert.ok(offeredBetterCol > 0, 'expected at least one record to receive the better-col push');
+  assert.ok(atCapUnresolved > 0, 'expected at least one record to remain at-cap and unresolved (Q2 PROVISIONAL)');
+});
+
+// ── FR-018 / T027 / OI-206 — array-branch empty-drop regression, corpus-wide ─────────────────────
+test('FR-018/T027: renderedFields never emits an empty [{},{},...] array literal (corpus-wide)', async () => {
+  const { readFileSync } = await import('node:fs');
+  const { fileURLToPath } = await import('node:url');
+  const { dirname, join } = await import('node:path');
+  const { toNarratorVector } = await import('../scripts/reasonNarratorVector.mjs');
+  const here = dirname(fileURLToPath(import.meta.url));
+  const rows = readFileSync(join(here, '../scripts/reason_corpus/evidence.jsonl'), 'utf8')
+    .trim().split('\n').map((l) => JSON.parse(l));
+
+  const offenders = [];
+  for (const r of rows) {
+    if (!r.evidence || r.error) continue;
+    const model = buildReasonRenderModel(toNarratorVector(r.evidence));
+    const json = JSON.stringify(model.rendered);
+    if (/\[\{\}(,\{\})*\]/.test(json)) offenders.push(r.id);
+  }
+  assert.deepEqual(offenders, [], `empty array literal found for: ${offenders.join(', ')}`);
+});
+
+test('FR-018/T027: unit regression — an array whose every element prunes empty is dropped, not emitted as [{},{}]', () => {
+  const pruned = { ...NV,
+    lostResource: { ...NV.lostResource,
+      line: [{ ply: 39, mover: 2, col: 3, cell: 'c4r5' }, { ply: 40, mover: 1, col: 2, cell: 'c3r5' }] },
+  };
+  const m = buildReasonRenderModel(pruned);
+  // Every `line[]` subfield (ply/mover/col/cell) is 'transformed' by disposition (fieldDisposition.mjs's
+  // isTransformed line regex), so every mapped element becomes {} — the array must be omitted from
+  // `rendered` entirely, not emitted as `[{},{}]`.
+  assert.ok(!('line' in (m.rendered.lostResource ?? {})), 'an all-empty-element array must not appear in rendered at all');
 });

@@ -5723,6 +5723,16 @@ const re = new RegExp(`\\[zone:${escaped}\\]([\\s\\S]*?)\\[/zone:${escaped}\\]`,
 
 **If picked up**: decide and record the intent in `docs/architecture/server-conventions.md`'s Annotation Gate section. If highlight retention wins, reorder and add a test covering a zone with a raw coordinate in its inner text. Related: OI-129 (prose naming a region with no annotation) — both concern how much annotation survives to the client.
 
+**Attributed by epic 059 (Deep-Reveal Remediation) T008, not fixed (2026-08-27):** `compute.mjs`'s
+`GUARD_FAILURE_CODE_TO_OI` (`connect-four/server/scripts/compute.mjs`) attributes every bare `P6`
+guard-action failure code to this issue. Measured by replaying the recorded
+`fv_suff_answers_boards_subset_2026-08-26T15-47-56Z.jsonl` (125 rows) through the real
+`guardExplainMoveLlmPayload` with `diagnostics: true`: **all 5 of the 5 observed `[zone:…]` span
+losses in that run are `P6:raw_coordinate` failures — i.e. this issue's cost, not OI-194's.** An
+OI-194 fix (raw-coordinate notation hygiene) would remove **none** of the span losses observed in
+that corpus; only reordering P6 after token-stripping (this issue) would. This is attribution only —
+this issue stays **deferred**, explicitly out of scope for Epic 12 (spec 059's Out of Scope section).
+
 ---
 
 ## OI-141 — `PricingScreen`'s mount-time `getPaddle()` has no rejection handler
@@ -6329,6 +6339,15 @@ grounded-prompt path) — flagged for completeness, not required for spec 058 to
 spec suffix, and add a regression test alongside the existing `SPAN_CARRYING_CODES` coverage in
 `server/tests/reasonRenderGuard.test.mjs`.
 
+**Attributed by epic 059 (Deep-Reveal Remediation) T008, not fixed (2026-08-27):** `compute.mjs`'s
+`GUARD_FAILURE_CODE_TO_OI` (`connect-four/server/scripts/compute.mjs`) attributes the
+`P5strong:tg` guard-action failure code to this issue. Replaying the recorded
+`fv_suff_answers_boards_subset_2026-08-26T15-47-56Z.jsonl` (125 rows) through the real
+`guardExplainMoveLlmPayload` with `diagnostics: true` surfaced **zero** occurrences of this code in
+that corpus — none of the 5 observed span losses in that run belong to this issue (all 5 are OI-140,
+see that entry). This is attribution only, over one measured corpus; this issue stays **open**,
+explicitly out of scope for Epic 12 (spec 059's Out of Scope section).
+
 ---
 
 ## OI-171 — A `future:` handle is offered but can never enter the required set, so the coach is never obliged to use one
@@ -6450,6 +6469,15 @@ c4r6   ["P5strong:cell_not_allowed:c4r6"]        <-- window member never offered
 That last line is the point: Decision A's semantics hold exactly. This entry stays **open** because
 the general defect — a correct single-cell highlight drawn from a window that was offered only as a
 whole — is still reachable by any alias family that does not also emit per-cell offers.
+
+**Attributed by epic 059 (Deep-Reveal Remediation) T008, not fixed (2026-08-27):** `compute.mjs`'s
+`GUARD_FAILURE_CODE_TO_OI` (`connect-four/server/scripts/compute.mjs`) attributes the
+`P5strong:cell_not_allowed` guard-action failure code to this issue. Replaying the recorded
+`fv_suff_answers_boards_subset_2026-08-26T15-47-56Z.jsonl` (125 rows) through the real
+`guardExplainMoveLlmPayload` with `diagnostics: true` surfaced **zero** occurrences of this code in
+that corpus — none of the 5 observed span losses in that run belong to this issue (all 5 are OI-140,
+see that entry). This is attribution only, over one measured corpus; this issue stays **open**
+(mitigated, not closed), explicitly out of scope for Epic 12 (spec 059's Out of Scope section).
 
 **If picked up — CORRECTED 2026-08-05.** The recipe previously recorded here was wrong and would
 ship a regression. It said `toAllowedSet` should stop setting `windowOnly: true`. But
@@ -6625,7 +6653,14 @@ is span-carrying, so newly-firing failures will start stripping Spanish highligh
 
 ## OI-177 — the required-set retry reads the RAW mechanism, so a required spec the guard later strips never triggers a retry
 
-**Status**: open (discovered while closing spec-058 feedback attempt 3; reported, not fixed)
+**Status**: RESOLVED by epic 059 (Deep-Reveal Remediation) T017, 2026-08-27 — see Design Decision 1 in
+`reason-DECISIONS.md`. `mechanismExplainer.mjs`'s `computeMechanism` now runs a new, first, in-process
+invocation of `guardExplainMoveLlmPayload` on `attempt1.mechanism` (guard-aware, before the existing
+single retry check), and `survivedSpecs = attempt1.usedSpecs.filter(s => !diagnostics.strippedSpecs.includes(s))`
+feeds the existing `missingRequiredGroups` call — so a required spec the guard later strips now DOES
+count as missing and triggers the retry. Retry BUDGET and TRIGGER SET are unchanged. Measured: in all 5
+of the corpus's span-losing rows, the stripped spec is one of that row's own `requiredSet` specs;
+`eval-5` replayed end-to-end goes from `calls === 1` (no retry) to `calls === 2` (retry fires).
 **Area**: `connect-four/server/mechanismExplainer.mjs` (`missingRequiredGroups` and the FR-008 retry call)
 **Discovered**: spec-058 feedback remediation attempt 3, 2026-08-05
 
@@ -6718,7 +6753,14 @@ would silently convert every major's single-cell alias into a `windows:` spec (s
 
 ## OI-180 — `halfForkCellsSpec` bundles a fork's disjoint endpoints into ONE `windows:` group, so the spec claims a line that does not exist
 
-**Status**: open (data-model correctness; the *visual* symptom was fixed 2026-08-06, the spec is still wrong)
+**Status**: PARTIALLY RESOLVED by epic 059 (Deep-Reveal Remediation) T031, 2026-08-27. T031 resolved
+the role-text side (`zoneAnnotations.mjs`'s `kind === 'double'` role text) as authoritative: role text
+for a fork's `windows:` spec is now arity-agnostic prose ("the fork squares…", no count claim), so it
+no longer contradicts a 3-cell spec like `eval-47`'s `you-double = windows:c3r6,c6r5,c7r2`. **The
+underlying spec-bundling defect this issue names — `halfForkCellsSpec` itself still comma-joins
+disjoint endpoints into one `windows:` group — is unchanged**; that producer-side fix was explicitly
+out of scope for the `zoneAnnotations.mjs` file T031 touched (it is OI-180's own subject, deferred, not
+this task's to fix). Data-model correctness half stays open.
 **Area**: `connect-four/server/scripts/renderReasonModel.mjs` (`halfForkCellsSpec`)
 **Discovered**: deep-reveal learner-quality evaluation, 2026-08-06
 
@@ -6796,7 +6838,12 @@ the unit tests prove the retry *fires*, not that the model complies. Cross-refs:
 
 ## OI-182 — a double threat's required set names both finishing squares but never the square that CREATES the fork, so the explanation lists effects and omits the cause
 
-**Status**: open (pedagogical correctness — the explanation is true but does not teach)
+**Status**: RESOLVED by epic 059 (Deep-Reveal Remediation) T025, 2026-08-27. `forkPivotCell`
+(`zoneAnnotations.mjs`) now offers the fork-creating pivot cell as an alias for `FORK_TAGS` halves,
+including board-tag-only pivots — the cause square this issue's example (c3r5) was offered but never
+required is now surfaced. See **OI-193** for the narrower gap this fix's own boundary left open (a
+fork represented purely in board tags, with no `tacticTag`-carrying half at all) — OI-193 is separately
+resolved by the same task.
 **Area**: `connect-four/server/scripts/renderReasonModel.mjs` (`deriveRequiredSet`, `halfForkCellsSpec`)
 **Discovered**: deep-reveal learner-quality evaluation, 2026-08-06
 
@@ -6901,7 +6948,11 @@ Cross-refs: OI-176, OI-181, OI-182.
 
 ## OI-184 — a deep reveal attributed the OPPONENT's double threat to the learner ("you should have kept the double threat alive")
 
-**Status**: open (factual correctness — the most severe defect found in the 2026-08-06 evaluation)
+**Status**: RESOLVED by epic 059 (Deep-Reveal Remediation) T033, 2026-08-27. `zoneAnnotations.mjs`'s
+terms map now attributes ownership on shared-vocabulary term descriptions (`describeTerm(slug, owners)`
+— only `double_threat` needed it) wherever ownership is determinable, so `zones.terms[double_threat]`
+can no longer hand one player's pattern to the other. `eval-13` (runs 0 and 4) was the reproducing
+case.
 **Area**: `connect-four/server/scripts/renderReasonModel.mjs` / the condition-D prompt; instance frozen in `connect-four/src/pages/groundingDiffCases.js` (case 2, attempt 8)
 **Discovered**: deep-reveal learner-quality evaluation, 2026-08-06
 
@@ -7000,7 +7051,13 @@ it out. Cross-refs: eval-21 G3 counterexample, spec 058 Task 6.
 
 ## OI-187 — `requiredSet` never obliges the better column, so nothing enforces the one thing A6 measures
 
-**Status**: open (measured, not fixed)
+**Status**: RESOLVED by epic 059 (Deep-Reveal Remediation) T026, 2026-08-27 (Q2 PROVISIONAL — see
+`reason-DECISIONS.md`). `deriveRequiredSet` now pushes `better-col` as a lowest-priority candidate into
+an already-free slot, never displacing a geometry group. Something now enforces the better column where
+this issue's title said nothing did — that is what closes it. **Not the same claim as full coverage**:
+measured corpus-wide, the mechanism is offered to only 21/63 records; 42/63 remain at-cap and
+unresolved by design — that residual is tracked separately as **OI-205, marked PARTIALLY RESOLVED, not
+closed**.
 **Area**: `connect-four/server/scripts/renderReasonModel.mjs` (`deriveRequiredSet`)
 **Discovered**: 2026-08-11 render-remediation baseline, 125 graded runs
 
@@ -7023,7 +7080,13 @@ remediation plan addresses A6 by putting the words in the template instead.
 
 ## OI-188 — the decision board's Tactics list asserts patterns that are not board-true on it
 
-**Status**: open (deliberately deferred from the 2026-08-11 remediation to avoid confounding its measurement)
+**Status**: RESOLVED by epic 059 (Deep-Reveal Remediation) T013+T016, 2026-08-27.
+`reasonBoardTags.mjs` now gates every vector-named overlay tag on the production detectors actually
+matching that board, instead of asserting a pattern that only becomes true on a later board. Measured
+corpus-wide: this suppresses the overlay on **100% of the 13 corpus records** carrying a vector-named
+fork half, including `pin-L2-enabled-opponent` (the record this issue's own example, `334` printing
+`double_threat at c2r1`, was drawn from) — every half's pattern now only shows once it is board-true on
+the board it is attached to.
 **Area**: `connect-four/server/scripts/reasonBoardSelect.mjs` (`patternOpts` overlay) → the rendered threat list
 **Discovered**: 2026-08-06 grading (pin-L1, pin-L2), re-confirmed 2026-08-11
 
@@ -7039,7 +7102,21 @@ before/after read. It interacts with OI-189: the false Tactics line is one of th
 
 ## OI-189 — the prompt displays term slugs it does not offer, and every unoffered-term emission traces to it
 
-**Status**: open (fix specified as Task 9b of the 2026-08-11 remediation plan; not yet implemented)
+**Status**: RESOLVED — in two halves, and this entry's prior status line was already stale before epic
+059 started. **Stale-status correction (2026-08-27):** the DISPLAY-PATH half shipped pre-epic as
+D48/I13 (`docs/epics/deep-reveal-remediation-epic.md:346`; `RENDER_DISPLAY_PHRASE`,
+`renderReasonModel.mjs`; `dropUnoffered`, `zoneAnnotations.mjs`), moving 49/63 records → 0/63 — this
+was true before epic 059's first task ran, and the old status line ("fix specified as Task 9b … not
+yet implemented") no longer described reality. **Epic 059 (T032, 2026-08-27) fixes the remaining
+half**: the real second, narrower producer was `openingFrame.mjs`'s `nameTag` (the O2 lead sentence),
+which used to name every opening as `the ${family}` regardless of whether `id` was set — an id-less
+"family only" fallback read exactly like offerable KB jargon, so the model wrapped it in an unoffered
+`[term:…]` tag even though `zones.terms` never carries opening-family names. **Correction for future
+readers**: T032's own task text and the 2026-08-26 grade report both named `causalLinks.mjs` as this
+producer — that citation is wrong; the fix and the report's own quoted evidence match `openingFrame.mjs`
+verbatim (see `reason-DECISIONS.md` for the recorded correction). True population was 2/125 rows, both
+`eval-13` — the third apparent case, `eval-33`'s `unclosed_tag`, belongs to OI-208, not this issue.
+Both halves are now done; this issue is closed.
 **Area**: `connect-four/server/scripts/renderReasonModel.mjs` (`assembleGroundedPrompt`) + the rendered threat list
 **Discovered**: 2026-08-11 baseline, 125 graded runs
 
@@ -7144,7 +7221,13 @@ become horizon-aware (and probably owner-aware). Cross-refs: OI-182, OI-191.
 
 ## OI-193 — `forkPivotCell` misses forks that live in the board tags rather than in a tagged half
 
-**Status**: open (partial limit of the OI-182 fix)
+**Status**: RESOLVED by epic 059 (Deep-Reveal Remediation) T025, 2026-08-27 (the same task that closed
+OI-182). `forkPivotCell` (`zoneAnnotations.mjs`) now also offers board-tag-only pivots, closing the gap
+`eval-47` exposed (neither half carrying a `tacticTag`). Note the deliberate exception this fix
+carries: board-tag pivots do **not** participate in the cross-board `seen` dedupe every other alias
+family uses (only a same-board collision guard applies) — on `eval-47` both candidate pivot cells are
+immediate-threat cells on the other near-term board, so cross-board dedupe would leave the record with
+zero pivots. See `reason-DECISIONS.md` for the recorded rationale.
 **Area**: `connect-four/server/scripts/reason_engine/zoneAnnotations.mjs` (`forkPivotCell`, `FORK_TAGS`)
 **Discovered**: 2026-08-21 post-fix subset re-measure (`eval-47`, A7c fails 5/5)
 
@@ -7160,7 +7243,14 @@ closing it generally.
 
 ## OI-194 — causal-link templates embed raw `cNrM` notation into the very text the prompt forbids the model to echo
 
-**Status**: open
+**Status**: RESOLVED by epic 059 (Deep-Reveal Remediation), 2026-08-27. `causalLinks.mjs`'s `cellColumn`/
+`windowColumns` helpers (T022, batch 5a) converted L1/L2/L3/L4/L8's `link.text` templates to the same
+"column N" prose form the `col1()`-based `bestCol`/`playedCol` mentions already used; a second gap-
+closure pass (B1, batch 5b) converted the remaining L5/L6/L9 templates. Measured corpus-wide:
+`link.text` raw coordinates went 51/63 (post-T022) → 23/63 → **0/63** after B1. Note attribution: this
+issue is about the causal-link templates specifically — OI-140 remains separately open/narrowed for a
+different producer (the annotation-gate ordering), and this fix removes none of OI-140's span losses
+(see OI-140's own attribution note).
 **Area**: `connect-four/server/scripts/reason_engine/causalLinks.mjs` (L1, L4, L8 templates interpolate `completingCell` / `window` cells)
 **Discovered**: 2026-08-23 post-fix subset re-measure (`eval-32` 5/5, contributing on `eval-37`, `eval-11`, `eval-38`, `pin-L5`)
 
@@ -7188,7 +7278,13 @@ than raw cell codes, so the frame text obeys the rule the prompt states. Cross-r
 
 ## OI-195 — the L2 template names the wrong cell as the one the opponent occupies
 
-**Status**: PARTIALLY FIXED 2026-08-25 (D49 rule 4) — the conceded cell is now `tie.sharedCells[0]`, so `pin-L2-enabled-opponent` names `c3r1` (which the opponent actually took) instead of the empty `c2r1`. STILL OPEN: (a) the verb "occupy" over-claims on the other four L2 records, where the named square is also empty on the opponent's own line — deferred to the L1/L2/L4/L8 prose pass; (b) the decision-board Tactics line asserting a present double threat with only 2 of 3 discs, which is a board-tag defect, not a template one.
+**Status**: RESOLVED. 2026-08-25 (D49 rule 4) fixed the conceded-cell half — `tie.sharedCells[0]`, not
+`completingCell`. Epic 059 (Deep-Reveal Remediation) T013+T015, 2026-08-27, fixes both halves this entry
+had left STILL OPEN: (a) the verb "occupy" over-claims — `causalLinks.mjs`'s L2 template is now
+occupancy-aware, saying "open a path to" / "threatening" instead of "occupies" when the named cell is
+still empty; (b) the decision-board Tactics line asserting a present double threat with only 2 of 3
+discs — `reasonBoardTags.mjs` now gates vector-named overlays on the production detectors actually
+matching the board (same fix that closed OI-188/OI-204).
 **Area**: `connect-four/server/scripts/reason_engine/causalLinks.mjs` (L2 template) + the decision-board Tactics line
 **Discovered**: 2026-08-23 post-fix subset re-measure (`pin-L2-enabled-opponent`, 4/5 runs)
 
@@ -7258,7 +7354,10 @@ fabricated cell. Cross-refs: OI-190, OI-195, OI-183 (no batch harness exercises 
 
 ## OI-198 — `roleText`'s `major` fallback renders ungrammatical text into the prompt ("you's four-in-a-row line")
 
-**Status**: open (pre-existing; confirmed unchanged by the 2026-08-11 remediation branch)
+**Status**: RESOLVED by epic 059 (Deep-Reveal Remediation) T030, 2026-08-27. `roleText` now routes
+owner-dependent verbs/possessives through new `possessive(owner)` / `conj(owner, base)` helpers, fixed
+as a class (every branch with an interpolated `${who}`), not a single string. Measured corpus-wide,
+all 63 records: `"you's"` 19/63 → 0/63, `"you gets"` 9/63 → 0/63.
 **Area**: `connect-four/server/scripts/reason_engine/zoneAnnotations.mjs` (`roleText`, the `major` fallback)
 **Discovered**: 2026-08-21 Checkpoint A review; still present 2026-08-23
 
@@ -7272,7 +7371,14 @@ Low severity (the model does not echo it verbatim), but it is player-adjacent te
 
 ## OI-199 — an O3 opening record can be told to explain via centrality while simultaneously forbidden to compare centrality
 
-**Status**: open (pre-existing composition; made more visible by the 2026-08-23 book-line gating)
+**Status**: RESOLVED by epic 059 (Deep-Reveal Remediation) T029, 2026-08-27 (Q5 PROVISIONAL — see
+`reason-DECISIONS.md`). `GUARDRAIL_ADMISSIBLE_FRAMINGS_*` in `openingFrame.mjs` is now split into 4
+variants gated on `clause === ''` — dropping the centrality invitation from the admissible-framings
+line when the centrality clause itself is suppressed, leaving the `GUARDRAIL_NO_CENTRALITY` denial
+untouched. Gap closure (B3, batch 5b) found and fixed the same contradiction class in a previously
+un-gated producer: `renderReasonModel.mjs`'s `OPENING_READING_KEY_*` constants also hardcoded
+"centrality" unconditionally — now split into 4 variants gated on
+`openingFrame.centralityOffered`, asserted by three tests.
 **Area**: `connect-four/server/scripts/reason_engine/openingFrame.mjs` (`GUARDRAIL_*` composition in `mk`)
 **Discovered**: 2026-08-23, live on `eval-11`
 
@@ -7304,7 +7410,10 @@ slugs already listed. Cross-ref: I13 in `reason-INVARIANTS.md`, D48.
 
 ## OI-201 — the `future-line` role text names no owner, so a line alias can be read as either player's
 
-**Status**: open
+**Status**: RESOLVED by epic 059 (Deep-Reveal Remediation) T024, 2026-08-27. `roleText`'s
+`future-line` branch now conjugates an owner the same way every other line branch does, via the
+owner-attribution machinery `describeTerm(slug, owners)` added for OI-184. Distinct from T033's fix
+(the `zones.terms` map) — this reaches the alias role text specifically.
 **Area**: `connect-four/server/scripts/reason_engine/zoneAnnotations.mjs` (`roleText`, the `future-line` branch)
 **Discovered**: 2026-08-25 G7 re-measure (`eval-2` runs 2 and 4; `eval-6` run 3 independently)
 
@@ -7326,7 +7435,13 @@ as the `line` branch — conjugate the owner. Cross-refs: OI-191, D49 rule 1.
 
 ## OI-202 — the reading key's `replyHistogram` rule, applied to the rendered values, says the BLUNDER was the tougher defense
 
-**Status**: open
+**Status**: RESOLVED by epic 059 (Deep-Reveal Remediation) T014, 2026-08-27 (Q4 PROVISIONAL — see
+`reason-DECISIONS.md`). `renderReasonModel.mjs`'s `READING_KEY` was replaced by `readingKeyFor(replyHistogram)`,
+which drops the `replyHistogram` comparative bullet entirely when the counts don't support the stated
+direction, rather than restating a rule the data contradicts. Measured: **6 of 63** records now omit
+it (`eval-29`, `eval-37`, `eval-44`, `eval-45`, `pin-branch-invariance-true-2`,
+`pin-branch-invariance-true-3`); 57 still render it. `eval-37`, this issue's own reproducing case, is
+verified green.
 **Area**: `connect-four/server/scripts/renderReasonModel.mjs` (`READING_KEY`) + the rendered `replyHistogram` values
 **Discovered**: 2026-08-25 G7 re-measure (`eval-37`, runs 1 and 3)
 
@@ -7344,7 +7459,11 @@ values support, or stop offering the comparative when the histogram does not bac
 
 ## OI-203 — a terminal `afterBest` board is rendered with live threat entries and no statement that the better move ends the game
 
-**Status**: open
+**Status**: RESOLVED by epic 059 (Deep-Reveal Remediation) T012, 2026-08-27 (Q3 PROVISIONAL — see
+`reason-DECISIONS.md`). `reasonBoardSelect.mjs` now keeps a terminal `afterBest` board but gives it
+`tags: []` and `terminal: true`, and `causalLinks.mjs`'s L1 template renders a single game-over sentence
+("wins on the spot", "the game is over there") instead of listing live threats on a position that is
+already decided.
 **Area**: `connect-four/server/scripts/reasonBoardSelect.mjs` (board selection / tag rendering for a terminal position)
 **Discovered**: 2026-08-25 G7 re-measure (`eval-41`)
 
@@ -7364,7 +7483,12 @@ the frame, not just the tactics list.
 
 ## OI-204 — the vector-named double threat is appended to the DECISION board, where it is not yet board-true
 
-**Status**: open
+**Status**: RESOLVED by epic 059 (Deep-Reveal Remediation) T013, 2026-08-27 (the same
+`reasonBoardTags.mjs` fix that closed OI-188). Vector-named overlay tags are now gated on the
+production detectors actually matching the board. Measured corpus-wide, this is a bigger consequence
+than the two records this issue named: it suppresses the overlay on **100% of the 13 corpus records**
+carrying a vector-named fork half — each half's pattern only becomes board-true on a LATER board,
+never the decision board it used to be attached to.
 **Area**: `connect-four/server/scripts/reasonBoardTags.mjs` (overlay tag placement) — see also OI-195's second half
 **Discovered**: 2026-08-25 G7 re-measure (`pin-L2-enabled-opponent`; same shape on `eval-33`)
 
@@ -7383,7 +7507,16 @@ model-independent. Cross-refs: OI-195, OI-190.
 
 ## OI-205 — `better-col` is offered on every record but can never be REQUIRED, so the one block the model reliably obeys never asks for the better column
 
-**Status**: open
+**Status**: PARTIALLY RESOLVED by epic 059 (Deep-Reveal Remediation) T026, 2026-08-27 (Q2 PROVISIONAL
+— see `reason-DECISIONS.md`). `deriveRequiredSet` now pushes `better-col` as a lowest-priority
+candidate into an already-free slot only, never displacing a geometry group. Measured corpus-wide
+(all 63 records): offered to **21/63**; **42/63 remain at-cap and unresolved by design** — this is
+intentional (Q2's PROVISIONAL choice deliberately does not compete with the geometry cap), not a bug,
+and this issue stays open rather than closed for that residual. (The task text's original "15/25
+at-cap" phrasing was against the 25-board subset baseline; the 63-record full-corpus number above is
+the current measurement and supersedes it.) The **near-duplicate report of this same defect, OI-187,
+IS closed** by this same task — OI-187's title ("nothing enforces it") is now false; this issue's
+title ("can never be required") stays true for the residual 42/63.
 **Area**: `connect-four/server/scripts/renderReasonModel.mjs` (`deriveRequiredSet`)
 **Discovered**: 2026-08-25 G7 re-measure (flagged independently by the `eval-33` and `eval-47` graders)
 
@@ -7408,7 +7541,13 @@ not whether it moves the harness's A6 number — the harness never retries. Cros
 
 ## OI-206 — a fully-`transformed` object array renders as `[{},{},{},{}]` instead of being dropped
 
-**Status**: open
+**Status**: RESOLVED by epic 059 (Deep-Reveal Remediation) T027/T028, 2026-08-27 — see Design Decision
+2 in `reason-DECISIONS.md`. The array branch of `renderedFields`'s `prune` now mirrors the object
+branch's empty-drop guard. Measured: empty `[{},{},...]` literals went **36/63 → 0/63**. T028 also
+added a corpus-wide board-selection-aware consistency test
+(`renderFieldPartitionLineCarveout.test.mjs`) for the related `.line`-path `fieldPartition` question;
+the `TRANSFORMED_LEAVES` carve-out itself is unchanged, not reclassified, and `eval-33` is a named,
+commented exemption in that test (its board-selection remedy stays deferred, per Design Decision 2).
 **Area**: `connect-four/server/scripts/renderReasonModel.mjs` (`renderedFields`, the `pruneArray` branch)
 **Discovered**: 2026-08-26 prose-conversion re-measure (flagged by the `eval-33` grader, confirmed at source)
 
@@ -7450,7 +7589,12 @@ contains an empty object literal.
 
 ## OI-207 — a causal frame can contradict its own required set ("too far to pin to a single square", then two squares are mandatory)
 
-**Status**: open
+**Status**: RESOLVED by epic 059 (Deep-Reveal Remediation) T034, 2026-08-27. `openingFrame.mjs`'s
+`horizonTail` now omits "too far to pin to a single square" when the half has a nameable cell
+(`denialCell(half) != null`, imported from `causalLinks.mjs` — a new one-way dependency), only dropping
+the false denial, never asserting the opposite. `eval-9`, this issue's own reproducing case, is fixed
+without a new issue id, per T034's own instruction to share a helper with OI-199's class where it keeps
+the fix small.
 **Area**: `connect-four/server/scripts/reason_engine/causalLinks.mjs` (L5/O1), `connect-four/server/scripts/renderReasonModel.mjs` (`deriveRequiredSet`)
 **Discovered**: 2026-08-26 subset re-measure (`eval-9`, deterministic 5/5)
 
@@ -7483,3 +7627,45 @@ Measured incidence: **3 of 125 runs** on the 2026-08-26 subset carry a non-empty
 A repair that cannot be shown to preserve the handle→phrase binding should drop the span (the existing
 `stripFailingZoneSpans` behaviour) rather than emit a mis-anchored highlight — silently rebinding is
 the one outcome worse than losing the highlight. Cross-refs: OI-189, OI-140.
+
+**Attributed by epic 059 (Deep-Reveal Remediation) T008, not fixed (2026-08-27):** `compute.mjs`'s
+`GUARD_FAILURE_CODE_TO_OI` (`connect-four/server/scripts/compute.mjs`) attributes the `unclosed_tag`
+guard-action failure code to this issue. Replaying the recorded
+`fv_suff_answers_boards_subset_2026-08-26T15-47-56Z.jsonl` (125 rows) through the real
+`guardExplainMoveLlmPayload` with `diagnostics: true` surfaced **zero** occurrences of this code in
+that corpus (the 3/125 `annotationRepairs` incidence noted above was measured directly against the
+grading run's `annotationRepairs` field, a different signal than `guardDiagnostics.failures`) — none
+of the 5 observed span losses in that run belong to this issue (all 5 are OI-140, see that entry).
+This is attribution only, over one measured corpus; this issue stays **open**, explicitly out of
+scope for Epic 12 (spec 059's Out of Scope section).
+
+## OI-209 — `fieldPartition.rendered` claims `lostResource.line` is shown when no selected board displays it
+
+**Status**: open (deferred out of Epic 12 by owner decision, 2026-08-27)
+**Area**: `connect-four/server/scripts/reasonBoardSelect.mjs` (`selectBoards`) / `renderReasonModel.mjs` (`fieldPartition`)
+**Discovered**: Epic 12 spec pipeline, plan critique 2026-08-27
+
+`fieldPartition` (`renderReasonModel.mjs:239-249`) is a disposition table recording which feature-vector
+paths were shown to the model. Its own header comment (`:236-238`) records a deliberate divergence:
+`transformed` fields "are shown to the model via the board, so here they count as rendered (not
+excluded) — the distinction that matters for the G2 over-removal audit is shown-anywhere vs. hidden."
+
+On `eval-33` that carve-out is unsound: `lostResource.line` is classified `transformed`/rendered, but
+the board that would display it is not among the boards `selectBoards` picks, so the forced denial
+sequence explaining why column 1 holds the draw appears **nowhere** in the prompt while `fieldPartition`
+still claims it was rendered.
+
+Epic 12 asserts the one-directional property instead (a `rendered` path must not be invisible in **both**
+the JSON residue and the boards) and carries `eval-33` as a **named, documented exemption** in the
+FR-019(b) corpus test — see `specs/059-deep-reveal-remediation/` and the epic's `### Deferred`
+subsection. The remedy considered and rejected for Epic 12 was to make that record's board selectable.
+It was rejected because (a) it was never verified at source — the planning session did not re-derive
+`selectBoards`'s rule set, (b) no requirement mandates it, and (c) adding a board surface has measured
+regression precedent: per `reason-render-grounded-prompt.md` §12g, the second projected board's caption
+alone moved render-label leakage 0/125 → 10/125, because any new prompt wording is wording the model
+echoes back into coach prose.
+
+Fixing this properly means deciding, per record, whether `lostResource.line` should be **dropped** from
+the offer set or **promoted** to a genuinely rendered surface — "make the empty braces go away" is not
+the bar. Cross-refs: OI-186 (`buildRenderDecision` recomputes the offer set — the larger refactor this
+sits inside, also out of Epic 12's scope), OI-206.

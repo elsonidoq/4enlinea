@@ -15,7 +15,8 @@ test('condition D produces the grounded prompt (board + causal link), not the gl
   const prompt = buildPromptForCondition('GLOSSARY-TEXT', NV, 'D');
   assert.match(prompt, /# Board/);
   assert.match(prompt, /causal link L6/);
-  assert.match(prompt, /forced win via c6r5/);   // composed frame text (P3, NV's actual completingCell)
+  // B1 (FR-014/SC-011): L6 names the completing cell as column prose (c6r5 -> column 6).
+  assert.match(prompt, /forced win via column 6/);   // composed frame text (P3, NV's actual completingCell)
   assert.match(prompt, /# Reading key/);          // reading key present (P3)
   assert.doesNotMatch(prompt, /GLOSSARY-TEXT/); // D does not prepend the 607-line glossary
   // The output-contract must be appended so D answers are gradeable (final-review Fix 1).

@@ -5,13 +5,14 @@
 
 **Lane:** `connect-four/server/scripts/reason_engine/{zoneAnnotations,causalLinks,openingFrame}.mjs`,
 `connect-four/server/scripts/{renderReasonModel,reasonBoardSelect,reasonBoardTags,compute,grade_mechanical}.mjs`,
+`connect-four/server/reasonRenderGuard.mjs` (production; see US1 task 1.7),
 `connect-four/server/scripts/reason_corpus/runs/GRADER_INSTRUCTIONS_v2.md` (new), and
 `.claude/skills/grade-fv-sufficiency/SKILL.md`. Conflicts with any concurrent branch in the
 reason-engine render path.
 
 **Sizing verdict: ONE epic, full speckit, with a hard internal ordering (US1 before US2/US3).**
 Applying `docs/best_practices_spec_driven_development.md:202-206`, all three conditions hold:
-(1) **23 tasks** — 6 measurement/instrument + 6 board-truth + 11 offer/template, each with its own
+(1) **24 tasks** — 7 measurement/instrument + 6 board-truth + 11 offer/template, each with its own
 detector-level test (revised upward from 12 after an adversarial coverage audit found nine further
 filed issues; see the revision note at the foot of this file); (2) **several genuinely unresolved design decisions** — see `## Open questions`,
 of which the required-set slot trade (OI-205 vs FR-005's cap of three,
@@ -59,7 +60,7 @@ been the problem. This is a render and measurement epic, not an engine epic.**
 
 | # | User story | Primary surface | Why it blocks |
 |---|---|---|---|
-| **US1** | The eval grades the text production would actually serve | `compute.mjs`, `GRADER_INSTRUCTIONS_v2.md`, `grade-fv-sufficiency` skill | Until this lands, A5/A7b/G7 measure a string no player receives, and no render fix below can be validated against a number |
+| **US1** | The eval grades the text production would actually serve | `compute.mjs`, `GRADER_INSTRUCTIONS_v2.md`, `grade-fv-sufficiency` skill, **and `reasonRenderGuard.mjs` in production** | Until this lands, A5/A7b/G7 measure a string no player receives, and no render fix below can be validated against a number. **US1 is NOT harness-only**: task 1.7 widens the production `guardExplainMoveLlmPayload` return shape (opt-in flag) so the harness can read guard diagnostics through the mandated seam. |
 | **US2** | No rendered artifact describes a board state that is not true | `reasonBoardSelect.mjs`, `reasonBoardTags.mjs`, `causalLinks.mjs`, `renderReasonModel.mjs`, `mechanismExplainer.mjs` | These are the board-false ones: the model is handed a contradiction and narrates it faithfully (OI-202, OI-203, OI-204, OI-195b, OI-188, OI-177) |
 | **US3** | Every handle, role and template is unambiguous, owned, and obeys the rules the prompt states | `zoneAnnotations.mjs`, `causalLinks.mjs`, `openingFrame.mjs`, `renderReasonModel.mjs` | The prompt tells the model one thing and shows it another (OI-194, OI-199, OI-201, OI-193, OI-205, OI-206, OI-198, OI-180, OI-189, OI-184) |
 
@@ -210,6 +211,30 @@ dispatch wrapper is part of the instrument and must be frozen alongside the rubr
 3. **Rubric versioning is frozen-forward.** `GRADER_INSTRUCTIONS_v1.md` is never edited in place. A
    scope change like decision 1 requires a **`GRADER_INSTRUCTIONS_v2.md`**, and judgment axes are only
    comparable within a rubric version. Record the version for the run in `runs/README.md`.
+   **Amended 2026-08-27 — `v2.md` must become the SOLE rubric source, not an additional document.**
+   `.claude/skills/grade-fv-sufficiency/SKILL.md:656-659` currently instructs the orchestrator to
+   *write the rubric fresh each run* to `<scratchpad>/GRADER_INSTRUCTIONS.md` from the skill's own body
+   (axis text for A5 `:179`, A6 `:255`, A7 `:298`, G1–G7 `:464` — locate by symbol, the file carries
+   ~+237/−49 uncommitted lines in this tree). So writing `v2.md` changes nothing about the next run
+   unless the skill's dispatch step is also changed to point at the checked-in file instead of
+   regenerating one. Task 1.4 now owns that change; see AC 4a.
+   **Corrected 2026-08-27 (spec-critique review) — the axis definitions do NOT "live only inside
+   `SKILL.md`", and v2 must not fold anything in from it.**
+   `reason_corpus/runs/GRADER_INSTRUCTIONS_v1.md` is already a complete, self-sufficient 218-line
+   rubric that defines every one of these axes: A5 (`:115-136`), A6 (`:137-138`), A7 (`:139-163`),
+   G1–G7 (`:165-178`), the pass rule (`:179`), and triage (`:184`). The SKILL.md line numbers cited
+   above (`:179` A5, `:255` A6, `:298` A7, `:464` G1–G7) are the orchestrator-side long-form
+   sections, not the per-case `## Your case` template (`:691` onward) that a dispatched grader
+   actually receives — and v1 is a frozen snapshot of exactly that template. The two bodies have
+   since diverged by 452 lines, so "fold in the axis definitions from SKILL.md" would import a
+   different, longer rubric body into v2 on top of the intended change (grade the served string),
+   confounding the two and defeating frozen-forward versioning. **v2 = `GRADER_INSTRUCTIONS_v1.md`
+   verbatim, plus an explicit per-axis "which string is graded" statement — nothing relocated out of
+   SKILL.md, nothing merged in from it.** v2 must record the SKILL.md-vs-v1 divergence as a known
+   non-comparability; any future adoption of SKILL.md's drifted text is a deliberate v3, scheduled
+   only after the first v2-graded run establishes its own baseline. Task 1.4's job is to make the
+   checked-in v2 file the skill's sole rubric source by replacing the scratchpad-regeneration step —
+   not to move axis text out of `SKILL.md`.
 4. **The retry's BUDGET and TRIGGER SET are settled and must not be redesigned.**
    `computeMechanism` has a required-set post-check, a better-column post-check
    (`mechanismExplainer.mjs:115`), both folded into ONE amended retry on a single shared budget, plus
@@ -263,7 +288,8 @@ dispatch wrapper is part of the instrument and must be frozen alongside the rubr
 - **Adding anything to the prompt adds VOCABULARY the model echoes** (§12g): the second projected
   board's caption alone moved render-label leakage 0/125 → 10/125. **Extend the never-repeat list in
   the same change that adds a surface.**
-- **New open-issue ids start at OI-207** — OI-206 is the highest in `docs/open_issues.md`. But
+- **New open-issue ids start at OI-209** — OI-207 and OI-208 are both now filed
+  (`docs/open_issues.md:7469` for OI-208, `open`), so OI-206 is no longer the highest id. But
   **check for an existing issue before opening one.** An earlier draft of this epic proposed OI-207 for
   the `you-double` role/spec arity mismatch; that artifact is already **OI-180** (`halfForkCellsSpec`
   bundles a fork's disjoint endpoints into one `windows:` group), seen from the spec side rather than
@@ -287,11 +313,12 @@ dispatch wrapper is part of the instrument and must be frozen alongside the rubr
 | # | Task | Surface |
 |---|---|---|
 | 1.1 | Add a post-guard field to each answers row, produced by calling `guardExplainMoveLlmPayload` with the same `board` + `allowedSet` production uses. Keep the pre-guard `mechanism` (see Q1). | `connect-four/server/scripts/compute.mjs` |
-| 1.2 | Record, per row, what the guard *did*: spans stripped and their failure codes, coordinates promoted/humanized. This is the measurement that makes OI-194's real cost visible. | `compute.mjs` |
-| 1.3 | Write `GRADER_INSTRUCTIONS_v2.md`: v1 verbatim plus an explicit statement of **which string each axis grades** (served prose for A5/A7b/G1/G7; the pre-guard string only where an axis is explicitly about generation). Never edit v1. | `reason_corpus/runs/GRADER_INSTRUCTIONS_v2.md` |
-| 1.4 | Freeze the dispatch wrapper: make the skill's fixed three-line dispatch mandatory and forbid adding out-of-rubric context (open-issue lists, hypotheses) to a dispatch message. | `.claude/skills/grade-fv-sufficiency/SKILL.md` |
+| 1.2 | Record, per row, what the guard *did*: spans stripped and their failure codes — read via the `diagnostics` field task 1.7 adds to `guardExplainMoveLlmPayload` (`{ failures: string[], strippedSpecs: string[] }`, `contracts/guard-diagnostics-contract.md:86-99`), called with its opt-in flag set. This is the measurement that makes OI-194's real cost visible. **Amended from an earlier draft that also asked for "coordinates promoted/humanized": the coordinate half is cut by design** — `promoteRawCoordinates` (`reasonRenderGuard.mjs:217-241`) and `humanizeGroundedCoordinates` (`:156-181`) collect nothing internally, so capturing that half would mean new instrumentation inside two production text-rewriting functions on the serving path, out of scope for this epic. | `compute.mjs` |
+| 1.3 | Write `GRADER_INSTRUCTIONS_v2.md`: `GRADER_INSTRUCTIONS_v1.md` **verbatim**, plus an explicit statement of **which string each axis grades** (served prose for A5/A7b/G1/G7; the pre-guard string only where an axis is explicitly about generation). `v1.md` already defines A5/A6/A7/G1–G7 in full (`:115-136`, `:137-138`, `:139-163`, `:165-178`) — **do not fold in or relocate any text from `SKILL.md`**; the SKILL.md sections the amendment previously pointed at are a different, longer, drifted body (see settled decision 3's correction). Also record the SKILL.md-vs-v1 divergence in `v2.md` as a known non-comparability. Never edit v1. | `reason_corpus/runs/GRADER_INSTRUCTIONS_v2.md` |
+| 1.4 | **Make `GRADER_INSTRUCTIONS_v2.md` the skill's SOLE rubric source.** Replace the "write the per-case instructions ONCE to `<scratchpad>/GRADER_INSTRUCTIONS.md`" regeneration step (`SKILL.md:656-659`) with a dispatch step that reads the checked-in `reason_corpus/runs/GRADER_INSTRUCTIONS_v2.md` in full and nothing else — this is a change to which file the dispatch step reads, **not** a relocation of axis text out of `SKILL.md`. Freeze the dispatch wrapper: make the skill's fixed three-line dispatch mandatory and forbid adding out-of-rubric context (open-issue lists, hypotheses) to a dispatch message. This also resolves Q6: the checked-in rubric file is the frozen/verifiable artifact; the three-line dispatch is frozen as a rule in the skill that names that file. | `.claude/skills/grade-fv-sufficiency/SKILL.md` |
 | 1.5 | Record the rubric version + dispatch-wrapper hash for every run in the runs README, and correct the superseded prose-layer numbers there (§evidence corrections 1–4). | `reason_corpus/runs/README.md` |
-| 1.6 | **Attribute every guard-action code 1.2 records to its owning open issue before any of it is read as an OI-194 cost.** Three guard-layer issues are already filed and each produces codes US1 will now surface: **OI-140** (`deferred` — the gate runs *before* token-stripping, so P6 discards zones the strip would have made valid: this may mean the 5 `P6:raw_coordinate` losses are an ORDERING defect, not an OI-194 defect), **OI-172** (`OPEN`, mitigated — whole-window-only admission rejects correct single-cell highlights; measured 14 `P5strong:cell_not_allowed` on 08-25a, 15 on 08-25b), **OI-170** (`OPEN` — `P5strong:tg` rejection spans never stripped). Output: a code → OI mapping, and a statement of which losses OI-194's fix would actually remove. | `compute.mjs`, `docs/open_issues.md` |
+| 1.6 | **Attribute every guard-action code 1.2 records to its owning open issue before any of it is read as an OI-194 cost.** Three guard-layer issues are already filed and each produces codes US1 will now surface: **OI-140** (`deferred` — the gate runs *before* token-stripping, so P6 discards zones the strip would have made valid: this may mean the 5 `P6:raw_coordinate` losses are an ORDERING defect, not an OI-194 defect), **OI-172** (`OPEN`, mitigated — whole-window-only admission rejects correct single-cell highlights; measured 14 `P5strong:cell_not_allowed` on 08-25a, 15 on 08-25b), **OI-170** (`OPEN` — `P5strong:tg` rejection spans never stripped), and **OI-208** (`open` — an unbalanced highlight tag repair closes it in the wrong place; its `unclosed_tag` repair path attributes `eval-33`'s 1-row hit, see the "Named but not fixed" list). Output: a code → OI mapping, and a statement of which losses OI-194's fix would actually remove. | `compute.mjs`, `docs/open_issues.md` |
+| 1.7 | **Widen `guardExplainMoveLlmPayload` to expose guard diagnostics, behind an opt-in flag.** The function (`reasonRenderGuard.mjs:418`, synchronous) currently returns only `{ ...rest, explanation, prompt, terms }`; `validateAnnotation`'s `{ valid, failures }` is consumed and only `console.warn`'d (`:428`, `:434`), and `stripFailingZoneSpans` is module-private (`:365`, no `export`). Add a `diagnostics` field threaded out from those existing call sites — do not recompute them — returned **only when the caller passes an explicit opt-in flag**. **Two-field shape only: `{ failures: string[], strippedSpecs: string[] }`** (`contracts/guard-diagnostics-contract.md:86-99`) — **amended from an earlier draft's "failures, promotions, humanizations": promoted/humanized coordinates are cut by design**, since `promoteRawCoordinates` (`:217-241`) and `humanizeGroundedCoordinates` (`:156-181`) have no internal collection to thread out. The live `/explain` response at `index.js:1470` must stay byte-identical to today when the flag is absent, so this needs no `docs/deployment_steps.md` entry for the response shape and no downstream consumer sees a new key. Task 1.2 is the harness's consumer of this flag. | `reasonRenderGuard.mjs` |
 
 ### US2 — No rendered artifact describes a board state that is not true
 
@@ -308,7 +335,7 @@ dispatch wrapper is part of the instrument and must be frozen alongside the rubr
 
 | # | Task | Open issue | Surface |
 |---|---|---|---|
-| 3.1 | **No prompt surface may embed raw `cNrM` into text the prompt forbids the model to write.** Measured over the 25 subset records via `buildReasonRenderModel`, the templates are a MINORITY of the producers: `link.text` **20/25**, `zones.aliases[].role` **13/25**, `requiredSet[].role`+`.spec` **25/25** (printed verbatim by `requiredLines`, `renderReasonModel.mjs:604-605`). Fixing only the causal templates would declare OI-194 done while every record still shows raw squares in the block the prompt calls **mandatory**. **Tension to resolve, not ignore:** the role-text source is `specHint()` → `disambiguateSiblingRoles()` (`zoneAnnotations.mjs:401-424`) — i.e. **D49's own fix for OI-191 is what injects `"the one at c6r5: …"`**, so a naive strip re-opens the sibling-collision defect D49 closed. The fix must keep siblings distinguishable without raw coordinates (see Q8). Justify the work by the measured 5/340 lost highlights + prompt hygiene — **not** by a player-facing coordinate leak, which is 0/125. | **OI-194** | `causalLinks.mjs`, `zoneAnnotations.mjs`, `renderReasonModel.mjs` |
+| 3.1 | **No prompt surface may embed raw `cNrM` into text the prompt forbids the model to write.** Measured over the 25 subset records by replaying all 25 stored `render_decision` records from `…2026-08-26T15-47-56Z.jsonl`, there are **two printed producers**, not three: `link.text` **20/25**, `zones.aliases[].role` **13/25** (the required block re-prints 10 of these 13, since `deriveRequiredSet` copies `role: alias.role` verbatim — `renderReasonModel.mjs:153`). `requiredSet[].spec` is **not** a third producer: `.spec` is never printed into the prompt — the required block is `renderReasonModel.mjs:604-605`, `` `- [zone:${g.handle}] = ${g.role}${g.truthBoard ? ...}` ``, which prints handle, role, and board, never `.spec`. **`.spec` is exempt by design, not a defect**: it is the key of `aliasBySpec` (`renderReasonModel.mjs:137`, matched at `:146`, the D2/D43 spec-string-equality contract) and must stay coordinate-bearing — stripping it would break required-set derivation. Fixing the two printed producers would declare OI-194 done at the surfaces that actually reach the prompt; the honest justification is "the role text the mandatory block re-prints carries raw squares on 10 of 25 records," not a 25/25 headline. **Tension to resolve, not ignore:** the role-text source is `specHint()` → `disambiguateSiblingRoles()` (`zoneAnnotations.mjs:401-424`) — i.e. **D49's own fix for OI-191 is what injects `"the one at c6r5: …"`**, so a naive strip re-opens the sibling-collision defect D49 closed. The fix must keep siblings distinguishable without raw coordinates (see Q8). Justify the work by the measured 5/340 lost highlights + prompt hygiene — **not** by a player-facing coordinate leak, which is 0/125. | **OI-194** | `causalLinks.mjs`, `zoneAnnotations.mjs`, `renderReasonModel.mjs` |
 | 3.2 | `future-line` role text names no owner, so a line alias reads as either player's; on `eval-2` two runs handed the player's own line to the opponent. Conjugate the owner as the `line` branch does. | **OI-201** | `zoneAnnotations.mjs:61` |
 | 3.3 | `forkPivotCell` only fires on a tagged half (`FORK_TAGS.has(half.tacticTag)`, `zoneAnnotations.mjs:93-94`); on `eval-47` the fork lives in board tags and no pivot is offered. | **OI-193** | `zoneAnnotations.mjs` |
 | 3.4 | `better-col` is offered on every record but `deriveRequiredSet` can never select it (it derives only geometry specs), so the one block the model reliably obeys never asks for the better column. Trades against FR-005's cap of three (`renderReasonModel.mjs:172`) — see Q2. | **OI-205** | `renderReasonModel.mjs` |
@@ -316,7 +343,7 @@ dispatch wrapper is part of the instrument and must be frozen alongside the rubr
 | 3.6 | The opening frame invites a centrality explanation (`openingFrame.mjs:72` `GUARDRAIL_ADMISSIBLE_FRAMINGS_CENTRALITY_ONLY`) and then forbids it (`:76` `GUARDRAIL_NO_CENTRALITY`), when the centrality clause is suppressed. Hit independently on `eval-21` (5/5) and `eval-11`; every run took the invitation and rested on a board-false central-grip claim. **Already filed — see the note below.** | **OI-199** | `openingFrame.mjs` |
 | 3.7 | `roleText`'s `major` fallback renders "you's four-in-a-row line" (`zoneAnnotations.mjs:78`); the sibling branches conjugate explicitly. Cosmetic, one line. | **OI-198** | `zoneAnnotations.mjs` |
 | 3.8 | Role/spec arity mismatch — `kind === 'double'` role text reads *"the single fork square"* (`zoneAnnotations.mjs:59`) while its spec can be a 3-cell set (`eval-47`: `you-double = windows:c3r6,c6r5,c7r2`). **Do NOT open a new id: this is the role-side view of OI-180** (`halfForkCellsSpec` bundles a fork's disjoint endpoints into one `windows:` group, so the spec claims a line that does not exist — `open`). Fix both sides together, or state explicitly which side is authoritative. | **OI-180** | `zoneAnnotations.mjs` |
-| 3.9 | **The prompt displays term slugs it does not offer.** On `eval-13`, L7's own prose supplies "the central-column opening" while `zones.terms` offers only `double_threat`; the model emits `[term:central-column opening]`, `annotationRepairs` fires, and `GRADER_INSTRUCTIONS_v1.md:47,176` makes a non-empty `annotationRepairs` a **G7c auto-FAIL** (measured: 3 of 125 rows). Fix already specified as Task 9b of the 2026-08-11 remediation plan and never implemented. | **OI-189** | `renderReasonModel.mjs`, `causalLinks.mjs` |
+| 3.9 | **A causal frame's prose must not introduce vocabulary outside the record's offer set.** On `eval-13`, L7's own prose supplies "the central-column opening" while `zones.terms` offers only `double_threat`; the model emits `[term:central-column opening]`, `annotationRepairs` fires, and `GRADER_INSTRUCTIONS_v1.md:47,176` makes a non-empty `annotationRepairs` a **G7c auto-FAIL**. **True population: 2 of 125 rows** (both `eval-13`), not 3 — the third flagged row, `eval-33`'s `unclosed_tag`, is an unrelated defect belonging to **OI-208** (see "Named but not fixed"). The display-path half of this defect (the model being SHOWN term slugs it has no permission to use) already shipped as **D48** (`reason-DECISIONS.md:1488`, status IMPLEMENTED, now binding invariant **I13**), taking that defect 49/63 records → 0/63; the code is present (`RENDER_DISPLAY_PHRASE`, `renderReasonModel.mjs:468`; `dropUnoffered`, `zoneAnnotations.mjs:466`). What remains is the different, narrower defect above — the frame's own prose naming a concept the record never offers — and the fix belongs in `causalLinks.mjs`, not the display path D48 already closed. | **OI-189** | `causalLinks.mjs` |
 | 3.10 | **Owner attribution on shared vocabulary.** `zones.terms[double_threat]`'s description is owner-neutral, so the model can hand the opponent's fork to the learner; `eval-13` reproduces it this run (runs 0 and 4). Task 3.2 fixes owner-naming for `future-line` roles only and does not reach the terms map. OI-184 is filed as "the most severe defect found in the 2026-08-06 evaluation" (factual correctness, `open`). | **OI-184** | `zoneAnnotations.mjs` (terms map) |
 | 3.11 | **A frame must not contradict its own required set.** On `eval-9` the L5/O1 frame says the win is "too far to pin to a single square" while `requiredSet` **mandates** naming two single squares; all 5 runs fail A5. Same class as OI-199 (3.6), different template pair — one guardrail-vs-requirement consistency check should cover both. | **OI-207** (filed 2026-08-26) | `causalLinks.mjs`, `renderReasonModel.mjs` |
 
@@ -343,20 +370,33 @@ Machine-checkable wherever possible. `IF/THEN` rules are the contract.
 
 1. IF `compute.mjs --llm` writes an answers row, THEN that row carries the post-guard served string,
    produced by importing `guardExplainMoveLlmPayload` from `reasonRenderGuard.mjs` — **not** by a
-   reimplementation of it. A test asserts the imported symbol is used.
+   reimplementation of it. A test asserts the imported symbol is used. IF the harness also records
+   guard diagnostics (task 1.2), THEN they are read from the `diagnostics` field task 1.7 adds to that
+   same function's return value (called with its opt-in flag), **not** recomputed by separately calling
+   `validateAnnotation` or reimplementing `stripFailingZoneSpans`.
 2. IF the recorded answers of `…2026-08-26T15-47-56Z` are replayed through the new harness path, THEN
    the count of raw `cNrM` tokens in served prose (with `[zone:…]` delimiters removed) is **0**, and
    the count of runs losing at least one `[zone:…]` span is **5**. *(Both figures were measured for
    this epic and are the regression fixture; harvest, never hand-write, any other fixture.)*
-3. `GRADER_INSTRUCTIONS_v2.md` exists; `GRADER_INSTRUCTIONS_v1.md` is byte-identical to its state at
-   `f6282be`; every axis in v2 names the string it grades.
+2a. IF the live `/explain` endpoint (`index.js:1470`) is called without the opt-in diagnostics flag,
+   THEN its response is byte-identical to today's — the widened `guardExplainMoveLlmPayload` return
+   shape must not leak a new key into the default response.
+3. `GRADER_INSTRUCTIONS_v2.md` exists and is the SOLE rubric source used by any grading run. It is
+   `GRADER_INSTRUCTIONS_v1.md` verbatim — v1 already defines A5, A6, A7, G1–G7 in full (`:115-136`,
+   `:137-138`, `:139-163`, `:165-178`) — plus an explicit per-axis "which string is graded" statement;
+   nothing is relocated out of `SKILL.md` or folded in from it, and the SKILL.md-vs-v1 divergence is
+   recorded in v2 as a known non-comparability rather than resolved. `GRADER_INSTRUCTIONS_v1.md` is
+   byte-identical to its state at `f6282be`; every axis in v2 names the string it grades.
+3a. **No run may be graded from a rubric that is not a checked-in `GRADER_INSTRUCTIONS_v*.md`.** The
+   skill's dispatch step (`SKILL.md:656-659`) must point at that checked-in file and must not
+   regenerate rubric text from the skill's own body into a scratchpad copy each run. A test or manual
+   check confirms the dispatch instruction names the checked-in path.
 4. IF a grading fleet is dispatched, THEN every dispatch message is byte-identical except for `id`,
    `condition` and the output path, and carries **no** out-of-rubric context (open-issue lists,
-   hypotheses, "known traps"). *(The artifact this is checked against is Q6's output — a template file
-   plus hash, or a rule in the skill. Until Q6 resolves, this AC has no checkable referent; the plan
-   must not treat it as testable before then.)* Note that
-   `.claude/skills/grade-fv-sufficiency/SKILL.md` **already specifies a fixed three-line dispatch** —
-   Q6's live half is only how it is frozen and verified, not what it says.
+   hypotheses, "known traps"). `.claude/skills/grade-fv-sufficiency/SKILL.md` **already specifies a
+   fixed three-line dispatch**; task 1.4 makes it point at the checked-in rubric (AC 3a) rather than a
+   regenerated scratchpad copy, which is what closes Q6 — the checked-in rubric file is the frozen,
+   verifiable artifact, and the three-line dispatch is frozen as a rule in the skill that names it.
 5. `runs/README.md` records the rubric version and the dispatch-wrapper identity for every run, and no
    longer asserts the superseded "flat incidence" / "70 passes had the same defect" numbers.
 
@@ -394,11 +434,16 @@ not an LLM re-measure:
     `"you's"` on 9, `"you gets"` on 5. An AC that greps only for `"you's"` is passed by a fix that
     leaves `"you gets"` in place.* Parametric over the whole offer set on all 63 corpus records.
 11. **No prompt surface that the model is told not to echo contains a `cNrM`/`colN` token** —
-    asserted over **all three** producers, not just the templates: `link.text`, `zones.aliases[].role`,
-    and `requiredSet[].role`/`.spec`. Baselines to go RED against, measured on the 25 subset records:
-    20/25, 13/25, **25/25** respectively. AND the sibling-disambiguation property D49 established still
-    holds — no two aliases sharing a `(role, truthBoard)` pair restate identically (§12d). Satisfying
-    11 by re-introducing the OI-191 collision is a regression, not a fix.
+    asserted over the **two printed producers**, not just the templates: `link.text` and
+    `zones.aliases[].role` (of which the required block re-prints 10 of 13, since `deriveRequiredSet`
+    copies `role: alias.role` — `renderReasonModel.mjs:153`). Baselines to go RED against, measured on
+    the 25 subset records: **20/25** and **13/25** respectively. `alias.spec` / `requiredSet[].spec` are
+    **exempt by design** — internal match keys (`aliasBySpec`, `renderReasonModel.mjs:137,146`, the
+    D2/D43 spec-string-equality contract) that are never printed into the prompt (`renderReasonModel.mjs:604-605`
+    prints handle, role, and board, never `.spec`); an AC demanding no `cNrM` there would break
+    required-set derivation and must not be written. AND the sibling-disambiguation property D49
+    established still holds — no two aliases sharing a `(role, truthBoard)` pair restate identically
+    (§12d). Satisfying 11 by re-introducing the OI-191 collision is a regression, not a fix.
 12. IF the opening guardrail suppresses the centrality clause, THEN "centrality" does not appear in
     the admissible-framings sentence for that record.
 13. IF `deriveRequiredSet` runs on any corpus record, THEN the better column is requestable — the
@@ -438,12 +483,32 @@ not an LLM re-measure:
   cosmetic defect that US1 will start surfacing. Excluded deliberately: it changes the served string,
   so fixing it mid-epic would move the very baseline US1 exists to establish. Re-evaluate after the
   first v2-graded run.
-- **OI-140 / OI-170 / OI-172** as *fixes*. Task 1.6 requires them to be **named and attributed** so
-  their guard-action codes are not misread as OI-194's cost, but repairing the gate's ordering
-  (OI-140) or its admission rule (OI-172) is its own design with its own blast radius.
+- **OI-140 / OI-170 / OI-172 / OI-208** as *fixes*. Task 1.6 requires them to be **named and
+  attributed** so their guard-action codes are not misread as OI-194's cost, but repairing the gate's
+  ordering (OI-140), its admission rule (OI-172), or the unbalanced-tag repair placement (**OI-208**,
+  `docs/open_issues.md:7469`, status `open` — an unbalanced highlight tag is repaired by closing it in
+  the wrong place, so on `eval-33` a highlighted square lands under text that does not describe it and
+  the player sees the wrong square lit up; area `reasonRenderGuard.mjs` / `annotationGate.js`) is its
+  own design with its own blast radius.
 - **OI-186** (`buildRenderDecision` recomputes the offer set) as a *refactor*. AC 9(b) requires
   `fieldPartition.rendered` to stop lying; restructuring the two builders into one shared producer is
   the larger fix and is not required to satisfy it.
+
+### Deferred
+
+Items dropped out of this epic during plan review (spec 059's plan-critique/plan-answers cycle),
+recorded here so they are not silently lost:
+
+- **Board-selection remedy for `eval-33`'s `lostResource.line`** (the `reasonBoardSelect.mjs` /
+  `selectBoards` change originally proposed in an earlier plan draft, step 3 of Design Decision 2) —
+  deferred out of Epic 12 because it was never verified at source (no mechanism, no citation, one
+  record — the plan's only explicitly self-labelled unverified step), no requirement mandates it
+  (FR-019 requires only that the two-sided rendered/visible check exist and be honest, not that every
+  record pass it), and adding a board surface has measured prompt-leakage regression precedent (§12g
+  above: the second projected board's caption alone moved render-label leakage 0/125 → 10/125).
+  `eval-33` is carried meanwhile as a documented, named exemption in the FR-019(b) corpus test (spec
+  059 task, `renderFieldPartitionLineCarveout.test.mjs`) rather than silently made to pass. File the
+  board-selection remedy as its own scoped item if a future session wants `eval-33` to go GREEN.
 
 ---
 
@@ -472,12 +537,15 @@ Genuinely unresolved; `/clarify` should settle them. None of the settled decisio
    comparative when unsupported is safer and loses a real signal on the records where it does hold.
 5. **OI-199: drop centrality from the framings sentence, or relax the guardrail?** The `eval-21` gate
    exists for a real reason (see the D-log), so relaxing it is not obviously safe.
-6. **How is the dispatch wrapper actually frozen** — a checked-in template file with a recorded hash,
-   or a rule in the skill? A rule is cheaper; a file is verifiable. **Half of this is already
-   answered: `.claude/skills/grade-fv-sufficiency/SKILL.md` already specifies the fixed three-line
-   dispatch verbatim.** Do not re-derive that text; decide only the freezing/verification mechanism,
-   and reconcile with AC 4. *(Caution: that file carries ~+237/−49 uncommitted lines in this tree, so
-   any line number into it will have drifted by plan time — locate by symbol.)*
+6. **RESOLVED (2026-08-27), not open.** *How is the dispatch wrapper actually frozen?* Answer: the
+   checked-in `GRADER_INSTRUCTIONS_v2.md` (task 1.3/1.4) is the frozen, verifiable rubric artifact, and
+   the skill's already-specified fixed three-line dispatch (`SKILL.md:656-659`) is frozen as a rule that
+   points at that checked-in file instead of regenerating rubric text into a scratchpad copy each run
+   (settled decision 3's amendment; AC 3a). This was forced by the finding that the skill previously
+   regenerated the rubric from its own body every run regardless of any `v1`/`v2` file, so "freeze the
+   dispatch wrapper" alone (the original half-answer) was moot without also fixing what it dispatches
+   against. *(Caution: `SKILL.md` carries ~+237/−49 uncommitted lines in this tree, so any line number
+   into it will have drifted by plan time — locate by symbol.)*
 7. **Is a post-fix LLM re-measure in scope at all**, given the control group is spent (§12f) and every
    judgment-axis delta of a few points is inside the noise band? If yes, against which recorded run,
    and under which rubric version? *(Note the trap: a v2-graded run is not comparable to any v1-graded
@@ -510,7 +578,7 @@ Read in this order. Treat everything in it as binding.
    prose-layer incidence numbers are superseded by this epic's `## The evidence`.**
 5. `docs/open_issues.md` — **in scope**: OI-177, OI-180, OI-182, OI-184, OI-187, OI-188, OI-189,
    OI-193, OI-194, OI-195, OI-198, OI-199, OI-201, OI-202, OI-203, OI-204, OI-205, OI-206.
-   **Named but not fixed**: OI-140, OI-170, OI-172, OI-178, OI-186. **Excluded**: OI-176, OI-183,
+   **Named but not fixed**: OI-140, OI-170, OI-172, OI-178, OI-186, OI-208. **Excluded**: OI-176, OI-183,
    OI-197, OI-200. Read each issue's own `Status:` line rather than trusting this summary — statuses
    drift, and an issue marked FIXED must not be worked.
 6. Production code, in the order the string flows: `connect-four/server/scripts/renderReasonModel.mjs`
@@ -543,9 +611,16 @@ What changed, and why it matters to anyone reading the task list:
    attributed, or excluded with a reason). The first draft's sweep iterated a list of issue numbers
    instead of reading headings — the same failure that had already caused OI-197–200 to be missed once
    in the intake. **If you extend this epic, sweep by subject.**
-2. **OI-194's task covered under half its producers.** Measured: raw `cNrM` appears in `link.text` on
-   20/25 records, alias roles on 13/25, and the required set on **25/25** — the block the prompt calls
-   mandatory. AC 11 now asserts all three, and Q8 owns the D49 tension the widening creates.
+2. **OI-194's task covered under half its producers — corrected 2026-08-27.** Measured by replaying
+   the 25 stored `render_decision` records: raw `cNrM` appears in `link.text` on 20/25 records and in
+   `zones.aliases[].role` on 13/25 (of which the required block re-prints 10, since `deriveRequiredSet`
+   copies `role: alias.role` — `renderReasonModel.mjs:153`). **The earlier "25/25 on the required set"
+   headline was a mis-measurement and is retracted**: `requiredSet[].spec` is never printed into the
+   prompt (`renderReasonModel.mjs:604-605` prints handle, role, and board, never `.spec`) and must stay
+   coordinate-bearing by design — it is the `aliasBySpec` match key (D2/D43). There are **two** printed
+   producers, not three, and the required-set role figure is **10/25**, not 25/25. AC 11 now asserts the
+   two printed producers with an explicit `.spec` carve-out, and Q8 owns the D49 tension the widening
+   still creates.
 3. **Two named deterministic failures had no owning task** — `eval-37` and
    `pin-branch-invariance-true-2` (now task 2.5), and `eval-9` (now 3.11).
 4. **Settled decision 4 was over-broad.** It asserted the enforcement layer must not be redesigned;

@@ -26,6 +26,14 @@ Read `docs/architecture/reason-render-grounded-prompt.md` (condition-D design) a
 
 ## Step 1 — generate the answers file
 
+> **RETIRED 2026-08-06.** The frozen-29 board set and its evidence file named below were **deleted**
+> when the corpus was consolidated to the single committed set at
+> `connect-four/server/scripts/reason_corpus/` (`boards.jsonl` + `evidence.jsonl`, 50 coverage rows +
+> 13 semantic `pin-*` regression rows). The nine L1–L9 regression anchors this runbook depended on
+> survive as those pins, recomputed against the current engine. **D29's intent — keeping this set as
+> an ablation anchor distinct from the P4 coverage set — no longer holds**, and retiring or restating
+> D29 is an open decision, not a path fix: see OI-185. Treat the paths below as historical.
+
 The frozen-29 input board set is already committed:
 `connect-four/server/scripts/boards_coverage_2026-07-02T11-37-56Z.jsonl` (this is the file that
 produced the committed `reason_evidence_boards_coverage_2026-07-02T11-37-56Z.jsonl` evidence — do
