@@ -28,6 +28,7 @@ const DS = {
   new:  { answers: 'fv_suff_answers_boards_2026-08-28T18-35-46Z',           n: 3, label: 'Current (2026-08-28, EN)' },
   base: { answers: 'fv_suff_answers_boards_subset_2026-08-26T15-47-56Z_served', n: 5, label: 'Baseline (2026-08-26, EN)' },
   es:   { answers: 'fv_suff_answers_boards_2026-08-31T12-52-38Z',            n: 3, label: 'Current (2026-08-31, ES)' },
+  old:  { answers: 'fv_suff_answers_boards_2026-08-06T16-04-29Z_served',   n: 2, label: 'Older baseline (2026-08-06, EN)' },
 };
 
 function loadSet(key) {
@@ -55,6 +56,10 @@ function loadSet(key) {
 }
 
 const AXES = ['A1', 'A2', 'A3', 'A4', 'A5', 'A6', 'A7', 'G1', 'G7'];
+// grade_mechanical.mjs computes these deterministically from the vector, so they mean the same
+// thing under rubric v1 and v2. Every other axis is a grader judgment and is NOT comparable
+// across a rubric change.
+const RUBRIC_INDEPENDENT = ['A1', 'A2', 'A6'];
 function axisRates(cases) {
   const t = {};
   for (const c of cases) for (const r of c.runs) for (const a of AXES) {
@@ -64,7 +69,7 @@ function axisRates(cases) {
   return t;
 }
 
-const data = { new: loadSet('new'), base: loadSet('base'), es: loadSet('es') };
+const data = { new: loadSet('new'), base: loadSet('base'), es: loadSet('es'), old: loadSet('old') };
 // restrict the current EN set to the baseline's boards for the paired comparison
 const baseIds = new Set(data.base.cases.map((c) => c.id));
 data.newOverlap = { label: 'Current, baseline boards only', n: 3, cases: data.new.cases.filter((c) => baseIds.has(c.id)) };
@@ -147,6 +152,7 @@ button[aria-pressed=true]{border-color:var(--accent);color:var(--accent)}
 <script>
 const D=${JSON.stringify(payload)};
 const AM=${JSON.stringify(AXIS_MEANING)};
+const RI=${JSON.stringify(RUBRIC_INDEPENDENT)};
 const AX=${JSON.stringify(AXES)};
 const pct=(p,g)=>g?Math.round(100*p/g):0;
 const esc=s=>String(s??'').replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
@@ -156,9 +162,16 @@ function rateRow(a,A,B){
   const ra=A[a],rb=B?B[a]:null;
   if(!ra)return '';
   const va=pct(ra.p,ra.g), vb=rb?pct(rb.p,rb.g):null;
-  const d=vb==null?null:va-vb;
+  const crossRubric = baseline==='old' && !RI.includes(a);
+  let d=vb==null?null:va-vb;
   const noisy=(D.variance.perAxisRate[a]??0)>=20;
-  const dTxt=d==null?'—':(d>0?'+':'')+d+(noisy&&Math.abs(d)<=20?' <span class=pill title="within the measured ±20% grader disagreement on this axis">noise</span>':'');
+  let dTxt;
+  if(crossRubric){
+    dTxt='<span class=pill title="The 08-06 grades were produced under rubric v1, which graded a different string (mechanism, pre-guard) for this axis. A delta here would compare two different standards.">v1 rubric — not comparable</span>';
+  } else {
+    dTxt=d==null?'—':(d>0?'+':'')+d+(noisy&&Math.abs(d)<=20?' <span class=pill title="within the measured ±20% grader disagreement on this axis">noise</span>':'');
+  }
+  if(crossRubric) d=null;
   return \`<tr><td><b>\${a}</b> <span style="color:var(--mut)">\${AM[a]||''}</span></td>
   <td class=num>\${vb==null?'—':vb+'%'}</td><td class=num>\${va}%</td>
   <td class="num \${d>0?'ok':d<0?'bad':''}">\${dTxt}</td>
@@ -184,8 +197,9 @@ function caseCard(c){
 }
 
 function render(){
-  const cur=D.sets.newOverlap, base=D.sets[baseline];
-  const RA=D.rates.newOverlap, RB=D.rates[baseline];
+  const afterKey = baseline==='old' ? 'new' : 'newOverlap';
+  const cur=D.sets[afterKey], base=D.sets[baseline];
+  const RA=D.rates[afterKey], RB=D.rates[baseline];
   const app=document.getElementById('app');
   app.innerHTML=\`
   <h2>1 · Where it stood before</h2>
@@ -193,10 +207,12 @@ function render(){
    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:10px">
     <span style="color:var(--mut);font-size:13px">Baseline:</span>
     <button aria-pressed="\${baseline==='base'}" onclick="setBase('base')">08-26 · 25 boards · n=5</button>
-    <span class=pill title="This is the code state immediately before Epic 12, re-graded under the same rubric as the current run.">clean Epic-12 delta</span>
+    <button aria-pressed="\${baseline==='old'}" onclick="setBase('old')">08-06 · 63 boards · n=2</button>
    </div>
-   <p class=note>The older 08-06 63-board run exists (<span class=mono>fv_suff_answers_boards_2026-08-06…</span>) but is <b>not offered as a switchable baseline</b>: its grades predate the v2 rubric, so its judgment axes were scored against a different standard, and it also predates Epic 11 — a delta against it would conflate two epics. Using it would require re-grading its 63 cases.</p>
-   <p>Baseline set: <b>\${esc(base.label)}</b> — \${base.cases.length} cases × \${base.n} runs, gpt-5.4-mini, condition D. Re-graded under the v2 rubric with <span class=mono>servedExplanation</span> derived retroactively, so both sides are scored by one instrument.</p>
+   \${baseline==='base'
+     ? \`<div class=caveat><b>Clean Epic-12 delta.</b> This is the code state immediately before this work, re-graded under the <b>same rubric v2</b> as the current run, so both sides are scored by one instrument. Narrower board coverage (25 of 63), and it is compared against those same 25 boards.</div>\`
+     : \`<div class=caveat><b>Full coverage, but two epics and two rubrics.</b> All 63 boards (compared against the full 63-board current run), so nothing is sampled away. Two things to hold: it predates <b>Epic 11 as well as Epic 12</b>, so any movement is the sum of both; and its grades were produced under <b>rubric v1</b>, which graded the pre-guard <span class=mono>mechanism</span> rather than <span class=mono>servedExplanation</span>. Only the script-computed axes (<b>A1, A2, A6</b>) mean the same thing under both rubrics — the judgment axes are marked not-comparable below rather than shown as a delta. It has not been re-graded under v2; that would take 63 agents.</div>\`}
+   <p>Baseline set: <b>\${esc(base.label)}</b> — \${base.cases.length} cases × \${base.n} runs, gpt-5.4-mini, condition D. Compared against <b>\${cur.cases.length} boards</b> of the current run.</p>
   </div>
 
   <h2>2 · Where it stands now</h2>
@@ -265,8 +281,10 @@ function render(){
     <button aria-pressed="\${view==='new'}" onclick="setView('new')">Current EN · 63</button>
     <button aria-pressed="\${view==='base'}" onclick="setView('base')">Baseline EN · 25</button>
     <button aria-pressed="\${view==='es'}" onclick="setView('es')">Current ES · 25</button>
+    <button aria-pressed="\${view==='old'}" onclick="setView('old')">Baseline 08-06 · 63</button>
     <button aria-pressed="\${onlyFail}" onclick="toggleFail()">failures only</button>
    </div>
+   \${view==='old'?'<div class=caveat><b>Rubric v1 grades.</b> These axis chips were scored under the older rubric against the pre-guard <span class="mono">mechanism</span>; the served text shown below it was derived retroactively with the current guard. Read the prose freely; treat the chips on the judgment axes as historical.</div>':''}
    \${view==='es'?'<div class=caveat><b>Spanish has no baseline.</b> These are current-state numbers only — there is no before/after for ES. Its A5 collapse (99%→48% vs EN) is the self-contradicting prompt above, not model quality; on A7 and A6 Spanish scores <i>higher</i> than English.</div>':''}
    \${D.sets[view].cases.filter(c=>!onlyFail||!c.case_pass).map(caseCard).join('')}
   </div>\`;
