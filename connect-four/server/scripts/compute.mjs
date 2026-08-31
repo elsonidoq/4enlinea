@@ -84,6 +84,8 @@ Options:
                               condition-D answer lines also carry a render_decision record for the grader.
   --n <N>               Runs per record per condition (--llm only). Default: 3.
   --model <id>          OpenAI model (--llm only). Default: $EXPLAIN_MODEL.
+  --locale en|es        Output locale (--llm only). 'es' appends SPANISH_OUTPUT_DIRECTIVE to the
+                        task, matching production's locale-aware prompt. Default: en.
   --sentence-budget <t> Answer-length instruction for the mechanism field, as prose (e.g. "1-3",
                         "4-6"). Default: 1-3. Used by the budget-ablation arm.
   -h, --help            Show this help and exit.
@@ -95,7 +97,7 @@ Requires OPENAI_API_KEY (and a model) for --llm; loaded from connect-four/server
 // process.exit or depends on --input being present. Everything below this point that the CLI
 // entry needs (INPUT, evidenceOut, useLlm, ts, N, model, CONDITIONS) is declared with `let` at
 // module scope and populated only when this file is the entry point.
-let inputArg, INPUT, inputStem, evidenceOut, useLlm, ts, N, model, CONDITIONS, idFilter, sentenceBudget;
+let inputArg, INPUT, inputStem, evidenceOut, useLlm, ts, N, model, CONDITIONS, idFilter, sentenceBudget, locale;
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
   if (process.argv.includes('--help') || process.argv.includes('-h')) {
     console.log(HELP);
@@ -124,6 +126,9 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
   N = parseInt(argVal('--n', '3'), 10);
   model = argVal('--model', process.env.EXPLAIN_MODEL);
   sentenceBudget = argVal('--sentence-budget', '1-3');
+  // Production threads a locale into buildPromptForCondition (mechanismExplainer.mjs:187); the CLI
+  // hardcoded 'en', so a Spanish eval silently generated English. 'es' appends SPANISH_OUTPUT_DIRECTIVE.
+  locale = argVal('--locale', 'en');
   const condArg = (argVal('--condition', 'A') || 'A').toLowerCase();
   CONDITIONS = condArg === 'all' ? ['A', 'B', 'C', 'D'] : condArg.toUpperCase().split(',');
 
@@ -322,7 +327,7 @@ export function postprocessAnswer(answer, render_decision) {
 // / empty movestring) — nothing to guard against.
 //
 // Q1 PROVISIONAL: both mechanism and servedExplanation stored; see spec.md Q1
-export function computeServedExplanation(mechanism, render_decision, movestring) {
+export function computeServedExplanation(mechanism, render_decision, movestring, locale = 'en') {
   if (typeof mechanism !== 'string' || !render_decision?.zones || !movestring) {
     return { servedExplanation: null, guardDiagnostics: null };
   }
@@ -333,12 +338,17 @@ export function computeServedExplanation(mechanism, render_decision, movestring)
     return { servedExplanation: null, guardDiagnostics: null };
   }
   const allowedSet = toAllowedSet(render_decision.zones.aliases);
+  // locale MUST be threaded: humanizeGroundedCoordinates is locale-aware (reasonRenderGuard.mjs:156)
+  // and production passes req.locale (index.js:1470). Defaulting to 'en' here rendered "column 5,
+  // row 6" inside Spanish served text — an eval artifact that made the es run look worse than what
+  // production would actually serve.
   const { explanation, diagnostics } = guardExplainMoveLlmPayload({
     explanation: mechanism,
     prompt: '',
     terms: {},
     board,
     allowedSet,
+    locale,
     diagnostics: true,
   });
   return { servedExplanation: explanation, guardDiagnostics: diagnostics };
@@ -413,7 +423,7 @@ async function runLlm(evidenceRows) {
     for (const condition of CONDITIONS) {
       let prompt;
       try {
-        prompt = buildPromptForCondition(glossaryText, nv, condition, 'en', sentenceBudget);
+        prompt = buildPromptForCondition(glossaryText, nv, condition, locale, sentenceBudget);
       } catch (err) {
         // Prompt-build failure (e.g. condition D's buildReasonRenderModel throwing
         // UncoveredVectorFieldError / classifyCausalLink no-match on a novel record) must not
@@ -460,7 +470,7 @@ async function runLlm(evidenceRows) {
         // diagnostics — computed via the REAL guardExplainMoveLlmPayload, never a reimplementation.
         // Q1 PROVISIONAL: both mechanism (pre-guard, above) and servedExplanation stored; see spec.md Q1
         const { servedExplanation, guardDiagnostics } = computeServedExplanation(
-          answer?.mechanism, render_decision, nv.movestring,
+          answer?.mechanism, render_decision, nv.movestring, locale,
         );
         const line = {
           id: row.id,
