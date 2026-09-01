@@ -24,6 +24,11 @@
 
 ### LLM Coach
 
+- [Deep Reveal — Release Evidence](deep-reveal-release-dashboard.html) — self-contained HTML report:
+  before/after axis rates against two baselines (08-26 25-board, 08-06 63-board — both rubric v2),
+  grader-variance error bars, per-blunder defect frequency, and every corpus case's served text.
+  Regenerate: `cd connect-four && node server/scripts/reason_corpus/build_release_dashboard.mjs`.
+
 [deep-reveal-eval.md](deep-reveal-eval.md) — 3-layer evaluation framework for deep reveal explanations: deterministic checks, LLM-as-judge, and golden set regression — implementing or running evals after prompt changes
 
 ### Other

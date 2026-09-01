@@ -83,6 +83,12 @@ frozen `GRADER_INSTRUCTIONS_v1.md` by 25 independently dispatched per-case agent
 (`connect-four/server/scripts/reason_corpus/runs/README.md`, §"Prose-conversion + caption-fix
 re-measure, 2026-08-26").
 
+> **Still accurate as history; no longer the whole picture (2026-09-01).** This run has SINCE been
+> re-graded under `GRADER_INSTRUCTIONS_v2.md` — `..._served_grades.jsonl`, 25 agents — so a v2-scored
+> copy of this baseline now exists alongside the v1 grades described above. The 08-06 63-board run was
+> re-graded under v2 too (63 agents). Both baselines and the current run are therefore scored by one
+> instrument; see `docs/deep-reveal-release-dashboard.html`.
+
 Axis rollup (per-run, `null` excluded) — **recomputed from
 `…_grades.jsonl` while writing this epic and reproduced exactly**:
 

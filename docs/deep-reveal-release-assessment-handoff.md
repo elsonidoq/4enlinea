@@ -1,3 +1,12 @@
+> **SUPERSEDED 2026-09-01 — this plan has been executed in full.** All 8 steps are done; the
+> deliverable is `docs/deep-reveal-release-dashboard.html`. Read that first. This file is kept as the
+> record of what was planned and why, which is still the best explanation of the measurement design
+> (why 08-26 is the clean single-epic baseline, why case-pass is not comparable across `n`, why the
+> corpus gives per-case-type not per-encounter rates). Two things it says are now out of date:
+> Step 4 called `--locale` missing — it was added (commit `adb2251`); and it proposed offering the
+> 08-06 run without re-grading it — it has since been re-graded under rubric v2, so both baselines
+> are directly comparable on every axis. Findings from the execution are OI-217…OI-222.
+
 # Handoff — Deep-Reveal Release Assessment
 
 **Written**: 2026-08-28, at the close of the spec 059 / Epic 12 implementation session.

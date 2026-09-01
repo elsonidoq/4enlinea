@@ -1033,7 +1033,7 @@ The staging connection string points at the **transaction pooler (port 6543)**. 
 
 **Why deferred**: staging deploys on Railway may inject their own session-pooler `DATABASE_URL`, so this may only bite a *local* `node --env-file=server/.env.staging migrate.js` invocation — unconfirmed either way.
 
-**If picked up**: either change `.env.staging`'s `DATABASE_URL` port to 5432 (session pooler), or have `migrate.js`/the deploy path rewrite 6543→5432 for staging. Verify what URL the staging Railway deploy actually uses for migrations before editing. Cross-ref: [[reference_supabase_connection]], memory `project_spec031_staging_production_deploy`.
+**If picked up**: either change `.env.staging`'s `DATABASE_URL` port to 5432 (session pooler), or have `migrate.js`/the deploy path rewrite 6543→5432 for staging. Verify what URL the staging Railway deploy actually uses for migrations before editing. Cross-ref: [[reference_supabase_connection]], memory `project_deploy_execution_traps`.
 
 **UPDATE 2026-08-02** (spec 054, Epic 4, US4, T044): the open question — whether Railway's own
 injection (not just the local `.env.staging` file) is also on 6543 — is now **settled: yes**.
@@ -5846,7 +5846,7 @@ validating the LLM's output against it.
 **Do NOT reuse `buildAllowedSetFromPatternMaps`** (`server/explainContext.js:448`). It builds the set
 from `classifyPattern` calls, which cost solver queries the live path does not make, and it lives in
 `buildExplainContext` — which has **zero callers** (verified; dead since the `/api/explain-move`
-retirement, cf. memory `project_prod_llm_call_graph`). Deriving from the annotation offer is both
+retirement, cf. `docs/architecture/server-conventions.md` §"Which function actually serves production deep-reveal"). Deriving from the annotation offer is both
 cheaper and sounder, because it is the same evidence the explanation was generated from.
 
 ### `tg` failing is correct behavior, not an obstacle
@@ -5905,7 +5905,7 @@ its P3 log-and-serve carve-out).
 
 Fold into the post-staging deep-reveal epic together with **OI-129**. Cross-refs: OI-124 (D3's
 wiring, closed), OI-126 (the token-stripping half, closed), memory
-`project_annotation_gate_and_zones`, `project_prod_llm_call_graph`.
+`project_annotation_gate_and_zones`; `docs/architecture/server-conventions.md` §"Which function actually serves production deep-reveal".
 
 ### Resolution (spec 058, US3, T030)
 
@@ -6525,7 +6525,7 @@ Severity is bounded by two things: it only fires when there are *zero* tags, and
 produce column-level highlights, never a cell. Post-058 most explanations emit real tags, so the
 fallback fires rarely — but it fires on exactly the explanations that are worst-grounded.
 
-Secondary cost, already documented in memory `project_ungrounded_highlights_look_real`: because a
+Secondary cost, already documented in `docs/architecture/frontend-conventions.md` §"`AnnotatedExplanation`'s regex fallback": because a
 zero-tag explanation still *looks* highlighted, browser-based or screenshot-based QA of grounding
 reads as a pass when nothing is grounded.
 
@@ -6538,7 +6538,7 @@ be gone.
 TRUNCATE, likely not). If not, delete it and let a zero-tag explanation render as plain prose —
 honest, and it makes the "model emitted nothing" case visible in QA instead of disguised. If it must
 stay, gate it behind a server-provided flag so the client never invents a highlight for a freshly
-generated explanation. Cross-refs: OI-171, OI-172, memory `project_ungrounded_highlights_look_real`.
+generated explanation. Cross-refs: OI-171, OI-172; `docs/architecture/frontend-conventions.md` §"`AnnotatedExplanation`'s regex fallback".
 
 ---
 
@@ -7464,6 +7464,12 @@ values support, or stop offering the comparative when the histogram does not bac
 `tags: []` and `terminal: true`, and `causalLinks.mjs`'s L1 template renders a single game-over sentence
 ("wins on the spot", "the game is over there") instead of listing live threats on a position that is
 already decided.
+
+**Independently confirmed by measurement, 2026-09-01.** On the 08-06 and 08-26 baselines `eval-41`
+failed this exact way on **every** run (a game-ending move described as "your threat to make four
+next move", with live tactic aliases on a terminal board); on the current 63-board run it **passes
+3/3**. A second, blind grader re-reading the baseline reached the same attribution and noted the
+frame had since been replaced. This is the clearest before/after in the release evidence.
 **Area**: `connect-four/server/scripts/reasonBoardSelect.mjs` (board selection / tag rendering for a terminal position)
 **Discovered**: 2026-08-25 G7 re-measure (`eval-41`)
 
@@ -7669,3 +7675,282 @@ Fixing this properly means deciding, per record, whether `lostResource.line` sho
 the offer set or **promoted** to a genuinely rendered surface — "make the empty braces go away" is not
 the bar. Cross-refs: OI-186 (`buildRenderDecision` recomputes the offer set — the larger refactor this
 sits inside, also out of Epic 12's scope), OI-206.
+
+## OI-210 — an L1 frame can name the denial cell by the same column the Decision block calls "Better move"
+
+**Status**: deferred (found while measuring spec 059; not a regression from it)
+**Area**: `connect-four/server/scripts/reason_engine/causalLinks.mjs` (L1), interaction with the Decision block
+**Discovered**: spec 059 / Epic 12 release-assessment measurement, 2026-08-28
+
+The assembled prompt for `eval-47` reads, two lines apart:
+
+```
+- Better move: column 5 (lands at c5r4). Outcome: win.
+Column 5 was the better move: it completes your double threat ... in column 3;
+the played move let the opponent take column 5, denying it.
+```
+
+Column 5 is simultaneously "the better move" and what "the opponent takes". This is literally
+defensible — the better move's landing cell and the denial cell are the *same square* `c5r4`, so
+whoever plays there gets it — but it reads as a flat contradiction. Both baseline runs and both
+post-epic runs inverted the attribution and violated the L1 guardrail printed directly beneath it
+("The correct move builds/completes YOUR pattern; do not attribute it to the opponent").
+
+Verified at source with `assembleGroundedPrompt(buildReasonRenderModel(...))` at HEAD, not inferred
+from a grader's report. **Not caused by the column-prose change** (B1/T022): the pre-epic cell-level
+text ("take c5r4") failed the same way. The column form makes the collision visible rather than
+creating it.
+
+**Why deferred**: found during release measurement, after Epic 12's acceptance gate was met; the fix
+is a wording change to a causal template that wants its own RED-first corpus test.
+**If picked up**: L1 must not name the denial cell by a bare column the Decision block already labels
+"Better move" — use possessive framing ("the square you would have taken"). Cross-refs: OI-195, D28.
+
+## OI-211 — the guard strips a zone wrapper but leaves the false claim standing in prose
+
+**Status**: deferred (design question, not a localized bug)
+**Area**: `connect-four/server/reasonRenderGuard.mjs` (`stripFailingZoneSpans`)
+**Discovered**: spec 059 release-assessment measurement, 2026-08-28
+
+On `eval-47` run 1 of the post-epic run, the model wrote "the winning square in column 3" for a cell
+that is in column 5. The guard detected it (`guardDiagnostics.failures: ["P2:col_mismatch:c5r4"]`) and
+stripped the `[zone:…]` wrapper — but the **sentence still ships to the player with the wrong column
+in it**. Removing the annotation does not unsay the claim; it only removes the highlight that would
+have let the player notice the mismatch.
+
+**Why deferred**: the guard's contract is span removal, not sentence rewriting; changing that is a
+design decision about whether a validation failure should suppress the surrounding clause, drop the
+whole explanation, or trigger a retry. Related to OI-177's retry seam but distinct from it.
+**If picked up**: decide the policy first (suppress clause / force retry / serve with the claim
+removed), then implement — do not widen `stripFailingZoneSpans` ad hoc.
+
+## OI-212 — the frozen grader rubric cannot locate its own answers file from the mandated dispatch
+
+**Status**: open (blocks reproducible grading runs)
+**Area**: `connect-four/server/scripts/reason_corpus/runs/GRADER_INSTRUCTIONS_v2.md`, `.claude/skills/grade-fv-sufficiency/SKILL.md`
+**Discovered**: spec 059, first real use of the v2 rubric, 2026-08-28
+
+Two composition defects between the two halves spec 059 shipped (T005 wrote the rubric, T006 rewrote
+the dispatch):
+
+1. The rubric says *"Substitute `<ANSWERS_STEM>` with the run's stem before dispatching"*, but the
+   mandated dispatch is a fixed three-line message carrying **no stem** — and the rubric is checked-in
+   and frozen, so it cannot be substituted per run either. As shipped, a grading run cannot find its
+   own answers file.
+2. The frozen v1 body hardcodes *"across 5 independent runs"* and *"run_index 0..4"*. Any run with a
+   different `--n` needs an out-of-band correction — exactly the per-run variation the freeze existed
+   to eliminate.
+
+Worked around in the 2026-08-28 runs by adding the stem and run count to the dispatch message.
+
+**Why deferred**: the workaround is reliable and the fix is a small edit to the skill's dispatch
+template, but it should land together with a decision about where run-shape parameters belong.
+**If picked up**: put the stem and run count in the dispatch (they are per-run facts), keep the rubric
+free of them. A third, already-fixed instance of the same class: the v2 addendum sat *after* the v1
+body it overrides, so graders applied the stale instruction first — fixed 2026-08-28 by prepending a
+precedence header; see OI-213's sibling note and memory `project_eval_run_comparison_traps`.
+
+## OI-213 — the new diagnostic guard call omits `locale`, so an `es` retry decision is predicted against English text
+
+**Status**: deferred (code-review finding from spec 059, not fixed)
+**Area**: `connect-four/server/mechanismExplainer.mjs` (the OI-177 guard-aware `survivedSpecs` call)
+**Discovered**: spec 059 code review, 2026-08-28
+
+The diagnostic call added for FR-013 is
+`guardExplainMoveLlmPayload({ explanation, board, allowedSet, diagnostics: true })` — no `locale`, so
+it defaults to `'en'`. `locale` is in scope and used three lines later by `mentionsBetterColumn`, and
+the real serving call (`index.js`, the `/explain` path) does pass it. `promoteRawCoordinates` and
+`humanizeGroundedCoordinates` are locale-parameterised, so for a Spanish request the retry decision is
+computed against text rewritten with English rules while a different string is actually served.
+
+**Why deferred**: no Spanish eval coverage exists today (OI-176), so it is currently latent.
+**If picked up**: thread `locale` through the diagnostic call. **This blocks any Spanish grading
+round** — fix it before measuring Spanish output.
+
+## OI-214 — the diagnostic guard call double-logs the annotation-gate warning, inflating an operational signal
+
+**Status**: deferred (low severity)
+**Area**: `connect-four/server/mechanismExplainer.mjs`, `connect-four/server/reasonRenderGuard.mjs`
+**Discovered**: spec 059 code review, 2026-08-28
+
+The FR-013 diagnostic run reuses the full guard including its
+`console.warn('[annotation gate] stripped failing zone annotation(s) …')`. Every deep-reveal request
+with a failing span now logs that warning **twice** — once for the retry decision, once at serve — and
+it fires on `attempt1` even when the retry then produces a clean answer. That warning is the signal
+used to track OI-140/OI-172 frequency, so the counts are now inflated and no longer comparable to
+pre-2026-08-28 logs.
+
+**Why deferred**: cosmetic for correctness, but it corrupts a metric.
+**If picked up**: add a diagnostics-only path that skips the warn, or a flag on it.
+
+## OI-215 — `GUARD_FAILURE_CODE_TO_OI` maps a code that can never fire and misses one that does
+
+**Status**: deferred (attribution table incomplete)
+**Area**: `connect-four/server/scripts/compute.mjs`
+**Discovered**: spec 059 code review, 2026-08-28
+
+The FR-007 attribution table maps `unclosed_tag → OI-208`, but `unclosed_tag` is a
+`processAnnotations` **repair name**, not a `validateAnnotation` failure code — it can never appear in
+`guardDiagnostics.failures`, so that entry is unreachable. Conversely the real emitted code
+`P5strong:col_not_allowed` (`annotationGate.js`) has **no** entry and falls silently into the
+unattributed bucket, which is precisely what FR-007 existed to prevent.
+
+**Why deferred**: does not affect served text; affects the honesty of the OI-attribution report.
+**If picked up**: drop the unreachable entry, add `P5strong:col_not_allowed`, and make the
+`guardActionAttribution` test fail on any observed code with no mapping.
+
+## OI-216 — the tactic-overlay board-truth gate asks "any such pattern" rather than "at this cell"
+
+**Status**: deferred (narrower than the fix it accompanies)
+**Area**: `connect-four/server/scripts/reasonBoardTags.mjs`
+**Discovered**: spec 059 code review, 2026-08-28
+
+T013's OI-204 fix gates the vector-named overlay on `detectFigure7(boardObj, null, patternPlayer)` /
+`detectDoubleThreat(boardObj, patternPlayer)`, which answer *"does this player have any such pattern
+on this board"* — not *"does it exist at `opts.patternCompletingCell`"*. A board where the player
+holds an unrelated fork elsewhere still passes the gate and renders the board-false cell claim the fix
+was added to prevent. Both detectors already return `cells`/`cols`, so the check is available.
+
+**Why deferred**: no corpus record currently exhibits it (the fix suppresses the overlay on 100% of
+the 13 fork-half records for other reasons — see D58), so it is latent.
+**If picked up**: compare `patternCompletingCell` against the detector's returned `cells`.
+
+---
+
+## OI-217 — the Spanish prompt contradicts itself: `buildTask` forbids naming players by colour, `SPANISH_OUTPUT_DIRECTIVE` orders it
+
+**Status**: open — needs an owner ruling on WHICH side changes, not a code fix decided by an agent
+**Area**: `connect-four/server/scripts/compute.mjs` (`buildTask`, `SPANISH_OUTPUT_DIRECTIVE`)
+**Discovered**: deep-reveal release assessment, 2026-08-31
+
+`buildTask` (compute.mjs:241, both locales) instructs: write `mechanism` as a coach speaking in the
+2nd person, "never by color". `SPANISH_OUTPUT_DIRECTIVE` (compute.mjs:255-258, appended only when
+`locale === 'es'`) then instructs: "Refer to the two discs as **verde** (first player) and **gris**
+(second player)". Both strings are present in the same assembled prompt and the Spanish one comes
+last, so the model follows it.
+
+Verified by building the real prompt for `eval-36` at both locales: the `es` prompt contains
+"verde", "gris" AND "never by color"; the `en` prompt contains neither colour word. **Measured on
+the 63-board corpus: 109/189 Spanish runs (58%), across 54 of 63 boards, name a player by colour —
+versus 0/189 in English.** This is production's own path (`mechanismExplainer.mjs:187` passes
+`locale` into the same builder), so Spanish players receive a materially different coach voice from
+English players. No retry fixes it; the model is obeying an instruction.
+
+**Not obviously a defect** — that is why this needs the owner. `CLAUDE.md` says user-facing text
+should call the discs green/gray, and the model's Rioplatense voseo correctly matches `src/i18n/es.json`
+(which uses `podés`/`jugás`/`tenés`/`mirá`, zero tuteo forms). It may be the rubric's A5a ban on
+player-colour names that is wrong for Spanish. Either the directive or the rubric should change;
+they cannot both stand.
+
+**If picked up**: decide the intended Spanish coach voice first, then make `buildTask` and
+`SPANISH_OUTPUT_DIRECTIVE` agree. Cross-refs: OI-183 (harness is single-attempt).
+
+---
+
+## OI-218 — the opening frame appends the deep-resource guardrail and horizon tail unconditionally, so a next-ply fork is described as settling "a long way out"
+
+**Status**: open
+**Area**: `connect-four/server/scripts/reason_engine/openingFrame.mjs`
+**Discovered**: deep-reveal release assessment, 2026-08-31
+
+`composeOpeningFrame`'s inner `mk()` (openingFrame.mjs:128-142) builds every opening frame as
+`guardrail: admissibleFramings + GUARDRAIL_DEEP_RESOURCE + …` and `text: lead + clause +
+horizonTail(fv)`. Neither is gated on the record's register or horizon. `horizonTail`'s switch only
+chooses WHICH deep phrasing applies ("a parity battle" / "a deep forced line" / "a deep line") — it
+never omits one.
+
+Consequence, verified on `eval-44`: an immediate-register record whose fork lands on the very next
+ply is told its resource "only settles a long way out, through a deep line", and the model echoed it
+("the deep shape they were working toward later") on a position scoring +18 for the opponent.
+
+**If picked up**: gate `GUARDRAIL_DEEP_RESOURCE` and `horizonTail` on the half's `register` /
+`horizon`, the same way the centrality clause is already gated on `clause === ''`.
+
+---
+
+## OI-219 — sibling line locators name a HORIZONTAL window by a column, producing board-false prose the model echoes
+
+**Status**: open
+**Area**: `connect-four/server/scripts/reason_engine/zoneAnnotations.mjs` (`disambiguateSiblingRoles`)
+**Discovered**: deep-reveal release assessment, 2026-08-31
+
+`disambiguateSiblingRoles` distinguishes sibling line handles with a `"the one in column N:"` prefix
+where N is the window's leftmost column. For a horizontal window that is misleading:
+`you-key-line` with spec `windows:c4r6,c5r6,c6r6,c7r6` is a **row-6** line spanning columns 4–7, but
+is labelled "the one in column 4". On `eval-34` the model faithfully echoed "your four-in-a-row line
+in column 4", which is board-false — column 4 is full and holds no four of the player's.
+
+**Measured: 15 of 63 corpus boards** carry at least one horizontal window labelled this way
+(detector D2 in `server/scripts/reason_corpus/frequency_probe.mjs`); **11.4% of 193 rendered blunders**
+harvested from simulated games. A sharper variant appears on `eval-47`, where the disambiguators
+*collide* — a single-square handle and its own line handle are labelled "column 3" and "column 6"
+because a line handle is named after its far end, so each column word denotes two different objects.
+
+**If picked up**: locate horizontal windows by row ("the row-6 line from column 4 to 7"), not by a
+column. Epic 12 fixed a different assertion in this same output (false HEIGHT claims, 22/58 → 0/58);
+this orientation case was never covered.
+
+---
+
+## OI-220 — one alias role string covers two different squares, and the single-square roles carry no ownership word
+
+**Status**: open
+**Area**: `connect-four/server/scripts/reason_engine/zoneAnnotations.mjs`
+**Discovered**: deep-reveal release assessment, 2026-08-31
+
+On `eval-2`, `you-key-square` (`future:c6r2`) and `opp-key-square` (`future:c6r3`) carry
+**byte-identical** role text — "this single square matters later, once the forced sequence reaches
+it — not a threat right now" — with no word identifying whose square it is. The *line* handles on the
+same board do carry ownership ("the whole four-in-a-row line **you are playing for**" vs "**your
+opponent** is playing for"), so the fix pattern already exists one field over.
+
+**Measured: 22 of 63 corpus boards** have at least one role string covering two or more distinct
+specs (detector D3 in `frequency_probe.mjs`); **37.3% of 193 rendered blunders**. Consequence: the
+model has no way to tell the two objects apart in prose, and graders observed it reusing one phrase
+for two different squares.
+
+**If picked up**: add the possessive to the single-square roles, mirroring the line roles.
+
+---
+
+## OI-221 — a REQUIRED handle can point at a square that is already occupied on its own truth board
+
+**Status**: open
+**Area**: `connect-four/server/scripts/renderReasonModel.mjs` (`deriveRequiredSet`)
+**Discovered**: deep-reveal release assessment, 2026-08-31
+
+On `eval-47`, `requiredSet` obliges `you-fork-pivot-2`, spec `c3r6`, `truthBoard: afterPlayed`, with
+the role "the square you play to CREATE the fork". Verified with
+`./visualize_board.sh 33211531304533201252211005442`: **c3r6 holds `X 29` — the played move itself**,
+and column 3 is full. No answer can satisfy the requirement; the coach is obliged to point at a
+square that is not there. All 3 runs failed, and the guard then stripped whatever the model produced.
+
+**Measured: 1 of 63 corpus boards; 2.1% of 193 rendered blunders** (detector D1 in
+`frequency_probe.mjs`). The detector is restricted to the NEAR boards (`decision` / `afterBest` /
+`afterPlayed`) and that restriction is load-bearing: on `projectedDeep` / `projectedDeepOpp` the
+projection plays the line out, so a "future" cell being filled is the NORMAL case — 60 of 62 occupied
+required cells sit on a projected board and are correct. Without the restriction the detector fires
+on 37/63 boards and means nothing.
+
+**If picked up**: reject a single-cell required handle whose cell is occupied on its own truth board
+when that board is `decision`/`afterBest`/`afterPlayed`.
+
+---
+
+## OI-222 — 16% of harvested blunders produce no render decision at all, and nobody has looked at why
+
+**Status**: open — UNTRIAGED
+**Area**: `connect-four/server/scripts/renderReasonModel.mjs` (`buildRenderDecision`)
+**Discovered**: deep-reveal release assessment, 2026-08-31
+
+Running `server/scripts/reason_corpus/frequency_probe.mjs --games 40 --seed 12345` over blunders
+harvested from simulated games: **36 of 229 blunders (16%) threw inside `buildRenderDecision`** and
+produced no render decision. The evidence pass itself succeeded on all 229 (0 engine errors), so this
+is specifically the render layer refusing.
+
+The corpus does not surface this because `boards.jsonl` is curated; these are blunders sampled from
+ordinary play. It is not known whether these are terminal/edge positions where refusing is correct,
+or a real coverage gap that costs a player their explanation.
+
+**If picked up**: log the thrown error per case in the probe, group by message, and decide per class
+whether refusal is correct. Reproduce with the seed above for a deterministic sample.

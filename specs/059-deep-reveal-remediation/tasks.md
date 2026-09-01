@@ -566,7 +566,15 @@ connect-four/server/tests/renderFieldPartitionLineCarveout.test.mjs`.
   `reasonBoardTags.test.mjs`, `zoneAnnotations.test.mjs`, `causalLinks.test.mjs`, `openingFrame.test.mjs`,
   `mechanismExplainer.test.mjs`) is an **extension** of a file already registered — no action needed.
 
-- [ ] T045 **[OWNER APPROVAL REQUIRED — Q7, not an acceptance gate]** Optional post-fix LLM re-measure.
+- [x] T045 **[OWNER APPROVAL REQUIRED — Q7, not an acceptance gate]** Optional post-fix LLM re-measure.
+  **DONE 2026-09-01, owner-directed** — executed far beyond this task's scope: not the 25-board subset
+  alone but the full 63-board corpus (n=3, condition D, gpt-5.4-mini) plus BOTH baselines re-graded
+  under `GRADER_INSTRUCTIONS_v2.md` (08-26 25 boards, and 08-06 63 boards — 63 agents), a Spanish
+  locale run, a grader-variance sample, and a programmatic per-blunder frequency probe. Results:
+  `docs/deep-reveal-release-dashboard.html` (regenerate with
+  `node server/scripts/reason_corpus/build_release_dashboard.mjs`). The caveat below about v1-vs-v2
+  comparability no longer applies: BOTH baselines are now v2-graded, so every axis is scored by one
+  instrument. Original task text retained for history:
   **No agent may execute this autonomously.** If, and only if, the owner explicitly approves: run
   `compute.mjs --llm` against the same 25-board subset under `GRADER_INSTRUCTIONS_v2.md`, understood as
   establishing a **new v2 baseline**, not a delta against any v1-graded run (the A6 control group is
