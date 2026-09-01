@@ -91,7 +91,7 @@ function render(){
   const RA=D.rates[afterKey], RB=D.rates[baseline];
   const app=document.getElementById('app');
   app.innerHTML=`
-  <h2>1 · Where it stood before</h2>
+  <h2>1 · The comparison</h2>
   <div class=card>
    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:10px">
     <span style="color:var(--mut);font-size:13px">Baseline:</span>
@@ -102,6 +102,14 @@ function render(){
      ? `<div class=caveat><b>Clean Epic-12 delta.</b> The code state immediately before this work, graded under the <b>same rubric v2</b> as the current run. Narrower board coverage (25 of 63), compared against those same 25 boards.</div>`
      : `<div class=caveat><b>Full coverage, two epics.</b> All 63 boards, compared against the full 63-board current run — nothing sampled away, and <b>re-graded under rubric v2</b> (63 agents, 2026-09-01) so every axis is scored by the same instrument as the current run. One thing to hold: this run predates <b>Epic 11 as well as Epic 12</b>, so any movement is the sum of both, not this work alone. Note also that <b>33% of its boards carry an empty <span class=mono>requiredSet</span></b> (mean size 1.44 vs 3.00 today) — G1 asks whether the answer used the handles it was required to use, so on those boards there was nothing to fail.</div>`}
    <p>Baseline set: <b>${esc(base.label)}</b> — ${base.cases.length} cases × ${base.n} runs, gpt-5.4-mini, condition D. Compared against <b>${cur.cases.length} boards</b> of the current run.</p>
+
+   <h3>Per-run axis rates — before vs after</h3>
+   <p class=note>Per-<b>run</b> rates, not case-pass: a case passes only if every run passes every axis, so case-pass is not comparable across datasets with different <span class=mono>n</span> (${base.n} vs ${cur.n} here). It is deliberately not shown.</p>
+   <div class=scroll><table><tr><th>Axis</th><th>Before</th><th>After</th><th>Δ</th><th></th></tr>
+   ${AX.map(a=>rateRow(a,RA,RB)).join('')}</table></div>
+   ${baseline==='base'
+     ? `<div class=caveat><b>Only A6 moved.</b> +14 points (p=0.012) on an axis with <b>0/40 grader disagreement</b> — the one solid win of this epic. A7 −10 and G1 −6 both sit inside the ±20% disagreement measured on those axes, so they are <b>no measured change</b>, not regressions.</div>`
+     : `<div class=caveat><b>Three axes moved beyond noise — but across two epics.</b> A6 +20, G7 +18, A5 +8 (all p≤0.001). Against the 08-26 baseline only A6 moves, so G7 and A5 are largely <b>Epic 11's</b> contribution, not this work. A4 +11, A7 +6 and G1 −4 all sit inside the ±20% grader noise on those axes.<br><br><b>A7 is not monotonic across the three datasets</b> — 08-06 54%, 08-26 77%, current 60%. The middle value is the only one measured on 25 boards rather than 63, so the two baselines disagree about A7's direction and the noise band covers both gaps. Read A7 as <b>not measurably improved by either epic</b>, not as a rise or a fall.</div>`}
   </div>
 
   <h2>2 · Where it stands now</h2>
@@ -113,15 +121,7 @@ function render(){
    <div class=caveat><b>A7 is the release question.</b> "Useful to the player who blundered" sits far below the mechanical axes. A4 means roughly one run in seven asserts something the board does not support. Both carry ±20% grader noise.</div>
   </div>
 
-  <h2>3 · The comparison</h2>
-  <div class=card>
-   <h3>Per-run axis rates — before vs after</h3>
-   <p class=note>Per-<b>run</b> rates, not case-pass: a case passes only if every run passes every axis, so case-pass is not comparable across datasets with different <span class=mono>n</span> (${base.n} vs ${cur.n} here). It is deliberately not shown.</p>
-   <div class=scroll><table><tr><th>Axis</th><th>Before</th><th>After</th><th>Δ</th><th></th></tr>
-   ${AX.map(a=>rateRow(a,RA,RB)).join('')}</table></div>
-   <div class=caveat><b>Only A6 moved.</b> A6 +14 points (p=0.012) and it has <b>0/40 grader disagreement</b> — the one solid win. A7 −10 and G1 −6 both sit inside the ±20% disagreement measured on those axes, so they are <b>no measured change</b>, not regressions.</div>
-  </div>
-
+  <h2>3 · How far can these numbers be trusted?</h2>
   <div class=card>
    <h3>How much of this is the instrument?</h3>
    <p>Five cases were re-graded blind on both sides by fresh agents (10 agents, identical dispatch).</p>
