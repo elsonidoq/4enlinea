@@ -1,0 +1,338 @@
+{
+ "eval-2|D|0": {
+  "A1": "pass",
+  "A2": "pass",
+  "A6": "pass",
+  "G7a_offered": "pass",
+  "G7b_offered": "pass",
+  "notes": ""
+ },
+ "eval-2|D|1": {
+  "A1": "pass",
+  "A2": "pass",
+  "A6": "pass",
+  "G7a_offered": "pass",
+  "G7b_offered": "pass",
+  "notes": ""
+ },
+ "eval-2|D|2": {
+  "A1": "pass",
+  "A2": "pass",
+  "A6": "pass",
+  "G7a_offered": "pass",
+  "G7b_offered": "pass",
+  "notes": ""
+ },
+ "eval-4|D|0": {
+  "A1": "pass",
+  "A2": "pass",
+  "A6": "fail",
+  "G7a_offered": "pass",
+  "G7b_offered": "pass",
+  "notes": "A6: prose never names column 2"
+ },
+ "eval-4|D|1": {
+  "A1": "pass",
+  "A2": "pass",
+  "A6": "fail",
+  "G7a_offered": "pass",
+  "G7b_offered": "pass",
+  "notes": "A6: prose never names column 2"
+ },
+ "eval-4|D|2": {
+  "A1": "pass",
+  "A2": "pass",
+  "A6": "pass",
+  "G7a_offered": "pass",
+  "G7b_offered": "pass",
+  "notes": ""
+ },
+ "eval-6|D|0": {
+  "A1": "pass",
+  "A2": "pass",
+  "A6": "pass",
+  "G7a_offered": "pass",
+  "G7b_offered": "pass",
+  "notes": ""
+ },
+ "eval-6|D|1": {
+  "A1": "pass",
+  "A2": "pass",
+  "A6": "pass",
+  "G7a_offered": "pass",
+  "G7b_offered": "pass",
+  "notes": ""
+ },
+ "eval-6|D|2": {
+  "A1": "pass",
+  "A2": "pass",
+  "A6": "pass",
+  "G7a_offered": "pass",
+  "G7b_offered": "pass",
+  "notes": ""
+ },
+ "eval-17|D|0": {
+  "A1": "pass",
+  "A2": "pass",
+  "A6": "pass",
+  "G7a_offered": "pass",
+  "G7b_offered": "pass",
+  "notes": ""
+ },
+ "eval-17|D|1": {
+  "A1": "pass",
+  "A2": "pass",
+  "A6": "pass",
+  "G7a_offered": "pass",
+  "G7b_offered": "pass",
+  "notes": ""
+ },
+ "eval-17|D|2": {
+  "A1": "pass",
+  "A2": "pass",
+  "A6": "fail",
+  "G7a_offered": "pass",
+  "G7b_offered": "pass",
+  "notes": "A6: prose never names column 6"
+ },
+ "eval-28|D|0": {
+  "A1": "pass",
+  "A2": "pass",
+  "A6": "pass",
+  "G7a_offered": "pass",
+  "G7b_offered": "pass",
+  "notes": ""
+ },
+ "eval-28|D|1": {
+  "A1": "pass",
+  "A2": "pass",
+  "A6": "pass",
+  "G7a_offered": "pass",
+  "G7b_offered": "pass",
+  "notes": ""
+ },
+ "eval-28|D|2": {
+  "A1": "pass",
+  "A2": "pass",
+  "A6": "pass",
+  "G7a_offered": "pass",
+  "G7b_offered": "pass",
+  "notes": ""
+ },
+ "eval-29|D|0": {
+  "A1": "pass",
+  "A2": "pass",
+  "A6": "pass",
+  "G7a_offered": "pass",
+  "G7b_offered": "pass",
+  "notes": ""
+ },
+ "eval-29|D|1": {
+  "A1": "pass",
+  "A2": "pass",
+  "A6": "pass",
+  "G7a_offered": "pass",
+  "G7b_offered": "pass",
+  "notes": ""
+ },
+ "eval-29|D|2": {
+  "A1": "pass",
+  "A2": "pass",
+  "A6": "pass",
+  "G7a_offered": "pass",
+  "G7b_offered": "pass",
+  "notes": ""
+ },
+ "eval-30|D|0": {
+  "A1": "pass",
+  "A2": "pass",
+  "A6": "pass",
+  "G7a_offered": "pass",
+  "G7b_offered": "pass",
+  "notes": ""
+ },
+ "eval-30|D|1": {
+  "A1": "pass",
+  "A2": "pass",
+  "A6": "pass",
+  "G7a_offered": "pass",
+  "G7b_offered": "pass",
+  "notes": ""
+ },
+ "eval-30|D|2": {
+  "A1": "pass",
+  "A2": "pass",
+  "A6": "pass",
+  "G7a_offered": "pass",
+  "G7b_offered": "pass",
+  "notes": ""
+ },
+ "eval-37|D|0": {
+  "A1": "pass",
+  "A2": "pass",
+  "A6": "pass",
+  "G7a_offered": "pass",
+  "G7b_offered": "pass",
+  "notes": ""
+ },
+ "eval-37|D|1": {
+  "A1": "pass",
+  "A2": "pass",
+  "A6": "pass",
+  "G7a_offered": "pass",
+  "G7b_offered": "pass",
+  "notes": ""
+ },
+ "eval-37|D|2": {
+  "A1": "pass",
+  "A2": "pass",
+  "A6": "pass",
+  "G7a_offered": "pass",
+  "G7b_offered": "pass",
+  "notes": ""
+ },
+ "eval-42|D|0": {
+  "A1": "pass",
+  "A2": "pass",
+  "A6": "pass",
+  "G7a_offered": "pass",
+  "G7b_offered": "pass",
+  "notes": ""
+ },
+ "eval-42|D|1": {
+  "A1": "pass",
+  "A2": "pass",
+  "A6": "pass",
+  "G7a_offered": "pass",
+  "G7b_offered": "pass",
+  "notes": ""
+ },
+ "eval-42|D|2": {
+  "A1": "pass",
+  "A2": "pass",
+  "A6": "pass",
+  "G7a_offered": "pass",
+  "G7b_offered": "pass",
+  "notes": ""
+ },
+ "eval-44|D|0": {
+  "A1": "pass",
+  "A2": "pass",
+  "A6": "pass",
+  "G7a_offered": "pass",
+  "G7b_offered": "pass",
+  "notes": ""
+ },
+ "eval-44|D|1": {
+  "A1": "pass",
+  "A2": "pass",
+  "A6": "pass",
+  "G7a_offered": "pass",
+  "G7b_offered": "pass",
+  "notes": ""
+ },
+ "eval-44|D|2": {
+  "A1": "pass",
+  "A2": "pass",
+  "A6": "pass",
+  "G7a_offered": "pass",
+  "G7b_offered": "pass",
+  "notes": ""
+ },
+ "eval-47|D|0": {
+  "A1": "pass",
+  "A2": "pass",
+  "A6": "pass",
+  "G7a_offered": "pass",
+  "G7b_offered": "pass",
+  "notes": ""
+ },
+ "eval-47|D|1": {
+  "A1": "pass",
+  "A2": "pass",
+  "A6": "fail",
+  "G7a_offered": "pass",
+  "G7b_offered": "pass",
+  "notes": "A6: prose never names column 5"
+ },
+ "eval-47|D|2": {
+  "A1": "pass",
+  "A2": "pass",
+  "A6": "pass",
+  "G7a_offered": "pass",
+  "G7b_offered": "pass",
+  "notes": ""
+ },
+ "pin-L2-enabled-opponent|D|0": {
+  "A1": "pass",
+  "A2": "pass",
+  "A6": "pass",
+  "G7a_offered": "pass",
+  "G7b_offered": "pass",
+  "notes": ""
+ },
+ "pin-L2-enabled-opponent|D|1": {
+  "A1": "pass",
+  "A2": "pass",
+  "A6": "pass",
+  "G7a_offered": "pass",
+  "G7b_offered": "pass",
+  "notes": ""
+ },
+ "pin-L2-enabled-opponent|D|2": {
+  "A1": "pass",
+  "A2": "pass",
+  "A6": "pass",
+  "G7a_offered": "pass",
+  "G7b_offered": "pass",
+  "notes": ""
+ },
+ "pin-L6-lost-win-and-gave-one|D|0": {
+  "A1": "pass",
+  "A2": "pass",
+  "A6": "pass",
+  "G7a_offered": "pass",
+  "G7b_offered": "pass",
+  "notes": ""
+ },
+ "pin-L6-lost-win-and-gave-one|D|1": {
+  "A1": "pass",
+  "A2": "pass",
+  "A6": "pass",
+  "G7a_offered": "pass",
+  "G7b_offered": "pass",
+  "notes": ""
+ },
+ "pin-L6-lost-win-and-gave-one|D|2": {
+  "A1": "pass",
+  "A2": "pass",
+  "A6": "pass",
+  "G7a_offered": "pass",
+  "G7b_offered": "pass",
+  "notes": ""
+ },
+ "pin-L7-practical-swindle|D|0": {
+  "A1": "pass",
+  "A2": "pass",
+  "A6": "pass",
+  "G7a_offered": "pass",
+  "G7b_offered": "pass",
+  "notes": ""
+ },
+ "pin-L7-practical-swindle|D|1": {
+  "A1": "pass",
+  "A2": "pass",
+  "A6": "pass",
+  "G7a_offered": "pass",
+  "G7b_offered": "pass",
+  "notes": ""
+ },
+ "pin-L7-practical-swindle|D|2": {
+  "A1": "pass",
+  "A2": "pass",
+  "A6": "pass",
+  "G7a_offered": "pass",
+  "G7b_offered": "pass",
+  "notes": ""
+ }
+}

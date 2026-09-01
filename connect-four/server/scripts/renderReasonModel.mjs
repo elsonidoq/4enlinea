@@ -9,7 +9,7 @@ import { selectBoards, renderThreatList, patternOnAfterBestBoard, boardSelection
 import { groundCell, horizonForRegister } from './reasonCellGrounding.mjs';
 import { parseBoardState } from '../classifier.js';
 import { composeOpeningFrame, centralityQualitative } from './reason_engine/openingFrame.mjs';
-import { buildAnnotationOffer, forkPivotCell, OFFERABLE_TERM_SLUGS } from './reason_engine/zoneAnnotations.mjs';
+import { buildAnnotationOffer, forkPivotCell, OFFERABLE_TERM_SLUGS, FORK_TAGS } from './reason_engine/zoneAnnotations.mjs';
 
 // The pruned vector minus fields the board carries (transformed) or statically excluded.
 // Path-precise: recurse into plain-object containers; classify arrays/primitives by their own path;
@@ -113,6 +113,34 @@ function halfLineSpec(h) {
   return null;
 }
 
+// Task 8 (2026-09-01). Does this half carry FORK geometry? Distinct from `halfForkCellsSpec` above,
+// which returns the fork's SPEC STRING (or null) for the D45 point-group derivation — this is a
+// boolean used ONLY to EXCLUDE a fork-carrying half from the L6 both-lines swap below, never to add
+// anything to the required set. Two shapes count: a tagged half (D45/D48: `tacticTag` in FORK_TAGS)
+// and a realized-pattern half whose `tag` is a fork with >= 2 cells (the alias family added by
+// Task 7 — offered, deliberately never required).
+// A fork-pivot alias handle, either owner, with or without `mkHandle`'s sibling ordinal suffix
+// (`you-fork-pivot`, `opp-fork-pivot`, `opp-fork-pivot-2`). Used by the L7 swap below to recognise a
+// group it must NEVER evict — D48 rule 3 makes a fork's pivot required, not merely offered.
+// EXPORTED for the corpus-wide guard in renderReasonModel.test.mjs: this regex and the L7 block's
+// `/-line(-\d+)?$/` both MIRROR `mkHandle`'s naming scheme in zoneAnnotations.mjs. A rename there
+// (`fork-pivot` -> `pivot`, say) would silently turn the D48-rule-3 abstention into a no-op on a
+// path that is dead on today's corpus, so no existing test would go red. The guard asserts the
+// mirror still matches what the offer layer actually produces.
+export const FORK_PIVOT_HANDLE = /-fork-pivot(-\d+)?$/;
+// Same mirror risk, same reason it is exported (the L7 victim search below uses it inline).
+export const LINE_GROUP_HANDLE = /-line(-\d+)?$/;
+
+// Exported so the corpus-wide L6 test can skip fork-carrying records through the PRODUCTION
+// predicate rather than a hand-rolled proxy (I12).
+export function halfCarriesFork(half) {
+  if (!half) return false;
+  if (half.tacticTag && FORK_TAGS.has(half.tacticTag)) return true;
+  if (half.kind === 'realized_pattern' && FORK_TAGS.has(half.tag)
+      && Array.isArray(half.cells) && half.cells.length >= 2) return true;
+  return false;
+}
+
 // The required set (spec 058, US2 — Derivation Rule, spec.md, as amended by D45). For each of
 // pruned.lostResource / pruned.opponentPunishment, the load-bearing cell (if any) is
 // denialCell(half) — the same `h?.cell ?? h?.completingCell ?? null` precedence causalLinks.mjs's
@@ -132,7 +160,14 @@ function halfLineSpec(h) {
 // the resource the player gave up, which is what every "what is the key/long four-in-a-row line?"
 // piece of feedback was asking about — and falling through to opponentPunishment when lostResource
 // offers no matching line. See reason-DECISIONS.md D45 for the reversal recipe.
-export function deriveRequiredSet(pruned, zones) {
+// Task 8 (2026-09-01) adds a third parameter, `linkId` — the ROUTED causal-link id that
+// `classifyCausalLink` already produced at every call site. It defaults to `undefined`, so a two-arg
+// call keeps the pre-Task-8 derivation byte-identical. It MUST be the routed id and must NOT be
+// re-derived from `kind` fields here: L9 precedes L6 in the link table and its `when` does not
+// constrain `opponentPunishment.kind`, so a "both halves are winning_line" test silently captures
+// the three L9 records (eval-31, eval-35, pin-L9-hedged-parity) whose own guardrail says
+// "hedge — do not fabricate a crisp cause".
+export function deriveRequiredSet(pruned, zones, linkId = undefined) {
   // Index by the UNPREFIXED spec (D43). `future:` is a render-framing decorator, not part of the
   // geometry: zoneParser's isValidSpec/expandSpec, annotationGate's checkP5Strong, reasonRenderGuard's
   // toAllowedSet and the client's annotatedText all strip it before matching, and so does this index.
@@ -161,20 +196,91 @@ export function deriveRequiredSet(pruned, zones) {
     return true;
   };
   const HALVES = ['lostResource', 'opponentPunishment'];
-  for (const half of HALVES) {
-    const h = pruned?.[half];
-    if (!push(half, halfForkCellsSpec(h))) push(half, denialCell(h));
+  // Task 8 (owner decision 2026-09-01: "swap, keep cap 3"). L6's own guardrail
+  // (causalLinks.mjs, link L6) reads verbatim: "You gave up a win AND handed the opponent their own;
+  // name both lines with their horizons." D45's SINGLE line slot can only ever require one of them,
+  // so the second line sat offered-but-unrequired on every L6 record — measured on eval-4 (A7b 3/3
+  // failures with `opp-key-line` offered and unrequired); 46.1% of real blunders per probe D4. On an
+  // L6 record the two LINE groups take the first two slots and ONE key square takes the third.
+  // D45's substance is preserved (the line is required; lostResource is derived first); only the
+  // L6 composition changes.
+  //
+  // OWNER FLAG: this swap is implemented for NON-FORK L6 records only. Measured 2026-09-01: of the
+  // 11 L6 corpus records, NINE carry fork geometry — eval-7, eval-8, eval-11, eval-12, eval-18,
+  // eval-20, eval-25, eval-26 AND `pin-L6-lost-win-and-gave-one` (whose lostResource derives
+  // `you-future-fork`; it is easy to miss because the plan's own id list named only the eval-* ones).
+  // They require a fork-cells group and/or a fork pivot. Requiring both lines there would delete the
+  // fork pivot, contradicting D48 rule 3 ("a fork's pivot is offered AND required"). Fork-carrying L6
+  // records therefore keep their existing D45/D48 derivation unchanged. That leaves exactly TWO
+  // non-fork L6 records in the corpus today — eval-3 and eval-4 (the measured class) — which are the
+  // only records this branch changes. Re-raise with the owner if both-lines should also apply to
+  // fork records; do not extend this branch to fork halves without that decision.
+  const bothWinning = linkId === 'L6'
+    && !halfCarriesFork(pruned?.lostResource) && !halfCarriesFork(pruned?.opponentPunishment);
+  if (bothWinning) {
+    for (const half of HALVES) push(half, halfLineSpec(pruned?.[half]));
+    // The key square(s) fill whatever the two line groups left free. When both lines matched (the
+    // eval-3/eval-4 shape this task was written for) exactly ONE square fits, which IS the owner's
+    // "swap, keep cap 3". The loop deliberately does NOT stop after the first square: on an L6
+    // record where fewer than two lines are OFFERED, stopping would drop a half's cell into a slot
+    // that is still free — a pure information loss the swap never asked for, and a silent weakening
+    // of FR-005's "one per half that resolves to a cell". Verified corpus-wide 2026-09-01: identical
+    // output on all 63 records either way (both non-fork L6 records offer two lines); the difference
+    // is only visible on a no-line L6 record, e.g. the NV fixture in renderReasonModel.test.mjs.
+    for (const half of HALVES) {
+      if (groups.length >= 3) break;
+      push(half, denialCell(pruned?.[half]));
+    }
+  } else {
+    for (const half of HALVES) {
+      const h = pruned?.[half];
+      if (!push(half, halfForkCellsSpec(h))) push(half, denialCell(h));
+    }
+    // The fork pivot earns a slot when the half is a fork: naming both endpoints without the move that
+    // creates them is the A7c failure (OI-182) — the endpoints are the effect, the pivot is the cause.
+    for (const half of HALVES) {
+      if (groups.length >= 3) break;
+      push(half, forkPivotCell(pruned?.[half]));
+    }
+    // The single line/window slot (FR-005: "plus at most one line/window"), lostResource first.
+    for (const half of HALVES) {
+      if (groups.length >= 3) break;
+      if (push(half, halfLineSpec(pruned?.[half]))) break;
+    }
   }
-  // The fork pivot earns a slot when the half is a fork: naming both endpoints without the move that
-  // creates them is the A7c failure (OI-182) — the endpoints are the effect, the pivot is the cause.
-  for (const half of HALVES) {
-    if (groups.length >= 3) break;
-    push(half, forkPivotCell(pruned?.[half]));
-  }
-  // The single line/window slot (FR-005: "plus at most one line/window"), lostResource first.
-  for (const half of HALVES) {
-    if (groups.length >= 3) break;
-    if (push(half, halfLineSpec(pruned?.[half]))) break;
+  // Task 8, part (b). L7 (causalLinks.mjs, link L7) is the SWINDLE frame: its guardrail asks for
+  // "the toughest, most resilient defense that keeps the practical swindle alive" — i.e. the
+  // actionable half of the record is the PLAYER'S own resource. Measured on eval-30 (A7b 2/3,
+  // render_bug, non-retry): all three slots went to the opponent's geometry
+  // (opp-future-fork / opp-fork-pivot / opp-key-line) while `you-double` / `you-fork-pivot` sat
+  // offered-only. If nothing `you-`-owned made it in, swap the opponent's LINE group out for it —
+  // the line is the most restateable-in-words of the three, and the cell/pivot groups are the ones
+  // the reader cannot see without a highlight.
+  const isSwindle = linkId === 'L7';
+  if (isSwindle && !groups.some((g) => g.handle.startsWith('you-'))) {
+    const own = (zones?.aliases ?? []).find((a) => a.handle.startsWith('you-double'))
+      ?? (zones?.aliases ?? []).find((a) => a.handle.startsWith('you-fork-pivot'));
+    if (own && !groups.some((g) => g.spec === own.spec)) {
+      const victim = groups.findIndex((g) => g.handle.startsWith('opp-') && LINE_GROUP_HANDLE.test(g.handle));
+      const entry = { half: 'lostResource', spec: own.spec, handle: own.handle, role: own.role, truthBoard: own.truthBoard };
+      if (groups.length < 3) {
+        groups.push(entry);
+      } else if (victim >= 0) {
+        groups[victim] = entry;
+      } else if (!FORK_PIVOT_HANDLE.test(groups[groups.length - 1].handle)) {
+        // Last resort: at cap with no line group to give up, so the LAST-derived group goes.
+        groups[groups.length - 1] = entry;
+      }
+      // ABSTAIN (fix round 1, 2026-09-01). The `else` above deliberately has no branch: when the set
+      // is at cap, offers no `opp-…-line` victim, AND the last-derived group is a FORK PIVOT, the
+      // swap does not fire at all. D48 rule 3 states a fork's pivot is offered AND required, so
+      // evicting it to make room would trade one invariant for another — and I2 says abstain rather
+      // than fabricate or violate. The player's counterplay stays offered-but-unrequired on such a
+      // record; that is a weaker outcome than the swap, not a wrong one. Measured 2026-09-01: no
+      // corpus record reaches this branch (of the 12 L7 records only eval-30 triggers the swap at
+      // all, and it has an `opp-key-line` victim), so this is a latent path being closed before it
+      // can fire, not a behaviour change — pinned by the fork-pivot abstention test.
+    }
   }
   // T026 (FR-017, OI-205/OI-187).
   // Q2 PROVISIONAL: reserved 4th-priority push into a free slot only; the at-cap records are not
@@ -189,7 +295,23 @@ export function deriveRequiredSet(pruned, zones) {
   return groups.slice(0, 3);
 }
 
+// Shared guard for the two by-design OMIT cases (I4/D3/D4/D23): `win_to_slower_win` and
+// `lose_to_faster_lose` with the swindle gate's `NotABlunder` verdict are not blunders — production
+// never reaches this file for them (`computeMechanism` returns `{ notABlunder: true }` early; see
+// mechanismExplainer.mjs). This guard only matters for direct callers of these two functions (the
+// frequency probe, and tests) that skip that early return — it raises a typed error instead of
+// falling through to `classifyCausalLink`'s opaque "no rule matched". Placed in BOTH
+// `buildReasonRenderModel` and `buildRenderDecision` (F9): each calls `classifyCausalLink`
+// independently, so a guard in only one misses the other's call.
+function guardNotABlunder(nvOrPruned) {
+  if (nvOrPruned.case === 'win_to_slower_win'
+      || (nvOrPruned.case === 'lose_to_faster_lose' && nvOrPruned.gate?.verdict === 'NotABlunder')) {
+    throw new Error(`NotABlunder: by-design OMIT (${nvOrPruned.case}) — no deep reveal for this move`);
+  }
+}
+
 export function buildReasonRenderModel(nv) {
+  guardNotABlunder(nv);
   const pruned = pruneVector(nv);
   const ctx = pruned.direction === 'enabled_opponent'
     ? { patternOnAfterBestBoard: patternOnAfterBestBoard(pruned) } : {};
@@ -217,7 +339,7 @@ export function buildReasonRenderModel(nv) {
       ],
       boards: selectBoards(pruned),
       zones,
-      requiredSet: deriveRequiredSet(pruned, zones),
+      requiredSet: deriveRequiredSet(pruned, zones, link.id),
       rendered: renderedFields(pruned, link.covers),
       openingReadingKey: openingReadingKeyFor(openingFrame),
       coverage: { ok: true, unowned: [] },
@@ -233,7 +355,7 @@ export function buildReasonRenderModel(nv) {
     frames: [{ id: link.id, confidence: link.confidence, text: link.text, covers: link.covers, guardrail: link.guardrail }],
     boards: selectBoards(pruned),
     zones,
-    requiredSet: deriveRequiredSet(pruned, zones),
+    requiredSet: deriveRequiredSet(pruned, zones, link.id),
     rendered: renderedFields(pruned, link.covers),
     coverage: { ok: true, unowned: [] },
   };
@@ -285,6 +407,7 @@ function groundResource(pruned) {
 // PURELY from the render helpers — no engine call. Reuses the same classify+assert path as
 // buildReasonRenderModel so routing is identical.
 export function buildRenderDecision(nv) {
+  guardNotABlunder(nv);
   const pruned = pruneVector(nv);
   const ctx = pruned.direction === 'enabled_opponent'
     ? { patternOnAfterBestBoard: patternOnAfterBestBoard(pruned) } : {};
@@ -342,7 +465,7 @@ export function buildRenderDecision(nv) {
     finalMovestring: decisiveFinalMovestring(pruned),
     openingContext,
     zones: { aliases: zones.aliases, terms: zones.terms },
-    requiredSet: deriveRequiredSet(pruned, zones),
+    requiredSet: deriveRequiredSet(pruned, zones, link.id),
   };
 }
 

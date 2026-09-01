@@ -2132,3 +2132,36 @@ browser pass on `/admin/grounding-diff`. What that cannot confirm is the deploye
     audio follows automatically (TTS is keyed by text hash, so new text regenerates on demand).
   - **Source**: 2026-08-25 session; branch `worktree-deep-reveal-grounding` (`0d6f818`..`2ef3ccb`);
     D46/D47/D48; OI-182/OI-184.
+
+## Epic 12 — Deep-Reveal Remediation (spec 059) — added 2026-08-28
+
+- [ ] **Served deep reveals carry the Epic 12 render fixes after the cache purge**
+  - **What**: after deploying the branch AND running the `explanation_cache` deep-reveal purge
+    (`docs/deployment_steps.md` → "Spec 058 render remediation — purge cached deep reveals…", whose
+    2026-08-28 update and its later amendment cover this epic), open a past mistake viewed *before* the
+    deploy, tap the deep reveal, and confirm the served text: (a) contains no raw `cNrM` coordinate;
+    (b) on a position with two sibling highlighted squares, distinguishes them by column
+    ("the one in column N"), never by a height word for two cells on the same row; (c) on a position
+    where two different squares share a column, does not name both as the same bare "column N";
+    (d) on a position where the better move wins outright, states the game is over rather than
+    describing a future threat.
+  - **Why staging**: the defect class is a *cache-state* condition — locally the cache is empty or
+    freshly written, so every request regenerates and the stale path cannot be reproduced. Only an
+    environment already holding rows written by the pre-Epic-12 render layer exercises it, and the
+    purge is a deploy-time action whose effect cannot be observed before it runs.
+  - **Expected**: post-purge, previously-viewed positions serve regenerated text meeting (a)–(d).
+    Audio follows automatically (TTS is keyed by text hash).
+  - **Source**: 2026-08-28 session; branch `worktree-deep-reveal-grounding`; spec 059 / Epic 12;
+    D51–D59 + the D49 addendum; OI-194, OI-198, OI-201, OI-203.
+
+- [ ] **A Spanish deep reveal is not degraded by the English-only retry check**
+  - **What**: request a deep reveal with `locale=es` on a position whose explanation trips the
+    required-set retry, and confirm the served Spanish text still names the better column and its
+    required squares.
+  - **Why staging**: needs a real `es` request end-to-end. The FR-013 guard-aware retry check added in
+    this epic omits `locale` (**OI-213**), so the retry decision is computed against English-rewritten
+    text while a different Spanish string is served. There is no Spanish eval coverage (OI-176) and no
+    local reproduction of the divergence.
+  - **Expected**: Spanish output is not systematically worse than English on naming the better column.
+    If it is, OI-213 is the cause and blocks any Spanish quality measurement.
+  - **Source**: 2026-08-28 spec 059 code review; OI-213, OI-176.

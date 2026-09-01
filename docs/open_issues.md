@@ -6892,8 +6892,17 @@ failure, not a context-sufficiency failure. Cross-refs: D45, OI-178, OI-180.
 
 ## OI-183 — no batch harness exercises the production deep-reveal path, so the retry layer cannot be measured
 
-**Status**: open — **QUANTIFIED 2026-08-26; owner decided to leave the harness as-is for now** (see below)
-**Area**: `connect-four/server/mechanismExplainer.mjs`, `connect-four/server/scripts/compute.mjs`, `.claude/skills/judge-deep-reveals/`
+**Status**: **RESOLVED 2026-09-01** — `compute.mjs --retry` now exercises production's own retry.
+Production's decision was extracted verbatim into `server/retryDecision.mjs` (`decideRetry`) and is
+called by BOTH `computeMechanism` and the harness, so the eval runs the real rule rather than a
+reimplementation (I12). The extraction is behaviour-preserving: every pre-existing
+`mechanismExplainer.test.mjs` assertion passes unmodified, the `isLlmError` path and LLM call count
+are unchanged. First measurement (63 boards x 3, 2026-09-01,
+`fv_suff_answers_boards_v3retry63_2026-09-01T20-55-54Z`): the retry fired on **81 of 189 runs (43%)**
+and recovered **74 of 81 (91%)** — 57 fully fixed, 17 partial, 7 unchanged. Two limits kept: the
+flag reproduces the two CONTENT triggers only (call/parse-error rows stay single-attempt), and A6 is
+not an independent measure on a `--retry` run because it is one of the triggers. See D60.
+**Area**: `connect-four/server/retryDecision.mjs`, `connect-four/server/mechanismExplainer.mjs`, `connect-four/server/scripts/compute.mjs`
 **Discovered**: deep-reveal learner-quality evaluation, 2026-08-06
 
 **2026-08-26 — how big this is, measured.** Replaying the 125 condition-D runs of

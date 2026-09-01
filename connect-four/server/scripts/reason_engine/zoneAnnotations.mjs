@@ -43,7 +43,12 @@ const TERM_KB = {
 // determinable from the term alone) falls back to a neutral, side-agnostic phrasing. Only
 // `double_threat` carries a directional claim today — `immediate_threat`/`figure_7`/`claimeven` are
 // already side-neutral and pass through unchanged.
-function describeTerm(slug, owners) {
+// Task 4 (OI-?, eval-29/eval-37/pin-branch-invariance-true-2): `immediate_threat`'s canonicalPhrase
+// ("threat to make four next move") is board-false whenever the tag fired only on a follow-up board
+// (afterPlayed/afterBest) and never on 'decision' — the model reads "next move" against the board in
+// front of the player. Per I13 this must NOT touch zones.terms membership; it only qualifies the
+// DESCRIPTION, mirroring the owners-based qualification above.
+function describeTerm(slug, owners, boards) {
   if (slug === 'double_threat' && owners && owners.size === 1) {
     const [owner] = owners;
     return owner === 'you'
@@ -52,6 +57,16 @@ function describeTerm(slug, owners) {
   }
   if (slug === 'double_threat') {
     return 'two winning squares at once for whichever side holds it — the other side cannot block both';
+  }
+  if (slug === 'immediate_threat' && boards && boards.size > 0 && !boards.has('decision')) {
+    const where = boards.has('afterPlayed') && !boards.has('afterBest')
+      ? 'true after the move you played, not on the current board'
+      : boards.has('afterBest') && !boards.has('afterPlayed')
+        ? 'true after the better move, not on the current board'
+        // both afterBest and afterPlayed fired, decision did not (eval-47): true on both follow-up
+        // boards, so it is board-true to name both qualifiers rather than pick one arbitrarily.
+        : 'true after the move you played and after the better move, not on the current board';
+    return `${TERM_KB[slug].description} (${where})`;
   }
   return TERM_KB[slug].description;
 }
@@ -103,7 +118,7 @@ function roleText(owner, kind) {
   // whose line it was reading and, measured on eval-2 (2/5 runs), handed the player's own winning
   // line to the opponent. Name the owner the same way the 'line' branch above does.
   if (kind === 'future-line') return `the whole four-in-a-row line ${who} ${owner === 'you' ? 'are' : 'is'} playing for — it decides this later, once the forced sequence reaches it, not a threat right now (${LINE_STEER})`;
-  if (kind === 'future') return `this single square matters later, once the forced sequence reaches it — not a threat right now`;
+  if (kind === 'future') return `a single square on ${possessive(owner)} four-in-a-row line — it matters later, once the forced sequence reaches it, not a threat right now`;
   // D45: the multi-cell fork alias is now a REQUIRED group, so its role text is paraphrased on every
   // run — the singular 'future' wording made the model call a two-square fork "the later fork
   // square" (measured, t043 run 1).
@@ -119,6 +134,12 @@ function roleText(owner, kind) {
   // immediate best move. The contrast must rule out "play this now", not merely omit a claim about it.
   if (kind === 'fork-pivot') return `the square ${plays} to CREATE the fork — the move that makes both winning squares live at once; it matters later, once the forced sequence reaches it — it is NOT the move to play right now`;
   if (kind === 'fork-pivot-now') return `the square ${plays} to CREATE the fork — the move that makes both winning squares live at once`;
+  // Task 5 (eval-47's unsatisfiable required handle): on the afterPlayed board, `boardTagPivotCell`
+  // names the played move's OWN landing square — already occupied on the board this alias names — so
+  // "the square X plays to CREATE the fork" instructs playing a filled square. Owner-neutral wording:
+  // the mover of an afterPlayed board is always the player, so a possessive like "your opponent's last
+  // move" would be board-false here.
+  if (kind === 'fork-pivot-played') return `the square your last move just filled — that move is what set up the fork`;
   // T030: was `${who}'s` — grammatical for "your opponent's" but produced "you's" for the owner
   // side. `possessive()` handles both.
   return `a single square completing ${possessive(owner)} four-in-a-row line`; // major
@@ -127,7 +148,10 @@ function roleText(owner, kind) {
 // Both tags are forks — figure_7's canonical phrase is literally '7-shaped double threat'
 // (causalLinks.mjs TAG_PHRASE). All three fork branches below previously gated on 'double_threat'
 // alone, so a figure_7 half got no fork alias at all (6 of the 20 fork halves in the corpus).
-const FORK_TAGS = new Set(['double_threat', 'figure_7']);
+// Exported (Task 8, 2026-09-01) so renderReasonModel.mjs's `halfCarriesFork` reads the SAME
+// definition of "what counts as a fork" instead of mirroring the literal (I8 — reuse the existing
+// definition, never reinvent it). Same precedent as `forkPivotCell` / `OFFERABLE_TERM_SLUGS`.
+export const FORK_TAGS = new Set(['double_threat', 'figure_7']);
 
 // The square that CREATES the fork = the LAST ply of the half's own line. NOT `entryCell`, which the
 // glossary defines as the FIRST move of `line` (feature-vector-glossary.md:168, reasonEngine.mjs:646)
@@ -257,6 +281,26 @@ export function buildAnnotationOffer(pruned, boardDecisions, opts = {}) {
   const decisionMovestring = boardDecisions.find((b) => b.id === 'decision')?.movestring ?? '';
   const pivotCreatingCol = (boardId) => (boardId === 'afterBest' ? pruned.bestCol
     : boardId === 'afterPlayed' ? pruned.playedCol : null);
+  // A pivot may take the PRESENT-tense `fork-pivot-now` role ("the square <owner> plays to CREATE the
+  // fork") only when that square is genuinely playable — empty AND gravity-top — on the board the
+  // alias itself names. `isFuture` (derived from `register`) is NOT that check: on
+  // `pin-branch-invariance-true-1` the realized-fork pivot `opp-fork-pivot = c5r3` is `register:
+  // 'immediate'` -> `isFuture === false` -> the present-tense role, while on the `decision` board it
+  // sits one row ABOVE the column top (`colHeights[4] === 1`, the cell's row is 2). The role asserted
+  // a move the opponent cannot make; the `fork-pivot` sibling role exists exactly for this and
+  // carries the "it is NOT the move to play right now" contrast. Board-checked through the production
+  // board model, the same discipline `playedConcession` (causalLinks.mjs) uses for its timing claim.
+  // Abstains to the non-present-tense role (I2) when the board is missing or unreadable.
+  const isGravityTopOn = (boardId, cell) => {
+    const ms = boardDecisions.find((b) => b.id === boardId)?.movestring;
+    const m = /^c(\d+)r(\d+)$/.exec(cell ?? '');
+    if (ms == null || !m) return false;
+    try {
+      const { colHeights } = parseBoardState(ms);
+      return colHeights[Number(m[1]) - 1] === Number(m[2]) - 1;
+    } catch { return false; }
+  };
+
   const boardTagPivotCell = (boardId) => {
     const col = pivotCreatingCol(boardId);
     if (col == null || !decisionMovestring) return null;
@@ -312,7 +356,8 @@ export function buildAnnotationOffer(pruned, boardDecisions, opts = {}) {
           const alreadyOnThisBoard = aliases.some((a) => a.spec === pivot && a.truthBoard === board.id);
           if (pivot && !windowCells.includes(pivot) && !sameBoardTaken.has(pivot) && !alreadyOnThisBoard) {
             const ph = mkHandle(`${tag.owner}-fork-pivot`);
-            aliases.push({ handle: ph, spec: pivot, role: roleText(tag.owner, 'fork-pivot-now'),
+            aliases.push({ handle: ph, spec: pivot,
+                           role: roleText(tag.owner, board.id === 'afterPlayed' ? 'fork-pivot-played' : 'fork-pivot-now'),
                            truthBoard: board.id, kbId: null });
             zoneAliasMap[ph] = pivot;
           }
@@ -451,6 +496,125 @@ export function buildAnnotationOffer(pruned, boardDecisions, opts = {}) {
     }
   }
 
+  // Realized-pattern forks (Task 7 — closes D48's stated known limit). Every fork family above keys
+  // off `half.tacticTag` + `forkCells` / `line`; a `realized_pattern` half carries `tag` / `cells` /
+  // `windows` / `finalMovestring` instead, so its fork got NEITHER a prong pair NOR a pivot. Measured
+  // 2026-09-01: 13/63 corpus records have a fork-tagged half with zero `*-fork-pivot` alias, and on
+  // pin-L2-enabled-opponent the fork's SECOND winning square (c6r1 on the half's own finalMovestring
+  // `33432`) had no handle at all, so the narration could point at one prong and call it the story.
+  //
+  // Runs AFTER the halfPairs / half-resource loops on purpose: it must not add to `seen` before those
+  // run, or it would evict aliases they would otherwise offer (verified: the pre-change handle set for
+  // all 10 realized-fork records is still offered in full afterwards).
+  for (const [half, otherHalf, side] of [
+    [pruned.lostResource, pruned.opponentPunishment, 'you'],
+    [pruned.opponentPunishment, pruned.lostResource, 'opp'],
+  ]) {
+    if (!half || half.kind !== 'realized_pattern' || !FORK_TAGS.has(half.tag)) continue;
+    // `half.owner` is NUMERIC (1|2) on a realized half — never the strings 'you'/'opp'. Ownership
+    // comes from the half's KIND via the existing helper, exactly as every other loop here (D47).
+    const owner = halfOwner(half, side);
+    // truthBoard: the SAME derivation the half-resource loop above uses for this half, so a realized
+    // half's prongs/pivot always name the continuation its own key-square and key-line name (D50's
+    // "one resolution, both loops"). NOT the F7 provenance rule ('afterPlayed' for a punishment
+    // half): measured over the 10 realized-fork records, `afterPlayed` is shown on ZERO of them, so
+    // that rule would have pointed every one of the 8 punishment-side records at a board the prompt
+    // never renders. All 10 are `register: 'immediate'` today, hence 'decision', which is always shown.
+    const isFuture = horizonForRegister(half.register) !== 'immediate';
+    const truthBoard = isFuture ? (deepBoardByHalf.get(half) ?? 'projectedDeep') : 'decision';
+    const pre = isFuture ? 'future:' : '';
+
+    // The prong PAIR — two-prong records only. 6 of the 10 realized-fork records carry a single-cell
+    // `cells`, which is a realized pattern, not a prong pair; there is nothing to pair there.
+    if (Array.isArray(half.cells) && half.cells.length >= 2) {
+      const rawSpec = 'windows:' + half.cells.join(',');
+      const spec = pre + rawSpec;
+      // Containment guard (measured on eval-47, and the reason this is not a bare `seen` check): when
+      // the fork is ALREADY board-true on a shown near-term board, the structural loop has offered it
+      // there — eval-47's `you-double = windows:c3r6,c6r5,c7r2` on `afterBest` is the same fork with a
+      // third endpoint, so a decision-board `windows:c3r6,c6r5` would be a strictly weaker RESTATEMENT
+      // of it, present-tense on a board the fork does not exist on yet. Skip when an alias of the SAME
+      // owner already covers every prong (owner-scoped, D47: never dedupe against the other side's
+      // geometry). eval-43/eval-44/pin-L2/pin-branch-invariance-false keep their pair — no offered
+      // alias there contains both prongs.
+      const coveredElsewhere = aliases.some((a) => a.handle.startsWith(`${owner}-`)
+        && half.cells.every((c) => specCells(a.spec.replace(/^future:/, '')).includes(c)));
+      if (!coveredElsewhere && !seen.has(rawSpec) && !seen.has(spec)) {
+        seen.add(rawSpec);
+        seen.add(spec);
+        const h = mkHandle(`${owner}-double`);
+        // Derived from THIS half's own tag, not hard-coded: the loop admits `FORK_TAGS` =
+        // {double_threat, figure_7}, so a `figure_7` half with two cells would have been labelled
+        // `double_threat` in the glossary. Inert on today's corpus (every realized `figure_7` half is
+        // single-cell and never reaches this block) — which is exactly why it has to be right here
+        // rather than discovered when one lands. Guarded so a tag with no glossary entry yields
+        // `null` instead of an unresolvable kbId (the same `TERM_KB ? … : null` shape used above).
+        aliases.push({ handle: h, spec, role: roleText(owner, isFuture ? 'future-fork' : 'double'),
+                       truthBoard, kbId: TERM_KB[half.tag]?.kbId ?? null });
+        zoneAliasMap[h] = spec;
+      }
+    }
+
+    // Each prong ALSO standalone — the same reason the half-resource loop offers its `forkCells`
+    // individually (OI-172): Decision A makes a `windows:` alias satisfiable only as the WHOLE window,
+    // so a correct single-cell fork highlight is stripped when the pair is the only handle on offer.
+    // Without this, pin-L2-enabled-opponent's render bug is only half-closed — `opp-double =
+    // windows:c2r1,c6r1` exists but the model still cannot legally highlight c6r1 alone. Offered for
+    // every realized fork half, single-cell ones included (there the cell IS the pattern).
+    for (const fc of (half.cells ?? [])) {
+      const cellSpec = pre + fc;
+      if (seen.has(fc) || seen.has(cellSpec)) continue;
+      seen.add(fc);
+      seen.add(cellSpec);
+      const fh = mkHandle(`${owner}-fork-square`);
+      aliases.push({ handle: fh, spec: cellSpec, role: roleText(owner, isFuture ? 'future' : 'major'),
+                     truthBoard, kbId: null });
+      zoneAliasMap[fh] = cellSpec;
+    }
+
+    // The PIVOT — the move that CREATED the fork = the landing cell of the LAST ply of the half's own
+    // `finalMovestring`. Validated through the production detector across all 10 realized-fork records
+    // (I12, never a hand-rolled proxy): for every one, `detectDoubleThreat(finalMovestring, half.owner)`
+    // matches and `detectDoubleThreat(finalMovestring minus its last ply, half.owner)` does not — the
+    // last ply is exactly what makes both winning squares live at once. Applies regardless of
+    // `cells.length`; only the prong-pair block above is restricted to two-prong records.
+    const last = half.finalMovestring?.at?.(-1);
+    if (last != null) {
+      const col = Number(last);
+      let pivot = null;
+      try {
+        const { colHeights } = parseBoardState(half.finalMovestring.slice(0, -1));
+        const row = colHeights[col];
+        if (row != null && row < 6) pivot = rcToCellStr({ col, row });
+      } catch { /* abstain, never guess (I2) */ }
+      // The same abstention guard the half-resource loop uses (Fix round 4, finding 3): when the pivot
+      // coincides with the OTHER half's completing square, the two labels are both true of different
+      // lines and read as a contradiction in one prompt. Abstain (I2) rather than pick one. Measured:
+      // 5 of these 10 records abstain here (eval-42, eval-49, eval-50, pin-L2-enabled-opponent,
+      // pin-branch-invariance-false) — in each the pivot IS the other half's completingCell.
+      const otherCells = new Set([otherHalf?.completingCell, otherHalf?.cell].filter(Boolean));
+      // The `future:` decorator applies to the pivot exactly as it does to the prongs and to the
+      // half-resource loop's own pivot offer (`const spec = pre + rawSpec` there). A bare `cNrM` spec
+      // carrying `truthBoard: 'projectedDeep'` is the eval-3 present-threat shape the decorator exists
+      // to prevent. BOTH keys are seeded into `seen` so the horizon-aware first-offer-wins dedupe above
+      // sees the whole picture. Dead on today's corpus (all 10 realized forks are `immediate`) — which
+      // is precisely why it has to be right here rather than discovered later.
+      const pivotSpec = pre + (pivot ?? '');
+      if (pivot && !otherCells.has(pivot) && !(half.cells ?? []).includes(pivot)
+          && !seen.has(pivot) && !seen.has(pivotSpec)) {
+        seen.add(pivot);
+        seen.add(pivotSpec);
+        const ph = mkHandle(`${owner}-fork-pivot`);
+        // Present tense requires BOTH a present horizon and a real gravity-top square on this
+        // alias's own truthBoard (see `isGravityTopOn`) — never `isFuture` alone.
+        const playableNow = !isFuture && isGravityTopOn(truthBoard, pivot);
+        aliases.push({ handle: ph, spec: pivotSpec, role: roleText(owner, playableNow ? 'fork-pivot-now' : 'fork-pivot'),
+                       truthBoard, kbId: null });
+        zoneAliasMap[ph] = pivotSpec;
+      }
+    }
+  }
+
   // Fired term vocabulary: structural board tags that map to a KB slug + the two halves' tags,
   // intersected with the KB-backed set (TERM_KB). T033 (FR-024, OI-184): also track WHICH owner(s)
   // fired each slug, so `describeTerm` can attribute a directional description (e.g. double_threat's
@@ -459,16 +623,24 @@ export function buildAnnotationOffer(pruned, boardDecisions, opts = {}) {
   // (owner 'opp'), and the un-attributed description handed the reader's own pattern to the opponent.
   const fired = new Set();
   const firedOwners = new Map(); // slug -> Set<'you'|'opp'>
-  const noteFired = (slug, owner) => {
+  // Task 4: which near-term board(s) each slug fired FROM (board-tag loop only — a half's tacticTag
+  // is record-wide provenance, not a single board, so it deliberately passes no boardId; describeTerm
+  // treats an empty/absent set as "no board qualifier needed", same as before this task).
+  const firedBoards = new Map(); // slug -> Set<boardId>
+  const noteFired = (slug, owner, boardId) => {
     if (!slug || !TERM_KB[slug]) return;
     fired.add(slug);
     if (!firedOwners.has(slug)) firedOwners.set(slug, new Set());
     if (owner) firedOwners.get(slug).add(owner);
+    if (boardId) {
+      if (!firedBoards.has(slug)) firedBoards.set(slug, new Set());
+      firedBoards.get(slug).add(boardId);
+    }
   };
   for (const board of boardDecisions) {
     if (!NEAR_TERM.has(board.id)) continue;
     for (const tag of board.tags ?? []) {
-      noteFired(KIND_TO_SLUG[tag.kind], tag.owner);
+      noteFired(KIND_TO_SLUG[tag.kind], tag.owner, board.id);
     }
   }
   for (const [half, side] of [[pruned.lostResource, 'you'], [pruned.opponentPunishment, 'opp']]) {
@@ -483,7 +655,7 @@ export function buildAnnotationOffer(pruned, boardDecisions, opts = {}) {
   }
   const terms = [...fired].sort().map((slug) => ({
     slug, kbId: TERM_KB[slug].kbId, canonicalPhrase: TAG_PHRASE[slug],
-    description: describeTerm(slug, firedOwners.get(slug)),
+    description: describeTerm(slug, firedOwners.get(slug), firedBoards.get(slug)),
   }));
 
   // OI-191 — sibling aliases must not restate byte-identically. `mkHandle` disambiguates the HANDLE
@@ -553,31 +725,132 @@ const HEIGHT_WORDS = ['lowest', 'second-lowest', 'third-lowest', 'fourth-lowest'
 //   3. LISTING ORDINAL, no geometry — "the first one listed" / "the second one listed" — the
 //      residual case where two members share their exact representative (column, row) (e.g. two
 //      different windows whose lowest cell coincides) and no spatial statement can distinguish them.
+// D2 fix (Task 2, D49-addendum-governed): a `windows:` spec spanning multiple columns is a LINE, not a
+// single cell — labelling it "the one in column N" is board-false (the model echoes "your line in
+// column N", which is not true of a line spanning c3–c6). `lineLocator` asserts the *truth* of the
+// locator instead: it returns a row/diagonal description built from the spec's own geometry, or `null`
+// when no true line claim can be made, in which case callers fall back to the existing column rung.
+//
+// F10: it must refuse non-line `windows:` specs. Two real corpus families would otherwise be
+// mislabeled as "a line": `|`-joined combined fork-lines specs (two or three 4-cell windows glued
+// together, e.g. eval-17–20's `windows:c3r5,c4r5,c5r5,c6r5|c4r3,c5r4,c6r5,c7r6`) and disjoint
+// fork-cell specs (e.g. eval-47's `windows:c3r6,c6r5,c7r2`, not contiguous). A naive regex scrape over
+// every `cNrM` token in the spec would call both of these "a line" — false. So: refuse anything
+// containing `|`, refuse anything that isn't exactly 4 cells, and refuse anything whose sorted cells
+// don't advance by a constant (col, row) step — i.e. isn't actually contiguous.
+export function lineLocator(spec) {
+  if (!spec) return null;
+  const raw = spec.startsWith('future:') ? spec.slice('future:'.length) : spec;
+  if (!raw.startsWith('windows:')) return null;
+  if (raw.includes('|')) return null; // F10: a combined fork-lines spec is NOT one line
+  const cells = [...raw.matchAll(/c(\d+)r(\d+)/g)].map((m) => ({ col: Number(m[1]), row: Number(m[2]) }));
+  if (cells.length !== 4) return null; // F10: only a genuine 4-cell window can be "a line"
+  const sorted = [...cells].sort((a, b) => (a.col - b.col) || (a.row - b.row));
+  const colStep = sorted[1].col - sorted[0].col;
+  const rowStep = sorted[1].row - sorted[0].row;
+  for (let i = 1; i < sorted.length; i++) {
+    if (sorted[i].col - sorted[i - 1].col !== colStep || sorted[i].row - sorted[i - 1].row !== rowStep) {
+      return null; // F10: not contiguous — disjoint fork-cell spec
+    }
+  }
+  const cols = [...new Set(cells.map((c) => c.col))].sort((a, b) => a - b);
+  const rows = [...new Set(cells.map((c) => c.row))].sort((a, b) => a - b);
+  if (cols.length < 2) return null; // vertical — the column wording is already true, use the rungs
+  if (rows.length === 1) return `the line across columns ${cols[0]}–${cols[cols.length - 1]} on row ${rows[0]}`;
+  const first = cells.reduce((a, b) => (a.col <= b.col ? a : b));
+  const last = cells.reduce((a, b) => (a.col >= b.col ? a : b));
+  const dir = last.row > first.row ? 'rising' : 'falling';
+  // Fix round 1 (Important + latent-collapse fix): the column-span-only wording collapsed two
+  // PARALLEL diagonals sharing a direction and column span into an identical label (eval-37:
+  // c4r1..c1r4 and c4r2..c1r5 both said "falling from column 1 to column 4"). Naming both row
+  // endpoints keeps the claim true (still built from the spec's own geometry, 1-based to match
+  // `rcToCellStr` = `c${col+1}r${row+1}`, r1 = bottom) and makes rung 1 unique for parallel lines
+  // instead of silently falling back to the false column claim this task exists to delete.
+  return `the diagonal line ${dir} from column ${first.col} on row ${first.row} to column ${last.col} on row ${last.row}`;
+}
+
+// A `windows:` spec spanning more than one column for which `lineLocator` returns `null` (a
+// `|`-joined combined fork-lines spec, or a disjoint fork-cell spec) must NEVER take a bare/height
+// column label — that label asserts the spec is "in column N" (or "the lower one in column N"),
+// which is exactly as false for a multi-column spec as the original D2 bug. (Fix round 1, `eval-13`.)
+function multiColumnWindowsWithoutLine(spec) {
+  if (!spec) return false;
+  const raw = spec.startsWith('future:') ? spec.slice('future:'.length) : spec;
+  if (!raw.startsWith('windows:')) return false;
+  const cols = new Set([...raw.matchAll(/c(\d+)r\d+/g)].map((m) => m[1]));
+  if (cols.size < 2) return false;
+  return lineLocator(spec) === null;
+}
+
+// Fix round 2 (per-member restructure). Round 1's rung ladder decided all-or-nothing PER GROUP: one
+// member with no true geometric/column label of its own (a `|`-joined `*-fork-lines` spec) failed the
+// whole rung's `every(Boolean)` check and dragged a perfectly describable sibling (a genuine 4-cell
+// `*-key-line`) down to the claim-free ordinal rung with it — e.g. `eval-17`'s `you-key-line` lost its
+// true diagonal wording purely because `you-fork-lines` sits in the same sibling group. That was an
+// artifact of the rung *structure* (one shared array, one shared uniqueness check), not something
+// anyone decided; the informativeness cost was real and is exactly what this restructure removes.
+//
+// Each member now independently takes the MOST INFORMATIVE label that is true FOR IT, in this order:
+//   1. GEOMETRIC — `lineLocator`'s row/diagonal wording, whenever the member's own spec supports it.
+//      Never displaced by a sibling, and never displaces one.
+//   2. COLUMN (with height where needed) — for every remaining member whose OWN spec genuinely IS a
+//      single column (a bare cell, or a vertical `windows:` line) — never a multi-column spec
+//      `lineLocator` refused (`multiColumnWindowsWithoutLine`, fix round 1's own guard: a `|`-joined
+//      or disjoint spec is never "in column N", full stop). Height disambiguation runs only among the
+//      OTHER column-family members sharing that exact column — geometric/ordinal members are
+//      invisible to this sub-ladder, so they can no longer force a column member down either.
+//   3. ORDINAL — the claim-free, position-based fallback: every member with no true label from (1) or
+//      (2) (a `|`-joined/disjoint spec, or a genuine (col,row) tie the column rung can't resolve).
+//      Always true (it only claims list position) and always unique on its own, since each member's
+//      index in the group's own stable sort is unique.
+// A final safety net reassigns any residual textual collision (extremely unlikely — different rungs
+// produce differently-shaped strings) to its own ordinal, which cannot collide with anything.
 function locatorsForGroup(sortedKeys) {
+  const n = sortedKeys.length;
+  const labels = new Array(n).fill(null);
+
+  // Rung "geometric".
+  for (let i = 0; i < n; i++) {
+    const g = sortedKeys[i].spec && lineLocator(sortedKeys[i].spec);
+    if (g) labels[i] = g;
+  }
+
+  // Rung "column" (+ height), scoped to the column-family subset only.
+  const colFamily = [];
+  for (let i = 0; i < n; i++) {
+    if (labels[i] === null && !multiColumnWindowsWithoutLine(sortedKeys[i].spec)) colFamily.push(i);
+  }
   const colCounts = new Map();
-  for (const k of sortedKeys) colCounts.set(k.col, (colCounts.get(k.col) ?? 0) + 1);
-
-  // Rung 1: column alone.
-  const colOnly = sortedKeys.map((k) => `the one in column ${k.col}`);
-  if (new Set(colOnly).size === colOnly.length) return colOnly;
-
-  // Rung 2: column, with height disambiguation only where a column is genuinely shared.
-  const withHeight = sortedKeys.map((k) => {
-    if (colCounts.get(k.col) === 1) return `the one in column ${k.col}`;
-    const sameColRows = [...new Set(sortedKeys.filter((k2) => k2.col === k.col).map((k2) => k2.row))]
+  for (const i of colFamily) colCounts.set(sortedKeys[i].col, (colCounts.get(sortedKeys[i].col) ?? 0) + 1);
+  for (const i of colFamily) {
+    const k = sortedKeys[i];
+    if (colCounts.get(k.col) === 1) { labels[i] = `the one in column ${k.col}`; continue; }
+    const sameColRows = [...new Set(colFamily.filter((j) => sortedKeys[j].col === k.col).map((j) => sortedKeys[j].row))]
       .sort((a, b) => a - b);
-    if (sameColRows.length === 1) return null; // exact (col,row) tie — rung 2 cannot distinguish
+    if (sameColRows.length === 1) continue; // exact (col,row) tie — falls through to the ordinal rung
     if (sameColRows.length === 2) {
-      return k.row === sameColRows[0] ? `the lower one in column ${k.col}` : `the upper one in column ${k.col}`;
+      labels[i] = k.row === sameColRows[0] ? `the lower one in column ${k.col}` : `the upper one in column ${k.col}`;
+      continue;
     }
     const rank = sameColRows.indexOf(k.row);
     const word = HEIGHT_WORDS[rank] ?? `${rank + 1}th-lowest`;
-    return `the ${word} one in column ${k.col}`;
-  });
-  if (withHeight.every(Boolean) && new Set(withHeight).size === withHeight.length) return withHeight;
+    labels[i] = `the ${word} one in column ${k.col}`;
+  }
 
-  // Rung 3: listing ordinal — asserts position in the list, never height or column.
-  return sortedKeys.map((_, idx) => `the ${ORDINAL_WORDS[idx] ?? `${idx + 1}th`} one listed`);
+  // Rung "ordinal" — the claim-free fallback for whatever is left.
+  for (let i = 0; i < n; i++) {
+    if (labels[i] === null) labels[i] = `the ${ORDINAL_WORDS[i] ?? `${i + 1}th`} one listed`;
+  }
+
+  // Safety net: reassign anything past a first-seen duplicate to its own position-based ordinal —
+  // never emit two identical role strings from disambiguateSiblingRoles.
+  const seen = new Set();
+  for (let i = 0; i < n; i++) {
+    if (seen.has(labels[i])) labels[i] = `the ${ORDINAL_WORDS[i] ?? `${i + 1}th`} one listed`;
+    seen.add(labels[i]);
+  }
+
+  return labels;
 }
 
 export function disambiguateSiblingRoles(aliases) {
@@ -597,7 +870,7 @@ export function disambiguateSiblingRoles(aliases) {
       const kx = specSortKey(x.a.spec), ky = specSortKey(y.a.spec);
       return (kx.row - ky.row) || (kx.col - ky.col) || (x.i - y.i);
     });
-    const locators = locatorsForGroup(sorted.map((item) => specSortKey(item.a.spec)));
+    const locators = locatorsForGroup(sorted.map((item) => ({ ...specSortKey(item.a.spec), spec: item.a.spec })));
     // Front-loaded, not appended: the LINE_STEER roles already END in a parenthetical, so a
     // trailing hint reads as part of that aside. Leading with the geometry also puts the one
     // distinguishing token first, where the model binds the handle.

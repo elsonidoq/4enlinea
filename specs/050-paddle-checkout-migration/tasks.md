@@ -401,7 +401,7 @@ docs/memory/backlog; `npm run test:fast` passes clean.
 - [x] T047 [US4] Remove `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `STRIPE_MONTHLY_PRICE_ID`,
   `STRIPE_ANNUAL_PRICE_ID` from `connect-four/.env.example` (leave `FRONTEND_URL` untouched —
   shared, non-Stripe) and from the Railway deploy env (memory
-  `project_spec031_staging_production_deploy`).
+  `project_deploy_execution_traps`, merged from `project_spec031_staging_production_deploy`).
 - [x] T048 [P] [US4] Rewrite `docs/architecture/api-conventions.md`'s "Stripe Checkout Config" /
   "Stripe Checkout" / "Stripe Activation Fallback" / "Stripe Webhook Endpoint" sections (`:59-103`)
   in place, using contracts/paddle-api.md as source, to describe the shipped Paddle contract

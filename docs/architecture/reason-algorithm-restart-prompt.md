@@ -55,7 +55,7 @@ union, stop — that is the drift we are escaping.
 - Memories worth reading (mechanism, not the drifted design):
   - `project_lookahead_shared_seam` — `collectNovelOpportunities` / `compareOpportunities` feed BOTH
     the feature vector AND the production annotation gate; characterize before editing.
-  - `feedback_feature_vector_design` — what to keep vs. drop in a feature vector.
+  - `feature-vector-sufficiency-experiment.md` §13 — what to keep vs. drop in a feature vector.
   - `feedback_occam_principled_extrapolation` — prefer ONE unifying mechanism over per-case
     special-casing. (General principle; ignore its note about the abandoned reason-field work.)
 

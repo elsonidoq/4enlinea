@@ -521,9 +521,12 @@ test('OI-191: the ordinal hint strips the future: decorator and never names a ra
   };
   const { aliases } = buildAnnotationOffer(p, []);
   const sq = aliases.find((a) => a.spec === 'future:c6r5');
-  // c6r5 and c3r5 are both row 5 (SAME height) but different columns (6 vs 3) — column alone
-  // distinguishes them, so this is "the one in column 6", never a height claim.
-  assert.match(sq.role, /^the one in column 6:/);
+  // Task 1 (D3 fix): the 'future' role text now carries an ownership word
+  // (${possessive(owner)}), so c6r5 (you-owned) and c3r5 (opp-owned) no longer share a role
+  // string — disambiguateSiblingRoles' (role, truthBoard) collision key no longer fires for this
+  // pair, so no locator prefix is added (the intended D3-fix side effect, not a regression).
+  assert.equal(sq.role,
+    'a single square on your four-in-a-row line — it matters later, once the forced sequence reaches it, not a threat right now');
   assert.doesNotMatch(sq.role, /\bc\d+r\d+\b/);
   const line = aliases.find((a) => a.spec === 'future:windows:c3r5,c4r5,c5r5,c6r5');
   // The line alias has no sibling of its own (its owner's OTHER offer is a plain future: cell, a
@@ -816,7 +819,21 @@ test('Regression fix corpus-wide: every sibling locator states something TRUE of
     }
   }
   assert.ok(checked > 0, 'expected at least one corpus record to check');
-  assert.ok(checkedGroups >= 50, `expected at least the 58 known sibling groups, got ${checkedGroups}`);
+  // Re-pinned by Task 2 (D2 fix, docs/architecture/reason-DECISIONS.md D49 addendum) and its fix
+  // rounds 1 and 2. This test's LOC_RE only matches column-family locators ("the one/lower/upper/… in
+  // column N" / "the … one listed"); the corpus has **59** real (role, truthBoard) sibling groups
+  // (measured independently by fix-round-1 review), but this count is narrower — it counts only a
+  // GROUP where 2+ members both happen to match LOC_RE (this map is built purely from LOC_RE hits, so
+  // a group with only one LOC_RE-matching member never reaches the length>=2 check and is silently
+  // excluded). A member whose representative geometry is a genuine `windows:` line now takes
+  // `lineLocator`'s row/diagonal wording instead (true by construction — see zoneAnnotations.mjs) and
+  // so leaves the LOC_RE-matching population; fix round 2's per-member restructure means this can now
+  // happen to just ONE member of a pair while its sibling (a `|`-joined/disjoint spec `lineLocator`
+  // must refuse) still lands on the ordinal rung, which ALSO matches LOC_RE (see LOC_RE's own
+  // "the … one listed" branch) — so round 2 does not uniformly grow or shrink this count relative to
+  // round 1, it reshuffles WHICH groups have 2+ LOC_RE-matching members. Measured after round 2:
+  // **33** column-family sibling groups (58 before Task 2 touched this file; 43 after round 1 alone).
+  assert.ok(checkedGroups >= 30, `expected at least the 33 known column-family sibling groups, got ${checkedGroups}`);
   assert.deepEqual(violations, [], `false-geometry locator violations:\n${violations.join('\n')}`);
 });
 

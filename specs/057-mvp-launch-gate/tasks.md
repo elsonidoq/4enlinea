@@ -388,8 +388,9 @@ assert no token form survives, in both locales.
   payload is **English-only today** and a locale-aware widening will not reach it. Either thread `locale`
   through `guardExplainMovePayload` (its call site `server/index.js:1263` has `locale` in scope) or state
   explicitly why it is left English-only. Context for that call: `/api/explain-move` is the legacy
-  `composeExplanation` path (`server/index.js:1233`) with no frontend caller found — memory
-  `project_prod_llm_call_graph` records it as dead. Do not silently skip it; record which.
+  `composeExplanation` path (`server/index.js:1233`) with no frontend caller found — `docs/architecture/server-conventions.md`
+  §"Which function actually serves production deep-reveal" (merged from `project_prod_llm_call_graph`)
+  records it as dead. Do not silently skip it; record which.
   (c) **The "single seam" claim in spec.md §Key Entities is CONFIRMED for LLM explanation text** —
   `/usr/bin/grep -rn "guardExplainMovePayload\|guardExplainMoveLlmPayload" connect-four/server` finds the
   import at `server/index.js:52` and exactly **four** `res.json(...)` call sites: `:1263`

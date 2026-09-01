@@ -1816,13 +1816,35 @@ that the model can see is a surface it can echo, and the never-repeat list has t
 
 ### D49 addendum — Q8 pick (PROVISIONAL, not resolved by this epic): plain-English ordinal locator for sibling disambiguation, and the board-tag-pivot dedupe exception
 
-- **Decision (Q8):** Sibling disambiguation (D49 rule 1, `disambiguateSiblingRoles`) now uses a plain-
-  English ordinal locator instead of raw coordinates: **"the lower one" / "the higher one"** for a
-  2-member collision group; **"the Nth one, counting from the bottom of the board"** beyond that — keyed
-  to a deterministic sort (board, then row ascending, then column ascending, then original alias order).
-  Corpus max collision-group size observed: 5. The D49 property (0/63 `(role, truthBoard)` collisions)
+- **Decision (Q8):** Sibling disambiguation (D49 rule 1, `disambiguateSiblingRoles`) uses a plain-
+  English locator instead of raw coordinates. The D49 property (0/63 `(role, truthBoard)` collisions)
   still holds. Measured corpus-wide, all 63 records: raw coordinates in `zones.aliases[].role` went
   32/63 → 0/63.
+- **AMENDED SAME DAY (2026-08-28) — the first locator wording shipped a board-FALSE claim.** The
+  original pick ("the lower one" / "the higher one"; "the Nth one, counting from the bottom of the
+  board") asserted a **height** relation `specSortKey` does not guarantee — its sort falls through to a
+  column tiebreak and then to original array order, so two cells on the **same row** were labelled
+  "lower" and "higher". Measured: **22 of 58** sibling groups carried a false height claim
+  (the 2026-08-28 corpus this measurement was taken against; 59 is the count post-A7-wave — see D60
+  §2, which split one group via an ownership-word change) (`eval-9`:
+  `future:c3r5` → "the lower one", `future:c6r5` → "the higher one", both on row 5). The corpus test
+  passed throughout because it asserted only that the two roles *differ* — an absence assertion, not a
+  truth assertion.
+- **SUPERSEDED by D60 §2.** The description below — a ladder of three rungs, taking the FIRST rung
+  that yields unique labels for the whole group — is **stale**. D60 §2 made `locatorsForGroup` decide
+  **per member** and added a **geometric (line) rung**, so one member that cannot take a geometric
+  label no longer drags its sibling down to a claim-free ordinal. Read D60 §2 for the current
+  behaviour; the paragraph below is kept for the historical record of what the Q8 pick originally was.
+- **Implementation as first shipped (SUPERSEDED — see above): `locatorsForGroup()`**, a strategy ladder
+  taking the first rung that yields
+  unique labels, every rung true by construction: (1) `"the one in column N"`; (2)
+  `"the lower/upper one in column N"`, and `"the <lowest|second-lowest|…> one in column N"` for 3+
+  sharing a column; (3) `"the <first|second|…> one listed"` where two members share a representative
+  cell and nothing spatial separates them. A height word may appear **only** on rung 2, where the
+  members provably share a column and differ in row.
+- **Rule this establishes for any future change here:** assert the *truth* of the locator, not merely
+  that siblings differ. Removing a coordinate and introducing a falsehood is strictly worse in a
+  grounding layer — ugly-but-true beats clean-but-false.
 - **This is a PROVISIONAL answer to `[NEEDS CLARIFICATION: Q8]` — not resolved by this epic.**
 - **Deliberate, documented exception found while implementing (OI-193's fix):** board-tag pivots
   (`forkPivotCell`'s board-tag-only offers, T025) do NOT participate in the cross-board `seen` dedupe
@@ -1834,3 +1856,159 @@ that the model can see is a surface it can echo, and the never-repeat list has t
 - **Status:** IMPLEMENTED, epic 059 (Deep-Reveal Remediation) T023 (Q8), T025 (dedupe exception).
   Resolves OI-193 (dedupe exception); Q8 itself is cross-cutting (T024, T030, T031, T033 all build on
   `roleText`/`disambiguateSiblingRoles`). `test:fast` 2041 / 0.
+
+---
+
+### D60 — A7 remediation wave 1: six render-layer changes, measured; and the fork geometry that is offered but not required is the next binding constraint
+
+- **Decision (six changes, all render-layer; `computeReason` untouched):**
+  1. **`roleText`'s `future` branch names its owner** (`zoneAnnotations.mjs`). It was the only cell-role
+     branch with no ownership word, so `you-key-square` and `opp-key-square` rendered byte-identical
+     roles. Now `a single square on ${possessive(owner)} four-in-a-row line — it matters later…`.
+     28/63 records carried >=2 ownerless-future roles; 37.3% of real blunders (probe D3).
+  2. **Sibling locators are line-aware and per-member** (`locatorsForGroup`). A multi-column window is
+     located as `the line across columns N–M on row R` / `the diagonal line rising from column N on
+     row R to column M on row S`, never `the one in column N`. `lineLocator` returns `null` — falling
+     through to a claim-free ordinal — for any spec containing `|`, any spec that is not exactly 4
+     contiguous cells, and any disjoint fork-cell group. The ladder decides **per member**, so one
+     member that cannot take a geometric label no longer drags its sibling down. Measured corpus-wide:
+     136 locator-prefixed aliases = 76 column-family / 50 line-family / 10 claim-free ordinal, and the
+     10 ordinals are exactly the `|`-joined fork-lines specs.
+  3. **The opening frame's deep-horizon tail is gated on `register === 'immediate'` only**
+     (`openingFrame.mjs` `horizonTail` + a new `deepResourceGuardrail`). Of 30 opening-context records,
+     15 are `forced_sequence` and 14 `parity` — for those "settles a long way out" is TRUE and D46's
+     `GUARDRAIL_DEEP_RESOURCE` must stay attached; only `eval-44` is `immediate`. **Gating
+     `forced_sequence` too would have stripped the eval-3 present-threat guardrail from 15 records.**
+  4. **`immediate_threat`'s glossary description is board-attributed** (`describeTerm` + `firedBoards`).
+     The slug fires from a tag on any near-term board, so "completes on the very next move" floated
+     record-wide while being true only on a follow-up board. 19 of the 25 offering records now carry a
+     qualifier. **`zones.terms` membership is byte-identical corpus-wide (I13): the fix is on the
+     description, never the offer.**
+  5. **A realized-pattern fork family is offered** (`zoneAnnotations.mjs`): a prong pair and a pivot,
+     `truthBoard` derived exactly as the half-resource loop derives it, reusing the existing round-4
+     collision abstention verbatim. Measured: 0 aliases evicted, 0 mutated corpus-wide.
+     **Counts CORRECTED 2026-09-01 (final review), re-measured pre-wave vs. post-wave over all 63
+     records:**
+     - **Pivot: attempted for all 13 realized-fork records; 5 added, 3 already covered, 5 abstaining.**
+       *Added* (new `opp-fork-pivot` on the `decision` board): `eval-43`, `eval-44`, `eval-46`,
+       `pin-L3-no-causation`, `pin-branch-invariance-true-1`. *Already had one* from the pre-existing
+       board-tag / tagged-half loops: `eval-47` (two), `eval-48`, `pin-L1-completes-your-tactic`.
+       *Abstaining* on the collision guard (the pivot IS the other half's completing cell):
+       `eval-42`, `eval-49`, `eval-50`, `pin-L2-enabled-opponent`, `pin-branch-invariance-false`.
+       (The earlier "pivot for all 13 … 13 -> 8" was self-contradictory: 13 records are *attempted*,
+       8 end up carrying a pivot, and only 5 of those 8 are this change's doing.)
+     - **Prong pair: 4 of the 7** realized-fork halves with `cells.length >= 2` gain one —
+       `eval-43`, `eval-44`, `pin-L2-enabled-opponent`, `pin-branch-invariance-false`. The other three
+       (`eval-47`, `eval-48`, `pin-L1-completes-your-tactic`) are suppressed by the containment /
+       `seen` guards, which is correct: an alias of the same owner already covers both prongs there.
+  6. **`deriveRequiredSet` branches on the ROUTED `link.id`, threaded from all three call sites** —
+     never re-derived from `kind` fields. On a **non-fork** L6 record both lines are required (owner
+     decision 2026-09-01, "swap, keep cap 3"); on L7 the player's own counterplay displaces an
+     opponent line, abstaining when the only victim would be a fork pivot (D48 rule 3).
+     Changed exactly 3 of 63 records: `eval-3`, `eval-4`, `eval-30`.
+  Plus: `causalLinks.mjs`'s L3/L5 frames gained a **mechanism** clause (below), and
+  `frequency_probe.mjs`'s denominator now excludes by-design OMITs, with a shared `guardNotABlunder`
+  helper raising a typed error from **both** `buildReasonRenderModel` and `buildRenderDecision`.
+
+- **Why L3's new clause does not violate its own guardrail.** L3 fires only on `lose_to_faster_lose`
+  and MUST NOT say the played move caused or enabled the pattern. The clause describes what the move
+  **conceded** — `filled the square right beneath the one your opponent needs… so that square is now
+  theirs to take on their very next turn`, or on the other branch `leaves the square your opponent
+  needs in column N open on their very next turn`. Decisive fact: in the second branch the square was
+  **already gravity-top before the played move**, in a column the player did not play — "leaves open"
+  describes a state that persisted THROUGH the move. This is the timing register **D30 Fix C**
+  explicitly sanctions ("`enabled_opponent` is a TIMING fact, NOT causation"). The `pOABB !== true`
+  opener says the pattern `is already available in this position` — *available*, not *present*: on
+  `eval-42` the `figure_7`'s own identifying cell is empty and the opponent must still play it.
+
+- **Measured, 14 counterexample cases x 3 runs, gpt-5.4-mini, rubric v2, Opus-graded**
+  (`fv_suff_answers_boards_smoke_a7wave1_2026-09-01T16-55-47Z`):
+  **A7 run-fails 35/42 -> 22/42** (25/42 as first reported; 3 of those 25 were phantom failures from a
+  contaminated smoke grade — see the correction note at the end of this entry); G1 15->10, G3 3->0,
+  G5 8->2, G6 3->0; against, A6 2->4, G4 0->3.
+  The **three deterministic A7a failures are resolved**: `eval-42` 3/3 -> 0/3 (full pass), `eval-28`
+  3/3 -> 0/3 (full pass), `eval-37` 3/3 -> 1/3. `eval-47`'s unsatisfiable required handle is gone.
+  **This refutes, for this change class, the standing prior that frame wording is inert.** The
+  distinction to keep: the inert precedent concerned *asking* the model to use a handle it already had;
+  this change *supplied a missing fact* (the mechanism) that no wording could have conjured.
+
+- **What the measurement says is next, and it is not a guess.** `eval-44` (A7c 3/3, unmoved) and
+  `pin-L2-enabled-opponent` (A7b 2/3 -> 3/3) were graded blind by different agents, and both name the
+  same cause: **wave 1 OFFERS the realized fork's pivot and second prong but never REQUIRES them**,
+  because `deriveRequiredSet`'s fork predicate reads `tacticTag`, which a `realized_pattern` half does
+  not carry. Offering without requiring did not move the model. Requiring is the lever
+  (`feedback_require_dont_suggest_llm_handles`, D45's own measurement: 0/12 under steering, 12/12 once
+  required). **Extending the required-set derivation to realized-fork shapes is the highest-value item
+  for wave 2.**
+
+- **A cost of the owner's L6 decision, measured and surfaced rather than absorbed — and the mechanism
+  first recorded here was WRONG. CORRECTED 2026-09-01 (final review), verified at source.** The
+  original bullet claimed the both-lines swap filled all three slots on `eval-4` so `better-col`
+  stopped being required, and that this caused the A6 regression. That is false in both halves:
+
+  ```
+  PRE-WAVE  eval-4 requiredSet: you-key-square, opp-key-square, you-key-line   (3 slots, at cap)
+  POST-WAVE eval-4 requiredSet: you-key-line,   opp-key-line,   you-key-square (3 slots, at cap)
+  better-col required: FALSE in BOTH
+  ```
+
+  - **The actual delta is one slot:** `opp-key-square` -> `opp-key-line` in slot 2. The set was at cap
+    (3) *before* the wave too, and D54's `better-col` push is gated on `groups.length < 3` — already
+    false pre-wave. **`better-col` was never required on this record, in either arm.**
+  - **The pre-wave baseline graded `eval-4` A6 pass/pass/pass *with* `better-col` unrequired.**
+    Requiring it is therefore demonstrably not necessary for A6 here, and its absence cannot be the
+    regression's cause.
+  - **The A6 regression is real** (pass/pass/pass -> fail/fail/pass, while A7b went 3/3 -> 2/3).
+    **Its cause is UNIDENTIFIED.** `eval-4`'s prompt moved in at least three ways over the wave, and the
+    evidence does not distinguish between them: (a) the slot-2 handle swap itself
+    (`opp-key-square` -> `opp-key-line`); (b) the `you-key-square`/`opp-key-square` role-text rewrite
+    (change 1 above: from "this single square matters later..." to "a single square on your/their
+    four-in-a-row line -- it matters later..."); (c) the required-set slot reorder (slots 1 and 3
+    traded places between the pre-wave and post-wave sets shown above). None of the three has been
+    isolated.
+  - **Cheapest next probe — an ablation on the actual diff, NOT a cap change:** grade `eval-4` with
+    `opp-key-square` in slot 2 (holding slot order and role text otherwise fixed) against the current
+    `opp-key-line` in slot 2. That isolates candidate (a). The role-text rewrite (b) and the slot
+    reorder (c) would each need their own ablation arm — neither is tested by a `better-col` swap,
+    since `better-col` did not move across the wave (see above: unrequired in both arms).
+  - **The deferred owner question, re-framed.** A 4th L6 slot would **newly** require `better-col` on
+    this record — a change *relative to the baseline*, not the restoration of something this wave
+    removed. Decide it on its own merits, not as a regression fix. (The OWNER FLAG in
+    `deriveRequiredSet` names the limit and the 9 fork-carrying L6 records excluded from the swap; that
+    comment does **not** carry this error.)
+
+- **Second deferred defect, now sized.** `frequency_probe.mjs` gains **D5 "dead fork offered as live"**
+  — a fork offered on a near-term board where the opponent moves next and can occupy a prong —
+  measured at **23/193 = 11.9% of real blunders**. `pin-L6-lost-win-and-gave-one` fails on exactly
+  this, with a `c1r5` ownership collision (`opponentPunishment.entryCell` + `tie.sharedCells` under a
+  `you-`-owned handle). **`eval-29` does not corroborate this.** The apparent second corroboration was
+  an artifact of a contaminated smoke grade for `eval-29` that in fact graded `pin-L6`'s board — see the
+  correction note at the end of this entry. Only `pin-L6-lost-win-and-gave-one` supports the D5 class.
+
+- **Probe honesty.** The 36 blunders that "threw and produced no render decision" were **35x
+  `win_to_slower_win` + 1x gate-`NotABlunder`** — by-design OMITs under I4, never defects. They are now
+  excluded from the denominator (229 = 193 rendered + 36 omitted + 0 errors) and raise a typed
+  `NotABlunder` error instead of `classifyCausalLink: no rule matched`. **Unreachable in production**:
+  `computeMechanism` returns `{ notABlunder: true }` before either function is called. (`index.js`'s
+  catch on this path is a bare HTTP 500 — the graceful branch is the earlier `result.notABlunder` one.)
+
+- **Method note worth keeping.** Every plan defect this wave surfaced was **authored** code or a test
+  body inside the plan contradicting the plan's own requirements — a snippet that dropped a branch
+  while the same task demanded byte-identical output; a suggested gloss that could not match its own
+  test regex; a test that could never go green; a proposed gate (`register === 'immediate'`) that would
+  have produced four board-false claims; a suggested opener using `punishment`, a banned A5a term with
+  a measured 88->76 regression behind it (D50 addendum). **Zero harvested values failed.** This is the
+  "harvest fixtures, never invent them" rule with a wave's worth of evidence behind it.
+
+- **Status:** IMPLEMENTED. `test:fast` **2056 -> 2092 pass / 0 fail / 282 suites, 0 eslint errors**.
+  No commits made by the implementing agents (owner commits WIP himself). Related: D30, D43, D45, D46,
+  D48, D49 + addendum, D50 + addendum, D54, D58; I2, I4, I12, I13; OI-182, OI-205.
+
+- **Correction (2026-09-01, post-publication).** The original smoke grade for `eval-29` was
+  contaminated: it graded `pin-L6-lost-win-and-gave-one`'s board under `eval-29`'s label. This inflated
+  the reported A7 headline (35/42 -> 25/42, corrected to 35/42 -> 22/42), manufactured a second
+  wave-1 regression that did not occur (`eval-29` actually improved, 1/3 failing -> 0/3 failing on a
+  clean re-grade, triage `prompt_confusion`, a non-A7 axis), and manufactured a second corroboration of
+  the D5 "dead fork offered as live" class that does not exist — only `pin-L6-lost-win-and-gave-one`
+  supports D5. Lesson: two graders returning near-identical prose about the same cell for different
+  records is a contamination signal, not a coincidence.

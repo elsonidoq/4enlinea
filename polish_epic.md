@@ -2011,7 +2011,7 @@ codebase once Paddle ships.*
    new Paddle-equivalent test files' names to both arrays in the same edit.
 6. Remove `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `STRIPE_MONTHLY_PRICE_ID`, `STRIPE_ANNUAL_PRICE_ID`
    from `.env.example` (`:21,24,27,28`) and from any deploy-config equivalent (Railway env, per memory
-   `project_spec031_staging_production_deploy`); leave `FRONTEND_URL` untouched (Non-obvious facts — it is
+   `project_deploy_execution_traps`, merged from `project_spec031_staging_production_deploy`); leave `FRONTEND_URL` untouched (Non-obvious facts — it is
    shared, non-Stripe).
 7. **Decision-gated DB cleanup** (per the DB-identifier Settled decision): write the migration that
    renames/drops `stripe_customer_id`/`stripe_events` (or, if `/clarify` overrides to keep-Stripe-named, skip

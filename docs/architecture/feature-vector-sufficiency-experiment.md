@@ -73,9 +73,10 @@ run-level axis rates.
 > **`connect-four/server/scripts/reason_corpus/`** (`boards.jsonl` + `evidence.jsonl`); the
 > `fv_suff/` corpora and every historical answers/grade artifact were deleted.
 >
-> **What no harness covers:** `computeMechanism`'s single shared retry (required-set miss and/or
-> unnamed better column). `compute.mjs` calls the model directly, so only attempt-1 behaviour is
-> measurable. `compute.mjs` also passes no `locale` (defaults `'en'`) while production threads it, so
+> **What no harness covers — CORRECTED 2026-09-01:** the retry IS now covered. `compute.mjs --retry`
+> (D60; `decideRetry` in `server/retryDecision.mjs`, the same function `computeMechanism` calls, so
+> the harness runs production's rule and not a copy) reproduces both content triggers. Without
+> `--retry` the harness is still attempt-1 only, and that remains the default. `compute.mjs` also passes no `locale` (defaults `'en'`) while production threads it, so
 > Spanish output has no eval coverage. See OI-183.
 
 ## 1. Background / why this exists
@@ -381,9 +382,12 @@ column as `c4r3` already passes A6. Do not "fix" A6 for raw-coordinate handling;
 
 **Two related facts that bound how any number here should be read:**
 
-- The harness calls the model **once**; production retries on a missing required handle or an unnamed
-  better column. 48 of 125 runs (38%) would have been retried, so every A6/A7c/G7 figure is a **floor**
-  (OI-183; owner decided 2026-08-26 to leave the harness single-attempt).
+- The harness calls the model **once by default**; production retries on a missing required handle or
+  an unnamed better column, and `--retry` (added 2026-09-01, D60) reproduces that. Any run WITHOUT
+  `--retry` is still a **floor**: 48 of 125 runs (38%) on the 2026-08-25 subset, and 48 of the 75
+  A7-failing runs (64%) on the 2026-08-28 corpus, would have been retried. Measured on the first
+  `--retry` corpus run (63 boards x 3, 2026-09-01): the retry fired on **81 of 189 runs (43%)** and
+  recovered **74 of 81 (91%)** — 57 fully fixed, 17 partial, 7 unchanged. OI-183 is resolved.
 - Judgment-axis numbers are comparable only within a rubric version **and** a frozen dispatch wrapper.
   Three runs on an identical rubric charged one defect at 14% → 28% → 79% purely because the dispatch
   message changed. See `reason_corpus/runs/README.md`.

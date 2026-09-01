@@ -20,14 +20,19 @@ Server endpoints share the solver singleton managed at startup. CLI scripts in `
 >   **`defaultCallLLM`** (`mechanismExplainer.mjs`), a separate OpenAI-chat implementation. `computeMechanism`'s
 >   `callLLM` option is a **test-injection seam**. `llmCoachHelpers.callLLM` is used **only** by the offline
 >   `run_eval.mjs` harness — it serves **no** production traffic.
-> - The coach one-liner uses a **separate Anthropic path**: `composeExplanation` → `anthropic.messages.create`
->   (usage fields `input_tokens`/`output_tokens`, not OpenAI's `prompt_tokens`/`completion_tokens`).
+> - `composeExplanation` (`index.js:616`) is **dead code**: its only call site (`index.js:1241`) sits
+>   inside `POST /api/explain-move`, which has **no frontend caller at all** (proven 2026-07-30, spec
+>   051 US4). See `server-conventions.md` §"Which function actually serves production deep-reveal".
+>   If that path were ever revived, its Anthropic usage fields are `input_tokens`/`output_tokens`, not
+>   OpenAI's `prompt_tokens`/`completion_tokens`. The one-liner a learner actually sees comes from
+>   `POST /api/explain-move-llm` → `explanation`, which already threads locale
+>   (`explanation_cache` is keyed `(position_hash, locale)`) — "localize the one-liner" is not work.
 > - `compute.mjs --llm` has its **own** OpenAI `fetch` (reads `EXPLAIN_MODEL`). OpenAI **TTS** (deep-reveal audio)
 >   is billable but char-priced (no token semantics).
 > - **`/api/recommend-move` is NOT a registered server route** — it is CLI-only (`recommend_next_move.mjs`),
 >   despite the "Server endpoint" column above. Do not treat it as a live prod endpoint.
 >
-> There is no single LLM choke-point. See memory `project_prod_llm_call_graph`; spec 047 (US7.5) unifies only the
+> There is no single LLM choke-point. See `server-conventions.md` §"Which function actually serves production deep-reveal"; spec 047 (US7.5) unifies only the
 > three OpenAI-chat paths for token/cost telemetry.
 
 ---
@@ -65,7 +70,7 @@ Walks a game tree `numPlies` deep with optimal play, classifying positions via t
 
 - **P3 checks visible text only.** `checkP3` strips all `[zone:...]` and `[term:...]` markup tags from the text before scanning for forbidden slugs. A `[term:forced_win]` tag does not trigger the `forced_win` jargon check — only the literal string in the rendered output does.
 
-- **Zero-count threats use bare `0`, not `[zone:tg]`.** `formatThreatStats` emits a bare `0` (no zone tag) when a threat count is zero. The LLM prompt has an explicit exception clause instructing the LLM to write bare `0` for zero-count lines rather than invent a zone tag. `checkP5Strong` always fails `[zone:tg]` — there is no valid use of that spec in LLM output.
+- **Zero-count threats render as the word `none`, not a zone tag.** `formatThreatStats` (`explainContext.js:374-380`) emits the literal word `none` — no digit, no zone tag — when a threat count is zero. The LLM prompt has an explicit exception clause instructing the LLM to describe a `none` line in plain words and never wrap it in a tag. `checkP5Strong` always fails `[zone:tg]` — there is no valid use of that spec in LLM output.
 
 ### LLM call
 `callLLM(prompt)` — native `fetch` to OpenAI chat completions API. Model and key read from `OPENAI_API_KEY` / `OPENAI_MODEL` env vars. **Note:** this helper backs the CLI/eval harnesses, not the production `/api/explain-move-llm` endpoint — see the "Production call-graph caveat" above.
@@ -258,17 +263,21 @@ This applies to any coach/explanation prompt that hands a board position to an L
 
 ```
 After the best move (column N):
-- Player major threats: 0
-- Player minor threats: 6
-- Opponent major threats: 1
-- Opponent minor threats: 3
+- Your major threats: none
+- Your minor threats: [zone:player-minor-best]6[/zone:player-minor-best]
+- Opponent major threats: [zone:opponent-major-best]1[/zone:opponent-major-best]
+- Opponent minor threats: [zone:opponent-minor-best]3[/zone:opponent-minor-best]
 
 After the move played (column M):
-- Player major threats: 1 (1 parity-aligned, 0 immediately playable)
-- Player minor threats: 2
-- Opponent major threats: 0
-- Opponent minor threats: 6
+- Your major threats: [zone:player-major-played]1[/zone:player-major-played]
+- Your minor threats: [zone:player-minor-played]2[/zone:player-minor-played]
+- Opponent major threats: none
+- Opponent minor threats: [zone:opponent-minor-played]6[/zone:opponent-minor-played]
 ```
+
+Each present count is wrapped in its own `[zone:alias]N[/zone:alias]` tag (`explainContext.js:374-385`);
+a zero count renders as the bare word `none`, carrying no tag. There is no "parity-aligned /
+immediately playable" suffix — `formatThreatStats` never emits one.
 
 Parity-aligned = threat row matches the player's winning parity.
 Immediately playable = gravity-top cell.
@@ -282,6 +291,37 @@ Immediately playable = gravity-top cell.
 Both paths include: "When the threat comparison shows a meaningful difference, use the specific counts as evidence."
 
 **Term tag instruction** is omitted from `## Output format` when no `## KB term definitions` section exists — no definitions = no tagging.
+
+### Prompt-assembly invariants that are easy to undo
+
+- **Zone-alias invariant: *alias in map ↔ row visible in prompt*.** Threat-comparison rows are hidden
+  entirely when not directionally meaningful, and an alias is added to `zoneAliasMap` **only** when its
+  row is shown. This is what prevents `P1:invalid_spec`: no row ⇒ no alias ⇒ the model cannot write a
+  zone tag for it. If you ever make a row conditional without making its alias conditional (or vice
+  versa), `expandZoneAliases` silently skips the alias, the raw alias name reaches `validateAnnotation`,
+  and the gate fails the span. `cellsToZoneSpec([])` returns `'tg'` (which the gate skips), never
+  `'windows:'` — which would pass P1 syntax and then fail `P1:empty`. Use `tg` as the sentinel for any
+  zone spec derived from a possibly-empty cell list.
+- **Threat definitions used by `## Threat comparison`.** *Major threats* = count of unique empty cells
+  that complete a 4-in-a-row for that player, **excluding** immediately-playable (gravity-top) cells —
+  from `getMajorThreatCells`, with no parity/playable breakdown. *Minor threats* = unique empty cells
+  across 2-disc + 2-empty windows, shadow windows filtered. Both are computed server-side by
+  `summarizeThreats()` / `formatThreatStats()` in `explainContext.js` and arrive pre-computed; the model
+  never counts them.
+- **`LANGUAGE_RULE` bans internal terms only — there is no positive vocabulary list.** The model
+  describes what it sees on the boards, plus KB terms when present. This is why two further sections are
+  *conditional* on `## KB term definitions` existing: the term-tagging instruction in `## Output format`,
+  and the wording of `## Task` (with terms: "name the tactical pattern that was missed"; without:
+  "do not invent tactical concept names — describe only what you can see changing between the two
+  boards"). Removing that conditionality reintroduces pattern-name hallucination on anchorless boards.
+- **There is no server-side post-processing of LLM output.** `injectDefaultActiveZone` was removed and
+  the zone-tag `!` (active-highlight) suffix is injected nowhere — neither in the prompt instructions nor
+  in `index.js`. The model's text is used as written; the render guard only ever *subtracts* (see
+  `server-conventions.md` §Annotation Gate), it never adds an annotation.
+- **Product-layer authority** (for *what the coach says*, as opposed to how the prompt is built):
+  `docs/mvp/coach_explanation_principles.md` and `docs/mvp/deep_reveal_product.md` are authoritative —
+  the latter defines Annotation Integrity Principles P1–P6. `docs/mvp/deep_reveal_improvements.md`
+  carries a staleness banner and is non-binding prior art; trust the code over it.
 
 ### recommend_next_move prompt
 ```

@@ -165,3 +165,39 @@ test('FR-020 corpus-wide: no opening frame both invites and forbids centrality i
   assert.ok(checked >= 20, `expected at least 20 opening-context corpus records, got ${checked}`);
   assert.deepEqual(violations, [], `FR-020 violations:\n${violations.join('\n')}`);
 });
+
+// ── Task 3 (F8): register-gate the deep-horizon tail on `register === 'immediate'` ONLY ──────────
+test('horizonTail: an immediate-register punishment is not framed as settling a long way out (eval-44)', () => {
+  const row = corpusRows.find((r) => r.id === 'eval-44');
+  const fv = pruneVector(toNarratorVector(row.evidence));
+  const frame = composeOpeningFrame(fv);
+  assert.ok(frame, 'eval-44 is an opening record and must produce a frame');
+  assert.ok(!frame.text.includes('a long way out'), frame.text);
+  assert.ok(!frame.guardrail.includes('a long way out'), frame.guardrail);
+});
+
+test('F8 corpus-wide: only the register === "immediate" opening record drops "a long way out"; forced_sequence/parity stay byte-identical', () => {
+  let checked = 0;
+  let immediateCount = 0;
+  const violations = [];
+  for (const row of corpusRows) {
+    if (!row.evidence || row.error || !row.evidence.openingContext) continue;
+    checked += 1;
+    const fv = pruneVector(toNarratorVector(row.evidence));
+    const half = fv.case && fv.case.startsWith('win_') ? fv.lostResource : fv.opponentPunishment;
+    const frame = composeOpeningFrame(fv);
+    const isImmediate = half?.register === 'immediate';
+    if (isImmediate) immediateCount += 1;
+    const textHasTail = frame.text.includes('a long way out');
+    const guardrailHasTail = frame.guardrail.includes('a long way out');
+    if (isImmediate && (textHasTail || guardrailHasTail)) {
+      violations.push(`${row.id}: register=immediate but frame still says "a long way out"`);
+    }
+    if (!isImmediate && (!textHasTail || !guardrailHasTail)) {
+      violations.push(`${row.id}: register=${half?.register} but "a long way out" was stripped`);
+    }
+  }
+  assert.ok(checked >= 20, `expected at least 20 opening-context corpus records, got ${checked}`);
+  assert.equal(immediateCount, 1, `expected exactly 1 register==='immediate' opening record, got ${immediateCount}`);
+  assert.deepEqual(violations, [], `F8 violations:\n${violations.join('\n')}`);
+});

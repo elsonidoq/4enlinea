@@ -65,10 +65,23 @@ function centralityClause(fv, winningFraming) {
 // imported from causalLinks.mjs rather than re-derived, so this stays in lockstep with
 // deriveRequiredSet's own precedence without duplicating it. Only the FALSE DENIAL is dropped, never
 // asserted the opposite way (I0: no overclaim either).
+// F8 (task-3): 1 of 30 opening-context records (`eval-44`) is `register === 'immediate'` — the
+// opponent's punishment lands on the very next ply, so the unconditional "settles a long way out"
+// framing was board-false for it. Gate on `register === 'immediate'` ONLY: `forced_sequence` (15
+// records) and `parity` (14 records) keep the existing wording byte-identical — for those, "settles a
+// long way out" remains board-true (genuinely a multi-ply forced line), and D46's guardrail
+// (GUARDRAIL_DEEP_RESOURCE, below) still needs to apply to stop a deep, currently-empty cell reading
+// as a present threat. Do not widen this gate to `forced_sequence`. NOTE: the task brief's own sample
+// code for this branch collapsed `forced_sequence` into the generic 'a deep line' wording (dropping
+// the pre-existing 'a deep forced line' text) — that would have changed the frame text for all 15
+// forced_sequence records, contradicting the "byte-identical" requirement, so the original
+// parity/forced_sequence/default three-way `battle` ternary is preserved unchanged below.
 function horizonTail(fv) {
   const half = fv.case && fv.case.startsWith('win_') ? fv.lostResource : fv.opponentPunishment;
-  const battle = half?.register === 'parity' ? 'a parity battle'
-    : half?.register === 'forced_sequence' ? 'a deep forced line' : 'a deep line';
+  const reg = half?.register;
+  if (reg === 'immediate') return ' The punishment lands almost at once — within the next move or two.';
+  const battle = reg === 'parity' ? 'a parity battle'
+    : reg === 'forced_sequence' ? 'a deep forced line' : 'a deep line';
   const pinnable = denialCell(half) != null;
   return pinnable
     ? ` This one only settles a long way out, through ${battle} — the lesson is the opening.`
@@ -103,6 +116,16 @@ const GUARDRAIL_ADMISSIBLE_FRAMINGS_CENTRALITY_ONLY = 'Explain the blunder throu
 const GUARDRAIL_ADMISSIBLE_FRAMINGS_PARITY_ONLY = 'Explain the blunder through the opening — parity. ';
 const GUARDRAIL_DEEP_RESOURCE = 'The deep resource resolves a long way out: when you name its square or line, say plainly that it '
   + 'matters LATER, once the forced sequence reaches it — never describe it as a threat that exists now.';
+// F8 (task-3, mirrors horizonTail's gate): the 1 `register === 'immediate'` record (eval-44) needs
+// the opposite instruction — its decisive square is NOW, not later, so telling the model to defer it
+// to "LATER" would itself be board-false. `forced_sequence`/`parity` keep GUARDRAIL_DEEP_RESOURCE
+// byte-identical; do not widen this gate.
+const GUARDRAIL_NEAR_RESOURCE = 'The decisive squares land within the next few moves: state that timing plainly — '
+  + 'never stretch it into a distant, abstract resource.';
+function deepResourceGuardrail(fv) {
+  const half = fv.case && fv.case.startsWith('win_') ? fv.lostResource : fv.opponentPunishment;
+  return half?.register === 'immediate' ? GUARDRAIL_NEAR_RESOURCE : GUARDRAIL_DEEP_RESOURCE;
+}
 
 const GUARDRAIL_NO_CENTRALITY = ' The two landing cells are NOT stated to differ in centrality or '
   + 'difficulty here — do not say one column is "more central," "the stronger column," or "easier '
@@ -137,7 +160,7 @@ export function composeOpeningFrame(fv) {
       // gating can agree with the guardrail's own admissible-framings choice above, instead of
       // re-deriving (or worse, hardcoding) whether centrality was actually offered this record.
       centralityOffered,
-      guardrail: admissibleFramings + GUARDRAIL_DEEP_RESOURCE + (clause === '' ? GUARDRAIL_NO_CENTRALITY : ''),
+      guardrail: admissibleFramings + deepResourceGuardrail(fv) + (clause === '' ? GUARDRAIL_NO_CENTRALITY : ''),
       text: lead + clause + horizonTail(fv),
     };
   };

@@ -9,6 +9,10 @@ import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { createSolverProcess } from '../c4solver-wrapper.js';
 import { computeMechanism, parseAnswer, mentionsBetterColumn } from '../mechanismExplainer.mjs';
+import { computeReason } from '../scripts/reason_engine/reasonEngine.mjs';
+import { toNarratorVector } from '../scripts/reasonNarratorVector.mjs';
+import { renderDecisionForCondition, postprocessAnswer, shapeRetryFields } from '../scripts/compute.mjs';
+import { decideRetry } from '../retryDecision.mjs';
 
 const MOVESTRING = '3325';
 const PLAYED_COL = 5;
@@ -374,4 +378,89 @@ test('FR-013/OI-177: a required spec whose zone span the guard strips is treated
   assert.equal(calls, 2, 'the guard-aware post-check must trigger exactly one retry');
   assert.ok(res.missingHandles.some((g) => g.spec === 'future:c6r4' && g.handle === 'you-key-square'),
     'missingHandles must name the required group whose span the guard stripped');
+});
+
+// ── decideRetry extraction (task-1: retryDecision.mjs, D51 seam) ─────────────────────────────
+// decideRetry is the extracted content-trigger decision computeMechanism now delegates to. Build
+// the renderDecision and attempt1 the REAL way — via computeReason/toNarratorVector/
+// renderDecisionForCondition/postprocessAnswer over a real solver — never a hand-authored
+// renderDecision/requiredSet object (I12: that would be the hand-rolled proxy the invariant forbids).
+test('decideRetry reproduces computeMechanism\'s own trigger decision (D51 seam, extracted)', async () => {
+  const nv = toNarratorVector(await computeReason(MOVESTRING, PLAYED_COL, { solver }));
+  const renderDecision = renderDecisionForCondition(nv, 'D');
+  const { answer } = parseAnswer(missingAnswer);
+  const { mechanism, usedSpecs } = postprocessAnswer(answer, renderDecision);
+
+  // A required-set MISS must decide shouldRetry === true and name the missing group.
+  const d = decideRetry({ attempt1: { mechanism, usedSpecs, answer }, renderDecision, prompt: 'P',
+                          movestring: MOVESTRING, bestCol: nv?.bestCol ?? null, locale: 'en' });
+  assert.equal(d.shouldRetry, true);
+  assert.ok(d.missing.length > 0);
+  assert.ok(d.retryPrompt.startsWith('P'));            // amended prompt extends the original
+  assert.match(d.retryPrompt, /Retry: required squares were missing/);
+});
+
+// ── compute.mjs `shapeRetryFields` — pure row-shaping, no network (task-2, harness --retry) ────
+// This is the same seam compute.mjs's runLlm uses to turn a real decideRetry() outcome into the
+// three additive answers-row fields (`retry_fired`/`retry_reason`/`attempt1`). Every fixture below
+// is a REAL decideRetry() outcome, built the same way the extraction test above does — via
+// computeReason/toNarratorVector/renderDecisionForCondition/postprocessAnswer over a real solver —
+// never a hand-authored { shouldRetry, missing, ... } stub (I12: that would be the hand-rolled
+// proxy invariant forbids). No LLM/network call anywhere in this block.
+test('shapeRetryFields: retry off (no outcome) — row unchanged from today\'s shape', () => {
+  const attempt1Row = {
+    raw: 'r', answer: { mechanism: 'm' }, parse_error: null, call_error: null,
+    guardDiagnostics: { x: 1 }, annotationRepairs: [], servedExplanation: 's',
+  };
+  const shaped = shapeRetryFields({ shouldRetry: false }, attempt1Row);
+  assert.deepEqual(shaped, { retry_fired: false, retry_reason: null, attempt1: null });
+});
+
+test('shapeRetryFields: also treats a missing/null outcome as no retry', () => {
+  const shaped = shapeRetryFields(null, { raw: 'r' });
+  assert.deepEqual(shaped, { retry_fired: false, retry_reason: null, attempt1: null });
+});
+
+test('shapeRetryFields: a real required-set-miss decideRetry outcome shapes retry_fired/retry_reason/attempt1', async () => {
+  const nv = toNarratorVector(await computeReason(MOVESTRING, PLAYED_COL, { solver }));
+  const renderDecision = renderDecisionForCondition(nv, 'D');
+  const { answer: rawAnswer } = parseAnswer(missingAnswer);
+  const { answer, usedSpecs } = postprocessAnswer(rawAnswer, renderDecision);
+  const d = decideRetry({
+    attempt1: { mechanism: answer?.mechanism ?? null, usedSpecs, answer }, renderDecision, prompt: 'P',
+    movestring: MOVESTRING, bestCol: nv?.bestCol ?? null, locale: 'en',
+  });
+  assert.equal(d.shouldRetry, true); // sanity: this fixture's real trigger, per the extraction test above
+
+  const attempt1Row = {
+    raw: missingAnswer, answer, parse_error: null, call_error: null,
+    guardDiagnostics: { some: 'diagnostics' }, annotationRepairs: [], servedExplanation: 'served text',
+  };
+  const shaped = shapeRetryFields(d, attempt1Row);
+  assert.equal(shaped.retry_fired, true);
+  assert.deepEqual(shaped.retry_reason.missingHandles, ['you-immediate', 'you-key-square', 'you-immediate-line']);
+  assert.equal(typeof shaped.retry_reason.missingBetterCol, 'boolean');
+  // attempt1 preserves the FIRST attempt's row data verbatim — never recomputed.
+  assert.equal(shaped.attempt1, attempt1Row);
+});
+
+test('shapeRetryFields: a column-only miss reports missingHandles: [] and missingBetterCol: true', async () => {
+  const nv = toNarratorVector(await computeReason(MOVESTRING, PLAYED_COL, { solver }));
+  const renderDecision = renderDecisionForCondition(nv, 'D');
+  const { answer: rawAnswer } = parseAnswer(noColumnAnswer); // satisfies the required set, never names the column
+  // Mirrors compute.mjs's own runLlm call site exactly: postprocessAnswer's return has no
+  // top-level `mechanism` field — it lives on the returned `answer` (postprocessAnswer's
+  // `{ answer, repairs, usedSpecs }`), matching `answer?.mechanism ?? null` in compute.mjs.
+  const { answer, usedSpecs } = postprocessAnswer(rawAnswer, renderDecision);
+  const d = decideRetry({
+    attempt1: { mechanism: answer?.mechanism ?? null, usedSpecs, answer }, renderDecision, prompt: 'P',
+    movestring: MOVESTRING, bestCol: nv?.bestCol ?? null, locale: 'en',
+  });
+  assert.equal(d.shouldRetry, true);
+  assert.equal(d.missing.length, 0, 'sanity: the required set is fully satisfied here');
+
+  const shaped = shapeRetryFields(d, { raw: noColumnAnswer });
+  assert.equal(shaped.retry_fired, true);
+  assert.deepEqual(shaped.retry_reason.missingHandles, []);
+  assert.equal(shaped.retry_reason.missingBetterCol, true);
 });

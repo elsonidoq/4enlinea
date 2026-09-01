@@ -90,7 +90,7 @@ validateMove(position, col) → { valid: boolean, reason?: string }
 
 Current slugs: `immediate_threat`, `forced_block`, `double_threat`, `forced_win`, `forbidden_columns`, `odd_even_threat`, `z_threat`, `claimeven`, `undercut`, `overcut`, `figure_7`, `j_shape` (`claimodd` was fully removed 2026-06-17 — see "Retired category slugs" below).
 
-`odd_even_threat` was added in Epic 6 as a free 2-star category. It is Red-only, `single_move` interaction mode, and has no `highlight_metadata`. Detection uses `immediateThreats` not `getMajorThreatCells`.
+`odd_even_threat` was added in Epic 6 as a free 2-star category. The puzzle *category* is Red-only (the detector itself is perspective-generic — see the Blunder Tag Registry note below), `single_move` interaction mode, and has no `highlight_metadata`. Detection uses `immediateThreats` not `getMajorThreatCells`.
 **MUST NOT**: Hard-code category slug lists anywhere else in server code — always import from `categories.js`.
 
 `PAID_CATEGORIES` is duplicated (not cross-imported) in two files that must be kept in sync by hand: `server/categories.js` (gates `GET /api/puzzles/draw` — 403 for a paid category when tier ≠ `'paid'`) and `src/lib/categories.js` (gates the SetPicker lock icon and the Post-Set Summary Pro-lesson check). Updating only one leaves the other gate half-fixed (server 403 with an unlocked UI icon, or vice versa).
@@ -165,7 +165,11 @@ When adding a new category, add its guard to `isClean`.
 
 The set contains exactly 16 tags (as of 2026-06-25): `immediate_threat`, `forced_block`, `forced_win`, `double_threat`, `undercut`, `overcut`, `figure_7`, `j_shape`, `z_threat`, `major_threat_parity`, `major_threat_nonparity`, `minor_threat`, `claimeven`, `drawing_move`, `suboptimal_move`, `forbidden_columns`.
 
-`odd_even_threat` was **removed** as a blunder tag 2026-06-25 (it remains a puzzle category and a `classifyPattern` tag — see [[project_detect_odd_even_threat_yellow]]). The three parity-aware threat tags replaced its blunder role; they are generic (almost any mid-game position carries a latent major threat), so they rank **last** among tactical tags in both `tagBlunder` cascades, just above the score-based fallbacks.
+`odd_even_threat` was **removed** as a blunder tag 2026-06-25 (it remains a puzzle category and a `classifyPattern` tag; `detectOddEvenThreat` in `classifier.js` supports both players, and D40 excludes the tag from live-coach recognition). The three parity-aware threat tags replaced its blunder role; they are generic (almost any mid-game position carries a latent major threat), so they rank **last** among tactical tags in both `tagBlunder` cascades, just above the score-based fallbacks.
+
+`odd_even_threat` therefore lives a split life, and grepping `classifier.js` will mislead you — `detectOddEvenThreat` is still registered in `classifyPattern`'s detector list, so the tag still appears in pattern Maps, but it is de-listed from the coach and blunder vocabularies. **Still wired (puzzle path — KEEP):** `categories.js` (`VALID_CATEGORIES`/`ORDER`/`NAMES`), `challengeSets.js`, `src/lib/categories.js`, `candidate-generator.js` (`checkOddEvenThreatPredicate`), `predicates.js` (`evalOddEvenThreat`), `classifyAiMove.js` (`AI_PATTERN_PRIORITY`), `shapeDescriptor.js` (`descriptorForPositional`), and `detectOddEvenThreat` + its `classifyPattern` registration. **Removed (coach + blunder — do NOT restore):** `PATTERN_KB` entry (`llmCoachHelpers.js`), `POSITIVE_CASCADE` (`explainContext.js`), `VALID_BLUNDER_TAGS` (`blunderTags.js`), both `tagBlunder` cascades (`MISSED_OWN_PRIORITY`, `ENABLED_OPP_PRIORITY` in `classifier.js`), and its REASON/POSITIVE templates (`blunderReasons.js`); its KB article `docs/knowledge-base/derived-odd-even-threat.md` was deleted, along with its `kbTermLesson.js` entry and the row in `llm-coach-endpoints.md`'s Pattern→KB table.
+
+`detectOddEvenThreat`'s `categoryEvidence` writes perspective-neutral field names — `goodRowCol`/`goodRow` (the majority-threat column/row) and `badMinorCol`/`badMinorRow` (the minor-threat column/row), written at `classifier.js:1615-1618`. These fields are not consumed anywhere downstream (verified: `classifier.js:1615,1617` are the only hits for those names in `connect-four/server` and `connect-four/src`) — safe to rename if needed.
 
 `VALID_BLUNDER_TAGS` is distinct from `VALID_CATEGORIES` in `server/categories.js` (which lists puzzle category slugs). Blunder tags are applied to sparring-game blunders via `tagBlunder()` in `classifier.js`. Any tag not in this set is substituted with `'suboptimal_move'` before INSERT into the `blunders` table.
 
@@ -559,7 +563,7 @@ classifyPattern(ms, perspective, solver) → Promise<Map<string, { cells: string
 
 Returns a Map of tactical pattern tags (e.g. `'immediate_threat'`, `'forced_win'`, `'z_threat'`) present for the given `perspective` on the position `ms`. Each value has a `cells` array of wire-format cell coordinates (`"c{col+1}r{row+1}"`, 1-indexed). Tags are drawn from all 15 detectors, run in parallel via `Promise.all`. Never contains `'unknown'`.
 
-The 15 detectors include three **parity-aware threat** detectors added 2026-06-25 — `major_threat_parity`, `major_threat_nonparity`, `minor_threat` (geometry-only, built on `categorizeThreats`; see **Threat categorization** below). `odd_even_threat` is still emitted (puzzle path) but is de-listed from the coach prompt and the blunder vocabulary — see [[project_detect_odd_even_threat_yellow]].
+The 15 detectors include three **parity-aware threat** detectors added 2026-06-25 — `major_threat_parity`, `major_threat_nonparity`, `minor_threat` (geometry-only, built on `categorizeThreats`; see **Threat categorization** below). `odd_even_threat` is still emitted (puzzle path) but is de-listed from the coach prompt and the blunder vocabulary (D40).
 
 - `ms` — 0-indexed movestring.
 - `perspective` — 1 (Red) or 2 (Yellow). The player whose patterns to detect.
@@ -769,7 +773,7 @@ The gravity-top restriction (only `row === colHeights[col]`) applies exclusively
 - `getScoreTier(col, score, immediateWinSet, immediateLossSet)` — classifies a column into IMMEDIATE WIN / WINS / DRAWS / LOSES / IMMEDIATE LOSS
 - `TIER_ORDER`, `IMMEDIATE_WIN_OUTCOMES`, `PATTERN_KB` — shared constants
 
-`PATTERN_KB` maps pattern keys to `{ id: '<kb-slug>' }` entries. No `inline` entries exist (all migrated to files 2026-06-20). A KB term is injected into an explain-move prompt **only when its pattern fires** (added to `relevantPatternKeys` in `explainContext.js`); the gate is `if (!relevantPatternKeys.has(patternKey)) continue;`. There is **no** `always_include` glossary path — it was removed 2026-06-25 because injecting a term with no on-board instance (even `parity`/`gravity_top`) caused the LLM to fabricate/misapply it (see memory `project_explain_system`). Special shape:
+`PATTERN_KB` maps pattern keys to `{ id: '<kb-slug>' }` entries. No `inline` entries exist (all migrated to files 2026-06-20). A KB term is injected into an explain-move prompt **only when its pattern fires** (added to `relevantPatternKeys` in `explainContext.js`); the gate is `if (!relevantPatternKeys.has(patternKey)) continue;`. There is **no** `always_include` glossary path — it was removed 2026-06-25 because injecting a term with no on-board instance (even `parity`/`gravity_top`) caused the LLM to fabricate/misapply it (the 2026-06-25 deep-reveal judge showed even `parity` and `gravity_top` failing this way). Do **not** re-add `always_include: true` to any entry. Special shape:
 - Alias entries share a `kbId` with another pattern key (e.g. `fork` → same file as `double_threat`); `explainContext.js` deduplicates by `kbId`. Every entry must have a corresponding `docs/knowledge-base/<id>.md` with `short_summary` and an entry in `src/lib/kbTermLesson.js` for the popup display name.
 
 **Why `short_summary` is required, not optional:** `loadKBShortSummary` (`llmCoachHelpers.js:144`) is what the server calls to build `termsMap`. A missing `short_summary` means the term is **silently dropped** from the map — no error — and the popup never opens for that term. On the client, `KbTermPopup` then falls back to rendering the raw `kbId` (an ugly slug) instead of a summary. Checklist when adding a new KB term:
@@ -845,6 +849,21 @@ silently disables `response_format` for a different model sharing the module.
 | Production deep-reveal | `mechanismExplainer.mjs`'s `defaultCallLLM` (thin wrapper) | `{ endpoint: 'explain-move-llm', purpose: 'deep-reveal' }` |
 | Offline eval harness | `llmCoachHelpers.js`'s `callLLM` | `{ endpoint: 'run-eval', purpose: 'offline-eval' }` |
 | Offline compute/eval script | `scripts/compute.mjs`'s `runLlm` (its former local `callExplainLLM` copy is deleted) | `{ endpoint: 'compute-eval', purpose: 'offline-eval' }` |
+
+**Which function actually serves production deep-reveal.** The table above is the authority; the
+pipeline diagrams in `llm-coach-endpoints.md` show `callLLM` and mislead readers into treating it as
+the choke-point. It is not, and that wrong premise cost spec 047 a full critique round.
+
+- `POST /api/explain-move-llm` → `computeMechanism` (`mechanismExplainer.mjs`) → its internal
+  **`defaultCallLLM`**. This is the OpenAI chat path that actually serves users. `computeMechanism`'s
+  `callLLM` option is a **test-injection seam only**.
+- **`callLLM` in `server/llmCoachHelpers.js` captures no production traffic** — it is used only by the
+  offline `run_eval.mjs` harness. Instrumenting it alone records nothing real.
+- **`composeExplanation` (`index.js:616`) is dead code.** Its only call site (`index.js:1241`) sits
+  inside `POST /api/explain-move` (`index.js:1190`), and that route has **no frontend caller at all** —
+  proven 2026-07-30 (spec 051 US4) by driving the real app (Sparring → Resign → Past Games → a
+  "Suboptimal" card → "What should I have played?") with the network tab captured in both languages:
+  zero requests to `/api/explain-move`, and no `oneLiner`/`one_liner` key in any captured payload.
 
 **`userId` threading is not purely mechanical.** Unlike the static `endpoint`/`purpose` literals above,
 `userId` is request-scoped. For the production deep-reveal path this requires two edit points, both
@@ -1221,12 +1240,15 @@ behavior.
 **What's wired in (T028)**: `guardExplainMoveLlmPayload` (`server/reasonRenderGuard.mjs`) — the
 single response-boundary seam every player-facing explanation crosses on its way out of
 `server/index.js` (documented in `server/reasonRenderGuard.mjs`'s own file header; also see OI-126
-below for the `stripInternalTokens` half of the same module) — now accepts an optional `board` and,
-when supplied, runs `validateAnnotation(explanation, board, null)` before serving the text. All
-three `/api/explain-move-llm` call sites (`server/index.js`: the cache-hit early return, the
-not-a-blunder early return, the fresh-generation response) pass the **pre-move** `Board` already
-constructed at the top of the handler (`new Board(movestring)`) — the same convention the offline
-callers use (the played column is passed separately, never baked into the board).
+below for the `stripInternalTokens` half of the same module) — now accepts an optional `board` and
+`allowedSet`, and, when `board` is supplied, runs `validateAnnotation(explanation, board, allowedSet)`
+before serving the text. All three `/api/explain-move-llm` call sites (`server/index.js`: the
+cache-hit early return, the not-a-blunder early return, the fresh-generation response) pass the
+**pre-move** `Board` already constructed at the top of the handler (`new Board(movestring)`) — the
+same convention the offline callers use (the played column is passed separately, never baked into
+the board). Only the fresh-generation call site threads a real `allowedSet` (spec 058, US3,
+OI-143); the cache-hit and not-a-blunder early returns keep `allowedSet: null` on purpose — there
+is no `renderDecision`/`zones.aliases` in scope to build one from on those paths.
 
 - **Enforcement is strip, not retry.** The owner explicitly rejected retry (a second LLM call is
   real cost) and serve-and-log (too weak) — see D3 in `specs/057-mvp-launch-gate/spec.md`. On any
@@ -1244,13 +1266,16 @@ callers use (the played column is passed separately, never baked into the board)
   `stripInternalTokens`'s widened coordinate regex (T026, below) plus the prompt-side instruction
   at `llmCoachHelpers.js:804`; neither is a hard guarantee, so a P3-flagged explanation can still
   reach the player today. This is a deliberate, recorded gap, not an oversight.
-- **`allowedSet` is never threaded on the live path, so P5Strong never runs there.**
-  `guardExplainMoveLlmPayload` always calls `validateAnnotation(explanation, board, null)` — the
-  third argument is hardcoded `null`. `checkP5Strong` only runs when `allowedSet != null`
-  (`annotationGate.js:500`), and no `server/index.js` call site builds one
-  (`/usr/bin/grep -n "allowedSet" server/index.js` → zero matches). So of the checks in the table
-  below, only **P1, P2, P3, P5, P6** apply to a served explanation; P5strong remains offline-eval-only
-  (`run_eval.mjs`, which does thread a real `allowedSet`).
+- **`allowedSet` IS threaded on the live path since spec 058 (OI-143 closed), so P5Strong runs
+  there.** The fresh-generation `POST /api/explain-move-llm` call site builds a real `allowedSet`
+  from `buildExplainContext` and passes it straight through:
+  `res.json(guardExplainMoveLlmPayload({ explanation, prompt, terms: termsMap, locale, board,
+  allowedSet }))` (`index.js:1464-1470`, comment: "allowedSet (spec 058, US3, OI-143): this is the
+  ONLY guardExplainMoveLlmPayload call site"). `checkP5Strong` only runs when `allowedSet != null`
+  (`annotationGate.js:500`), so of the checks in the table below, **P1, P2, P3, P5, P6, and P5strong**
+  all apply to a served, freshly-generated explanation. (The cache-hit and not-a-blunder early
+  returns still pass `allowedSet: null` — there is no fresh `buildExplainContext` run on those paths
+  to build one from — so P5strong is skipped only there, not on the live path in general.)
 - **Deleted debug logs.** `validateAnnotation` (`server/annotationGate.js`) used to
   unconditionally `console.log` its parsed zones and `allowedSet` on every call — which would have
   printed on every served explanation once T028 wired the gate into the request path. Both lines
@@ -1262,10 +1287,16 @@ callers use (the played column is passed separately, never baked into the board)
   without it — a delta of **~0.014ms per call**, effectively free against the Explanation Engine's
   <2s budget (Constitution V).
 - **`guardExplainMovePayload` (`/api/explain-move`, the legacy `composeExplanation` path) is
-  deliberately NOT wired to the gate.** Per `docs/knowledge-base`/memory
-  `project_prod_llm_call_graph`, this endpoint has no frontend caller, and `composeExplanation`'s
-  output never carries `[zone:...]` tags in the first place — there is nothing for the gate to
-  validate there.
+  deliberately NOT wired to the gate.** That endpoint is dead (see "Which function actually serves
+  production deep-reveal" above), and `composeExplanation`'s output never carries `[zone:...]` tags
+  in the first place — there is nothing for the gate to validate there.
+- **Two rewriters upstream of the guard are still uninstrumented.** `guardExplainMoveLlmPayload`
+  accepts `diagnostics: true` and returns `{ failures, strippedSpecs }` (D51), so what
+  `stripFailingZoneSpans` removed is now recoverable. `promoteRawCoordinates` and
+  `humanizeGroundedCoordinates` are not: the former is a bare `seg.replace(CXRY_RE, …)` with no
+  collection, and the latter's only `push` is the zone-tag depth stack, not a record of what it
+  rewrote. Measuring what *those two* did to a served answer requires new instrumentation inside
+  production text-rewriting code — it is not threadable through the existing return.
 
 ### Signature
 
@@ -1286,7 +1317,7 @@ The gate runs up to seven checks:
 | **P3** — forbidden terminology | Explanation must not contain disc notation (`\bR\b`, `\bY\b`), player names (Red/Yellow/Black), or engine jargon (forced win, the solver, forced_win, etc.). | Yes (failures are logged and served, not strippable — no span) |
 | **P5** — blocked 4-windows | Each zone must have at least one live 4-window (not blocked by both players) on the actual board. | Yes |
 | **P6** — raw coordinates | Zone inner text must not contain raw coordinate strings like `c4r3` or `col5`. **Since D44 the pipeline is rewrite-then-check:** `humanizeGroundedCoordinates` (`reasonRenderGuard.mjs`) runs *before* `validateAnnotation` and rewrites, in place, any coordinate the enclosing zone's own spec covers into localized wording (`serverT(locale, 'cell')` — "column 1, row 3"), so a correct engine-vouched highlight is no longer destroyed by its own prose. A **mismatched** coordinate (one the zone does not cover) is deliberately left raw and still fails here, span and all. | Yes |
-| **P5strong** — zone-vs-allowedSet (Epic B) | When `allowedSet` is provided: `tg` always fails; `colN` must match an allowed column; cell-level specs must appear in a CONCRETE-ELIGIBLE entry's `cells` list. ABSTRACT-ONLY entries satisfy `colN` zones but NOT cell-level zones. | **No** — the live seam never builds/threads an `allowedSet` (see above) |
+| **P5strong** — zone-vs-allowedSet (Epic B) | When `allowedSet` is provided: `tg` always fails; `colN` must match an allowed column; cell-level specs must appear in a CONCRETE-ELIGIBLE entry's `cells` list. ABSTRACT-ONLY entries satisfy `colN` zones but NOT cell-level zones. | **Yes** on fresh-generation (spec 058, OI-143 closed) — `null` only on the cache-hit / not-a-blunder early returns (see above) |
 
 **Backward compatibility**: When the `allowedSet` parameter is `null` or omitted (old callers, and every live call today), P5strong is silently skipped. The Epic A API is fully preserved.
 

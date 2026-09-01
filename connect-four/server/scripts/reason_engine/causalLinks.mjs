@@ -106,6 +106,54 @@ function cellPhrase(cell, others = []) {
   // Falls back to the plain column phrase rather than asserting an unsupported height claim.
   return `column ${p.col}`;
 }
+// A7a (eval-37 / eval-42, graded 3/3 deterministic). L3's tail said only "the move you played only
+// speeds up the finish" — an OUTCOME, never a mechanism, so every run faithfully restated the
+// outcome and nothing else. This names, when and only when the board proves it, WHAT the played move
+// conceded: a geometric/timing fact about the resulting position.
+//
+// HARD CONSTRAINT (L3's own guardrail, verbatim): "MUST NOT say the played move caused or enabled the
+// pattern, and MUST NOT tell the player they are lost; both moves lose…". Both clauses below are
+// therefore purely descriptive of the position AFTER the played move — neither says the move created,
+// enabled, or opened the door to the opponent's pattern (per D30 Fix C, on `lose_to_faster_lose`
+// `enabled_opponent` is a TIMING fact, not causation; the pattern pre-exists).
+//
+// Board-checked, never inferred from `register`/`kind`: the completing cell must be gravity-top and
+// empty on the engine's own `movestring` + the played column. When it is not, we abstain to the
+// existing (weaker but true) sentence — I2.
+//
+// Returns the WHOLE tail (leading punctuation included) rather than a bare predicate, because the
+// two branches need different SENTENCE STRUCTURE, not just different words. Final-review fix
+// (2026-09-01): the not-the-played-column branch used to land inside L3's contrastive semicolon
+// frame — "Column X makes your opponent work hardest for it; the move you played leaves the square …
+// open". The clause is literally true and guardrail-clean, but the semicolon parallel implies the
+// BETTER move would have differed in this respect, and on `eval-42` (`bestCol = 0`, needed column
+// index 2) playing column 1 leaves that same square open too — a false implicature that invites
+// "column 1 would have stopped them". Gating the branch on `bestCol === col` (the only case where
+// the contrast is real) was the alternative, and it was rejected: `eval-42` is the record this whole
+// clause exists for (A7a 3/3 -> 0/3, full pass, D60), and gating would drop it back to the
+// mechanism-free "only speeds up the finish". So the branch stays and becomes NON-CONTRASTIVE
+// instead: a standalone sentence stating a fact about the position, making no comparison to the
+// better move. The same-column branch keeps the semicolon frame — there the played move IS the disc
+// directly under the needed square, so the contrast with the better move is genuine.
+function playedConcession(fv, cellCol) {
+  const m = CELL_RC_RE.exec(fv.opponentPunishment?.completingCell ?? '');
+  if (m && fv.playedCol != null) {
+    const col = Number(m[1]) - 1, row = Number(m[2]) - 1;
+    try {
+      const { colHeights } = parseBoardState(`${fv.movestring ?? ''}${fv.playedCol}`);
+      if (colHeights[col] === row) {
+        // colHeights[col] === row means that square is empty AND gravity-top right after the played
+        // move, i.e. the opponent can take it on their very next turn. If it is also the played
+        // column, the played move is literally the disc directly under it.
+        return col === fv.playedCol
+          ? `; the move you played filled the square right beneath the one your opponent needs in ${cellCol}, so that square is now theirs to take on their very next turn.`
+          : `. The square your opponent needs in ${cellCol} is already open to them on their very next turn.`;
+      }
+    } catch { /* board unreadable — fall through to the honest default */ }
+  }
+  return '; the move you played only speeds up the finish.';
+}
+
 function windowColumns(w) {
   const cols = (Array.isArray(w) ? w : [])
     .map((c) => { const m = CELL_RE.exec(c ?? ''); return m ? Number(m[1]) : null; })
@@ -218,7 +266,27 @@ export const CAUSAL_LINKS = [
     guardrail: 'MUST NOT say the played move caused or enabled the pattern, and MUST NOT tell the player they are lost; both moves lose, but the better one makes the opponent work hardest — frame it as the toughest defense. Do not add a closing caveat like "but the position is still lost," "both lines end poorly," "the result still goes against you," or "you still lose either way" — the practical-resistance framing must stand on its own, with no defeatist final clause.',
     // FR-009 / T016: grain-aware — see plainTagForCellGrain above.
     // FR-014a / T022: cell named as "column N" prose, not a raw cNrM token (OI-194).
-    template: (fv) => `Your opponent's ${plainTagForCellGrain(fv.opponentPunishment?.tag, fv.movestring, fv.player, fv.opponentPunishment?.completingCell, 'opp')} in ${cellColumn(fv.opponentPunishment?.completingCell)} is coming no matter what you play here — your move didn't create it. Column ${col1(fv.bestCol)} makes your opponent work hardest for it; the move you played only speeds up the finish.` },
+    // A7a: the inevitability claim is now GATED on `ctx.patternOnAfterBestBoard`, and the tail names
+    // the concession when the board proves one (see `playedConcession`). "is coming no matter what
+    // you play here" is a claim about the AFTER-BEST board; on eval-42 (the only L3 corpus record
+    // with patternOnAfterBestBoard === false) it is board-FALSE, so that branch states only that the
+    // pattern already stands in this position — which asserts no causation either way. D30 is
+    // untouched: `patternOnAfterBestBoard` still does NOT drive L2/L3 routing (`when` keys on the
+    // sign `case`); it only gates a sentence whose truth it genuinely decides.
+    //
+    // The false branch says "available", never "already there"/"waiting": a `realized_pattern` half
+    // is a pattern the opponent REALIZES with their reply, so on eval-42 the figure_7's own cell
+    // c3r2 is still EMPTY on the decision board (`3113302513454460055`: the opponent holds only
+    // c4r1 and c2r3 of that window). Asserting the pattern is present would be an I2 fabrication and
+    // exactly the existence claim condition-D graders check.
+    template: (fv, ctx) => {
+      const cellCol = cellColumn(fv.opponentPunishment?.completingCell);
+      const pattern = `Your opponent's ${plainTagForCellGrain(fv.opponentPunishment?.tag, fv.movestring, fv.player, fv.opponentPunishment?.completingCell, 'opp')} in ${cellCol}`;
+      const opener = ctx?.patternOnAfterBestBoard === true
+        ? `${pattern} is coming no matter what you play here — your move didn't create it.`
+        : `${pattern} is already available in this position.`;
+      return `${opener} Column ${col1(fv.bestCol)} makes your opponent work hardest for it${playedConcession(fv, cellCol)}`;
+    } },
   { id: 'L2', family: 'realized_denied', confidence: 'high',
     when: (fv) => fv.route === 'realized_denied' && fv.direction === 'enabled_opponent'
                   && fv.case !== 'lose_to_faster_lose',
@@ -307,7 +375,20 @@ export const CAUSAL_LINKS = [
       const completingCell = fv.lostResource?.completingCell;
       const denial = denialCell(fv.opponentPunishment);
       const others = [completingCell, denial];
-      return `You had a forced win — it resolves ${horizonPhrase(fv.lostResource?.register)}${pliesTail(fv)} via a ${forkOrParity(fv.lostResource)} completing at ${cellPhrase(completingCell, others)}. Column ${col1(fv.bestCol)} was the move that kept it; the played move let the opponent deny it at ${cellPhrase(denial, others)}.`;
+      const base = `You had a forced win — it resolves ${horizonPhrase(fv.lostResource?.register)}${pliesTail(fv)} via a ${forkOrParity(fv.lostResource)} completing at ${cellPhrase(completingCell, others)}. Column ${col1(fv.bestCol)} was the move that kept it; the played move let the opponent deny it at ${cellPhrase(denial, others)}.`;
+      // A7a (eval-28, graded 3/3 deterministic): the sentence above states the OUTCOME ("the opponent
+      // denied it") and stops, so every run restated the outcome. This names WHY that square matters.
+      // Board-grounded, not asserted: appended only when the denial square is genuinely one of the
+      // four squares of the player's own winning line (`lostResource.window`) — true on all 9 L5
+      // corpus records as of 2026-09-01, but re-checked per record so a future record with a denial
+      // outside the window abstains to the (weaker but true) sentence instead of fabricating (I2).
+      // `verdict === 'occupation'` is required for the same reason: "taking it is what kills the
+      // win" presumes the opponent actually TAKES that square. A `no_occupation` half (the shape
+      // eval-37's own lostResource has) denies the resource some other way, so it abstains too.
+      const win = Array.isArray(fv.lostResource?.window) ? fv.lostResource.window : null;
+      if (!win || !denial || !win.includes(denial)) return base;
+      if (fv.opponentPunishment?.verdict !== 'occupation') return base;
+      return `${base} Your winning line ran through that square: the played move gave your opponent the time to take it first, and taking it is what kills the win.`;
     } },
   { id: 'L6', family: 'sign', confidence: 'high',
     when: (fv) => fv.route !== 'realized_denied' && fv.lostResource?.kind === 'winning_line'

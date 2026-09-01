@@ -424,6 +424,40 @@ Do not route authored content through `AnnotatedExplanation`. Memoize the array 
 `boardPropsAreEqual` falls back to `Object.is` for every non-`board` prop, so a fresh-but-equal array
 defeats the memo. Authoring contract and its gates: `lesson-editor.md` §"Window highlights".
 
+#### `AnnotatedExplanation`'s regex fallback — a rendered highlight is NOT a grounded one
+
+`AnnotatedExplanation.jsx` falls back to `regexFallbackParse` (`src/lib/annotatedText.js`) when
+`parseAnnotatedText` yields **zero** zones *and* zero terms:
+
+```js
+const primary = parseAnnotatedText(text);
+if (primary.zones.length === 0 && primary.terms.length === 0 && text) return regexFallbackParse(text);
+```
+
+`regexFallbackParse` scrapes `"column N"` / `"col N"` out of **prose** and synthesises `colN` zones
+**client-side**. They render as ordinary dotted-underline highlights and light up a whole column on
+click, but nothing about them is grounded: no `allowedSet` check, no `checkP5Strong`, no engine
+evidence, and they can never resolve to a single square — only a column. So an explanation where the
+model emitted zero annotations does not look empty on screen; **it looks highlighted**, and it ships
+those ungrounded highlights to a real player, bypassing every server-side grounding guard (**OI-173**).
+
+The fallback is all-or-nothing, so a text with one real tag gets no fallback at all — partial grounding
+renders *fewer* underlines than none. The visual signal is not even monotonic in grounding.
+
+**Consequence: never judge grounding from the rendered page, a screenshot, or browser-driven QA.** Count
+`[zone:…]` specs in the **stored** text and keep the cell-level ones:
+
+```js
+const specs = [...text.matchAll(/\[zone:([^\]]+)\]/g)].map(m => m[1])
+  .filter((s, i, a) => a.indexOf(s) === i);            // open + close share a spec
+const cellLevel = specs.filter(s => /(^|:)c\d+r\d+/.test(s) || s.includes('windows:')).length;
+```
+
+`cellLevel` is the honest measure — exactly what the fallback cannot fabricate.
+`AdminGroundingDiffPage.jsx`'s `countGroundedZones` helper is already this. Counting rendered underlines
+instead would have made the pre-epic BEFORE column of the spec-058 comparison look partly grounded when
+it had emitted nothing at all: understating the improvement *while looking more rigorous*.
+
 ### BadgeType enum (LOCKED — cross-epic contract)
 
 | Value | Background | Default glyph |

@@ -2005,6 +2005,20 @@ again** — the same failure precedent already on record on this file (`docs/dep
 "Staging's 058 TRUNCATE is already marked DONE 2026-08-04 — i.e. it ran BEFORE this code — so on
 staging it must be run again").
 
+**Amended later the same day (2026-08-28), after a code review of the full epic diff.** Two further
+served-text changes landed on top of the set above, both fixing defects the epic's own fixes
+introduced, so this purge covers them too — no separate entry, no change to the command or
+verification:
+(a) sibling disambiguation no longer uses the height-based ordinal locator described above (it
+asserted "the lower one"/"the higher one" for cells on the **same row**, false on 22 of 58 sibling
+groups); it now uses a column-first strategy ladder — `"the one in column N"`, then
+`"the lower/upper one in column N"`, then `"the <first|second> one listed"` — every rung true by
+construction;
+(b) a causal frame no longer collapses two *different* cells that share a column into one identical
+`"column N"` phrase (6 of 63 records, all L6, e.g. `c2r5` and `c2r6` both rendering as "column 2"); a
+same-frame collision now renders `"the lower/upper square in column N"`.
+Both change the text a player is served, and both are already inside the file set named above.
+
 `GET /api/user/blunder/:id/deep-reveal` checks `explanation_cache` **before** any producer runs
 (`server/index.js` ~:1308): the key is `sha256(movestring:col)` plus locale, and a hit returns the
 stored `deep_reveal_json` directly, bypassing `computeMechanism` entirely. **The key contains nothing

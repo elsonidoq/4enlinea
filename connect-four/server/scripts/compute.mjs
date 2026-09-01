@@ -38,6 +38,7 @@ import { loadEnv } from './reason_engine/lib/boardUtils.mjs';
 import { callOpenAIChat } from '../llmChat.js';
 import { Board } from '../classifier.js';
 import { guardExplainMoveLlmPayload, toAllowedSet } from '../reasonRenderGuard.mjs';
+import { decideRetry } from '../retryDecision.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -65,7 +66,7 @@ Two passes over the boards in --input:
 
 Usage (from connect-four/):
   node server/scripts/compute.mjs --input <boards.jsonl> [--out <name>] [--ids <id,...>]
-       [--llm [--condition A|B|C|D|all] [--n 3] [--model X]]
+       [--llm [--condition A|B|C|D|all] [--n 3] [--model X] [--retry]]
 
 Options:
   --input <path>        REQUIRED. Boards JSONL to evaluate (absolute, or resolved from cwd).
@@ -88,6 +89,17 @@ Options:
                         task, matching production's locale-aware prompt. Default: en.
   --sentence-budget <t> Answer-length instruction for the mechanism field, as prose (e.g. "1-3",
                         "4-6"). Default: 1-3. Used by the budget-ablation arm.
+  --retry               Reproduce production's real retry decision (decideRetry, retryDecision.mjs)
+                        instead of scoring a single attempt. IMPORTANT: a --retry run is NOT
+                        comparable to historical single-attempt runs on any judgment axis — it
+                        reproduces production's two CONTENT triggers only (a missing required
+                        square/line and/or an unnamed better column); rows that hit a call/parse
+                        error remain single-attempt (that is a separate, pre-existing LLM-error
+                        retry trigger, out of scope here). It is gated to condition D — on A/B/C,
+                        render_decision is null and the content triggers are inert. A6 is NOT an
+                        independent measure on a --retry run: it is one of the retry's own
+                        triggers, so report it separately and never against a single-attempt
+                        baseline.
   -h, --help            Show this help and exit.
 
 Requires OPENAI_API_KEY (and a model) for --llm; loaded from connect-four/server/.env.`;
@@ -97,7 +109,7 @@ Requires OPENAI_API_KEY (and a model) for --llm; loaded from connect-four/server
 // process.exit or depends on --input being present. Everything below this point that the CLI
 // entry needs (INPUT, evidenceOut, useLlm, ts, N, model, CONDITIONS) is declared with `let` at
 // module scope and populated only when this file is the entry point.
-let inputArg, INPUT, inputStem, evidenceOut, useLlm, ts, N, model, CONDITIONS, idFilter, sentenceBudget, locale;
+let inputArg, INPUT, inputStem, evidenceOut, useLlm, useRetry, ts, N, model, CONDITIONS, idFilter, sentenceBudget, locale;
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
   if (process.argv.includes('--help') || process.argv.includes('-h')) {
     console.log(HELP);
@@ -122,6 +134,9 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
 
   // --llm flags
   useLlm = process.argv.includes('--llm');
+  // Reproduces production's real retry decision (decideRetry, retryDecision.mjs) — gated to
+  // condition D in the per-run loop below, since renderDecision is null on A/B/C.
+  useRetry = process.argv.includes('--retry');
   ts = new Date().toISOString().replace(/:/g, '-').replace(/\.\d+Z$/, 'Z');
   N = parseInt(argVal('--n', '3'), 10);
   model = argVal('--model', process.env.EXPLAIN_MODEL);
@@ -394,6 +409,30 @@ export function attributeGuardFailureCode(failure) {
   return null;
 }
 
+// ── Retry row-shaping (pure; no network, no solver) ──────────────────────────────────────────
+// Shapes the three additive answers-row fields (`retry_fired`/`retry_reason`/`attempt1`) from a
+// `decideRetry` outcome and the first attempt's row-shaped data. Kept separate from the network
+// call so it is unit-testable without a mock LLM: `retryOutcome` is `decideRetry(...)`'s return
+// value (or null/`{ shouldRetry: false }` when the retry gate wasn't satisfied — off, wrong
+// condition, or a call/parse error on attempt 1); `attempt1Row` is
+// `{ raw, answer, parse_error, call_error, guardDiagnostics, annotationRepairs, servedExplanation }`
+// for the FIRST attempt, i.e. exactly the shape the non-retry answer line already carries for
+// those fields. Every existing row field keeps its current meaning: when the retry does not fire,
+// this returns `attempt1: null` and nothing else about the row's shape changes.
+export function shapeRetryFields(retryOutcome, attempt1Row) {
+  if (!retryOutcome?.shouldRetry) {
+    return { retry_fired: false, retry_reason: null, attempt1: null };
+  }
+  return {
+    retry_fired: true,
+    retry_reason: {
+      missingHandles: (retryOutcome.missing ?? []).map((g) => g.handle),
+      missingBetterCol: Boolean(retryOutcome.missingBetterColPhrase),
+    },
+    attempt1: attempt1Row,
+  };
+}
+
 async function runLlm(evidenceRows) {
   if (!process.env.OPENAI_API_KEY) throw new Error('OPENAI_API_KEY not set in environment');
   if (!model) throw new Error('EXPLAIN_MODEL not set (and no --model given)');
@@ -414,6 +453,8 @@ async function runLlm(evidenceRows) {
   if (existsSync(answersOut)) console.log('(appending to existing output file)');
 
   let done = 0, failed = 0;
+  // Retry summary (Step 4): how many runs retried, and the trigger split.
+  let retriedTotal = 0, retriedMissingHandlesOnly = 0, retriedMissingBetterColOnly = 0, retriedBoth = 0;
   for (const row of evidenceRows) {
     if (!row.evidence || row.evidence.notABlunder) continue; // error row or non-blunder: nothing to narrate
     // toNarratorVector produces the UN-pruned narrator vector; per-condition pruning happens inside
@@ -442,6 +483,9 @@ async function runLlm(evidenceRows) {
           call_error: err.message,
           render_decision: null,
           annotationRepairs: null,
+          retry_fired: false,
+          retry_reason: null,
+          attempt1: null,
         };
         appendFileSync(answersOut, JSON.stringify(line) + '\n');
         failed++;
@@ -464,14 +508,71 @@ async function runLlm(evidenceRows) {
         } catch (err) {
           call_error = err.message;
         }
-        const { answer: postAnswer, repairs: annotationRepairs } = postprocessAnswer(answer, render_decision);
+        let { answer: postAnswer, repairs: annotationRepairs, usedSpecs } = postprocessAnswer(answer, render_decision);
         answer = postAnswer;
         // FR-001/FR-002: the served string production would actually show, plus the guard's own
         // diagnostics — computed via the REAL guardExplainMoveLlmPayload, never a reimplementation.
         // Q1 PROVISIONAL: both mechanism (pre-guard, above) and servedExplanation stored; see spec.md Q1
-        const { servedExplanation, guardDiagnostics } = computeServedExplanation(
+        let { servedExplanation, guardDiagnostics } = computeServedExplanation(
           answer?.mechanism, render_decision, nv.movestring, locale,
         );
+
+        // ── Retry (--retry only): reproduce production's real decideRetry (retryDecision.mjs) —
+        // never a hand-rolled proxy (I12). Gated to condition D: render_decision is null on A/B/C
+        // (the required-set trigger is dead there), and buildRetryPrompt's amended text refers to
+        // "the Decision block above," which A/B/C prompts don't contain — production itself is
+        // D-only. Skipped on a call/parse error: that belongs to the pre-existing, separate
+        // LLM-error retry trigger (mechanismExplainer.mjs's isLlmError), out of scope here.
+        let retryOutcome = { shouldRetry: false };
+        const attempt1Row = { raw, answer, parse_error, call_error, guardDiagnostics, annotationRepairs, servedExplanation };
+        if (useRetry && condition === 'D' && !call_error && !parse_error) {
+          retryOutcome = decideRetry({
+            attempt1: { mechanism: answer?.mechanism ?? null, usedSpecs, answer },
+            renderDecision: render_decision,
+            prompt,
+            movestring: nv.movestring,
+            bestCol: nv?.bestCol ?? null,
+            locale,
+          });
+          if (retryOutcome.shouldRetry) {
+            // Same callOpenAIChat options as attempt 1, so cost accounting stays correct.
+            let raw2 = null, answer2 = null, parse_error2 = null, call_error2 = null;
+            try {
+              ({ content: raw2 } = await callOpenAIChat(retryOutcome.retryPrompt, {
+                model,
+                apiKey: process.env.OPENAI_API_KEY,
+                endpoint: 'compute-eval',
+                userId: null,
+                purpose: 'offline-eval',
+              }));
+              ({ answer: answer2, parse_error: parse_error2 } = parseAnswer(raw2));
+            } catch (err) {
+              call_error2 = err.message;
+            }
+            const { answer: postAnswer2, repairs: annotationRepairs2 } = postprocessAnswer(answer2, render_decision);
+            const { servedExplanation: servedExplanation2, guardDiagnostics: guardDiagnostics2 } = computeServedExplanation(
+              postAnswer2?.mechanism, render_decision, nv.movestring, locale,
+            );
+            // Top-level fields now describe the FINAL (retried) attempt — what production would
+            // serve; attempt1Row above preserves the discarded first one.
+            raw = raw2;
+            answer = postAnswer2;
+            parse_error = parse_error2;
+            call_error = call_error2;
+            annotationRepairs = annotationRepairs2;
+            servedExplanation = servedExplanation2;
+            guardDiagnostics = guardDiagnostics2;
+
+            retriedTotal++;
+            const missedHandles = retryOutcome.missing?.length > 0;
+            const missedBetterCol = Boolean(retryOutcome.missingBetterColPhrase);
+            if (missedHandles && missedBetterCol) retriedBoth++;
+            else if (missedHandles) retriedMissingHandlesOnly++;
+            else if (missedBetterCol) retriedMissingBetterColOnly++;
+          }
+        }
+        const { retry_fired, retry_reason, attempt1 } = shapeRetryFields(retryOutcome, attempt1Row);
+
         const line = {
           id: row.id,
           pattern_category: row.evidence.case,
@@ -487,6 +588,9 @@ async function runLlm(evidenceRows) {
           annotationRepairs,
           servedExplanation,
           guardDiagnostics,
+          retry_fired,
+          retry_reason,
+          attempt1,
         };
         appendFileSync(answersOut, JSON.stringify(line) + '\n');
         if (call_error || parse_error) {
@@ -500,6 +604,13 @@ async function runLlm(evidenceRows) {
     }
   }
   console.log(`\nDone. ${done} ok, ${failed} failed → ${answersOut}`);
+  if (useRetry) {
+    console.log(`Retried: ${retriedTotal} run(s) — ${retriedMissingHandlesOnly} missing-handles only, `
+      + `${retriedMissingBetterColOnly} missing-better-column only, ${retriedBoth} both.`);
+    console.log('--retry reproduces production\'s two content triggers only; call/parse-error rows remain single-attempt.');
+    console.log('A6 on a --retry run is not an independent measure — it is one of the retry\'s own triggers. '
+      + 'Report it separately and never against a single-attempt baseline.');
+  }
 }
 
 // ── Main ──────────────────────────────────────────────────────────────────────

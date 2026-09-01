@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'fs';
-import { buildReasonRenderModel, assembleGroundedPrompt, buildRenderDecision, deriveRequiredSet } from '../scripts/renderReasonModel.mjs';
+import { buildReasonRenderModel, assembleGroundedPrompt, buildRenderDecision, deriveRequiredSet, halfCarriesFork } from '../scripts/renderReasonModel.mjs';
 
 const OPENING = JSON.parse(readFileSync(new URL('./fixtures/opening_vectors.json', import.meta.url)));
 
@@ -1274,4 +1274,937 @@ test('FR-018/T027: unit regression — an array whose every element prunes empty
   // isTransformed line regex), so every mapped element becomes {} — the array must be omitted from
   // `rendered` entirely, not emitted as `[{},{}]`.
   assert.ok(!('line' in (m.rendered.lostResource ?? {})), 'an all-empty-element array must not appear in rendered at all');
+});
+
+test('D3 fix: aliases owned by different players never share a role string (corpus-wide)', async () => {
+  const { readFileSync } = await import('node:fs');
+  const { fileURLToPath } = await import('node:url');
+  const { dirname, join } = await import('node:path');
+  const { toNarratorVector, pruneVector } = await import('../scripts/reasonNarratorVector.mjs');
+  const here = dirname(fileURLToPath(import.meta.url));
+  const rows = readFileSync(join(here, '../scripts/reason_corpus/evidence.jsonl'), 'utf8')
+    .trim().split('\n').map((l) => JSON.parse(l));
+  for (const row of rows) {
+    const fv = pruneVector(toNarratorVector(row.evidence));
+    const model = buildReasonRenderModel(fv);
+    const roleOwner = new Map(); // role string -> 'you' | 'opp'
+    for (const a of model.zones.aliases) {
+      // Exemption (Task 5): the afterPlayed board-tag pivot role is deliberately owner-neutral —
+      // the mover of an afterPlayed board is always the player, so no possessive applies.
+      if (a.role === "the square your last move just filled — that move is what set up the fork") continue;
+      const owner = a.handle.startsWith('you-') ? 'you' : a.handle.startsWith('opp-') ? 'opp' : null;
+      if (!owner) continue;
+      const prev = roleOwner.get(a.role);
+      assert.ok(prev === undefined || prev === owner,
+        `${row.id}: role string shared across owners: "${a.role}" (${a.handle})`);
+      roleOwner.set(a.role, owner);
+    }
+  }
+});
+
+test('eval-47: an afterPlayed board-tag pivot is described as the move already made, not a move to play', async () => {
+  const { readFileSync } = await import('node:fs');
+  const { fileURLToPath } = await import('node:url');
+  const { dirname, join } = await import('node:path');
+  const { toNarratorVector, pruneVector } = await import('../scripts/reasonNarratorVector.mjs');
+  const here = dirname(fileURLToPath(import.meta.url));
+  const rows = readFileSync(join(here, '../scripts/reason_corpus/evidence.jsonl'), 'utf8')
+    .trim().split('\n').map((l) => JSON.parse(l));
+  const row = rows.find((r) => r.id === 'eval-47');
+  assert.ok(row, 'corpus must contain eval-47');
+  const fv = pruneVector(toNarratorVector(row.evidence));
+  const model = buildReasonRenderModel(fv);
+  const pivots = model.zones.aliases.filter((a) => a.handle.includes('fork-pivot') && a.truthBoard === 'afterPlayed');
+  assert.ok(pivots.length, 'eval-47 must offer an afterPlayed board-tag pivot');
+  for (const p of pivots) {
+    assert.ok(!/to CREATE the fork/.test(p.role) || /just|already/.test(p.role),
+      `${p.handle}: role still instructs playing an occupied square: "${p.role}"`);
+  }
+});
+
+// ---------------------------------------------------------------------------------------------
+// Task 7 (D48 known-limit closure): realized-pattern fork halves.
+//
+// Every fork family in zoneAnnotations.mjs keys off `half.tacticTag` + `forkCells`/`line`; a
+// `realized_pattern` half carries `tag`/`cells`/`windows`/`finalMovestring` instead, so its fork got
+// neither a prong pair nor a pivot. 13 corpus records have a realized fork half.
+//
+// The pivot rule ("the landing cell of the LAST ply of the half's own finalMovestring") was validated
+// through the PRODUCTION detector `detectDoubleThreat` (I12 — never a hand-rolled proxy) over all
+// 10 realized-fork records in the task scope: for every one, the tag's owner HAS a double threat on
+// `finalMovestring` and does NOT on `finalMovestring` minus its last ply. 10/10 PASS.
+//
+// Two families of principled abstention are pinned below, because "no pivot offered" must be
+// distinguishable from "the loop silently missed one":
+//   * PIVOT_ABSTAIN — the pivot coincides with the OTHER half's completing square. Both labels are
+//     true of different lines and read as a contradiction in one prompt, so the existing round-4
+//     guard abstains (I2). The cell is still offered, under the other half's own handle.
+//   * eval-47 / eval-48 / pin-L1-completes-your-tactic — realized forks whose pattern is already
+//     board-true on a shown near-term board, where the structural loop offers it (with its pivot)
+//     already. The containment guard keeps this loop from restating a weaker, present-tense copy.
+const REALIZED_FORK_IDS = ['eval-42', 'eval-43', 'eval-44', 'eval-46', 'eval-49', 'eval-50',
+  'pin-L2-enabled-opponent', 'pin-L3-no-causation', 'pin-branch-invariance-true-1',
+  'pin-branch-invariance-false'];
+// ids -> the exact prong-pair spec expected. The other 6 have `cells.length === 1` (a single-cell
+// realized pattern, not a prong pair): nothing to pair, and nothing is asserted for them.
+const PRONG_PAIR = {
+  'eval-43': 'windows:c4r3,c6r2',
+  'eval-44': 'windows:c3r1,c7r1',
+  'pin-L2-enabled-opponent': 'windows:c2r1,c6r1',
+  'pin-branch-invariance-false': 'windows:c2r1,c6r1',
+};
+// ids -> the pivot cell offered (all validated PASS through detectDoubleThreat).
+const PIVOT_OFFERED = {
+  'eval-43': 'c4r2',
+  'eval-44': 'c6r1',
+  'eval-46': 'c6r2',
+  'pin-L3-no-causation': 'c4r2',
+  'pin-branch-invariance-true-1': 'c5r3',
+};
+// ids where the validated pivot is deliberately NOT offered, and the cell it collides with.
+const PIVOT_ABSTAIN = {
+  'eval-42': 'c1r4',
+  'eval-49': 'c3r4',
+  'eval-50': 'c3r4',
+  'pin-L2-enabled-opponent': 'c3r1',
+  'pin-branch-invariance-false': 'c3r1',
+};
+
+async function loadRealizedForkCorpus() {
+  const { readFileSync } = await import('node:fs');
+  const { fileURLToPath } = await import('node:url');
+  const { dirname, join } = await import('node:path');
+  const { toNarratorVector, pruneVector } = await import('../scripts/reasonNarratorVector.mjs');
+  const here = dirname(fileURLToPath(import.meta.url));
+  const rows = readFileSync(join(here, '../scripts/reason_corpus/evidence.jsonl'), 'utf8')
+    .trim().split('\n').map((l) => JSON.parse(l));
+  return { rows, prune: (ev) => pruneVector(toNarratorVector(ev)) };
+}
+
+test('Task 7: the realized-fork pivot rule holds through the production detectDoubleThreat (I12 gate)', async () => {
+  const { rows, prune } = await loadRealizedForkCorpus();
+  const { Board, detectDoubleThreat, parseBoardState } = await import('../classifier.js');
+  for (const id of REALIZED_FORK_IDS) {
+    const fv = prune(rows.find((r) => r.id === id).evidence);
+    const half = [fv.lostResource, fv.opponentPunishment].find((h) => h?.kind === 'realized_pattern');
+    assert.ok(half, `${id}: expected a realized_pattern half`);
+    const ms = half.finalMovestring;
+    assert.ok(ms && ms.length > 1, `${id}: realized half must carry a finalMovestring`);
+    // The pivot rule itself: the LAST ply is what makes both winning squares live at once.
+    assert.equal(detectDoubleThreat(new Board(ms), half.owner).matched, true,
+      `${id}: owner ${half.owner} must hold a double threat on ${ms}`);
+    assert.equal(detectDoubleThreat(new Board(ms.slice(0, -1)), half.owner).matched, false,
+      `${id}: owner ${half.owner} must NOT already hold it before the last ply of ${ms}`);
+    // ...and the cell that ply lands on is the pivot the offer uses.
+    const col = Number(ms.at(-1));
+    const { colHeights } = parseBoardState(ms.slice(0, -1));
+    const pivot = `c${col + 1}r${colHeights[col] + 1}`;
+    const expected = PIVOT_OFFERED[id] ?? PIVOT_ABSTAIN[id];
+    assert.equal(pivot, expected, `${id}: pivot cell drifted`);
+  }
+});
+
+test('Task 7: realized fork halves offer a prong pair (2-prong records) and a validated pivot', async () => {
+  const { rows, prune } = await loadRealizedForkCorpus();
+  for (const id of REALIZED_FORK_IDS) {
+    const fv = prune(rows.find((r) => r.id === id).evidence);
+    const model = buildReasonRenderModel(fv);
+    const half = [fv.lostResource, fv.opponentPunishment].find((h) => h?.kind === 'realized_pattern');
+    const unprefixed = (a) => a.spec.replace(/^future:/, '');
+
+    if (PRONG_PAIR[id]) {
+      assert.equal(half.cells.length, 2, `${id}: expected a 2-prong realized fork`);
+      const prongSpec = 'windows:' + half.cells.join(',');
+      assert.equal(prongSpec, PRONG_PAIR[id], `${id}: prong spec drifted`);
+      const prong = model.zones.aliases.find((a) => unprefixed(a) === prongSpec);
+      assert.ok(prong, `${id}: fork prongs ${prongSpec} not offered`);
+      assert.match(prong.handle, /-double(-\d+)?$/, `${id}: prong pair must use the double family`);
+      assert.match(prong.role, /fork squares/, `${id}: prong pair must carry the fork role text`);
+      // M4 — pins the truthBoard ruling. F7's provenance rule ('afterPlayed' for an
+      // opponentPunishment half) would put these on a board shown on ZERO of these records; the loop
+      // reuses the half-resource loop's own horizon derivation instead, and all 10 realized forks are
+      // `register: 'immediate'`, so the answer is the present tense on `decision`. A silent revert to
+      // provenance, or a silent switch to `future:` framing, must go red here.
+      assert.equal(prong.truthBoard, 'decision', `${id}: prong pair must name the decision board`);
+      assert.ok(!prong.spec.startsWith('future:'),
+        `${id}: an immediate-register fork must not be offered under the future: decorator`);
+      // OI-172: a `windows:` alias is satisfiable only as the WHOLE window, so the pair alone leaves
+      // a correct single-prong highlight illegal — which is exactly the pin-L2 render bug ("c6r1 has
+      // no handle"). Each prong must ALSO be reachable on its own, under some alias of this owner.
+      for (const c of half.cells) {
+        assert.ok(model.zones.aliases.some((a) => unprefixed(a) === c),
+          `${id}: prong ${c} has no standalone single-cell handle`);
+      }
+    } else {
+      assert.equal(half.cells.length, 1,
+        `${id}: not listed as 2-prong, so cells must be single (F4 scope correction)`);
+    }
+
+    const pivots = model.zones.aliases.filter((a) => a.handle.includes('fork-pivot'));
+    if (PIVOT_OFFERED[id]) {
+      assert.ok(pivots.some((a) => unprefixed(a) === PIVOT_OFFERED[id]),
+        `${id}: validated pivot ${PIVOT_OFFERED[id]} not offered (offered: ${pivots.map((a) => a.spec).join(', ') || 'none'})`);
+    } else {
+      // Abstention, not omission: the pivot IS the other half's completing square, and that cell is
+      // still reachable — under the other half's handle, with the other half's (also true) label.
+      const other = half === fv.lostResource ? fv.opponentPunishment : fv.lostResource;
+      const collidesWith = other?.completingCell ?? other?.cell;
+      assert.equal(collidesWith, PIVOT_ABSTAIN[id],
+        `${id}: pivot abstention must be the other-half collision, not a silent miss`);
+      assert.ok(model.zones.aliases.some((a) => unprefixed(a) === PIVOT_ABSTAIN[id]),
+        `${id}: the abstained pivot cell must still be offered under the other half's handle`);
+      assert.ok(!pivots.some((a) => unprefixed(a) === PIVOT_ABSTAIN[id]),
+        `${id}: the colliding cell must not ALSO be relabelled as a fork pivot`);
+    }
+  }
+});
+
+test('Task 7: the containment guard keeps an already-board-true realized fork from being restated on the decision board', async () => {
+  // The realized-fork set is 13 records, not the brief's 10. On eval-47 / eval-48 /
+  // pin-L1-completes-your-tactic the realized fork is ALREADY board-true on a shown near-term board,
+  // where the structural loop offers it (with its pivot). Without the owner-scoped containment guard
+  // the realized-fork loop adds a weaker, present-tense copy on `decision` — measured on eval-47:
+  // `you-double-3 = windows:c3r6,c6r5 @ decision`, a 2-cell restatement of the board-true 3-cell
+  // `you-double = windows:c3r6,c6r5,c7r2 @ afterBest`, on a board the fork does not exist on.
+  // Delete the guard and this test goes red.
+  const { rows, prune } = await loadRealizedForkCorpus();
+  const unprefix = (s) => s.replace(/^future:/, '');
+
+  const evalFortySeven = buildReasonRenderModel(prune(rows.find((r) => r.id === 'eval-47').evidence));
+  const doubles47 = evalFortySeven.zones.aliases.filter((a) => /^you-double(-\d+)?$/.test(a.handle));
+  // Exactly the two pre-existing structural forks — one per near-term board the fork is real on.
+  assert.equal(doubles47.length, 2,
+    `eval-47: expected only the 2 board-true fork aliases, got ${doubles47.map((a) => `${a.handle}=${a.spec}@${a.truthBoard}`).join(', ')}`);
+  assert.ok(doubles47.some((a) => a.truthBoard === 'afterBest' && unprefix(a.spec).includes('c7r2')),
+    'eval-47: the board-true afterBest fork (the one carrying the third endpoint c7r2) must survive');
+  assert.ok(doubles47.every((a) => a.truthBoard !== 'decision'),
+    'eval-47: no fork alias may be restated on the decision board, where the fork is not yet real');
+  assert.ok(!evalFortySeven.zones.aliases.some((a) => unprefix(a.spec) === 'windows:c3r6,c6r5'),
+    'eval-47: the guarded-against 2-cell restatement windows:c3r6,c6r5 must not be offered');
+
+  for (const id of ['eval-48', 'pin-L1-completes-your-tactic']) {
+    const model = buildReasonRenderModel(prune(rows.find((r) => r.id === id).evidence));
+    const doubles = model.zones.aliases.filter((a) => /^you-double(-\d+)?$/.test(a.handle));
+    assert.equal(doubles.length, 1,
+      `${id}: expected exactly one fork alias, got ${doubles.map((a) => `${a.handle}=${a.spec}@${a.truthBoard}`).join(', ')}`);
+    assert.equal(doubles[0].truthBoard, 'afterBest',
+      `${id}: the fork is board-true on afterBest and must be offered there, not restated on decision`);
+  }
+});
+
+test('Task 7 (F5): the realized-fork loop only WIDENS the offer — no pre-change handle is evicted', async () => {
+  // Pinned from a corpus run on the code immediately BEFORE the realized-fork loop landed.
+  const PRE = {
+    'eval-42': ['better-col', 'played-col', 'opp-major', 'opp-major-line', 'you-major', 'you-major-line', 'opp-key-square', 'opp-key-line', 'opp-key-square-2'],
+    'eval-43': ['better-col', 'played-col', 'opp-major', 'opp-major-line', 'opp-major-2', 'opp-major-line-2'],
+    'eval-44': ['better-col', 'played-col', 'opp-key-square', 'opp-key-line'],
+    'eval-46': ['better-col', 'played-col', 'opp-major', 'opp-major-line', 'opp-double', 'opp-major-2', 'opp-major-line-2', 'opp-major-3', 'opp-major-line-3', 'you-immediate', 'you-immediate-line'],
+    'eval-49': ['better-col', 'played-col', 'you-major', 'you-major-line', 'you-immediate', 'you-immediate-line', 'you-key-square'],
+    'eval-50': ['better-col', 'played-col', 'you-major', 'you-major-line', 'you-immediate', 'you-immediate-line', 'you-key-square'],
+    'pin-L2-enabled-opponent': ['better-col', 'played-col', 'opp-key-square', 'opp-key-line', 'opp-key-square-2'],
+    'pin-L3-no-causation': ['better-col', 'played-col', 'opp-major', 'opp-major-line', 'opp-major-2', 'opp-major-line-2', 'you-immediate', 'you-immediate-line'],
+    'pin-branch-invariance-true-1': ['better-col', 'played-col', 'opp-major', 'opp-major-line', 'opp-major-2', 'opp-major-line-2'],
+    'pin-branch-invariance-false': ['better-col', 'played-col', 'opp-key-square', 'opp-key-line', 'opp-key-square-2'],
+  };
+  const { rows, prune } = await loadRealizedForkCorpus();
+  for (const [id, handles] of Object.entries(PRE)) {
+    const model = buildReasonRenderModel(prune(rows.find((r) => r.id === id).evidence));
+    const now = model.zones.aliases.map((a) => a.handle);
+    for (const h of handles) assert.ok(now.includes(h), `${id}: handle ${h} was evicted`);
+  }
+});
+
+test('Task 7: every offered alias names a board the prompt actually renders (corpus-wide)', async () => {
+  // The F7 provenance rule ('afterPlayed' for an opponentPunishment half) would have broken this on
+  // 8 of the 10 realized-fork records: `afterPlayed` is shown on ZERO of them, so those aliases would
+  // have pointed at a board the prompt never prints. The realized-fork loop uses the half-resource
+  // loop's own horizon derivation instead.
+  const { rows, prune } = await loadRealizedForkCorpus();
+  for (const row of rows) {
+    const model = buildReasonRenderModel(prune(row.evidence));
+    const shown = new Set(model.boards.map((b) => b.id));
+    for (const a of model.zones.aliases) {
+      assert.ok(shown.has(a.truthBoard),
+        `${row.id}: alias ${a.handle} names board "${a.truthBoard}", not among [${[...shown].join(', ')}]`);
+    }
+  }
+});
+
+test('Task 7 (fix round 1, I1): a DEEP realized fork carries the future: decorator on the prongs, each prong, AND the pivot', async () => {
+  // Every realized fork in the corpus today is `register: 'immediate'`, so the loop's `future:` branch
+  // is unreachable from `evidence.jsonl` — which is exactly why the pivot's missing prefix could sit
+  // there unnoticed. This drives `buildAnnotationOffer` (the production function, no mock) directly
+  // with a deep-register realized half so the branch is exercised rather than argued about.
+  //
+  // The half's geometry is eval-44's real, solver-grounded one (`cells` / `finalMovestring` verbatim);
+  // only `register` is changed, which is the one field that selects the horizon. A bare `cNrM` spec
+  // carrying `truthBoard: 'projectedDeep'` is the eval-3 present-threat shape the decorator exists to
+  // prevent, so all four offers must be prefixed.
+  const { buildAnnotationOffer } = await import('../scripts/reason_engine/zoneAnnotations.mjs');
+  const half = { kind: 'realized_pattern', tag: 'double_threat', register: 'parity', owner: 1,
+                 cells: ['c3r1', 'c7r1'], completingCell: 'c3r1', finalMovestring: '44315' };
+  const pruned = { player: 2, opponent: 1, bestCol: 2, playedCol: 1,
+                   lostResource: null, opponentPunishment: half };
+  const boards = [{ id: 'decision', shown: true, movestring: '443', tags: [] },
+                  { id: 'projectedDeep', shown: true, movestring: '44315', tags: [] }];
+  const { aliases, zoneAliasMap } = buildAnnotationOffer(pruned, boards);
+
+  const byHandle = (re) => aliases.find((a) => re.test(a.handle));
+  const pair = byHandle(/^opp-double/);
+  const prong = byHandle(/^opp-fork-square/);
+  const pivot = byHandle(/^opp-fork-pivot/);
+  for (const [what, a] of [['prong pair', pair], ['standalone prong', prong], ['pivot', pivot]]) {
+    assert.ok(a, `deep realized fork must still offer its ${what}`);
+    assert.equal(a.truthBoard, 'projectedDeep', `${what}: a deep offer must name the projected board`);
+    assert.ok(a.spec.startsWith('future:'),
+      `${what}: a deep offer must carry the future: decorator, got "${a.spec}"`);
+    assert.equal(zoneAliasMap[a.handle], a.spec, `${what}: zoneAliasMap must agree with the alias spec`);
+  }
+  assert.equal(pivot.spec, 'future:c6r1');
+  assert.match(pivot.role, /NOT the move to play right now/, 'a deep pivot takes the "not right now" role');
+});
+
+// ---------------------------------------------------------------------------------------------
+// Task 2 (D2 fix, D49-addendum-governed): a `windows:` spec spanning multiple columns is a LINE,
+// not a single cell — `disambiguateSiblingRoles`' rung-1 column locator ("the one in column N")
+// used to fire on it anyway (`specSortKey` collapses the whole spec to one representative cell),
+// so the model faithfully echoed a board-false claim ("your line in column 4") about a line that
+// actually spans columns 4–7. `lineLocator` asserts the *true* geometry — a row range or a
+// diagonal direction — and returns `null` when no true single-line claim can be made, in which
+// case the caller falls back to the existing (still-true) rungs.
+//
+// Controller ruling (task-2-ruling.md) AMENDS the brief's Step-1 test: measured against the live
+// corpus, the brief's unscoped assertion ("no multi-column windows: alias may ever carry a
+// single-column locator") flags 58 aliases today, 9 of which are `|`-joined combined fork-lines
+// specs (two or three 4-cell windows glued together — NOT one line) that `lineLocator` is
+// REQUIRED by its own F10 contract to refuse, after which they correctly fall back to the column
+// rung the brief's test forbids. So Step 1 is scoped here to genuine single-line specs only: no
+// `|`, exactly 4 cells, constant (col, row) step across the sorted cells. `|`-joined and disjoint
+// specs are explicitly out of scope (pre-existing wording, not a Task 2 regression) and are
+// covered instead by the negative `lineLocator(...) === null` cases below.
+function isSingleLineWindowsSpec(rawSpec) {
+  if (rawSpec.includes('|')) return false;
+  const cells = [...rawSpec.matchAll(/c(\d+)r(\d+)/g)].map((m) => ({ col: +m[1], row: +m[2] }));
+  if (cells.length !== 4) return false;
+  const sorted = [...cells].sort((a, b) => (a.col - b.col) || (a.row - b.row));
+  const colStep = sorted[1].col - sorted[0].col;
+  const rowStep = sorted[1].row - sorted[0].row;
+  for (let i = 1; i < sorted.length; i++) {
+    if (sorted[i].col - sorted[i - 1].col !== colStep || sorted[i].row - sorted[i - 1].row !== rowStep) return false;
+  }
+  return true;
+}
+
+test('D2 fix: a genuine multi-column windows: line never gets a single-column locator (corpus-wide, scoped per task-2-ruling.md)', async () => {
+  const { toNarratorVector, pruneVector } = await import('../scripts/reasonNarratorVector.mjs');
+  const rows = await loadCorpus();
+  let sawAtLeastOneMultiColumnLine = false;
+  for (const row of rows) {
+    const fv = pruneVector(toNarratorVector(row.evidence));
+    const model = buildReasonRenderModel(fv);
+    for (const a of model.zones.aliases) {
+      const raw = a.spec.replace(/^future:/, '');
+      if (!raw.startsWith('windows:')) continue;
+      const body = raw.slice('windows:'.length);
+      if (!isSingleLineWindowsSpec(body)) continue; // ruling: |-joined / disjoint specs out of scope
+      const cols = new Set([...body.matchAll(/c(\d+)r\d+/g)].map((m) => m[1]));
+      if (cols.size < 2) continue; // vertical line — a column locator IS true, leave it alone
+      sawAtLeastOneMultiColumnLine = true;
+      assert.ok(!/^the (lower |upper |[a-z-]+ )?one in column \d+:/.test(a.role),
+        `${row.id} ${a.handle}: multi-column line labelled by a single column: "${a.role}"`);
+    }
+  }
+  assert.ok(sawAtLeastOneMultiColumnLine, 'fixture sanity: corpus must contain at least one multi-column line alias');
+});
+
+test('D2 fix: lineLocator refuses |-joined fork-lines specs and disjoint fork-cell specs (F10, negative cases)', async () => {
+  const { lineLocator } = await import('../scripts/reason_engine/zoneAnnotations.mjs');
+  const { toNarratorVector, pruneVector } = await import('../scripts/reasonNarratorVector.mjs');
+  const rows = await loadCorpus();
+
+  // |-joined combined fork-lines specs (task-2-ruling.md's own examples): two or three 4-cell
+  // windows glued by `|` are NOT one line.
+  for (const id of ['eval-17', 'eval-18', 'eval-19', 'eval-20']) {
+    const row = rows.find((r) => r.id === id);
+    assert.ok(row, `corpus must contain ${id}`);
+    const fv = pruneVector(toNarratorVector(row.evidence));
+    const model = buildReasonRenderModel(fv);
+    const forkLines = model.zones.aliases.find((a) => a.handle.includes('fork-lines'));
+    assert.ok(forkLines, `${id}: must offer a fork-lines alias`);
+    assert.ok(forkLines.spec.includes('|'), `${id}: fixture sanity — expected a |-joined spec, got "${forkLines.spec}"`);
+    assert.equal(lineLocator(forkLines.spec), null, `${id}: |-joined spec must not be called a line`);
+  }
+
+  // eval-47's disjoint fork-cell spec: three cells, none contiguous.
+  const row47 = rows.find((r) => r.id === 'eval-47');
+  const fv47 = pruneVector(toNarratorVector(row47.evidence));
+  const model47 = buildReasonRenderModel(fv47);
+  const disjoint = model47.zones.aliases.find((a) => a.spec.replace(/^future:/, '') === 'windows:c3r6,c6r5,c7r2');
+  assert.ok(disjoint, 'eval-47: fixture sanity — expected the windows:c3r6,c6r5,c7r2 alias');
+  assert.equal(lineLocator(disjoint.spec), null, 'eval-47: disjoint fork-cell spec must not be called a line');
+
+  // Direct unit cases, independent of the corpus, for the boundary conditions the brief calls out.
+  assert.equal(lineLocator('windows:c3r5,c4r5,c5r5,c6r5|c4r3,c5r4,c6r5,c7r6'), null, 'a | anywhere in the spec refuses');
+  assert.equal(lineLocator('windows:c3r6,c6r5,c7r2'), null, 'not exactly 4 cells refuses');
+  assert.equal(lineLocator('windows:c3r5,c4r5,c5r5,c7r5'), null, 'non-constant step (gap) refuses');
+  assert.equal(lineLocator('col3'), null, 'a col… spec is never a windows: line');
+  assert.equal(lineLocator('c3r5'), null, 'a bare single-cell spec is never a windows: line');
+});
+
+test('D2 fix: every locator lineLocator actually emits for the corpus is true of its spec\'s own geometry (F10 positive truth-reconstruction)', async () => {
+  const { lineLocator } = await import('../scripts/reason_engine/zoneAnnotations.mjs');
+  const { toNarratorVector, pruneVector } = await import('../scripts/reasonNarratorVector.mjs');
+  const rows = await loadCorpus();
+  let sawRowLocator = false, sawDiagonalLocator = false;
+  for (const row of rows) {
+    const fv = pruneVector(toNarratorVector(row.evidence));
+    const model = buildReasonRenderModel(fv);
+    for (const a of model.zones.aliases) {
+      const raw = a.spec.replace(/^future:/, '');
+      if (!raw.startsWith('windows:')) continue;
+      const locator = lineLocator(a.spec);
+      if (locator === null) continue;
+      const body = raw.slice('windows:'.length);
+      const cells = [...body.matchAll(/c(\d+)r(\d+)/g)].map((m) => ({ col: +m[1], row: +m[2] }));
+      const cols = [...new Set(cells.map((c) => c.col))].sort((x, y) => x - y);
+      const rows_ = [...new Set(cells.map((c) => c.row))].sort((x, y) => x - y);
+
+      const rowMatch = /^the line across columns (\d+)–(\d+) on row (\d+)$/.exec(locator);
+      // Fix round 1: the diagonal wording now names both row endpoints (not just the column span),
+      // so two parallel diagonals sharing a direction and column span render distinguishable labels.
+      const diagMatch = /^the diagonal line (rising|falling) from column (\d+) on row (\d+) to column (\d+) on row (\d+)$/.exec(locator);
+      assert.ok(rowMatch || diagMatch, `${row.id} ${a.handle}: unrecognized locator shape "${locator}"`);
+
+      if (rowMatch) {
+        sawRowLocator = true;
+        // A row locator's cells must all share that row.
+        assert.equal(rows_.length, 1, `${row.id} ${a.handle}: row locator but cells span multiple rows`);
+        assert.equal(rows_[0], Number(rowMatch[3]), `${row.id} ${a.handle}: row locator names the wrong row`);
+        assert.equal(cols[0], Number(rowMatch[1]), `${row.id} ${a.handle}: row locator names the wrong lowest column`);
+        assert.equal(cols[cols.length - 1], Number(rowMatch[2]), `${row.id} ${a.handle}: row locator names the wrong highest column`);
+      } else {
+        sawDiagonalLocator = true;
+        // A diagonal locator's cells must be contiguous with a constant, non-zero row step.
+        assert.ok(cols.length >= 2 && rows_.length >= 2, `${row.id} ${a.handle}: diagonal locator but cells don't vary in both axes`);
+        const sorted = [...cells].sort((c1, c2) => (c1.col - c2.col) || (c1.row - c2.row));
+        const rowStep = sorted[1].row - sorted[0].row;
+        for (let i = 1; i < sorted.length; i++) {
+          assert.equal(sorted[i].row - sorted[i - 1].row, rowStep,
+            `${row.id} ${a.handle}: diagonal locator but row step is not constant across the sorted cells`);
+        }
+        const first = cells.reduce((x, y) => (x.col <= y.col ? x : y));
+        const last = cells.reduce((x, y) => (x.col >= y.col ? x : y));
+        const expectedDir = last.row > first.row ? 'rising' : 'falling';
+        assert.equal(diagMatch[1], expectedDir, `${row.id} ${a.handle}: diagonal locator names the wrong direction`);
+        assert.equal(Number(diagMatch[2]), cols[0], `${row.id} ${a.handle}: diagonal locator names the wrong lowest column`);
+        assert.equal(Number(diagMatch[3]), first.row, `${row.id} ${a.handle}: diagonal locator names the wrong row at its lowest column`);
+        assert.equal(Number(diagMatch[4]), cols[cols.length - 1], `${row.id} ${a.handle}: diagonal locator names the wrong highest column`);
+        assert.equal(Number(diagMatch[5]), last.row, `${row.id} ${a.handle}: diagonal locator names the wrong row at its highest column`);
+      }
+    }
+  }
+  assert.ok(sawRowLocator, 'fixture sanity: corpus must exercise the row-locator branch');
+  assert.ok(sawDiagonalLocator, 'fixture sanity: corpus must exercise the diagonal-locator branch');
+});
+
+// Fix round 1 (Important finding, since SUPERSEDED by round 2 below). The initial D2 fix let
+// `opp-key-line` win a true rung-1 diagonal label, which made rung 1's uniqueness check pass for the
+// whole sibling GROUP — and so promoted its sibling `opp-fork-lines` (a `|`-joined spec `lineLocator`
+// correctly refuses) UP into rung 1's plain column wording too: "the one in column 3", a board-false
+// claim about a spec spanning columns 3-7. Round 1 fixed that by making BOTH siblings fall to the
+// claim-free ordinal rung whenever either one couldn't get a true column/geometric label — safe, but
+// it also threw away `opp-key-line`'s true diagonal label, which is exactly the informativeness cost
+// round 2 (below) exists to recover: the fix in this block is what round 2's per-member restructure
+// replaces, not what it currently produces. Superseded by the round-2 test.
+//
+// Fix round 2 (per-member restructure). Each member of a sibling group now takes the most informative
+// TRUE label for ITSELF — `lineLocator`'s geometric wording where its own spec supports it, a column
+// label only where its own spec genuinely occupies one column, the claim-free ordinal only where
+// neither is available (a `|`-joined or disjoint spec). `opp-fork-lines` must still never regain a
+// column label — `multiColumnWindowsWithoutLine` still refuses it outright — but `opp-key-line` must
+// no longer be dragged down to ordinal by its sibling's failure: it gets its true diagonal back.
+test('D2 fix round 2: each fork-lines pair\'s *-key-line sibling regains a true geometric label while *-fork-lines keeps a claim-free ordinal, corpus-wide (10 pairs)', async () => {
+  const { toNarratorVector, pruneVector } = await import('../scripts/reasonNarratorVector.mjs');
+  const rows = await loadCorpus();
+  const COLUMN_FAMILY = /^the (lower |upper |[a-z-]+ )?one in column \d+:/;
+  const LINE_FAMILY = /^the (line across columns|diagonal line)/;
+  const ORDINAL = /^the [\w-]+ one listed: /;
+  let pairsChecked = 0;
+  for (const row of rows) {
+    const fv = pruneVector(toNarratorVector(row.evidence));
+    const model = buildReasonRenderModel(fv);
+    const forkLinesAliases = model.zones.aliases.filter((a) =>
+      a.handle.includes('fork-lines') && a.spec.replace(/^future:/, '').includes('|'));
+    for (const forkLines of forkLinesAliases) {
+      const owner = forkLines.handle.startsWith('you-') ? 'you' : 'opp';
+      const keyLine = model.zones.aliases.find((a) => a.handle === `${owner}-key-line`);
+      if (!keyLine) continue; // not every |-joined fork-lines record also offers a plain key-line
+      // Both must be in the SAME sibling group (same collision key) for this to be a meaningful check.
+      if (`${keyLine.role.replace(/^[^:]*:\s*/, '')}|${keyLine.truthBoard}` !==
+          `${forkLines.role.replace(/^[^:]*:\s*/, '')}|${forkLines.truthBoard}`) continue;
+      pairsChecked += 1;
+      assert.ok(!COLUMN_FAMILY.test(forkLines.role),
+        `${row.id}: ${forkLines.handle} must never carry a column-family locator, got "${forkLines.role}"`);
+      assert.ok(ORDINAL.test(forkLines.role),
+        `${row.id}: ${forkLines.handle} should land on the claim-free ordinal rung, got "${forkLines.role}"`);
+      assert.ok(LINE_FAMILY.test(keyLine.role),
+        `${row.id}: ${keyLine.handle} should regain its true geometric label, got "${keyLine.role}"`);
+      assert.notEqual(keyLine.role, forkLines.role, `${row.id}: the two siblings must render distinguishable roles`);
+    }
+  }
+  assert.equal(pairsChecked, 10, `expected exactly the 10 known fork-lines/key-line pairs, checked ${pairsChecked}`);
+});
+
+// Task 4 (deep-reveal-a7-remediation): `immediate_threat`'s canonicalPhrase ("threat to make four next
+// move") is board-false whenever the tag never fired on the DECISION board — it fired only on a
+// follow-up board (afterPlayed/afterBest), and the model applied "next move" to the board in front of
+// the player instead. Grader-verified board-false echoes: eval-29 (A7b, non-retry), eval-37 run 1,
+// pin-branch-invariance-true-2. Uses `boardSelectionDecisions` directly (production's `noteFired`
+// scope, the FULL decision set) rather than `model.boards`, which is shown-only.
+test('immediate_threat term gloss names its board when the tag never fired on the decision board', async () => {
+  const { readFileSync } = await import('node:fs');
+  const { fileURLToPath } = await import('node:url');
+  const { dirname, join } = await import('node:path');
+  const { toNarratorVector, pruneVector } = await import('../scripts/reasonNarratorVector.mjs');
+  const { boardSelectionDecisions } = await import('../scripts/reasonBoardSelect.mjs');
+  const here = dirname(fileURLToPath(import.meta.url));
+  const rows = readFileSync(join(here, '../scripts/reason_corpus/evidence.jsonl'), 'utf8')
+    .trim().split('\n').map((l) => JSON.parse(l));
+
+  let checked = 0;
+  for (const row of rows) {
+    const fv = pruneVector(toNarratorVector(row.evidence));
+    const model = buildReasonRenderModel(fv);
+    const t = model.zones.terms.find((x) => x.slug === 'immediate_threat');
+    if (!t) continue;
+    // Recompute where the tag fired from ALL board-selection decisions (production's noteFired scope),
+    // not just the shown subset on model.boards.
+    const decisions = boardSelectionDecisions(fv);
+    const firedBoards = decisions
+      .filter((b) => ['decision', 'afterBest', 'afterPlayed'].includes(b.id))
+      .filter((b) => (b.tags ?? []).some((tag) => tag.kind === 'immediate'))
+      .map((b) => b.id);
+    if (firedBoards.length && !firedBoards.includes('decision')) {
+      checked += 1;
+      assert.match(t.description, /after the (move|better move)/,
+        `${row.id}: immediate_threat fired only on ${firedBoards.join(',')} but the gloss carries no board qualifier: "${t.description}"`);
+    }
+  }
+  assert.ok(checked > 0, 'expected at least one corpus record to exercise the board-qualified gloss');
+});
+
+// ── Task 8 (2026-09-01): L6 requires BOTH lines (swap, cap stays 3); L7 requires the player's own
+// counterplay. `deriveRequiredSet` gained a third parameter, the ROUTED link id — never a re-derived
+// `kind` test, which would capture the L9 records (see the D-2026-09-01 L9 pin below).
+
+async function loadTask8Corpus() {
+  const { toNarratorVector, pruneVector } = await import('../scripts/reasonNarratorVector.mjs');
+  const { fileURLToPath } = await import('url');
+  const { dirname, join } = await import('path');
+  const here = dirname(fileURLToPath(import.meta.url));
+  const rows = readFileSync(join(here, '../scripts/reason_corpus/evidence.jsonl'), 'utf8')
+    .trim().split('\n').map((l) => JSON.parse(l));
+  return { rows, toNarratorVector, pruneVector };
+}
+
+// Harvested from the live corpus 2026-09-01 (evidence.jsonl, by id): eval-4's two offered line
+// handles are you-key-line (future:windows:c2r5,c3r5,c4r5,c5r5) and opp-key-line
+// (future:windows:c3r2,c4r2,c5r2,c6r2). Before this task the required set was
+// you-key-square / opp-key-square / you-key-line — one line only, while L6's guardrail says
+// "name BOTH lines with their horizons".
+test('D-2026-09-01: an L6 record requires BOTH lines plus one key square (eval-4)', async () => {
+  const { rows, toNarratorVector, pruneVector } = await loadTask8Corpus();
+  const fv = pruneVector(toNarratorVector(rows.find((r) => r.id === 'eval-4').evidence));
+  const model = buildReasonRenderModel(fv);
+  assert.equal(model.link.id, 'L6');
+  const specs = model.requiredSet.map((g) => g.spec);
+  assert.ok(specs.includes('future:windows:c2r5,c3r5,c4r5,c5r5'), 'you-key-line missing: ' + specs);
+  assert.ok(specs.includes('future:windows:c3r2,c4r2,c5r2,c6r2'), 'opp-key-line missing: ' + specs);
+  assert.equal(model.requiredSet.length, 3);
+  // The third slot is ONE key square — the swap keeps the cap at 3, it does not widen it.
+  assert.deepEqual(model.requiredSet.map((g) => g.handle),
+    ['you-key-line', 'opp-key-line', 'you-key-square']);
+});
+
+// Measured on eval-30 (A7b 2/3, render_bug, non-retry): all three slots went to the opponent's
+// geometry while `you-double` sat offered-only. L7's guardrail asks for the player's own most
+// stubborn defense, so the required set must carry something the PLAYER owns.
+test('D-2026-09-01: an L7 record with an offered you-fork requires it (eval-30)', async () => {
+  const { rows, toNarratorVector, pruneVector } = await loadTask8Corpus();
+  const fv = pruneVector(toNarratorVector(rows.find((r) => r.id === 'eval-30').evidence));
+  const model = buildReasonRenderModel(fv);
+  assert.equal(model.link.id, 'L7');
+  const handles = model.requiredSet.map((g) => g.handle);
+  assert.ok(handles.some((h) => h.startsWith('you-double') || h.startsWith('you-fork-pivot')),
+    'no player-owned counterplay handle required: ' + handles);
+  assert.ok(model.requiredSet.length <= 3);
+});
+
+test('D-2026-09-01: no non-fork L6 record leaves an offered line handle unrequired (corpus-wide)', async () => {
+  const { rows, toNarratorVector, pruneVector } = await loadTask8Corpus();
+  let checked = 0;
+  for (const row of rows) {
+    const fv = pruneVector(toNarratorVector(row.evidence));
+    const model = buildReasonRenderModel(fv);
+    if (model.link.id !== 'L6') continue;
+    // Fork-carrying L6 records follow a different rule (D48 rule 3: a fork's pivot is offered AND
+    // required) — skipped through the PRODUCTION predicate, never a hand-rolled proxy.
+    if (halfCarriesFork(fv.lostResource) || halfCarriesFork(fv.opponentPunishment)) continue;
+    checked += 1;
+    const lineSpecs = model.zones.aliases.filter((a) => a.spec.includes('windows:')).map((a) => a.spec);
+    const requiredLines = model.requiredSet.filter((g) => g.spec.includes('windows:'));
+    assert.ok(requiredLines.length >= Math.min(2, lineSpecs.length),
+      `${row.id}: L6 with ${lineSpecs.length} offered lines but only ${requiredLines.length} required`);
+  }
+  assert.ok(checked >= 2, `expected at least 2 non-fork L6 records, saw ${checked}`);
+});
+
+// Pinned from a snapshot taken on the PRE-Task-8 code (2026-09-01, all 63 corpus records built with
+// buildReasonRenderModel). Byte-identical after the change: the both-lines swap must never reach a
+// fork-carrying L6 record, because requiring both lines there would delete the fork pivot D48 rule 3
+// requires. Pins (half, spec, handle, truthBoard) — role is a pure function of (owner, kind) and is
+// pinned by the D49 sibling-role tests.
+const TASK8_FORK_L6_PINS = {
+  'eval-7': [['lostResource', 'future:c2r5', 'you-future-fork', 'projectedDeep'],
+    ['opponentPunishment', 'future:c6r2', 'opp-key-square', 'projectedDeepOpp'],
+    ['lostResource', 'future:c2r4', 'you-fork-pivot', 'projectedDeep']],
+  'eval-8': [['lostResource', 'future:c2r5', 'you-future-fork', 'projectedDeep'],
+    ['opponentPunishment', 'future:c6r2', 'opp-key-square', 'projectedDeepOpp'],
+    ['lostResource', 'future:c2r4', 'you-fork-pivot', 'projectedDeep']],
+  'eval-11': [['lostResource', 'future:c2r5', 'you-future-fork', 'projectedDeep'],
+    ['opponentPunishment', 'future:c2r4', 'opp-key-square', 'projectedDeepOpp'],
+    ['lostResource', 'future:windows:c2r5,c3r5,c4r5,c5r5', 'you-key-line', 'projectedDeep']],
+  'eval-12': [['lostResource', 'future:c2r5', 'you-future-fork', 'projectedDeep'],
+    ['opponentPunishment', 'future:c2r4', 'opp-key-square', 'projectedDeepOpp'],
+    ['lostResource', 'future:windows:c2r5,c3r5,c4r5,c5r5', 'you-key-line', 'projectedDeep']],
+  'eval-18': [['lostResource', 'future:windows:c5r5,c7r6', 'you-future-fork', 'projectedDeep'],
+    ['opponentPunishment', 'future:c5r2', 'opp-key-square', 'projectedDeepOpp'],
+    ['lostResource', 'future:c5r4', 'you-fork-pivot', 'projectedDeep']],
+  'eval-20': [['lostResource', 'future:windows:c5r5,c7r6', 'you-future-fork', 'projectedDeep'],
+    ['opponentPunishment', 'future:c5r2', 'opp-key-square', 'projectedDeepOpp'],
+    ['lostResource', 'future:c5r4', 'you-fork-pivot', 'projectedDeep']],
+  'eval-25': [['lostResource', 'future:windows:c5r6,c7r3', 'you-future-fork', 'projectedDeep'],
+    ['opponentPunishment', 'future:c1r5', 'opp-key-square', 'projectedDeepOpp'],
+    ['lostResource', 'future:c5r5', 'you-fork-pivot', 'projectedDeep']],
+  'eval-26': [['lostResource', 'future:windows:c5r6,c7r3', 'you-future-fork', 'projectedDeep'],
+    ['opponentPunishment', 'future:c5r5', 'opp-future-fork', 'projectedDeepOpp'],
+    ['opponentPunishment', 'future:c5r4', 'opp-fork-pivot', 'projectedDeepOpp']],
+};
+
+test('D-2026-09-01: fork-carrying L6 records keep their existing (unswapped) required set (corpus-wide)', async () => {
+  const { rows, toNarratorVector, pruneVector } = await loadTask8Corpus();
+  for (const [id, pin] of Object.entries(TASK8_FORK_L6_PINS)) {
+    const fv = pruneVector(toNarratorVector(rows.find((r) => r.id === id).evidence));
+    const model = buildReasonRenderModel(fv);
+    assert.equal(model.link.id, 'L6', `${id}: expected L6 routing`);
+    assert.deepEqual(model.requiredSet.map((g) => [g.half, g.spec, g.handle, g.truthBoard]), pin,
+      `${id}: fork-carrying L6 required set drifted from its pre-Task-8 snapshot`);
+  }
+});
+
+// L9's guardrail ("hedge — do not fabricate a crisp cause") forbids the both-lines rewrite, and L9
+// precedes L6 in the link table while satisfying the same `winning_line`/`winning_line` kind shape —
+// which is exactly why the branch keys on the ROUTED link id, not on kind fields.
+const TASK8_L9_PINS = {
+  'eval-31': [['lostResource', 'future:c6r5', 'you-key-square', 'projectedDeep'],
+    ['opponentPunishment', 'c6r2', 'opp-major', 'decision'],
+    ['lostResource', 'future:windows:c4r3,c5r4,c6r5,c7r6', 'you-key-line', 'projectedDeep']],
+  'eval-35': [['lostResource', 'future:c5r5', 'you-key-square', 'projectedDeep'],
+    ['opponentPunishment', 'future:c5r4', 'opp-key-square', 'projectedDeepOpp'],
+    ['lostResource', 'future:windows:c2r5,c3r5,c4r5,c5r5', 'you-key-line', 'projectedDeep']],
+  'pin-L9-hedged-parity': [['lostResource', 'future:c5r5', 'you-key-square', 'projectedDeep'],
+    ['opponentPunishment', 'future:c5r4', 'opp-key-square', 'projectedDeepOpp'],
+    ['lostResource', 'future:windows:c2r5,c3r5,c4r5,c5r5', 'you-key-line', 'projectedDeep']],
+};
+
+test('D-2026-09-01: L9 required sets are untouched by the L6 swap (eval-31, eval-35, pin-L9-hedged-parity)', async () => {
+  const { rows, toNarratorVector, pruneVector } = await loadTask8Corpus();
+  for (const [id, pin] of Object.entries(TASK8_L9_PINS)) {
+    const fv = pruneVector(toNarratorVector(rows.find((r) => r.id === id).evidence));
+    const model = buildReasonRenderModel(fv);
+    assert.equal(model.link.id, 'L9', `${id}: expected L9 routing`);
+    assert.deepEqual(model.requiredSet.map((g) => [g.half, g.spec, g.handle, g.truthBoard]), pin,
+      `${id}: L9 required set drifted — the both-lines swap must never reach an L9 record`);
+  }
+});
+
+test('D-2026-09-01: FR-004 (required ⊆ offered) and the 1-3 cap hold corpus-wide after the swap', async () => {
+  const { rows, toNarratorVector, pruneVector } = await loadTask8Corpus();
+  for (const row of rows) {
+    const fv = pruneVector(toNarratorVector(row.evidence));
+    const model = buildReasonRenderModel(fv);
+    const offered = new Set(model.zones.aliases.map((a) => a.spec));
+    assert.ok(model.requiredSet.length <= 3, `${row.id}: required set over cap`);
+    for (const g of model.requiredSet) {
+      assert.ok(offered.has(g.spec), `${row.id}: required spec ${g.spec} (${g.handle}) is not offered`);
+    }
+    // buildRenderDecision must derive the SAME required set (it routes the same link id).
+    assert.deepEqual(buildRenderDecision(fv).requiredSet, model.requiredSet,
+      `${row.id}: buildRenderDecision required set diverged from buildReasonRenderModel`);
+  }
+});
+
+test('D-2026-09-01: deriveRequiredSet with no linkId keeps the pre-Task-8 derivation (default arg)', () => {
+  const pruned = {
+    lostResource: { completingCell: 'c5r5', window: ['c2r5', 'c3r5', 'c4r5', 'c5r5'] },
+    opponentPunishment: { completingCell: 'c3r5', window: ['c6r2', 'c5r3', 'c4r4', 'c3r5'] },
+  };
+  const twoArg = deriveRequiredSet(pruned, { aliases: LINE_ALIASES });
+  const explicitNonL6 = deriveRequiredSet(pruned, { aliases: LINE_ALIASES }, 'L5');
+  assert.deepEqual(twoArg.map((g) => g.handle), ['you-key-square', 'opp-key-square', 'you-key-line']);
+  assert.deepEqual(explicitNonL6, twoArg);
+  // Same fixture routed as L6 swaps to both lines + one square, still capped at 3.
+  const asL6 = deriveRequiredSet(pruned, { aliases: LINE_ALIASES }, 'L6');
+  assert.deepEqual(asL6.map((g) => g.handle), ['you-key-line', 'opp-key-line', 'you-key-square']);
+});
+
+// ── Task 8, fix round 1 (2026-09-01): the L7 swap must never evict a fork PIVOT ──────────────────
+// D48 rule 3: "a fork's pivot is offered AND required". The swap's last-resort victim (at cap, with
+// no `opp-…-line` group to give up) used to overwrite the LAST-derived group unconditionally — which
+// on an L7 fork record can be `opp-fork-pivot`, trading one invariant for another. It now ABSTAINS
+// (I2). Dead on today's corpus (only eval-30 triggers the swap at all, and it has a line victim), so
+// these are unit tests on `deriveRequiredSet` with the routed link id passed explicitly — the same
+// entry point production uses, just fed a shape the 63 records do not currently contain.
+
+// At cap, no line group, last-derived group is a fork pivot. Derivation:
+//   point(lostResource)      -> c6r2                 -> opp-key-square
+//   point(opponentPunishment)-> windows:c3r5,c7r1    -> opp-future-fork   (double_threat forkCells)
+//   pivot(opponentPunishment)-> c5r4                 -> opp-fork-pivot    (last ply of its line)
+const L7_PIVOT_TAIL_PRUNED = {
+  lostResource: { completingCell: 'c6r2' },
+  opponentPunishment: {
+    tacticTag: 'double_threat', completingCell: 'c3r5', forkCells: ['c3r5', 'c7r1'],
+    line: [{ cell: 'c4r3' }, { cell: 'c5r4' }],
+  },
+};
+const L7_PIVOT_TAIL_ALIASES = [
+  { handle: 'opp-key-square', spec: 'c6r2', role: 'a square on the opponent line', truthBoard: 'decision', kbId: null },
+  { handle: 'opp-future-fork', spec: 'windows:c3r5,c7r1', role: 'both fork squares', truthBoard: 'afterPlayed', kbId: 'double_threat' },
+  { handle: 'opp-fork-pivot', spec: 'c5r4', role: 'the square that creates the fork', truthBoard: 'afterPlayed', kbId: null },
+  { handle: 'you-double', spec: 'windows:c1r4,c2r2', role: 'your own counterplay', truthBoard: 'decision', kbId: 'double_threat' },
+];
+
+test('D-2026-09-01 (fix round 1): the L7 swap ABSTAINS when the only victim would be a fork pivot (D48 rule 3)', () => {
+  const req = deriveRequiredSet(L7_PIVOT_TAIL_PRUNED, { aliases: L7_PIVOT_TAIL_ALIASES }, 'L7');
+  // Preconditions the abstention depends on — asserted, not assumed.
+  assert.equal(req.length, 3, 'fixture must be AT CAP for the last-resort branch to be reachable');
+  assert.ok(!req.some((g) => /-line(-\d+)?$/.test(g.handle)), 'fixture must offer NO line victim');
+  assert.match(req[req.length - 1].handle, /-fork-pivot$/, 'fixture must end on a fork pivot');
+  // The abstention itself: the pivot survives and the swap did not fire.
+  assert.deepEqual(req.map((g) => g.handle), ['opp-key-square', 'opp-future-fork', 'opp-fork-pivot']);
+  assert.ok(!req.some((g) => g.handle.startsWith('you-')),
+    'the swap must not fire here — requiring you-double would have deleted the fork pivot D48 rule 3 requires');
+});
+
+test('D-2026-09-01 (fix round 1): the L7 last-resort swap STILL fires when the tail group is not a pivot', () => {
+  // Same shape, but the opponent half carries no pivot (no `line`), so the third slot is filled by a
+  // second key square — an ordinary group the swap may evict. This is the positive control proving
+  // the abstention is scoped to fork pivots and did not disable the last-resort branch outright.
+  const pruned = {
+    lostResource: { completingCell: 'c6r2' },
+    opponentPunishment: { tacticTag: 'double_threat', completingCell: 'c3r5', forkCells: ['c3r5', 'c7r1'] },
+  };
+  const aliases = [...L7_PIVOT_TAIL_ALIASES.filter((a) => a.handle !== 'opp-fork-pivot'),
+    { handle: 'opp-key-square-2', spec: 'col4', role: 'the better column', truthBoard: 'decision', kbId: null }];
+  const req = deriveRequiredSet({ ...pruned, bestCol: 3 }, { aliases }, 'L7');
+  assert.deepEqual(req.map((g) => g.handle), ['opp-key-square', 'opp-future-fork', 'you-double'],
+    'the non-pivot tail group is a legitimate victim and must still be swapped out');
+});
+
+test('D-2026-09-01 (fix round 1): an offered LINE remains the preferred victim, and the fork pivot survives beside it', () => {
+  // Line victim present AND a pivot present: the line goes, the pivot survives — the ordering the
+  // swap was written with, re-pinned so a future edit cannot quietly promote the pivot to victim.
+  const aliases = [...L7_PIVOT_TAIL_ALIASES,
+    { handle: 'opp-key-line', spec: 'windows:c6r2,c5r3,c4r4,c3r5', role: 'the opponent line', truthBoard: 'decision', kbId: null }];
+  const pruned = {
+    lostResource: { window: ['c6r2', 'c5r3', 'c4r4', 'c3r5'] },   // no cell -> its group IS the line
+    opponentPunishment: {
+      tacticTag: 'double_threat', completingCell: 'c3r5', forkCells: ['c3r5', 'c7r1'],
+      line: [{ cell: 'c4r3' }, { cell: 'c5r4' }],
+    },
+  };
+  const req = deriveRequiredSet(pruned, { aliases }, 'L7');
+  assert.ok(req.some((g) => g.handle === 'you-double'), 'the swap must fire: ' + req.map((g) => g.handle));
+  assert.ok(req.some((g) => g.handle === 'opp-fork-pivot'), 'the fork pivot must survive: ' + req.map((g) => g.handle));
+  assert.ok(!req.some((g) => g.handle === 'opp-key-line'), 'the LINE is the victim: ' + req.map((g) => g.handle));
+});
+
+// ── Task 9: by-design OMITs raise a typed NotABlunder error instead of falling through to
+// classifyCausalLink's opaque "no rule matched" (I4/D3/D4/D23). Minimal vector shape per the task
+// brief — the guard keys only on `case` and `gate.verdict`, so this exercises the real branch
+// without a live solver call. Guarded in BOTH buildRenderDecision (what the frequency probe calls,
+// and which calls classifyCausalLink itself) and buildReasonRenderModel (F9).
+
+test('a by-design OMIT (win_to_slower_win) raises NotABlunder, not "no rule matched" (via buildRenderDecision)', () => {
+  const fv = { case: 'win_to_slower_win' };
+  assert.throws(() => buildRenderDecision(fv), /NotABlunder/);
+});
+
+test('a by-design OMIT (win_to_slower_win) raises NotABlunder from buildReasonRenderModel too', () => {
+  const fv = { case: 'win_to_slower_win' };
+  assert.throws(() => buildReasonRenderModel(fv), /NotABlunder/);
+});
+
+test('a by-design OMIT (lose_to_faster_lose gate NotABlunder) raises NotABlunder (via buildRenderDecision)', () => {
+  const fv = { case: 'lose_to_faster_lose', gate: { verdict: 'NotABlunder' } };
+  assert.throws(() => buildRenderDecision(fv), /NotABlunder/);
+});
+
+test('a by-design OMIT (lose_to_faster_lose gate NotABlunder) raises NotABlunder from buildReasonRenderModel too', () => {
+  const fv = { case: 'lose_to_faster_lose', gate: { verdict: 'NotABlunder' } };
+  assert.throws(() => buildReasonRenderModel(fv), /NotABlunder/);
+});
+
+test('lose_to_faster_lose with gate.verdict Blunder does NOT trip the guard (only NotABlunder does)', () => {
+  // Sanity control: a real, gated Blunder on this case must not be swallowed by the guard. The
+  // minimal fixture is missing other fields buildRenderDecision needs downstream, so it may still
+  // throw for an unrelated reason (or run to completion) — what this test pins is that the guard's
+  // own typed error never fires here.
+  const fv = { case: 'lose_to_faster_lose', gate: { verdict: 'Blunder' } };
+  try {
+    buildRenderDecision(fv);
+  } catch (err) {
+    assert.ok(!/NotABlunder: by-design OMIT/.test(err.message),
+      `guard must not fire on gate.verdict === 'Blunder', got: ${err.message}`);
+  }
+});
+
+// ── Final-review fixes (2026-09-01) ─────────────────────────────────────────────────────────────
+
+// Fix 2. A realized-fork pivot may take the PRESENT-tense `fork-pivot-now` role ("the square <owner>
+// plays to CREATE the fork") only when the square is genuinely playable on the board the alias names.
+// `pin-branch-invariance-true-1`'s `opp-fork-pivot = c5r3` is `register: 'immediate'` (so the old
+// `isFuture`-only choice gave it the present tense) but on the `decision` board it is EMPTY AND NOT
+// GRAVITY-TOP — the column top is row 2 (0-indexed 1) and the cell's row is 2 — so the opponent
+// cannot play it. Blast radius measured corpus-wide: 1 of 63 records.
+test('Fix 2: a realized-fork pivot that is not gravity-top on its own truthBoard takes the NON-present-tense role', async () => {
+  const { readFileSync } = await import('node:fs');
+  const { fileURLToPath } = await import('node:url');
+  const { dirname, join } = await import('node:path');
+  const { toNarratorVector, pruneVector } = await import('../scripts/reasonNarratorVector.mjs');
+  const { parseBoardState } = await import('../classifier.js');
+  const here = dirname(fileURLToPath(import.meta.url));
+  const rows = readFileSync(join(here, '../scripts/reason_corpus/evidence.jsonl'), 'utf8')
+    .trim().split('\n').map((l) => JSON.parse(l));
+
+  const fv = pruneVector(toNarratorVector(rows.find((r) => r.id === 'pin-branch-invariance-true-1').evidence));
+  const model = buildReasonRenderModel(fv);
+  const pivot = model.zones.aliases.find((a) => a.handle === 'opp-fork-pivot');
+  assert.ok(pivot, 'fixture premise: this record offers a realized-fork pivot');
+  assert.equal(pivot.spec, 'c5r3');
+  assert.equal(pivot.truthBoard, 'decision');
+
+  // The premise, checked through the production board model rather than asserted as a constant.
+  const board = model.boards.find((b) => b.id === pivot.truthBoard);
+  const { colHeights } = parseBoardState(board.movestring);
+  assert.notEqual(colHeights[4], 2, 'fixture premise: c5r3 must NOT be gravity-top on the decision board');
+
+  assert.match(pivot.role, /it is NOT the move to play right now/,
+    'a square the opponent cannot play must not be described as the square they play');
+  assert.doesNotMatch(pivot.role, /CREATE the fork — the move that makes both winning squares live at once$/);
+});
+
+test('Fix 2: every fork pivot claiming the present tense IS gravity-top on the board it names (corpus-wide)', async () => {
+  const { readFileSync } = await import('node:fs');
+  const { fileURLToPath } = await import('node:url');
+  const { dirname, join } = await import('node:path');
+  const { toNarratorVector, pruneVector } = await import('../scripts/reasonNarratorVector.mjs');
+  const { parseBoardState } = await import('../classifier.js');
+  const here = dirname(fileURLToPath(import.meta.url));
+  const rows = readFileSync(join(here, '../scripts/reason_corpus/evidence.jsonl'), 'utf8')
+    .trim().split('\n').map((l) => JSON.parse(l));
+
+  // Scoped to the realized-fork family this fix touches: those pivots name a board the prompt shows
+  // and carry a bare (non-`future:`) spec. The board-tag pivots (T025, `afterBest`/`afterPlayed`) are
+  // a different construction — there the pivot cell is the creating move itself, already PLAYED on
+  // the board it names — and are deliberately out of scope.
+  const FORK_TAGS = new Set(['double_threat', 'figure_7']);
+  let checked = 0, presentTense = 0;
+  for (const r of rows) {
+    const fv = pruneVector(toNarratorVector(r.evidence));
+    const realized = [fv.lostResource, fv.opponentPunishment]
+      .filter((h) => h && h.kind === 'realized_pattern' && FORK_TAGS.has(h.tag));
+    if (!realized.length) continue;
+    const model = buildReasonRenderModel(fv);
+    for (const a of model.zones.aliases) {
+      if (!/-fork-pivot(-\d+)?$/.test(a.handle)) continue;
+      if (a.spec.startsWith('future:')) continue;
+      if (a.truthBoard === 'afterBest' || a.truthBoard === 'afterPlayed') continue;   // board-tag pivots
+      const board = model.boards.find((b) => b.id === a.truthBoard);
+      if (!board) continue;
+      checked++;
+      const m = /^c(\d+)r(\d+)$/.exec(a.spec);
+      const { colHeights } = parseBoardState(board.movestring);
+      const gravityTop = colHeights[Number(m[1]) - 1] === Number(m[2]) - 1;
+      const claimsNow = !/NOT the move to play right now/.test(a.role)
+        && /plays? to CREATE the fork/.test(a.role);
+      if (claimsNow) presentTense++;
+      assert.equal(claimsNow, gravityTop,
+        `${r.id} ${a.handle} (${a.spec} on ${a.truthBoard}): present-tense=${claimsNow} but gravity-top=${gravityTop}`);
+    }
+  }
+  assert.ok(checked >= 5, `expected the realized-fork pivots to still be offered; checked ${checked}`);
+  // The gravity-top ones keep `fork-pivot-now`: eval-43, eval-44, eval-46, pin-L3-no-causation.
+  assert.equal(presentTense, 4, `expected 4 present-tense realized-fork pivots; got ${presentTense}`);
+});
+
+// Fix 5a. `FORK_PIVOT_HANDLE` (and the L7 victim search's `LINE_GROUP_HANDLE`) MIRROR `mkHandle`'s
+// naming scheme in zoneAnnotations.mjs. A rename there would silently turn the D48-rule-3 abstention
+// into a no-op on a path that is dead on today's corpus, so no existing test would go red. This
+// asserts the mirror against what the offer layer actually produces.
+test('Fix 5a: every fork-pivot handle the offer layer produces matches FORK_PIVOT_HANDLE (corpus-wide)', async () => {
+  const { readFileSync } = await import('node:fs');
+  const { fileURLToPath } = await import('node:url');
+  const { dirname, join } = await import('node:path');
+  const { toNarratorVector, pruneVector } = await import('../scripts/reasonNarratorVector.mjs');
+  const { FORK_PIVOT_HANDLE, LINE_GROUP_HANDLE } = await import('../scripts/renderReasonModel.mjs');
+  const here = dirname(fileURLToPath(import.meta.url));
+  const rows = readFileSync(join(here, '../scripts/reason_corpus/evidence.jsonl'), 'utf8')
+    .trim().split('\n').map((l) => JSON.parse(l));
+
+  let pivots = 0, lines = 0;
+  for (const r of rows) {
+    const model = buildReasonRenderModel(pruneVector(toNarratorVector(r.evidence)));
+    for (const a of model.zones.aliases) {
+      // "A fork pivot" is identified by the ROLE TEXT (what the reader is told the handle is), never
+      // by the regex under test — otherwise the assertion would be f(a) === f(a) and vacuous.
+      if (/to CREATE the fork|that move is what set up the fork/.test(a.role)) {
+        pivots++;
+        assert.match(a.handle, FORK_PIVOT_HANDLE,
+          `${r.id}: ${a.handle} is a fork pivot by its role text but FORK_PIVOT_HANDLE does not match it — `
+          + 'the L7 D48-rule-3 abstention would silently stop protecting it');
+      }
+      // Same mirror risk for the L7 victim search. Scoped to the `*-key-line` / `*-<kind>-line`
+      // family it actually targets; `*-fork-lines` (plural, the D45 both-lines group) is a separate
+      // handle family the swap deliberately does not treat as a line victim.
+      if (/-key-line(-\d+)?$/.test(a.handle)) {
+        lines++;
+        assert.match(a.handle, LINE_GROUP_HANDLE, `${r.id}: ${a.handle} must be recognisable as a line group`);
+      }
+    }
+  }
+  assert.ok(pivots >= 20, `expected the corpus to still offer fork pivots; got ${pivots}`);
+  assert.ok(lines >= 20, `expected the corpus to still offer key-line groups; got ${lines}`);
+});
+
+// Fix 5b. The realized-fork prong pair's `kbId` is derived from the half's own tag, not hard-coded to
+// 'double_threat'. Inert on today's corpus (every realized `figure_7` half is single-cell and never
+// reaches the pair block), so this drives the branch directly.
+test('Fix 5b: a realized-fork prong pair takes its kbId from the half\'s own tag, not a hard-coded double_threat', async () => {
+  const { buildAnnotationOffer } = await import('../scripts/reason_engine/zoneAnnotations.mjs');
+  const boards = [{ id: 'decision', movestring: '3323', shown: true, tags: [] }];
+  const mk = (tag) => ({
+    bestCol: 0, playedCol: 1, movestring: '3323',
+    opponentPunishment: { kind: 'realized_pattern', tag, owner: 2, register: 'immediate',
+      cells: ['c2r1', 'c6r1'], finalMovestring: '33232' },
+  });
+  const pairOf = (tag) => buildAnnotationOffer(mk(tag), boards).aliases
+    .find((a) => /-double(-\d+)?$/.test(a.handle));
+
+  const f7 = pairOf('figure_7');
+  assert.ok(f7, 'the figure_7 two-prong half must still get a pair');
+  assert.equal(f7.kbId, 'figure_7', 'the pair must be glossed as the tag it actually is');
+
+  const dt = pairOf('double_threat');
+  assert.equal(dt.kbId, 'double_threat', 'the double_threat path is unchanged');
 });

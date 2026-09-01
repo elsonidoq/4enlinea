@@ -338,7 +338,15 @@ PK: `(position_hash, locale)` — composite (migration 059). Was `position_hash`
 
 **`position_hash`** is `sha256('${movestring}:${col}')` where `col` is 0-indexed. Computed at write time in the `/api/explain-move-llm` endpoint.
 
-**`deep_reveal_json`** shape: `{ explanation: string, prompt: string }`. The `prompt` field stores the full LLM system prompt used to generate the explanation (for cache-rebuild and debugging). May be `null` on very old rows (migration 023 made `llm_prompt` nullable before the field moved into `deep_reveal_json`).
+**`deep_reveal_json`** shape: `{ explanation: string, prompt: string, terms: object }` (`index.js:1453`).
+The `prompt` field stores the full LLM system prompt used to generate the explanation (for
+cache-rebuild and debugging). May be `null` on very old rows (migration 023 made `llm_prompt`
+nullable before the field moved into `deep_reveal_json`). **`terms`** is a `{ [kbId]: shortSummary }`
+map, one entry per `[term:kbId]` tag found in `explanation` (`index.js:1429-1437`) — the `kbId` key is
+exactly the string the LLM wrote inside the tag, **not necessarily the KB file slug**. Some readers
+fall back to a legacy `fullText` key from pre-Epic-3 rows (`index.js:3919`,
+`reasonRenderGuard.mjs:493`); `index.js:1330` reads `deep_reveal_json.terms ?? {}` to guard against
+older rows that predate the `terms` field.
 
 ---
 
@@ -372,6 +380,18 @@ PK: `id`
 | human_note | text | NO | |
 | feature | text | NO | |
 | created_at | timestamptz | NO | `now()` |
+
+**`movestring`** is the **pre-move** position — the played column is not stored as a column. Recover it
+from the stored `llm_prompt` (`index.js:1483-1521` stores no column; the `col` request field is used
+only to look up the cached prompt, never persisted):
+
+```js
+const m = llmPrompt.match(/Move played: column (\d+)/);
+const col = parseInt(m[1], 10) - 1; // 0-indexed
+```
+
+The regex matches the live prompt line built at `llmCoachHelpers.js:659`
+(`` `- Move played: column ${playedCol + 1}` ``).
 
 ---
 

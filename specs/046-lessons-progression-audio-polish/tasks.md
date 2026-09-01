@@ -388,8 +388,8 @@ until both pre-flight checks are resolved.
 - [x] T042 PRE-FLIGHT GATE (manual): confirm `NODE_ENV=production` is reliably set in the actually-deployed
   Railway environment (`requireAdmin` in `server/adminAuth.js` is a no-op outside `NODE_ENV=production`, so
   the API-side gap this phase closes is only a real production exposure if `NODE_ENV` is in fact `production`
-  there today). Inspect the Railway env/deploy config (see memory `project_spec031_staging_production_deploy.md`
-  for prior deploy-config traps). If `NODE_ENV` is not reliably set, note the reduced urgency of the API-side
+  there today). Inspect the Railway env/deploy config (see memory `project_deploy_execution_traps.md`,
+  merged from `project_spec031_staging_production_deploy`, for prior deploy-config traps). If `NODE_ENV` is not reliably set, note the reduced urgency of the API-side
   fix in this phase's implementation notes but still proceed with the frontend guard (T047–T049), which has no
   `NODE_ENV` dependency.
 - [x] T043 [P] Add `requireLocalhost` as the first middleware argument on the 5 currently-ungated lesson-admin

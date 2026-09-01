@@ -4,7 +4,7 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import { toNarratorVector, pruneVector } from '../scripts/reasonNarratorVector.mjs';
-import { classifyCausalLink } from '../scripts/reason_engine/causalLinks.mjs';
+import { classifyCausalLink, denialCell } from '../scripts/reason_engine/causalLinks.mjs';
 import { patternOnAfterBestBoard } from '../scripts/reasonBoardSelect.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -201,4 +201,128 @@ test('OI-195: a punishment half with no tie falls back to completingCell (T015: 
   assert.match(link.text, /let the opponent open a path to column 2\b/);
   assert.doesNotMatch(link.text, /let the opponent occupy column 2\b/);
   assert.doesNotMatch(link.text, /\bc\d+r\d+\b/);
+});
+
+// ── A7a (task 6) — L3 states the CONCESSION, not just the outcome; the inevitability claim is gated;
+// L5 gains the causal connective. Graded 3/3 deterministic on eval-37 / eval-42 / eval-28.
+//
+// The hard constraint on every new L3 clause is L3's own guardrail, verbatim: "MUST NOT say the
+// played move caused or enabled the pattern, and MUST NOT tell the player they are lost". The
+// clauses below are descriptive of the resulting position only; the tests assert that directly.
+
+test('A7a/L3 (eval-37): names the concession (the square right beneath the one the opponent needs), not just the outcome', () => {
+  const { fv, link } = classifyById('eval-37');
+  assert.equal(link.id, 'L3');
+  assert.equal(fv.playedCol, 0);
+  assert.equal(fv.opponentPunishment.completingCell, 'c1r4');
+  assert.match(link.text, /right beneath the one your opponent needs in column 1/);
+  assert.doesNotMatch(link.text, /only speeds up the finish\.$/);
+  // patternOnAfterBestBoard === true here, so the inevitability clause and its no-causation denial stay.
+  assert.match(link.text, /no matter what you play here/);
+  assert.match(link.text, /didn't create it/i);
+  assert.doesNotMatch(link.text, /\bc\d+r\d+\b/);           // no raw coordinate leaks (OI-194)
+});
+
+test('A7a/L3 (eval-42): no inevitability claim when the pattern is absent from the after-best board, and no causation assertion', () => {
+  const { link } = classifyById('eval-42');
+  assert.equal(link.id, 'L3');
+  assert.ok(!link.text.includes('no matter what you play here'), link.text);
+  // "available", never "already there"/"waiting": the figure_7's own cell c3r2 is EMPTY on the
+  // decision board (the opponent holds only c4r1 and c2r3 of that window), so a PRESENCE claim
+  // would be an I2 fabrication. `realized_pattern` means the opponent realizes it with their reply.
+  assert.match(link.text, /already available in this position/);
+  assert.doesNotMatch(link.text, /already there|waiting in this position/i);
+  // The guardrail's hard MUST NOT, asserted on the player-facing text itself.
+  assert.doesNotMatch(link.text, /caused|enabled|opened the door|created it|let the opponent/i);
+  // Final-review fix (2026-09-01): the clause is NON-CONTRASTIVE — its own sentence, no semicolon
+  // parallel with "Column 1 makes your opponent work hardest for it". `bestCol` here is 0 and the
+  // needed column index is 2, so playing the BETTER column leaves that square open too; the old
+  // semicolon frame implied otherwise and invited "column 1 would have stopped them".
+  assert.match(link.text, /The square your opponent needs in column 3 is already open to them on their very next turn/);
+  assert.doesNotMatch(link.text, /the move you played leaves the square/);
+  assert.doesNotMatch(link.text, /work hardest for it; the move you played/);
+  // The mechanism must still be named — this record is the reason the clause exists (A7a 3/3 -> 0/3,
+  // full pass, D60). Regressing it to the mechanism-free abstention would undo that.
+  assert.doesNotMatch(link.text, /only speeds up the finish/);
+  assert.doesNotMatch(link.text, /\bc\d+r\d+\b/);
+});
+
+test('A7a/L3 (eval-42): the non-contrastive branch makes no claim about the BETTER move leaving that square open', () => {
+  // The structural defect the rewording fixes, asserted on the vector that proves it: playing
+  // `bestCol` does not touch the needed square's column either, so any sentence that contrasts the
+  // played move with the better move ON THIS POINT is false. Derived from the record, not asserted
+  // as a constant.
+  const { fv, link } = classifyById('eval-42');
+  const m = /^c(\d+)r(\d+)$/.exec(fv.opponentPunishment.completingCell);
+  const neededCol = Number(m[1]) - 1;
+  assert.notEqual(fv.bestCol, neededCol,
+    'fixture premise: the better column is NOT the needed square\'s column, so the contrast would be false');
+  assert.notEqual(fv.playedCol, neededCol, 'fixture premise: this is the not-the-played-column branch');
+  // Nothing in the text attributes the open square to the played move.
+  assert.doesNotMatch(link.text, /the move you played (leaves|left|opened|allows)/i);
+});
+
+// Derived, never hard-coded: the no-causation sweep below is the ONLY mechanical guard on L3's hard
+// MUST NOT, so it has to cover an L3 record added to the corpus tomorrow, not the nine that happen to
+// exist today. Rows that don't produce a vector/link at all (error rows) are skipped, exactly as the
+// other corpus sweeps in this suite do.
+function idsForLink(linkId) {
+  const ids = [];
+  for (const row of rows) {
+    if (!row?.evidence || row.error) continue;
+    try { if (classifyById(row.id).link.id === linkId) ids.push(row.id); } catch { /* not classifiable */ }
+  }
+  return ids;
+}
+
+test('A7a/L3: no clause on ANY L3 corpus record asserts the played move caused or enabled the pattern', () => {
+  const l3Ids = idsForLink('L3');
+  assert.ok(l3Ids.length >= 9, `expected the corpus to still carry the known L3 records; got ${l3Ids.length}`);
+  for (const id of l3Ids) {
+    const { link } = classifyById(id);
+    assert.equal(link.id, 'L3', id);
+    assert.doesNotMatch(link.text, /\b(caused|enabled|opened the door|handed|gave (your|the) opponent)\b/i, id);
+    assert.doesNotMatch(link.text, /already losing|neither move wins|you are lost/i, id);
+    assert.doesNotMatch(link.text, /\bc\d+r\d+\b/, id);
+  }
+});
+
+test('A7a/L3: abstains to the existing wording when the completing cell is not gravity-top after the played move', () => {
+  const { link } = classifyById('pin-L3-no-causation');
+  assert.match(link.text, /only speeds up the finish\.$/);   // I2 abstention, wording unchanged
+});
+
+test('A7a/L5 (eval-28): the denial square is tied to the winning line instead of being left as a bare outcome', () => {
+  const { fv, link } = classifyById('eval-28');
+  assert.equal(link.id, 'L5');
+  assert.ok(fv.lostResource.window.includes(denialCell(fv.opponentPunishment)));
+  assert.match(link.text, /Your winning line ran through that square/);
+  assert.match(link.text, /taking it is what kills the win/);
+  assert.doesNotMatch(link.text, /\bc\d+r\d+\b/);
+});
+
+test('A7a/L5: every L5 corpus record gets the causal sentence, and it abstains when the vector cannot support it', () => {
+  const l5Ids = idsForLink('L5');
+  assert.ok(l5Ids.length >= 9, `expected the corpus to still carry the known L5 records; got ${l5Ids.length}`);
+  for (const id of l5Ids) {
+    const { fv, link } = classifyById(id);
+    assert.equal(link.id, 'L5', id);
+    assert.ok(fv.lostResource.window.includes(denialCell(fv.opponentPunishment)), `${id}: denial cell must be in the winning window`);
+    assert.equal(fv.opponentPunishment.verdict, 'occupation', `${id}: the opponent must actually TAKE that square`);
+    assert.match(link.text, /Your winning line ran through that square/, id);
+  }
+  // I2 abstention 1: no window on the vector -> "your winning line ran through that square" is
+  // not fabricated.
+  const { fv } = classifyById('eval-28');
+  const noWindow = { ...fv, lostResource: { ...fv.lostResource, window: undefined } };
+  const link = classifyCausalLink(noWindow, {});
+  assert.equal(link.id, 'L5');
+  assert.doesNotMatch(link.text, /Your winning line ran through that square/);
+  // I2 abstention 2: a half that denies WITHOUT occupying that square -> "taking it is what kills
+  // the win" is not fabricated either (the `no_occupation` shape eval-37's own lostResource has).
+  const noOcc = { ...fv, opponentPunishment: { ...fv.opponentPunishment, verdict: 'no_occupation' } };
+  const link2 = classifyCausalLink(noOcc, {});
+  assert.equal(link2.id, 'L5');
+  assert.doesNotMatch(link2.text, /taking it is what kills the win/);
+  assert.match(link2.text, /let the opponent deny it at column 7\.$/);   // weaker but true, unchanged
 });

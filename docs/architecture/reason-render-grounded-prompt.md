@@ -375,7 +375,7 @@ import it and the catalog — and nothing re-implements the rules:
    `PROVISIONAL` (rare in self-play) — to *guarantee* they are evaluated, the sampler needs a
    **targeted harvest** for those links (directed search / higher budget), not only the diversity
    sweep. (Never hand-build boards — use `playGame` with a property filter; see memory
-   `feedback_reproduce_fv_case_from_coverage` and `CLAUDE.md` §"When you need a concrete movestring".)
+   `feature-vector-sufficiency-experiment.md` §14 and `CLAUDE.md` §"When you need a concrete movestring".)
 
 **Auditability guarantee:** to change a rule, edit one entry in `causalLinks.mjs`; the composer,
 grader rubric, coverage universe, and the §6 completeness assertion all re-derive from it. A mistake
@@ -1102,11 +1102,48 @@ here per §12g's own rule:
   (not yet reachable — the column needs to fill first)" — never upgrade a non-gravity-top threat into
   a "next move" claim. (Batch 3a, `grainOf(...)`, T013.)
 
-**Q8's ordinal-locator phrasing** ("the lower one" / "the higher one" / "the Nth one, counting from the
-bottom of the board") is the opposite direction — it is new REPLACEMENT vocabulary for sibling
-disambiguation (D49 addendum, T023), not new prohibited vocabulary — so it does not itself add a
-never-repeat bullet; the raw-coordinate form it replaces (`"the one at c6r5: …"`) was already covered
-by the existing `cNrM` never-repeat rule two bullets up in the same reading key.
+**Q8's sibling-locator phrasing** is REPLACEMENT vocabulary for sibling disambiguation (D49 addendum,
+T023), not new prohibited vocabulary — so it does not itself add a never-repeat bullet; the
+raw-coordinate form it replaces (`"the one at c6r5: …"`) was already covered by the existing `cNrM`
+never-repeat rule two bullets up in the same reading key.
+
+> **SUPERSEDED 2026-08-28 — the first locator wording was board-FALSE and was replaced.** The
+> originally-shipped phrasing ("the lower one" / "the higher one" / "the Nth one, counting from the
+> bottom of the board") asserted a **height** relation that `specSortKey`'s sort does not guarantee:
+> the sort falls through to a column tiebreak and then to original array order, so two cells on the
+> **same row** were being labelled "lower" and "higher". Measured: **22 of 58** sibling groups carried
+> a false height claim (`eval-9`: `future:c3r5` → "the lower one", `future:c6r5` → "the higher one",
+> both row 5). The corpus test could not catch it because it asserted only that the two roles *differ*.
+>
+> **SUPERSEDED 2026-09-01 (D60 §2) — the ladder is now PER-MEMBER and gained a geometric rung above
+> column. The three rungs below are kept as the contract as it stood on 2026-08-28; they are no
+> longer what the code does. Current behaviour: each alias takes the most informative TRUE label
+> available to IT — `lineLocator`'s row/diagonal wording for a single contiguous 4-cell window
+> (`"the line across columns N–M on row R"` / `"the diagonal line rising from column N on row R to
+> column M on row S"`), else the column wording, else a claim-free ordinal — and uniqueness is
+> checked across the mixed set. `lineLocator` returns `null` for any `|`-joined or non-contiguous
+> spec, so a fork-cell group never gets a line label. Measured corpus-wide after the change: 136
+> locator-prefixed aliases = 76 column-family / 50 line-family / 10 claim-free ordinal.**
+>
+> **Contract as of 2026-08-28 — `locatorsForGroup()` in `zoneAnnotations.mjs`, a strategy ladder that
+> takes the first rung yielding unique labels, every rung true by construction:**
+> 1. **column** — `"the one in column N"` (always a true statement about the representative cell)
+> 2. **column + height** — `"the lower one in column N"` / `"the upper one in column N"`, and
+>    `"the <lowest|second-lowest|…> one in column N"` for 3+ sharing a column
+> 3. **listing ordinal, asserting no geometry** — `"the <first|second|…> one listed"`, for the residual
+>    case where two members share a representative cell and nothing spatial separates them
+>
+> A height word may appear **only** on rung 2, where the members provably share a column and differ in
+> row. Any future change here must assert the *truth* of the locator, not merely that siblings differ —
+> see the same-session lesson in the memory `feedback_wrong_test_is_part_of_the_bug`.
+
+**Same-frame cell disambiguation (`cellPhrase`, `causalLinks.mjs`, added 2026-08-28).** Collapsing a
+cell to `"column N"` (B1/T022) is ambiguous when two *different* cells named in the same frame share a
+column — measured at **6/63** records, all L6, e.g. "You had a forced win via column 2 … lets the
+opponent force their own win via column 2" for `c2r5` vs `c2r6`. The contract is now: a cell renders as
+`"column N"` only when no other cell named in the same frame shares that column; otherwise it renders
+as `"the lower square in column N"` / `"the upper square in column N"`, decided by the actual row
+values. Never emit a raw `cNrM`/`colN` to resolve the ambiguity — that reopens OI-194.
 
 **Batches 5a/5b (T022, T029, T034, plus the B1–B3 gap closures) verified, not merely asserted, to add
 no genuinely new vocabulary**: `causalLinks.mjs`'s `cellColumn`/`windowColumns` helpers (checked at

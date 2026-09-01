@@ -294,7 +294,7 @@ over that board set. `generate_eval_set.mjs` (the old-explain board generator) i
 - The explain prompt (`explainContext.js` / the LLM narrator, i.e. `compute.mjs`'s
   `buildPrompt`/`TASK` and `reasonNarratorVector.mjs`'s `toNarratorVector`/`pruneVector`) does not
   yet teach the model how to read `realized_pattern`/`denial` halves or `route`/`tag`/`direction`
-  when constructing an explanation. See memory `project_explain_system` for the current prompt
+  when constructing an explanation. See `llm-coach-endpoints.md` for the current prompt
   invariants and data flow this must extend without violating.
 
 Both are downstream UI/prompt consumers of the evidence shape, not blockers for the engine or

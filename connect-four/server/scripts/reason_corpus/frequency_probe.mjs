@@ -117,11 +117,44 @@ function d4(rd) {
     .map((a) => a.handle);
 }
 
+// D5: a fork offered for a player on a near-term board where the OTHER side moves next and can
+//     immediately occupy a prong (gravity-top) — the fork is refutable on the spot (pin-L6's class).
+//     Measurement only (this wave does NOT fix it): sizes how often a `-double` fork alias, on a
+//     near board where the fork-owning side is NOT the one to move, has a gravity-top prong the
+//     mover can occupy right now. Implemented mechanically from `rd.zones.aliases` (any `-double`
+//     handle) + boardMs/occupied (already in this file) + side-to-move (`Board#currentPlayer`, which
+//     is movestring-length parity — already exposed on the `Board` this file already imports).
+function d5(rd, nv) {
+  const hits = [];
+  for (const a of rd.zones?.aliases ?? []) {
+    if (!/-double(-\d+)?$/.test(a.handle)) continue;
+    if (!NEAR_BOARDS.has(a.truthBoard)) continue;
+    const window = parseWindow(a.spec);
+    if (!window || window.length < 2) continue;
+    const ms = boardMs(nv, a.truthBoard);
+    if (!ms) continue;
+    let b; try { b = new Board(ms); } catch { continue; }
+    const mover = b.currentPlayer;
+    // whose fork is it: `you-*` belongs to nv.player, `opp-*` belongs to nv.opponent.
+    const forkOwner = a.handle.startsWith('opp-') ? nv.opponent : (a.handle.startsWith('you-') ? nv.player : null);
+    if (forkOwner == null || forkOwner === mover) continue; // fork owner is the one to move -> not refutable by "the other side"
+    for (const cell of window) {
+      if (occupied(ms, cell)) continue; // prong already filled -> not a live fork window at all
+      if (b.colHeights[cell.col] === cell.row) {
+        hits.push(`${a.handle}@c${cell.col + 1}r${cell.row + 1}/${a.truthBoard}`);
+        break; // one hit per alias is enough
+      }
+    }
+  }
+  return hits;
+}
+
 export const DETECTORS = [
   ['D1 required handle on an occupied cell', d1],
   ['D2 horizontal line labelled by column', (rd) => d2(rd)],
   ['D3 one role string, two different squares', (rd) => d3(rd)],
   ['D4 guardrail demands a line the required set omits', (rd) => d4(rd)],
+  ['D5 dead fork offered as live', d5],
 ];
 
 async function main() {
@@ -129,7 +162,9 @@ async function main() {
   const rng = mulberry32(SEED);
   const counts = Object.fromEntries(DETECTORS.map(([n]) => [n, 0]));
   const examples = Object.fromEntries(DETECTORS.map(([n]) => [n, null]));
-  let blunders = 0, rendered = 0, engineErrors = 0, renderErrors = 0;
+  let blunders = 0, rendered = 0, engineErrors = 0, renderErrors = 0, omittedByDesign = 0;
+  const engineErrorMsgs = new Map();
+  const renderErrorMsgs = new Map();
   const games = new Set();
   try {
     for await (const b of harvestBlunders(solver, { maxGames: GAMES, rng })) {
@@ -138,8 +173,27 @@ async function main() {
       try {
         const evidence = await computeReason(b.boardState, b.movePlayed, { solver });
         nv = toNarratorVector(evidence);
-      } catch { engineErrors++; continue; }
-      try { rd = buildRenderDecision(nv); } catch { renderErrors++; continue; }
+      } catch (err) {
+        engineErrors++;
+        const key = err?.message ?? String(err);
+        engineErrorMsgs.set(key, (engineErrorMsgs.get(key) ?? 0) + 1);
+        continue;
+      }
+      // By-design OMITs (I4/D3/D4/D23): win_to_slower_win and lose_to_faster_lose with the
+      // swindle-gate NotABlunder verdict are not blunders — production never reaches this file for
+      // them (computeMechanism returns { notABlunder: true } early). Excluding them here keeps the
+      // probe's denominator honest instead of inflating it with by-design non-defects that would
+      // otherwise surface as an opaque "classifyCausalLink: no rule matched" render error.
+      if (nv.case === 'win_to_slower_win'
+          || (nv.case === 'lose_to_faster_lose' && nv.gate?.verdict === 'NotABlunder')) {
+        omittedByDesign++; continue;
+      }
+      try { rd = buildRenderDecision(nv); } catch (err) {
+        renderErrors++;
+        const key = err?.message ?? String(err);
+        renderErrorMsgs.set(key, (renderErrorMsgs.get(key) ?? 0) + 1);
+        continue;
+      }
       if (!rd) { renderErrors++; continue; }
       rendered++;
       for (const [name, fn] of DETECTORS) {
@@ -153,7 +207,15 @@ async function main() {
   } finally { solver.destroy(); }
 
   console.log(`\nSAMPLE: ${games.size} simulated games -> ${blunders} blunders; ${rendered} produced a render decision`);
-  console.log(`        (engine errors ${engineErrors}, render errors ${renderErrors}) seed=${SEED}\n`);
+  console.log(`        (engine errors ${engineErrors}, render errors ${renderErrors}, omittedByDesign ${omittedByDesign}) seed=${SEED}\n`);
+  if (engineErrorMsgs.size) {
+    console.log('engine error breakdown (self-triaging: the next unexplained throw stands out here):');
+    for (const [msg, n] of engineErrorMsgs) console.log(`  ${n}x  ${msg}`);
+  }
+  if (renderErrorMsgs.size) {
+    console.log('render error breakdown (self-triaging: the next unexplained throw stands out here):');
+    for (const [msg, n] of renderErrorMsgs) console.log(`  ${n}x  ${msg}`);
+  }
   console.table(DETECTORS.map(([n]) => ({
     detector: n,
     blunders_affected: counts[n],

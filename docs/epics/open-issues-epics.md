@@ -1735,7 +1735,7 @@ covered files are triaged.
   signature — so it passes unchanged and gives **zero** coverage of the bug that was fixed.
 - The jsdom/`global-jsdom` peer mismatch (OI-16's second bullet) is **resolved** — do not reintroduce
   `--legacy-peer-deps`; Railway's `npm ci` is strict and `railpack.json` hides it
-  (memory `project_spec031_staging_production_deploy`).
+  (memory `project_deploy_execution_traps`).
 - Re-measured lint baseline: **282 errors + 14 warnings across 71 files** (164 `no-undef`, 159 of those
   `process`), point-in-time. 3 of the 282 are `Unused eslint-disable directive` reports
   (`server/index.js:4260`, `server/tests/renderCoverageUniverse.test.mjs:28`,
@@ -1749,7 +1749,7 @@ covered files are triaged.
 - `docs/architecture/server-conventions.md` §"CSP Directive Rationale"
 - `docs/open_issues.md` — OI-70, OI-71, OI-16, OI-29, OI-58, OI-6, OI-72 (OI-51/OI-52 moved to Epic 4), plus
   the whole file for US8.3's closeout audit
-- memories: `project_csp_helmet_traps`, `project_repo_worktree_setup`, `project_spec031_staging_production_deploy`
+- memories: `project_csp_helmet_traps`, `project_repo_worktree_setup`, `project_deploy_execution_traps`
 
 **User stories & tasks**
 

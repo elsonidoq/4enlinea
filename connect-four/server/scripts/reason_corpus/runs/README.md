@@ -71,12 +71,24 @@ found the same day" (`docs/epics/deep-reveal-remediation-epic.md`, "The evidence
 message wrapping a frozen rubric is itself part of the instrument: the 08-26 run used rubric `v1`
 unchanged but a dispatch message that deviated from the skill's own fixed three-line format (it listed
 open issues by number), and that alone is the best-supported explanation for that run's A5 delta. The
-frozen rubric files are `GRADER_INSTRUCTIONS_v1.md` (superseded for new runs) and
-`GRADER_INSTRUCTIONS_v2.md` (current; adds the per-axis "which string is graded" statement — pre-guard
-`mechanism` vs post-guard `servedExplanation` — spec 059 US1 / T005) in this directory.
+frozen rubric files are `GRADER_INSTRUCTIONS_v1.md` (superseded for new runs),
+`GRADER_INSTRUCTIONS_v2.md` (adds the per-axis "which string is graded" statement — pre-guard
+`mechanism` vs post-guard `servedExplanation` — spec 059 US1 / T005) and, since 2026-09-01,
+**`GRADER_INSTRUCTIONS_v3.md` (current)** in this directory.
+
+**v3 = v2 verbatim (first 330 lines byte-identical, `diff`-verified) + one appended subtest,
+`A7e SEVERITY`.** A7e fires only when the after-played board leaves the opponent a gravity-top four
+(a mate in 1) and requires the served text to make it unmistakable that the opponent finishes on
+their very next move; it is N/A otherwise. It triggers on **10 of the 63** corpus records.
+**A7 under v3 is strictly stricter than under v2 — A7e can only ADD failures — so a v3-graded A7
+number must never be compared against a v1- or v2-graded one.** Motivating case: `eval-29`, where
+the played move loses to a mate in 1, all three runs described it as a persisting advantage, and the
+case still PASSED A7 3/3 under v2 because no axis required conveying severity.
 
 | run stem | rubric | dispatch wrapper |
 |---|---|---|
+| `fv_suff_answers_boards_smoke_a7wave1_2026-09-01T16-55-47Z` | **v2** | fixed three-line dispatch + one line naming the answers stem (the rubric's `<ANSWERS_STEM>` placeholder must be filled and two datasets shared the same case ids); 14-case counterexample subset, NOT the full corpus |
+| `fv_suff_answers_boards_v3retry63_2026-09-01T20-55-54Z` | **v3** — pending grading | generated with `--retry` (first run ever to exercise production's retry); mechanical pass done, judgment axes not yet graded |
 | `fv_suff_answers_boards_2026-08-06T16-04-29Z` | skill directly (unversioned) — **not comparable** to v1/v2 | pre-freeze, no fixed-three-line dispatch existed yet |
 | `fv_suff_answers_arm1-baseline-mini-n5_2026-08-11T18-32-47Z` | skill directly (unversioned) — **not comparable** to v1/v2 | pre-freeze, no fixed-three-line dispatch existed yet |
 | `fv_suff_answers_boards_subset_2026-08-21T21-19-32Z` | **v1** | legacy: full rubric text regenerated fresh to `<scratchpad>/GRADER_INSTRUCTIONS.md` each run (`SKILL.md`'s pre-T006 step 2) |
