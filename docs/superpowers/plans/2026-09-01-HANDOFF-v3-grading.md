@@ -52,10 +52,30 @@ addition — the rubric carries an `<ANSWERS_STEM>` placeholder that must be fil
 inferred. Sanitise awkward ids for the FILENAME only (`pin-L1-completes-your-tactic` -> `pin-L1__D.json`);
 the `id` inside the JSON stays verbatim.
 
-Dispatch in waves up to the concurrency cap; `mkdir -p .../parts_v3retry63` first; each agent owns a
-private path and never appends to a shared file. When all 63 return, **you** concatenate them with a
-`node -e` script (not `cat`) into `..._grades.jsonl`, one line per case, ordered by first appearance of
-`id` in the answers file, asserting the count is 63 and every dispatched id is present.
+**Dispatch in THREE BATCHES OF 21, and STOP for owner confirmation between them.** `mkdir -p
+.../parts_v3retry63` first. Each agent owns a private output path and never appends to a shared file.
+
+- **Batch 1** — the first 21 case ids, in the order they first appear in the answers file. Launch all
+  21 in ONE message (multiple tool calls), then wait for every one to return.
+- **Then STOP.** Do not start batch 2 on your own initiative. Report to the owner: how many of the 21
+  returned cleanly, how many failed or returned malformed JSON, the pass/fail split so far, anything
+  that looked wrong, and the running cost. Then **ask for explicit confirmation to proceed**, using
+  `AskUserQuestion` so it is a real gate and not a rhetorical question. Wait for the answer.
+- **Batch 2** — the next 21, same rule. Stop and report and ask again.
+- **Batch 3** — the final 21. Then proceed to the merge.
+
+This is the owner's instruction and it is a hard gate: **63 Opus graders is the most expensive thing in
+this workflow, and the batching exists so a systematic problem (a bad dispatch, a wrong rubric path, a
+contaminated batch) is caught after 21 agents rather than after 63.** If batch 1 surfaces something
+wrong, say so plainly and recommend fixing before continuing rather than pressing on.
+
+While a batch runs, do NOT start the dashboard work — a partial `_grades.jsonl` would produce a table
+that looks complete and is not.
+
+When all 63 have returned, **you** concatenate them with a `node -e` script (not `cat`) into
+`..._grades.jsonl`, one line per case, ordered by first appearance of `id` in the answers file,
+asserting the count is 63 and that every dispatched id is present. A missing or unparseable part gets a
+`case_pass:false, notes:"sub-agent error"` line written by you rather than being silently dropped.
 
 ## Step 2 — rebuild the report and add the comparison table
 
