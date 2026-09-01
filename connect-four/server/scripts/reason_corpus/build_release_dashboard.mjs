@@ -162,16 +162,11 @@ function rateRow(a,A,B){
   const ra=A[a],rb=B?B[a]:null;
   if(!ra)return '';
   const va=pct(ra.p,ra.g), vb=rb?pct(rb.p,rb.g):null;
-  const crossRubric = baseline==='old' && !RI.includes(a);
-  let d=vb==null?null:va-vb;
+  // Both baselines are graded under rubric v2 (08-06 re-graded 2026-09-01, 63 agents), so every
+  // axis is scored by the same instrument on both sides and every delta is a real comparison.
+  const d=vb==null?null:va-vb;
   const noisy=(D.variance.perAxisRate[a]??0)>=20;
-  let dTxt;
-  if(crossRubric){
-    dTxt='<span class=pill title="The 08-06 grades were produced under rubric v1, which graded a different string (mechanism, pre-guard) for this axis. A delta here would compare two different standards.">v1 rubric — not comparable</span>';
-  } else {
-    dTxt=d==null?'—':(d>0?'+':'')+d+(noisy&&Math.abs(d)<=20?' <span class=pill title="within the measured ±20% grader disagreement on this axis">noise</span>':'');
-  }
-  if(crossRubric) d=null;
+  const dTxt=d==null?'—':(d>0?'+':'')+d+(noisy&&Math.abs(d)<=20?' <span class=pill title="within the measured ±20% grader disagreement on this axis">noise</span>':'');
   return \`<tr><td><b>\${a}</b> <span style="color:var(--mut)">\${AM[a]||''}</span></td>
   <td class=num>\${vb==null?'—':vb+'%'}</td><td class=num>\${va}%</td>
   <td class="num \${d>0?'ok':d<0?'bad':''}">\${dTxt}</td>
@@ -210,8 +205,8 @@ function render(){
     <button aria-pressed="\${baseline==='old'}" onclick="setBase('old')">08-06 · 63 boards · n=2</button>
    </div>
    \${baseline==='base'
-     ? \`<div class=caveat><b>Clean Epic-12 delta.</b> This is the code state immediately before this work, re-graded under the <b>same rubric v2</b> as the current run, so both sides are scored by one instrument. Narrower board coverage (25 of 63), and it is compared against those same 25 boards.</div>\`
-     : \`<div class=caveat><b>Full coverage, but two epics and two rubrics.</b> All 63 boards (compared against the full 63-board current run), so nothing is sampled away. Two things to hold: it predates <b>Epic 11 as well as Epic 12</b>, so any movement is the sum of both; and its grades were produced under <b>rubric v1</b>, which graded the pre-guard <span class=mono>mechanism</span> rather than <span class=mono>servedExplanation</span>. Only the script-computed axes (<b>A1, A2, A6</b>) mean the same thing under both rubrics — the judgment axes are marked not-comparable below rather than shown as a delta. It has not been re-graded under v2; that would take 63 agents.</div>\`}
+     ? \`<div class=caveat><b>Clean Epic-12 delta.</b> The code state immediately before this work, graded under the <b>same rubric v2</b> as the current run. Narrower board coverage (25 of 63), compared against those same 25 boards.</div>\`
+     : \`<div class=caveat><b>Full coverage, two epics.</b> All 63 boards, compared against the full 63-board current run — nothing sampled away, and <b>re-graded under rubric v2</b> (63 agents, 2026-09-01) so every axis is scored by the same instrument as the current run. One thing to hold: this run predates <b>Epic 11 as well as Epic 12</b>, so any movement is the sum of both, not this work alone. Note also that <b>33% of its boards carry an empty <span class=mono>requiredSet</span></b> (mean size 1.44 vs 3.00 today) — G1 asks whether the answer used the handles it was required to use, so on those boards there was nothing to fail.</div>\`}
    <p>Baseline set: <b>\${esc(base.label)}</b> — \${base.cases.length} cases × \${base.n} runs, gpt-5.4-mini, condition D. Compared against <b>\${cur.cases.length} boards</b> of the current run.</p>
   </div>
 
@@ -227,7 +222,7 @@ function render(){
   <h2>3 · The comparison</h2>
   <div class=card>
    <h3>Per-run axis rates — before vs after</h3>
-   <p class=note>Per-<b>run</b> rates, not case-pass: a case passes only if every run passes every axis, so case-pass is not comparable across datasets with different <span class=mono>n</span> (5 vs 3). It is deliberately not shown here.</p>
+   <p class=note>Per-<b>run</b> rates, not case-pass: a case passes only if every run passes every axis, so case-pass is not comparable across datasets with different <span class=mono>n</span> (\${base.n} vs \${cur.n} here). It is deliberately not shown.</p>
    <div class=scroll><table><tr><th>Axis</th><th>Before</th><th>After</th><th>Δ</th><th></th></tr>
    \${AX.map(a=>rateRow(a,RA,RB)).join('')}</table></div>
    <div class=caveat><b>Only A6 moved.</b> A6 +14 points (p=0.012) and it has <b>0/40 grader disagreement</b> — the one solid win. A7 −10 and G1 −6 both sit inside the ±20% disagreement measured on those axes, so they are <b>no measured change</b>, not regressions.</div>
