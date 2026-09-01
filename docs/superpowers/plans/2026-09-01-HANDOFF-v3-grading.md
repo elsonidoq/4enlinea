@@ -63,8 +63,9 @@ Target: `docs/deep-reveal-release-dashboard.html`, built by
 `connect-four/server/scripts/reason_corpus/build_release_dashboard.mjs` (its `DS` map near line 27
 declares the datasets; `jl()` reads `runs/<answers>.jsonl` and `<answers>_grades.jsonl`).
 
-**The full table specification is on disk — read it and follow it:**
-`.superpowers/sdd/2026-09-01-harness-retry-alignment/report-table-spec.md`
+**The full table specification is INLINED at the end of this document** ("Appendix — comparison
+table specification"). It was originally written to `.superpowers/sdd/`, which is git-ignored
+scratch; it is reproduced here so this handoff stands alone.
 
 Its requirements in brief (the spec has the detail and the measured numbers):
 
@@ -119,7 +120,9 @@ Add the new run to the builder's dataset map as well, so the existing per-case s
   four times for one recurring failure: asserting a cause or a number without checking it belonged to
   the record. Read the correction before trusting the narrative, and hold yourself to the same bar.
 - `.superpowers/sdd/2026-09-01-deep-reveal-a7-remediation/progress.md` — the full ledger: every task,
-  22 controller rulings, and the measurements behind them.
+  22 controller rulings, and the measurements behind them. **This path is git-ignored scratch and may
+  not exist in your checkout.** If it is missing, D60 above carries the load-bearing content; nothing
+  in this handoff depends on the ledger.
 
 ## What to report
 
@@ -127,3 +130,47 @@ The graded axis rates for the new run; how they compare **within their comparabi
 they cannot be compared outside it; whether A7e fired on the expected 10 records and what it caught;
 any contaminated grade you found; and the path to the rebuilt dashboard. State plainly anything you
 could not verify — that is the most useful line in a handoff.
+
+
+---
+
+# Appendix — comparison table specification (inlined; source was git-ignored)
+
+Target: `docs/deep-reveal-release-dashboard.html`, built by
+`connect-four/server/scripts/reason_corpus/build_release_dashboard.mjs` (its `DS` map at ~:27
+currently declares 4 datasets; the table below is a NEW section covering all graded runs).
+
+## R1 — comparability must be visually obvious
+
+A row's numbers are comparable to another row's ONLY if all three match:
+  (a) rubric version (v1 / v2 / v3), (b) retry (on / off), (c) eval-set size (63 = full).
+Compute a **comparability group** from that triple and give every row a coloured left border plus a
+short chip (A, B, C…). Legend: "same chip = directly comparable; different chip = do not compare
+judgment axes". One sorted table is kept (owner chose columns+note over banding), so the chip is what
+carries the grouping.
+
+## R2 — every instrument difference states its EXPECTED effect
+
+Render a small legend ABOVE the table. Directions are measured, not guessed:
+
+| change | expected effect on A7 | why (measured) |
+|---|---|---|
+| rubric v2 → v3 | **↓ lower** | v3 adds A7e SEVERITY; it can only ADD failures. Triggers on 10/63 records; 25 of their 30 runs pass A7 under v2, so worst case 114/189 (60.3%) → 89/189 (47.1%). |
+| retry off → on | **↑ higher** | measured 2026-09-01: retry fires on ~50% of runs and recovers 90% of those (12 fully fixed / 7 partial / 2 unchanged of 21 firings). Only a retry-on run reflects what production serves. |
+| 63 cases → subset | **not comparable in absolute terms** | subsets (25-case, 14-case) deliberately over-sample hard/rare cases, so their rates are not corpus rates. |
+| model change | direction unknown | note it; do not predict. |
+
+## R3 — brief but self-contained
+
+A reader opening the HTML cold must understand it WITHOUT the D-log. Cap the prose at roughly one
+short paragraph plus the legend table. It must convey: what the axes are, that judgment axes carry a
+measured grader band (±20–24% run-level even Opus-vs-Opus), and that the chip governs comparability.
+No links required for comprehension.
+
+## Also required
+
+- **Heatmap** on numeric axis cells: greener = higher, redder = lower, on a fixed 0–100 scale so the
+  colour always means absolute quality (never a within-row rank).
+- **Partial-run highlight**: light red on the run/case-count cell whenever cases < 63.
+- **Columns**: run (stem), date, cases, runs, rubric, retry, model, locale, then the axis rates.
+- **All 13 graded runs** (those with a `_grades.jsonl` sidecar), newest first.
