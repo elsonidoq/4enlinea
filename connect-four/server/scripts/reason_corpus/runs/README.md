@@ -88,7 +88,7 @@ case still PASSED A7 3/3 under v2 because no axis required conveying severity.
 | run stem | rubric | dispatch wrapper |
 |---|---|---|
 | `fv_suff_answers_boards_smoke_a7wave1_2026-09-01T16-55-47Z` | **v2** | fixed three-line dispatch + one line naming the answers stem (the rubric's `<ANSWERS_STEM>` placeholder must be filled and two datasets shared the same case ids); 14-case counterexample subset, NOT the full corpus |
-| `fv_suff_answers_boards_v3retry63_2026-09-01T20-55-54Z` | **v3** — pending grading | generated with `--retry` (first run ever to exercise production's retry); mechanical pass done, judgment axes not yet graded |
+| `fv_suff_answers_boards_v3retry63_2026-09-01T20-55-54Z` | **v3** — graded 2026-09-01 | mandatory checked-in three-line dispatch + the `<ANSWERS_STEM>` line, **Opus** graders, 63 independently dispatched per-case agents in 3 batches of 21, one private grade file each. Generated with `--retry` (first run ever to exercise production's retry: fired on 81/189 runs). Sonnet was rejected as grader after a 10-case blind calibration failed its pre-registered rule (A7 disagreement 40% vs a 24% Opus-vs-Opus band; every case-pass disagreement ran the same direction, Sonnet passing what Opus failed). |
 | `fv_suff_answers_boards_2026-08-06T16-04-29Z` | skill directly (unversioned) — **not comparable** to v1/v2 | pre-freeze, no fixed-three-line dispatch existed yet |
 | `fv_suff_answers_arm1-baseline-mini-n5_2026-08-11T18-32-47Z` | skill directly (unversioned) — **not comparable** to v1/v2 | pre-freeze, no fixed-three-line dispatch existed yet |
 | `fv_suff_answers_boards_subset_2026-08-21T21-19-32Z` | **v1** | legacy: full rubric text regenerated fresh to `<scratchpad>/GRADER_INSTRUCTIONS.md` each run (`SKILL.md`'s pre-T006 step 2) |
@@ -97,6 +97,28 @@ case still PASSED A7 3/3 under v2 because no axis required conveying severity.
 | `fv_suff_answers_boards_subset_2026-08-25T20-16-50Z` | **v1** | legacy: same scratchpad regeneration |
 | `fv_suff_answers_boards_subset_2026-08-26T15-47-56Z` | **v1** (rubric file) | **deviated** from the skill's own fixed three-line dispatch — the dispatch message additionally listed known-open issues by number (including "OI-194 (raw cNrM notation)"); see the dispatch-wrapper-priming analysis in the 08-26 section below. This is the confounder T006/AC 4 exist to eliminate. |
 | *(any run graded after 2026-08-27, epic 059 T006 lands)* | **v2** (must be) | mandatory checked-in three-line dispatch pointing at `GRADER_INSTRUCTIONS_v2.md`, no out-of-rubric context (spec 059 T006/T006a) — no run graded with this dispatch wrapper exists yet as of this entry |
+
+### v3 + retry results, 2026-09-01 (the v3 baseline)
+
+`fv_suff_answers_boards_v3retry63_2026-09-01T20-55-54Z` — condition D, `gpt-5.4-mini`, n=3, all 63
+boards, 189/189 answers, 0 parse/call errors. **This run is its own comparability group**: no prior run
+combines rubric v3, retry-on and the full 63 boards, so its judgment axes cannot be compared to any
+earlier number. Per-run rates:
+
+| A1 | A2 | A3 | A4 | A5 | A6 | A7 | G1 | G2 | G3 | G4 | G5 | G6 | G7 |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| 100 | 100 | 98 | 86 | 98 | 94 | **73** | 95 | 97 | 99 | 99 | 95 | 100 | 96 |
+
+Cases fully passing 20/63; of the 43 failures, 35 intermittent and **8 systematic** (all runs).
+Triage: 27 `prompt_confusion`, 16 `render_bug`, **0 `vector_error`, 0 `missing_info`** — as in every
+prior run, the engine's evidence is not the problem.
+
+**A7e fired on 6 of its 10 trigger records** (`eval-29` ×2, `eval-33` ×2, `eval-37`, `eval-40`,
+`pin-branch-invariance-true-2` ×2, `pin-branch-invariance-true-3` ×2 — 10 run-level charges) and on
+**zero** non-trigger records. `eval-32`, `eval-39`, `eval-45` and `pin-L4-missed-defense` passed it.
+Crediting back the 8 runs whose ONLY A7 failure was A7e gives a v2-equivalent reading of **this same
+run** of 146/189 = 77.2% — the internal estimate of what A7e costs, and the only A7e-vs-no-A7e
+comparison that holds the run fixed.
 
 Mechanical axes (A1, A2, A6, G7a/G7b membership) come from `grade_mechanical.mjs` and ARE comparable
 across all runs — that script did not change.

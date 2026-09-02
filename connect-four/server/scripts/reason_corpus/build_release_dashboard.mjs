@@ -5,7 +5,7 @@
 // Usage: node server/scripts/reason_corpus/build_release_dashboard.mjs
 // Output: docs/deep-reveal-release-dashboard.html
 
-import { readFileSync, writeFileSync } from 'fs';
+import { readFileSync, writeFileSync, readdirSync } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 
@@ -29,6 +29,7 @@ const DS = {
   base: { answers: 'fv_suff_answers_boards_subset_2026-08-26T15-47-56Z_served', n: 5, label: 'Baseline (2026-08-26, EN)' },
   es:   { answers: 'fv_suff_answers_boards_2026-08-31T12-52-38Z',            n: 3, label: 'Current (2026-08-31, ES)' },
   old:  { answers: 'fv_suff_answers_boards_2026-08-06T16-04-29Z_served',   n: 2, label: 'Older baseline (2026-08-06, EN)' },
+  v3:   { answers: 'fv_suff_answers_boards_v3retry63_2026-09-01T20-55-54Z',  n: 3, label: 'Retry + rubric v3 (2026-09-01, EN)' },
 };
 
 function loadSet(key) {
@@ -69,12 +70,79 @@ function axisRates(cases) {
   return t;
 }
 
-const data = { new: loadSet('new'), base: loadSet('base'), es: loadSet('es'), old: loadSet('old') };
+// ── All graded runs: comparability map ──────────────────────────────────────────
+// Every answers file in runs/ that has a `_grades.jsonl` sidecar. Rubric version and
+// dispatch-wrapper identity come from runs/README.md's "Grader rubric versions" ledger —
+// the authoritative record — NOT from filenames. `retry` is read from the answers rows
+// themselves (`retry_fired` exists only on runs generated with --retry). `locale` was
+// verified by reading each run's served text, not assumed from the stem.
+const RUN_META = {
+  'fv_suff_answers_boards_v3retry63_2026-09-01T20-55-54Z':        { date: '2026-09-01', rubric: 'v3',   locale: 'EN' },
+  'fv_suff_answers_boards_smoke_a7wave1_2026-09-01T16-55-47Z':    { date: '2026-09-01', rubric: 'v2',   locale: 'EN', note: '14-case A7 counterexample subset, not the corpus' },
+  'fv_suff_answers_boards_2026-08-31T12-52-38Z':                  { date: '2026-08-31', rubric: 'v2?',  locale: 'ES', note: 'rubric version not recorded in runs/README.md; provably NOT v3 (v3 was created 2026-09-01, this run was graded 2026-08-31) — v2 is near-certain' },
+  'fv_suff_answers_boards_2026-08-28T18-35-46Z':                  { date: '2026-08-28', rubric: 'v2',   locale: 'EN' },
+  'fv_suff_answers_boards_subset_2026-08-28T14-59-41Z':           { date: '2026-08-28', rubric: '—',    locale: 'EN', note: '8-case sanity run; rubric not recorded' },
+  'epic12_sanity_OLD':                                            { date: 'unknown',    rubric: '—',    locale: 'EN', note: '8-case sanity run; no timestamp in stem, rubric not recorded' },
+  'fv_suff_answers_boards_subset_2026-08-26T15-47-56Z_served':    { date: '2026-08-26', rubric: 'v2',   locale: 'EN', note: 're-graded under v2 on the post-guard served string' },
+  'fv_suff_answers_boards_subset_2026-08-26T15-47-56Z':           { date: '2026-08-26', rubric: 'v1',   locale: 'EN', note: 'DEVIATED dispatch — listed open issues by number; confounded A5' },
+  'fv_suff_answers_boards_subset_2026-08-25T20-16-50Z':           { date: '2026-08-25', rubric: 'v1',   locale: 'EN' },
+  'fv_suff_answers_boards_subset_2026-08-25T15-57-08Z':           { date: '2026-08-25', rubric: 'v1',   locale: 'EN' },
+  'fv_suff_answers_boards_subset_2026-08-23T15-16-19Z':           { date: '2026-08-23', rubric: 'v1',   locale: 'EN' },
+  'fv_suff_answers_boards_subset_2026-08-21T21-19-32Z':           { date: '2026-08-21', rubric: 'v1',   locale: 'EN' },
+  'fv_suff_answers_arm1-baseline-mini-n5_2026-08-11T18-32-47Z':   { date: '2026-08-11', rubric: '—',    locale: 'EN', note: 'pre-freeze, graded by the skill directly — not comparable to v1/v2' },
+  'fv_suff_answers_boards_2026-08-06T16-04-29Z_served':           { date: '2026-08-06', rubric: 'v2',   locale: 'EN', note: 're-graded 2026-09-01 (63 agents) on the post-guard served string' },
+  'fv_suff_answers_boards_2026-08-06T16-04-29Z':                  { date: '2026-08-06', rubric: '—',    locale: 'EN', note: 'pre-freeze, graded by the skill directly — not comparable to v1/v2' },
+};
+
+function loadAllRuns() {
+  const files = readdirSync(RUNS).filter((f) => f.endsWith('_grades.jsonl'));
+  const out = [];
+  for (const f of files) {
+    const stem = f.replace(/_grades\.jsonl$/, '');
+    let ans, grades;
+    try { ans = jl(`${RUNS}/${stem}.jsonl`); grades = jl(`${RUNS}/${f}`); }
+    catch { continue; }                                  // sidecar with no answers file
+    const meta = RUN_META[stem] ?? { date: 'unknown', rubric: '—', locale: 'EN', note: 'not in the runs/README.md ledger' };
+    const retryOn = ans.some((r) => r.retry_fired !== undefined);
+    const retryFired = ans.filter((r) => r.retry_fired).length;
+    const ids = new Set(ans.map((r) => r.id));
+    const nRuns = new Set(ans.map((r) => r.run_index)).size;
+    const models = [...new Set(ans.map((r) => r.model).filter(Boolean))];
+    const t = {};
+    for (const g of grades) for (const r of (g.per_run ?? [])) for (const a of AXES) {
+      const v = r[a]; if (v == null) continue;
+      t[a] ??= { p: 0, g: 0 }; t[a].g++; if (v === 'pass') t[a].p++;
+    }
+    const cp = grades.filter((g) => g.case_pass).length;
+    out.push({
+      stem, date: meta.date, rubric: meta.rubric, note: meta.note ?? '', locale: meta.locale,
+      cases: ids.size, gradedCases: grades.length, n: nRuns, rows: ans.length,
+      model: models.join(', ') || '—', retry: retryOn, retryFired, casePass: cp, rates: t,
+    });
+  }
+  // newest first; 'unknown' dates sort last
+  out.sort((a, b) => (b.date === 'unknown' ? '' : b.date).localeCompare(a.date === 'unknown' ? '' : a.date) || a.stem.localeCompare(b.stem));
+  // Comparability group = (rubric, retry, eval-set size, locale). Same chip ⇒ directly comparable.
+  // The table spec named the first three; locale is added deliberately because it demonstrably moves
+  // the judgment axes (the ES run's A5 collapse is a prompt defect, not model quality), so grouping an
+  // ES run with an EN one would invite exactly the comparison the chip exists to prevent.
+  const seen = new Map();
+  for (const r of out) {
+    const key = `${r.rubric}|${r.retry ? 'retry' : 'single'}|${r.cases}|${r.locale}`;
+    if (!seen.has(key)) seen.set(key, String.fromCharCode(65 + seen.size));
+    r.group = seen.get(key); r.groupKey = key;
+  }
+  return out;
+}
+const allRuns = loadAllRuns();
+
+const data = { new: loadSet('new'), base: loadSet('base'), es: loadSet('es'), old: loadSet('old'), v3: loadSet('v3') };
 // restrict the current EN set to the baseline's boards for the paired comparison
 const baseIds = new Set(data.base.cases.map((c) => c.id));
 data.newOverlap = { label: 'Current, baseline boards only', n: 3, cases: data.new.cases.filter((c) => baseIds.has(c.id)) };
 
 const payload = {
+  allRuns,
   sets: Object.fromEntries(Object.entries(data).map(([k, v]) => [k, { label: v.label, n: v.n, cases: v.cases }])),
   rates: Object.fromEntries(Object.entries(data).map(([k, v]) => [k, axisRates(v.cases)])),
   variance: {
@@ -140,6 +208,15 @@ button[aria-pressed=true]{border-color:var(--accent);color:var(--accent)}
 .ax.p{color:var(--ok);border-color:color-mix(in srgb,var(--ok) 40%,var(--line))}
 .ax.f{color:var(--bad);border-color:color-mix(in srgb,var(--bad) 45%,var(--line));background:color-mix(in srgb,var(--bad) 8%,transparent)}
 .scroll{overflow-x:auto}
+.chip{display:inline-flex;align-items:center;justify-content:center;width:19px;height:19px;border-radius:5px;font-size:11.5px;font-weight:700;color:#fff}
+.runs td,.runs th{white-space:nowrap}
+.runs td.stem{white-space:normal;max-width:290px}
+.runs tr>td:first-child{border-left:4px solid var(--g)}
+.runs tr>th:first-child{border-left:4px solid transparent}
+.hm{text-align:center;font-variant-numeric:tabular-nums;border-radius:4px}
+.partial{background:color-mix(in srgb,var(--bad) 16%,transparent);font-weight:600}
+.legend{font-size:13px}
+.legend td,.legend th{padding:5px 9px}
 .grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:12px}
 @media(max-width:640px){h1{font-size:22px}}
 </style>
@@ -173,6 +250,53 @@ function rateRow(a,A,B){
   <td><div class=bar><i style="width:\${va}%"></i></div></td></tr>\`;
 }
 
+const GROUP_COLORS=['#3b5bdb','#2f7a55','#b4443a','#9a6b1f','#7048b6','#0b7285','#a61e4d','#5c7cfa','#495057'];
+// Fixed 0-100 scale: hue 0 (red) -> 120 (green). Colour always means absolute quality.
+function heat(v){
+  if(v==null)return '';
+  const h=Math.round(1.2*v);
+  return 'background:hsl('+h+' 62% 47% / .20);color:inherit';
+}
+function runsTable(){
+  const R=D.allRuns;
+  const groups=[...new Set(R.map(r=>r.group))];
+  const gc=g=>GROUP_COLORS[groups.indexOf(g)%GROUP_COLORS.length];
+  document.getElementById('runlegend').innerHTML =
+    '<div style="display:flex;gap:14px;flex-wrap:wrap;align-items:center;font-size:13px">'
+    + groups.map(g=>{
+        const ex=R.find(r=>r.group===g);
+        return '<span style="display:inline-flex;gap:6px;align-items:center">'
+          + '<span class=chip style="background:'+gc(g)+'">'+g+'</span>'
+          + '<span style="color:var(--mut)">rubric '+esc(ex.rubric)+' · '+(ex.retry?'retry on':'single attempt')+' · '+ex.cases+' boards · '+esc(ex.locale)+'</span></span>';
+      }).join('')
+    + '</div><div class=note style="margin-top:8px">Same chip = directly comparable. Different chip = <b>do not compare the judgment axes</b> (A3–A5, A7, G1–G7); only A1, A2 and A6 travel across groups.</div>';
+
+  const head='<tr><th>Run</th><th>Date</th><th>Cases</th><th>Runs</th><th>Rubric</th><th>Retry</th><th>Model</th><th>Loc</th>'
+    + AX.map(a=>'<th title="'+(AM[a]||'')+'">'+a+'</th>').join('')+'</tr>';
+  const body=R.map(r=>{
+    const partial=r.cases<63;
+    const cells=AX.map(a=>{
+      const t=r.rates[a];
+      if(!t)return '<td class=hm style="color:var(--mut)">—</td>';
+      const v=pct(t.p,t.g);
+      return '<td class=hm style="'+heat(v)+'" title="'+t.p+'/'+t.g+' runs">'+v+'</td>';
+    }).join('');
+    return '<tr style="--g:'+gc(r.group)+'">'
+      + '<td class=stem><span class=chip style="background:'+gc(r.group)+'">'+r.group+'</span> '
+      + '<span class=mono style="font-size:12px">'+esc(r.stem)+'</span>'
+      + (r.note?'<div style="color:var(--mut);font-size:12px;margin-top:2px">'+esc(r.note)+'</div>':'')+'</td>'
+      + '<td class=num>'+esc(r.date)+'</td>'
+      + '<td class="num'+(partial?' partial':'')+'" title="'+(partial?'partial eval set — fewer than the full 63 boards':'full corpus')+'">'+r.cases+'</td>'
+      + '<td class=num>'+r.n+'</td>'
+      + '<td>'+esc(r.rubric)+'</td>'
+      + '<td>'+(r.retry?'<b class=ok>on</b> <span style="color:var(--mut)">('+r.retryFired+'/'+r.rows+')</span>':'<span style="color:var(--mut)">off</span>')+'</td>'
+      + '<td class=mono style="font-size:12px">'+esc(r.model)+'</td>'
+      + '<td>'+esc(r.locale)+'</td>'
+      + cells+'</tr>';
+  }).join('');
+  document.getElementById('runstable').innerHTML=head+body;
+}
+
 function caseCard(c){
   const st=c.case_pass?'<span class=ok>pass</span>':'<span class=bad>fail</span>';
   const tri=c.triage?'<span class=pill>'+c.triage+'</span>':'';
@@ -197,6 +321,31 @@ function render(){
   const RA=D.rates[afterKey], RB=D.rates[baseline];
   const app=document.getElementById('app');
   app.innerHTML=\`
+  <h2>All graded runs — comparability map</h2>
+  <div class=card>
+   <p class=sub style="margin-bottom:12px">Every eval run that has been graded, newest first. Each run scores one set of blunder
+   explanations on axes <b>A1–A7</b> (is the coaching true, in the coach's voice, and useful to the player who
+   blundered?) and <b>G1/G7</b> (did it use the board handles it was told to use, and wrap them honestly?).
+   <b>Numbers are only comparable within a colour group.</b> A run's chip encodes its
+   <i>instrument</i> — rubric version, whether production's retry was exercised, and eval-set size; change any one and the
+   judgment axes move for reasons that have nothing to do with the code. Even inside a group, the judgment axes
+   (A4, A7, G1) carry a measured <b>±20–24% run-level grader disagreement</b>, Opus-vs-Opus — so treat small
+   deltas as noise. A1/A2/A6 are computed by script and are comparable everywhere.</p>
+
+   <h3>What each instrument change does to A7</h3>
+   <div class=scroll><table class=legend><tr><th>Change</th><th>Expected effect</th><th>Measured basis</th></tr>
+    <tr><td>rubric <b>v2 → v3</b></td><td class=bad><b>↓ lower</b></td><td>v3 appends the A7e SEVERITY subtest, which can only <i>add</i> failures. Triggers on 10 of 63 records; 25 of their 30 v2 runs passed A7, so worst case 114/189 (60.3%) → 89/189 (47.1%).</td></tr>
+    <tr><td>retry <b>off → on</b></td><td class=ok><b>↑ higher</b></td><td>Retry fires on ~43–50% of runs and recovers ~91% of those. Only a retry-on run reflects what production actually serves.</td></tr>
+    <tr><td><b>63 → subset</b></td><td class=warn><b>not comparable</b></td><td>The 25- and 14-case subsets deliberately over-sample hard and rare cases, so their rates are not corpus rates in absolute terms.</td></tr>
+    <tr><td><b>model change</b></td><td>direction unknown</td><td>Noted, never predicted.</td></tr>
+   </table></div>
+
+   <div id=runlegend style="margin:14px 0 8px"></div>
+   <div class=scroll><table class=runs id=runstable></table></div>
+   <p class=note>Cell colour is a fixed 0–100 scale — green is a high absolute rate, red a low one. It never
+   encodes a rank within the row. A red <b>cases</b> cell marks a partial eval set (fewer than the full 63 boards).</p>
+  </div>
+
   <h2>1 · The comparison</h2>
   <div class=card>
    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:10px">
@@ -273,6 +422,7 @@ function render(){
   <div class=card>
    <p class=note>The owner's question is not a pass/fail bar — it is whether these read as a good coach. Every case is open below: board, movestring, the exact text a player is served, and the per-run axis grid.</p>
    <div style="display:flex;gap:8px;flex-wrap:wrap;margin:10px 0">
+    <button aria-pressed="\${view==='v3'}" onclick="setView('v3')">Retry + v3 · 63</button>
     <button aria-pressed="\${view==='new'}" onclick="setView('new')">Current EN · 63</button>
     <button aria-pressed="\${view==='base'}" onclick="setView('base')">Baseline EN · 25</button>
     <button aria-pressed="\${view==='es'}" onclick="setView('es')">Current ES · 25</button>
@@ -283,8 +433,9 @@ function render(){
    \${view==='es'?'<div class=caveat><b>Spanish has no baseline.</b> These are current-state numbers only — there is no before/after for ES. Its A5 collapse (99%→48% vs EN) is the self-contradicting prompt above, not model quality; on A7 and A6 Spanish scores <i>higher</i> than English.</div>':''}
    \${D.sets[view].cases.filter(c=>!onlyFail||!c.case_pass).map(caseCard).join('')}
   </div>\`;
+  runsTable();
 }
-let view='new', onlyFail=false;
+let view='v3', onlyFail=false;
 function setBase(b){baseline=b;render()}
 function setView(v){view=v;render()}
 function toggleFail(){onlyFail=!onlyFail;render()}
