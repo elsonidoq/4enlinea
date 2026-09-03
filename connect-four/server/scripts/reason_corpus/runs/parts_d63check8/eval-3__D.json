@@ -1,0 +1,1118 @@
+{
+ "id": "eval-3",
+ "condition": "D",
+ "runs": [
+  {
+   "run_index": 0,
+   "feature_vector": {
+    "movestring": "333334",
+    "playedCol": 3,
+    "bestCol": 1,
+    "discs": 6,
+    "boardState": "opening",
+    "player": 1,
+    "opponent": 2,
+    "case": "win_to_lose",
+    "notABlunder": false,
+    "lostResource": {
+     "kind": "winning_line",
+     "register": "parity",
+     "completingCell": "c5r5",
+     "window": [
+      "c2r5",
+      "c3r5",
+      "c4r5",
+      "c5r5"
+     ],
+     "pliesToEnd": 34,
+     "line": null,
+     "finalMovestring": "33333410111003110004224555552222566666644",
+     "entryCell": "c1r1",
+     "terminal": "win",
+     "parityAttribution": {
+      "nameable": true,
+      "controllingGroup": [
+       "c2r5",
+       "c3r5",
+       "c4r5",
+       "c5r5"
+      ],
+      "ownDiscs": 1,
+      "empties": [
+       {
+        "cell": "c2r5",
+        "zcount": 4,
+        "parity": "even"
+       },
+       {
+        "cell": "c3r5",
+        "zcount": 5,
+        "parity": "odd"
+       },
+       {
+        "cell": "c5r5",
+        "zcount": 4,
+        "parity": "even"
+       }
+      ],
+      "completingCell": "c5r5",
+      "parityNamingDeferred": true,
+      "namedRule": null
+     },
+     "tacticTag": null,
+     "tacticCells": [],
+     "tacticFromDiff": false,
+     "anchorCells": [
+      "c2r1",
+      "c5r2"
+     ]
+    },
+    "opponentPunishment": {
+     "kind": "winning_line",
+     "register": "parity",
+     "completingCell": "c6r2",
+     "window": [
+      "c3r2",
+      "c4r2",
+      "c5r2",
+      "c6r2"
+     ],
+     "pliesToEnd": 31,
+     "line": null,
+     "finalMovestring": "33333434011111000001222222444466666655",
+     "entryCell": "c5r2",
+     "terminal": "win",
+     "parityAttribution": {
+      "nameable": true,
+      "controllingGroup": [
+       "c3r2",
+       "c4r2",
+       "c5r2",
+       "c6r2"
+      ],
+      "ownDiscs": 1,
+      "empties": [
+       {
+        "cell": "c3r2",
+        "zcount": 2,
+        "parity": "even"
+       },
+       {
+        "cell": "c5r2",
+        "zcount": 1,
+        "parity": "odd"
+       },
+       {
+        "cell": "c6r2",
+        "zcount": 2,
+        "parity": "even"
+       }
+      ],
+      "completingCell": "c6r2",
+      "parityNamingDeferred": true,
+      "namedRule": null
+     },
+     "tacticTag": null,
+     "tacticCells": [],
+     "tacticFromDiff": false,
+     "tie": {
+      "kind": "tied",
+      "sharedCells": [
+       "c5r2"
+      ]
+     }
+    },
+    "replyHistogram": {
+     "afterBest": 0,
+     "afterPlayed": 2
+    },
+    "gate": null
+   },
+   "render_decision": {
+    "case": "win_to_lose",
+    "route": "sign",
+    "direction": null,
+    "patternOnAfterBestBoard": null,
+    "link": {
+     "id": "L6",
+     "confidence": "high",
+     "covers": [
+      "route",
+      "lostResource.kind",
+      "opponentPunishment.kind",
+      "opponentPunishment.verdict",
+      "lostResource.terminal",
+      "opponentPunishment.terminal",
+      "lostResource.forkCase",
+      "opponentPunishment.forkCase",
+      "opponentPunishment.tie.kind",
+      "opponentPunishment.tie.tied",
+      "lostResource.register",
+      "opponentPunishment.register"
+     ],
+     "guardrail": "You gave up a win AND handed the opponent their own; name both lines with their horizons.",
+     "text": "You had a forced win via column 5 (deep, via a parity battle), and column 2 was the move that kept it. The played move gives it up AND lets the opponent force their own win via column 6."
+    },
+    "boards": [
+     {
+      "id": "decision",
+      "shown": true,
+      "reason": "the position under judgment"
+     },
+     {
+      "id": "afterBest",
+      "shown": false,
+      "reason": "the better move — tag-set identical to the decision board, omitted"
+     },
+     {
+      "id": "afterPlayed",
+      "shown": false,
+      "reason": "the move you played — tag-set identical to the decision board, omitted"
+     },
+     {
+      "id": "projectedDeep",
+      "shown": true,
+      "reason": "where the deep parity resource resolves — your line"
+     },
+     {
+      "id": "projectedDeepOpp",
+      "shown": true,
+      "reason": "where the deep parity resource resolves — your opponent's line"
+     }
+    ],
+    "resource": {
+     "completingCell": {
+      "cell": "c5r5",
+      "status": "empty",
+      "horizon": "deep-parity",
+      "reachableInPlies": 40,
+      "role": "where the load-bearing resource completes"
+     },
+     "registerToHorizon": {
+      "register": "parity",
+      "horizon": "deep-parity"
+     }
+    },
+    "fieldPartition": {
+     "rendered": [
+      "movestring",
+      "playedCol",
+      "bestCol",
+      "boardState",
+      "player",
+      "opponent",
+      "case",
+      "lostResource.completingCell",
+      "lostResource.window[]",
+      "lostResource.pliesToEnd",
+      "lostResource.finalMovestring",
+      "lostResource.entryCell",
+      "lostResource.parityAttribution.controllingGroup[]",
+      "lostResource.parityAttribution.ownDiscs",
+      "lostResource.parityAttribution.empties[].cell",
+      "lostResource.parityAttribution.empties[].zcount",
+      "lostResource.parityAttribution.empties[].parity",
+      "lostResource.parityAttribution.completingCell",
+      "lostResource.anchorCells[]",
+      "opponentPunishment.completingCell",
+      "opponentPunishment.window[]",
+      "opponentPunishment.pliesToEnd",
+      "opponentPunishment.finalMovestring",
+      "opponentPunishment.entryCell",
+      "opponentPunishment.parityAttribution.controllingGroup[]",
+      "opponentPunishment.parityAttribution.ownDiscs",
+      "opponentPunishment.parityAttribution.empties[].cell",
+      "opponentPunishment.parityAttribution.empties[].zcount",
+      "opponentPunishment.parityAttribution.empties[].parity",
+      "opponentPunishment.parityAttribution.completingCell",
+      "opponentPunishment.tie.sharedCells[]",
+      "replyHistogram.afterBest",
+      "replyHistogram.afterPlayed"
+     ],
+     "covered": [
+      "lostResource.kind",
+      "lostResource.register",
+      "lostResource.terminal",
+      "opponentPunishment.kind",
+      "opponentPunishment.register",
+      "opponentPunishment.terminal",
+      "opponentPunishment.tie.kind"
+     ],
+     "excluded": [
+      "discs",
+      "notABlunder",
+      "lostResource.parityAttribution.nameable",
+      "lostResource.parityAttribution.parityNamingDeferred",
+      "lostResource.tacticFromDiff",
+      "opponentPunishment.parityAttribution.nameable",
+      "opponentPunishment.parityAttribution.parityNamingDeferred",
+      "opponentPunishment.tacticFromDiff"
+     ]
+    },
+    "finalMovestring": "33333410111003110004224555552222566666644",
+    "openingContext": null,
+    "zones": {
+     "aliases": [
+      {
+       "handle": "better-col",
+       "spec": "col2",
+       "role": "the column of the better move",
+       "truthBoard": "decision",
+       "kbId": null
+      },
+      {
+       "handle": "played-col",
+       "spec": "col4",
+       "role": "the column you played",
+       "truthBoard": "decision",
+       "kbId": null
+      },
+      {
+       "handle": "you-key-square",
+       "spec": "future:c5r5",
+       "role": "a single square on your four-in-a-row line — it matters later, once the forced sequence reaches it, not a threat right now",
+       "truthBoard": "projectedDeep",
+       "kbId": null
+      },
+      {
+       "handle": "you-key-line",
+       "spec": "future:windows:c2r5,c3r5,c4r5,c5r5",
+       "role": "the whole four-in-a-row line you are playing for — it decides this later, once the forced sequence reaches it, not a threat right now (a LINE of four squares, not a single square — use this handle, not a single-square handle, whenever your words say \"line\", \"strip\" or \"row of four\")",
+       "truthBoard": "projectedDeep",
+       "kbId": null
+      },
+      {
+       "handle": "opp-key-square",
+       "spec": "future:c6r2",
+       "role": "a single square on your opponent's four-in-a-row line — it matters later, once the forced sequence reaches it, not a threat right now",
+       "truthBoard": "projectedDeepOpp",
+       "kbId": null
+      },
+      {
+       "handle": "opp-key-line",
+       "spec": "future:windows:c3r2,c4r2,c5r2,c6r2",
+       "role": "the whole four-in-a-row line your opponent is playing for — it decides this later, once the forced sequence reaches it, not a threat right now (a LINE of four squares, not a single square — use this handle, not a single-square handle, whenever your words say \"line\", \"strip\" or \"row of four\")",
+       "truthBoard": "projectedDeepOpp",
+       "kbId": null
+      }
+     ],
+     "terms": []
+    },
+    "requiredSet": [
+     {
+      "half": "lostResource",
+      "spec": "future:windows:c2r5,c3r5,c4r5,c5r5",
+      "handle": "you-key-line",
+      "role": "the whole four-in-a-row line you are playing for — it decides this later, once the forced sequence reaches it, not a threat right now (a LINE of four squares, not a single square — use this handle, not a single-square handle, whenever your words say \"line\", \"strip\" or \"row of four\")",
+      "truthBoard": "projectedDeep"
+     },
+     {
+      "half": "opponentPunishment",
+      "spec": "future:windows:c3r2,c4r2,c5r2,c6r2",
+      "handle": "opp-key-line",
+      "role": "the whole four-in-a-row line your opponent is playing for — it decides this later, once the forced sequence reaches it, not a threat right now (a LINE of four squares, not a single square — use this handle, not a single-square handle, whenever your words say \"line\", \"strip\" or \"row of four\")",
+      "truthBoard": "projectedDeepOpp"
+     },
+     {
+      "half": "lostResource",
+      "spec": "future:c5r5",
+      "handle": "you-key-square",
+      "role": "a single square on your four-in-a-row line — it matters later, once the forced sequence reaches it, not a threat right now",
+      "truthBoard": "projectedDeep"
+     }
+    ]
+   },
+   "answer": {
+    "better_move": 2,
+    "played_outcome": "loss",
+    "best_outcome": "win",
+    "mechanism": "You should have played column 2: it keeps your own deep four-in-a-row line alive and preserves the key square on it, [zone:future:c5r5]c5r5[/zone:future:c5r5], so the later forced race still works for you. By playing column 4 instead, you give up that line and let your opponent take over with [zone:future:windows:c3r2,c4r2,c5r2,c6r2]their own four-in-a-row line running through the c3-c6 strip on row 2[/zone:future:windows:c3r2,c4r2,c5r2,c6r2], so you lose instead of holding the win.",
+    "key_cells": [
+     "c3r2",
+     "c4r2",
+     "c5r2",
+     "c5r5",
+     "c6r2"
+    ],
+    "fields_relied_on": [
+     "case",
+     "lostResource.completingCell",
+     "lostResource.window",
+     "lostResource.pliesToEnd",
+     "lostResource.parityAttribution.controllingGroup",
+     "lostResource.parityAttribution.ownDiscs",
+     "lostResource.parityAttribution.empties",
+     "lostResource.anchorCells",
+     "opponentPunishment.completingCell",
+     "opponentPunishment.window",
+     "opponentPunishment.pliesToEnd",
+     "opponentPunishment.parityAttribution.controllingGroup",
+     "opponentPunishment.parityAttribution.ownDiscs",
+     "opponentPunishment.parityAttribution.empties",
+     "opponentPunishment.tie.sharedCells",
+     "replyHistogram.afterBest",
+     "replyHistogram.afterPlayed"
+    ],
+    "unsure_about": "",
+    "confidence": "high"
+   },
+   "servedExplanation": "You should have played column 2: it keeps your own deep four-in-a-row line alive and preserves the key square on it, [zone:future:c5r5]column 5, row 5[/zone:future:c5r5], so the later forced race still works for you. By playing column 4 instead, you give up that line and let your opponent take over with [zone:future:windows:c3r2,c4r2,c5r2,c6r2]their own four-in-a-row line running through the columns 3 through 6 strip on row 2[/zone:future:windows:c3r2,c4r2,c5r2,c6r2], so you lose instead of holding the win.",
+   "better_col_repaired": false,
+   "mechanism_pre_repair": null,
+   "retry_fired": true,
+   "served_attempt": "retry",
+   "precomputed": {
+    "A1": "pass",
+    "A2": "pass",
+    "A6": "pass",
+    "G7a_offered": "pass",
+    "G7b_offered": "pass",
+    "notes": ""
+   }
+  },
+  {
+   "run_index": 1,
+   "feature_vector": {
+    "movestring": "333334",
+    "playedCol": 3,
+    "bestCol": 1,
+    "discs": 6,
+    "boardState": "opening",
+    "player": 1,
+    "opponent": 2,
+    "case": "win_to_lose",
+    "notABlunder": false,
+    "lostResource": {
+     "kind": "winning_line",
+     "register": "parity",
+     "completingCell": "c5r5",
+     "window": [
+      "c2r5",
+      "c3r5",
+      "c4r5",
+      "c5r5"
+     ],
+     "pliesToEnd": 34,
+     "line": null,
+     "finalMovestring": "33333410111003110004224555552222566666644",
+     "entryCell": "c1r1",
+     "terminal": "win",
+     "parityAttribution": {
+      "nameable": true,
+      "controllingGroup": [
+       "c2r5",
+       "c3r5",
+       "c4r5",
+       "c5r5"
+      ],
+      "ownDiscs": 1,
+      "empties": [
+       {
+        "cell": "c2r5",
+        "zcount": 4,
+        "parity": "even"
+       },
+       {
+        "cell": "c3r5",
+        "zcount": 5,
+        "parity": "odd"
+       },
+       {
+        "cell": "c5r5",
+        "zcount": 4,
+        "parity": "even"
+       }
+      ],
+      "completingCell": "c5r5",
+      "parityNamingDeferred": true,
+      "namedRule": null
+     },
+     "tacticTag": null,
+     "tacticCells": [],
+     "tacticFromDiff": false,
+     "anchorCells": [
+      "c2r1",
+      "c5r2"
+     ]
+    },
+    "opponentPunishment": {
+     "kind": "winning_line",
+     "register": "parity",
+     "completingCell": "c6r2",
+     "window": [
+      "c3r2",
+      "c4r2",
+      "c5r2",
+      "c6r2"
+     ],
+     "pliesToEnd": 31,
+     "line": null,
+     "finalMovestring": "33333434011111000001222222444466666655",
+     "entryCell": "c5r2",
+     "terminal": "win",
+     "parityAttribution": {
+      "nameable": true,
+      "controllingGroup": [
+       "c3r2",
+       "c4r2",
+       "c5r2",
+       "c6r2"
+      ],
+      "ownDiscs": 1,
+      "empties": [
+       {
+        "cell": "c3r2",
+        "zcount": 2,
+        "parity": "even"
+       },
+       {
+        "cell": "c5r2",
+        "zcount": 1,
+        "parity": "odd"
+       },
+       {
+        "cell": "c6r2",
+        "zcount": 2,
+        "parity": "even"
+       }
+      ],
+      "completingCell": "c6r2",
+      "parityNamingDeferred": true,
+      "namedRule": null
+     },
+     "tacticTag": null,
+     "tacticCells": [],
+     "tacticFromDiff": false,
+     "tie": {
+      "kind": "tied",
+      "sharedCells": [
+       "c5r2"
+      ]
+     }
+    },
+    "replyHistogram": {
+     "afterBest": 0,
+     "afterPlayed": 2
+    },
+    "gate": null
+   },
+   "render_decision": {
+    "case": "win_to_lose",
+    "route": "sign",
+    "direction": null,
+    "patternOnAfterBestBoard": null,
+    "link": {
+     "id": "L6",
+     "confidence": "high",
+     "covers": [
+      "route",
+      "lostResource.kind",
+      "opponentPunishment.kind",
+      "opponentPunishment.verdict",
+      "lostResource.terminal",
+      "opponentPunishment.terminal",
+      "lostResource.forkCase",
+      "opponentPunishment.forkCase",
+      "opponentPunishment.tie.kind",
+      "opponentPunishment.tie.tied",
+      "lostResource.register",
+      "opponentPunishment.register"
+     ],
+     "guardrail": "You gave up a win AND handed the opponent their own; name both lines with their horizons.",
+     "text": "You had a forced win via column 5 (deep, via a parity battle), and column 2 was the move that kept it. The played move gives it up AND lets the opponent force their own win via column 6."
+    },
+    "boards": [
+     {
+      "id": "decision",
+      "shown": true,
+      "reason": "the position under judgment"
+     },
+     {
+      "id": "afterBest",
+      "shown": false,
+      "reason": "the better move — tag-set identical to the decision board, omitted"
+     },
+     {
+      "id": "afterPlayed",
+      "shown": false,
+      "reason": "the move you played — tag-set identical to the decision board, omitted"
+     },
+     {
+      "id": "projectedDeep",
+      "shown": true,
+      "reason": "where the deep parity resource resolves — your line"
+     },
+     {
+      "id": "projectedDeepOpp",
+      "shown": true,
+      "reason": "where the deep parity resource resolves — your opponent's line"
+     }
+    ],
+    "resource": {
+     "completingCell": {
+      "cell": "c5r5",
+      "status": "empty",
+      "horizon": "deep-parity",
+      "reachableInPlies": 40,
+      "role": "where the load-bearing resource completes"
+     },
+     "registerToHorizon": {
+      "register": "parity",
+      "horizon": "deep-parity"
+     }
+    },
+    "fieldPartition": {
+     "rendered": [
+      "movestring",
+      "playedCol",
+      "bestCol",
+      "boardState",
+      "player",
+      "opponent",
+      "case",
+      "lostResource.completingCell",
+      "lostResource.window[]",
+      "lostResource.pliesToEnd",
+      "lostResource.finalMovestring",
+      "lostResource.entryCell",
+      "lostResource.parityAttribution.controllingGroup[]",
+      "lostResource.parityAttribution.ownDiscs",
+      "lostResource.parityAttribution.empties[].cell",
+      "lostResource.parityAttribution.empties[].zcount",
+      "lostResource.parityAttribution.empties[].parity",
+      "lostResource.parityAttribution.completingCell",
+      "lostResource.anchorCells[]",
+      "opponentPunishment.completingCell",
+      "opponentPunishment.window[]",
+      "opponentPunishment.pliesToEnd",
+      "opponentPunishment.finalMovestring",
+      "opponentPunishment.entryCell",
+      "opponentPunishment.parityAttribution.controllingGroup[]",
+      "opponentPunishment.parityAttribution.ownDiscs",
+      "opponentPunishment.parityAttribution.empties[].cell",
+      "opponentPunishment.parityAttribution.empties[].zcount",
+      "opponentPunishment.parityAttribution.empties[].parity",
+      "opponentPunishment.parityAttribution.completingCell",
+      "opponentPunishment.tie.sharedCells[]",
+      "replyHistogram.afterBest",
+      "replyHistogram.afterPlayed"
+     ],
+     "covered": [
+      "lostResource.kind",
+      "lostResource.register",
+      "lostResource.terminal",
+      "opponentPunishment.kind",
+      "opponentPunishment.register",
+      "opponentPunishment.terminal",
+      "opponentPunishment.tie.kind"
+     ],
+     "excluded": [
+      "discs",
+      "notABlunder",
+      "lostResource.parityAttribution.nameable",
+      "lostResource.parityAttribution.parityNamingDeferred",
+      "lostResource.tacticFromDiff",
+      "opponentPunishment.parityAttribution.nameable",
+      "opponentPunishment.parityAttribution.parityNamingDeferred",
+      "opponentPunishment.tacticFromDiff"
+     ]
+    },
+    "finalMovestring": "33333410111003110004224555552222566666644",
+    "openingContext": null,
+    "zones": {
+     "aliases": [
+      {
+       "handle": "better-col",
+       "spec": "col2",
+       "role": "the column of the better move",
+       "truthBoard": "decision",
+       "kbId": null
+      },
+      {
+       "handle": "played-col",
+       "spec": "col4",
+       "role": "the column you played",
+       "truthBoard": "decision",
+       "kbId": null
+      },
+      {
+       "handle": "you-key-square",
+       "spec": "future:c5r5",
+       "role": "a single square on your four-in-a-row line — it matters later, once the forced sequence reaches it, not a threat right now",
+       "truthBoard": "projectedDeep",
+       "kbId": null
+      },
+      {
+       "handle": "you-key-line",
+       "spec": "future:windows:c2r5,c3r5,c4r5,c5r5",
+       "role": "the whole four-in-a-row line you are playing for — it decides this later, once the forced sequence reaches it, not a threat right now (a LINE of four squares, not a single square — use this handle, not a single-square handle, whenever your words say \"line\", \"strip\" or \"row of four\")",
+       "truthBoard": "projectedDeep",
+       "kbId": null
+      },
+      {
+       "handle": "opp-key-square",
+       "spec": "future:c6r2",
+       "role": "a single square on your opponent's four-in-a-row line — it matters later, once the forced sequence reaches it, not a threat right now",
+       "truthBoard": "projectedDeepOpp",
+       "kbId": null
+      },
+      {
+       "handle": "opp-key-line",
+       "spec": "future:windows:c3r2,c4r2,c5r2,c6r2",
+       "role": "the whole four-in-a-row line your opponent is playing for — it decides this later, once the forced sequence reaches it, not a threat right now (a LINE of four squares, not a single square — use this handle, not a single-square handle, whenever your words say \"line\", \"strip\" or \"row of four\")",
+       "truthBoard": "projectedDeepOpp",
+       "kbId": null
+      }
+     ],
+     "terms": []
+    },
+    "requiredSet": [
+     {
+      "half": "lostResource",
+      "spec": "future:windows:c2r5,c3r5,c4r5,c5r5",
+      "handle": "you-key-line",
+      "role": "the whole four-in-a-row line you are playing for — it decides this later, once the forced sequence reaches it, not a threat right now (a LINE of four squares, not a single square — use this handle, not a single-square handle, whenever your words say \"line\", \"strip\" or \"row of four\")",
+      "truthBoard": "projectedDeep"
+     },
+     {
+      "half": "opponentPunishment",
+      "spec": "future:windows:c3r2,c4r2,c5r2,c6r2",
+      "handle": "opp-key-line",
+      "role": "the whole four-in-a-row line your opponent is playing for — it decides this later, once the forced sequence reaches it, not a threat right now (a LINE of four squares, not a single square — use this handle, not a single-square handle, whenever your words say \"line\", \"strip\" or \"row of four\")",
+      "truthBoard": "projectedDeepOpp"
+     },
+     {
+      "half": "lostResource",
+      "spec": "future:c5r5",
+      "handle": "you-key-square",
+      "role": "a single square on your four-in-a-row line — it matters later, once the forced sequence reaches it, not a threat right now",
+      "truthBoard": "projectedDeep"
+     }
+    ]
+   },
+   "answer": {
+    "better_move": 2,
+    "played_outcome": "loss",
+    "best_outcome": "win",
+    "mechanism": "By playing column 2, you keep the tough central defense that preserves your [zone:future:windows:c2r5,c3r5,c4r5,c5r5]four-in-a-row line[/zone:future:windows:c2r5,c3r5,c4r5,c5r5] and the key [zone:future:c5r5]square that still matters later[/zone:future:c5r5] when the forcing race reaches it. Your played move in column 4 gives that up and lets your opponent take over the later fight on [zone:future:windows:c3r2,c4r2,c5r2,c6r2]their own four-in-a-row line[/zone:future:windows:c3r2,c4r2,c5r2,c6r2], so you lose the win and hand them their own forcing line instead.",
+    "key_cells": [
+     "c2r5",
+     "c3r2",
+     "c3r5",
+     "c4r2",
+     "c4r5",
+     "c5r2",
+     "c5r5",
+     "c6r2"
+    ],
+    "fields_relied_on": [
+     "case",
+     "lostResource.completingCell",
+     "lostResource.window",
+     "lostResource.pliesToEnd",
+     "lostResource.entryCell",
+     "lostResource.parityAttribution.controllingGroup",
+     "lostResource.parityAttribution.ownDiscs",
+     "lostResource.parityAttribution.empties",
+     "lostResource.parityAttribution.completingCell",
+     "lostResource.anchorCells",
+     "opponentPunishment.completingCell",
+     "opponentPunishment.window",
+     "opponentPunishment.pliesToEnd",
+     "opponentPunishment.entryCell",
+     "opponentPunishment.parityAttribution.controllingGroup",
+     "opponentPunishment.parityAttribution.ownDiscs",
+     "opponentPunishment.parityAttribution.empties",
+     "opponentPunishment.parityAttribution.completingCell",
+     "opponentPunishment.tie.sharedCells",
+     "replyHistogram.afterBest",
+     "replyHistogram.afterPlayed"
+    ],
+    "unsure_about": "",
+    "confidence": "high"
+   },
+   "servedExplanation": "By playing column 2, you keep the tough central defense that preserves your [zone:future:windows:c2r5,c3r5,c4r5,c5r5]four-in-a-row line[/zone:future:windows:c2r5,c3r5,c4r5,c5r5] and the key [zone:future:c5r5]square that still matters later[/zone:future:c5r5] when the forcing race reaches it. Your played move in column 4 gives that up and lets your opponent take over the later fight on [zone:future:windows:c3r2,c4r2,c5r2,c6r2]their own four-in-a-row line[/zone:future:windows:c3r2,c4r2,c5r2,c6r2], so you lose the win and hand them their own forcing line instead.",
+   "better_col_repaired": false,
+   "mechanism_pre_repair": null,
+   "retry_fired": true,
+   "served_attempt": "retry",
+   "precomputed": {
+    "A1": "pass",
+    "A2": "pass",
+    "A6": "pass",
+    "G7a_offered": "pass",
+    "G7b_offered": "pass",
+    "notes": ""
+   }
+  },
+  {
+   "run_index": 2,
+   "feature_vector": {
+    "movestring": "333334",
+    "playedCol": 3,
+    "bestCol": 1,
+    "discs": 6,
+    "boardState": "opening",
+    "player": 1,
+    "opponent": 2,
+    "case": "win_to_lose",
+    "notABlunder": false,
+    "lostResource": {
+     "kind": "winning_line",
+     "register": "parity",
+     "completingCell": "c5r5",
+     "window": [
+      "c2r5",
+      "c3r5",
+      "c4r5",
+      "c5r5"
+     ],
+     "pliesToEnd": 34,
+     "line": null,
+     "finalMovestring": "33333410111003110004224555552222566666644",
+     "entryCell": "c1r1",
+     "terminal": "win",
+     "parityAttribution": {
+      "nameable": true,
+      "controllingGroup": [
+       "c2r5",
+       "c3r5",
+       "c4r5",
+       "c5r5"
+      ],
+      "ownDiscs": 1,
+      "empties": [
+       {
+        "cell": "c2r5",
+        "zcount": 4,
+        "parity": "even"
+       },
+       {
+        "cell": "c3r5",
+        "zcount": 5,
+        "parity": "odd"
+       },
+       {
+        "cell": "c5r5",
+        "zcount": 4,
+        "parity": "even"
+       }
+      ],
+      "completingCell": "c5r5",
+      "parityNamingDeferred": true,
+      "namedRule": null
+     },
+     "tacticTag": null,
+     "tacticCells": [],
+     "tacticFromDiff": false,
+     "anchorCells": [
+      "c2r1",
+      "c5r2"
+     ]
+    },
+    "opponentPunishment": {
+     "kind": "winning_line",
+     "register": "parity",
+     "completingCell": "c6r2",
+     "window": [
+      "c3r2",
+      "c4r2",
+      "c5r2",
+      "c6r2"
+     ],
+     "pliesToEnd": 31,
+     "line": null,
+     "finalMovestring": "33333434011111000001222222444466666655",
+     "entryCell": "c5r2",
+     "terminal": "win",
+     "parityAttribution": {
+      "nameable": true,
+      "controllingGroup": [
+       "c3r2",
+       "c4r2",
+       "c5r2",
+       "c6r2"
+      ],
+      "ownDiscs": 1,
+      "empties": [
+       {
+        "cell": "c3r2",
+        "zcount": 2,
+        "parity": "even"
+       },
+       {
+        "cell": "c5r2",
+        "zcount": 1,
+        "parity": "odd"
+       },
+       {
+        "cell": "c6r2",
+        "zcount": 2,
+        "parity": "even"
+       }
+      ],
+      "completingCell": "c6r2",
+      "parityNamingDeferred": true,
+      "namedRule": null
+     },
+     "tacticTag": null,
+     "tacticCells": [],
+     "tacticFromDiff": false,
+     "tie": {
+      "kind": "tied",
+      "sharedCells": [
+       "c5r2"
+      ]
+     }
+    },
+    "replyHistogram": {
+     "afterBest": 0,
+     "afterPlayed": 2
+    },
+    "gate": null
+   },
+   "render_decision": {
+    "case": "win_to_lose",
+    "route": "sign",
+    "direction": null,
+    "patternOnAfterBestBoard": null,
+    "link": {
+     "id": "L6",
+     "confidence": "high",
+     "covers": [
+      "route",
+      "lostResource.kind",
+      "opponentPunishment.kind",
+      "opponentPunishment.verdict",
+      "lostResource.terminal",
+      "opponentPunishment.terminal",
+      "lostResource.forkCase",
+      "opponentPunishment.forkCase",
+      "opponentPunishment.tie.kind",
+      "opponentPunishment.tie.tied",
+      "lostResource.register",
+      "opponentPunishment.register"
+     ],
+     "guardrail": "You gave up a win AND handed the opponent their own; name both lines with their horizons.",
+     "text": "You had a forced win via column 5 (deep, via a parity battle), and column 2 was the move that kept it. The played move gives it up AND lets the opponent force their own win via column 6."
+    },
+    "boards": [
+     {
+      "id": "decision",
+      "shown": true,
+      "reason": "the position under judgment"
+     },
+     {
+      "id": "afterBest",
+      "shown": false,
+      "reason": "the better move — tag-set identical to the decision board, omitted"
+     },
+     {
+      "id": "afterPlayed",
+      "shown": false,
+      "reason": "the move you played — tag-set identical to the decision board, omitted"
+     },
+     {
+      "id": "projectedDeep",
+      "shown": true,
+      "reason": "where the deep parity resource resolves — your line"
+     },
+     {
+      "id": "projectedDeepOpp",
+      "shown": true,
+      "reason": "where the deep parity resource resolves — your opponent's line"
+     }
+    ],
+    "resource": {
+     "completingCell": {
+      "cell": "c5r5",
+      "status": "empty",
+      "horizon": "deep-parity",
+      "reachableInPlies": 40,
+      "role": "where the load-bearing resource completes"
+     },
+     "registerToHorizon": {
+      "register": "parity",
+      "horizon": "deep-parity"
+     }
+    },
+    "fieldPartition": {
+     "rendered": [
+      "movestring",
+      "playedCol",
+      "bestCol",
+      "boardState",
+      "player",
+      "opponent",
+      "case",
+      "lostResource.completingCell",
+      "lostResource.window[]",
+      "lostResource.pliesToEnd",
+      "lostResource.finalMovestring",
+      "lostResource.entryCell",
+      "lostResource.parityAttribution.controllingGroup[]",
+      "lostResource.parityAttribution.ownDiscs",
+      "lostResource.parityAttribution.empties[].cell",
+      "lostResource.parityAttribution.empties[].zcount",
+      "lostResource.parityAttribution.empties[].parity",
+      "lostResource.parityAttribution.completingCell",
+      "lostResource.anchorCells[]",
+      "opponentPunishment.completingCell",
+      "opponentPunishment.window[]",
+      "opponentPunishment.pliesToEnd",
+      "opponentPunishment.finalMovestring",
+      "opponentPunishment.entryCell",
+      "opponentPunishment.parityAttribution.controllingGroup[]",
+      "opponentPunishment.parityAttribution.ownDiscs",
+      "opponentPunishment.parityAttribution.empties[].cell",
+      "opponentPunishment.parityAttribution.empties[].zcount",
+      "opponentPunishment.parityAttribution.empties[].parity",
+      "opponentPunishment.parityAttribution.completingCell",
+      "opponentPunishment.tie.sharedCells[]",
+      "replyHistogram.afterBest",
+      "replyHistogram.afterPlayed"
+     ],
+     "covered": [
+      "lostResource.kind",
+      "lostResource.register",
+      "lostResource.terminal",
+      "opponentPunishment.kind",
+      "opponentPunishment.register",
+      "opponentPunishment.terminal",
+      "opponentPunishment.tie.kind"
+     ],
+     "excluded": [
+      "discs",
+      "notABlunder",
+      "lostResource.parityAttribution.nameable",
+      "lostResource.parityAttribution.parityNamingDeferred",
+      "lostResource.tacticFromDiff",
+      "opponentPunishment.parityAttribution.nameable",
+      "opponentPunishment.parityAttribution.parityNamingDeferred",
+      "opponentPunishment.tacticFromDiff"
+     ]
+    },
+    "finalMovestring": "33333410111003110004224555552222566666644",
+    "openingContext": null,
+    "zones": {
+     "aliases": [
+      {
+       "handle": "better-col",
+       "spec": "col2",
+       "role": "the column of the better move",
+       "truthBoard": "decision",
+       "kbId": null
+      },
+      {
+       "handle": "played-col",
+       "spec": "col4",
+       "role": "the column you played",
+       "truthBoard": "decision",
+       "kbId": null
+      },
+      {
+       "handle": "you-key-square",
+       "spec": "future:c5r5",
+       "role": "a single square on your four-in-a-row line — it matters later, once the forced sequence reaches it, not a threat right now",
+       "truthBoard": "projectedDeep",
+       "kbId": null
+      },
+      {
+       "handle": "you-key-line",
+       "spec": "future:windows:c2r5,c3r5,c4r5,c5r5",
+       "role": "the whole four-in-a-row line you are playing for — it decides this later, once the forced sequence reaches it, not a threat right now (a LINE of four squares, not a single square — use this handle, not a single-square handle, whenever your words say \"line\", \"strip\" or \"row of four\")",
+       "truthBoard": "projectedDeep",
+       "kbId": null
+      },
+      {
+       "handle": "opp-key-square",
+       "spec": "future:c6r2",
+       "role": "a single square on your opponent's four-in-a-row line — it matters later, once the forced sequence reaches it, not a threat right now",
+       "truthBoard": "projectedDeepOpp",
+       "kbId": null
+      },
+      {
+       "handle": "opp-key-line",
+       "spec": "future:windows:c3r2,c4r2,c5r2,c6r2",
+       "role": "the whole four-in-a-row line your opponent is playing for — it decides this later, once the forced sequence reaches it, not a threat right now (a LINE of four squares, not a single square — use this handle, not a single-square handle, whenever your words say \"line\", \"strip\" or \"row of four\")",
+       "truthBoard": "projectedDeepOpp",
+       "kbId": null
+      }
+     ],
+     "terms": []
+    },
+    "requiredSet": [
+     {
+      "half": "lostResource",
+      "spec": "future:windows:c2r5,c3r5,c4r5,c5r5",
+      "handle": "you-key-line",
+      "role": "the whole four-in-a-row line you are playing for — it decides this later, once the forced sequence reaches it, not a threat right now (a LINE of four squares, not a single square — use this handle, not a single-square handle, whenever your words say \"line\", \"strip\" or \"row of four\")",
+      "truthBoard": "projectedDeep"
+     },
+     {
+      "half": "opponentPunishment",
+      "spec": "future:windows:c3r2,c4r2,c5r2,c6r2",
+      "handle": "opp-key-line",
+      "role": "the whole four-in-a-row line your opponent is playing for — it decides this later, once the forced sequence reaches it, not a threat right now (a LINE of four squares, not a single square — use this handle, not a single-square handle, whenever your words say \"line\", \"strip\" or \"row of four\")",
+      "truthBoard": "projectedDeepOpp"
+     },
+     {
+      "half": "lostResource",
+      "spec": "future:c5r5",
+      "handle": "you-key-square",
+      "role": "a single square on your four-in-a-row line — it matters later, once the forced sequence reaches it, not a threat right now",
+      "truthBoard": "projectedDeep"
+     }
+    ]
+   },
+   "answer": {
+    "better_move": 2,
+    "played_outcome": "loss",
+    "best_outcome": "win",
+    "mechanism": "You should have played column 2 to keep your [zone:future:windows:c2r5,c3r5,c4r5,c5r5]four-in-a-row line[/zone:future:windows:c2r5,c3r5,c4r5,c5r5] alive; that is the tough defense that still holds the later parity fight. By playing column 4 instead, you gave up that line and also opened a path for your opponent’s [zone:future:windows:c3r2,c4r2,c5r2,c6r2]four-in-a-row line[/zone:future:windows:c3r2,c4r2,c5r2,c6r2], which they can force once the forced sequence runs out. The key point is that column 2 preserves the one square that matters later, [zone:future:c5r5]the finishing square on your line[/zone:future:c5r5], while column 4 lets your opponent take over the late game.",
+    "key_cells": [
+     "c2r5",
+     "c3r2",
+     "c3r5",
+     "c4r2",
+     "c4r5",
+     "c5r2",
+     "c5r5",
+     "c6r2"
+    ],
+    "fields_relied_on": [
+     "case",
+     "lostResource.completingCell",
+     "lostResource.window",
+     "lostResource.pliesToEnd",
+     "lostResource.anchorCells",
+     "lostResource.parityAttribution.controllingGroup",
+     "lostResource.parityAttribution.ownDiscs",
+     "opponentPunishment.completingCell",
+     "opponentPunishment.window",
+     "opponentPunishment.pliesToEnd",
+     "opponentPunishment.parityAttribution.controllingGroup",
+     "opponentPunishment.parityAttribution.ownDiscs",
+     "opponentPunishment.tie.sharedCells",
+     "replyHistogram.afterBest",
+     "replyHistogram.afterPlayed"
+    ],
+    "unsure_about": "",
+    "confidence": "high"
+   },
+   "servedExplanation": "You should have played column 2 to keep your [zone:future:windows:c2r5,c3r5,c4r5,c5r5]four-in-a-row line[/zone:future:windows:c2r5,c3r5,c4r5,c5r5] alive; that is the tough defense that still holds the later parity fight. By playing column 4 instead, you gave up that line and also opened a path for your opponent’s [zone:future:windows:c3r2,c4r2,c5r2,c6r2]four-in-a-row line[/zone:future:windows:c3r2,c4r2,c5r2,c6r2], which they can force once the forced sequence runs out. The key point is that column 2 preserves the one square that matters later, [zone:future:c5r5]the finishing square on your line[/zone:future:c5r5], while column 4 lets your opponent take over the late game.",
+   "better_col_repaired": false,
+   "mechanism_pre_repair": null,
+   "retry_fired": true,
+   "served_attempt": "retry",
+   "precomputed": {
+    "A1": "pass",
+    "A2": "pass",
+    "A6": "pass",
+    "G7a_offered": "pass",
+    "G7b_offered": "pass",
+    "notes": ""
+   }
+  }
+ ]
+}

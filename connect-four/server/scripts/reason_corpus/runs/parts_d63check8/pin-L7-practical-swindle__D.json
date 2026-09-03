@@ -1,0 +1,1651 @@
+{
+ "id": "pin-L7-practical-swindle",
+ "condition": "D",
+ "runs": [
+  {
+   "run_index": 0,
+   "feature_vector": {
+    "movestring": "424424244263",
+    "playedCol": 5,
+    "bestCol": 3,
+    "discs": 12,
+    "boardState": "opening",
+    "player": 1,
+    "opponent": 2,
+    "case": "lose_to_faster_lose",
+    "notABlunder": false,
+    "lostResource": {
+     "kind": "conditional_swindle",
+     "register": "forced_sequence",
+     "completingCell": "c2r3",
+     "window": [
+      "c1r3",
+      "c2r3",
+      "c3r3",
+      "c4r3"
+     ],
+     "pliesToEnd": 15,
+     "line": [
+      {
+       "ply": 15,
+       "mover": 1,
+       "col": 1,
+       "cell": "c2r1"
+      },
+      {
+       "ply": 16,
+       "mover": 2,
+       "col": 1,
+       "cell": "c2r2"
+      },
+      {
+       "ply": 17,
+       "mover": 1,
+       "col": 3,
+       "cell": "c4r3"
+      },
+      {
+       "ply": 18,
+       "mover": 2,
+       "col": 2,
+       "cell": "c3r5"
+      },
+      {
+       "ply": 19,
+       "mover": 1,
+       "col": 2,
+       "cell": "c3r6"
+      },
+      {
+       "ply": 20,
+       "mover": 2,
+       "col": 3,
+       "cell": "c4r4"
+      },
+      {
+       "ply": 21,
+       "mover": 1,
+       "col": 3,
+       "cell": "c4r5"
+      },
+      {
+       "ply": 22,
+       "mover": 2,
+       "col": 3,
+       "cell": "c4r6"
+      },
+      {
+       "ply": 23,
+       "mover": 1,
+       "col": 6,
+       "cell": "c7r2"
+      },
+      {
+       "ply": 24,
+       "mover": 2,
+       "col": 6,
+       "cell": "c7r3"
+      },
+      {
+       "ply": 25,
+       "mover": 1,
+       "col": 6,
+       "cell": "c7r4"
+      },
+      {
+       "ply": 26,
+       "mover": 2,
+       "col": 6,
+       "cell": "c7r5"
+      },
+      {
+       "ply": 27,
+       "mover": 1,
+       "col": 6,
+       "cell": "c7r6"
+      },
+      {
+       "ply": 28,
+       "mover": 2,
+       "col": 0,
+       "cell": "c1r2"
+      },
+      {
+       "ply": 29,
+       "mover": 1,
+       "col": 0,
+       "cell": "c1r3"
+      }
+     ],
+     "finalMovestring": "42442424426330113223336666600",
+     "entryCell": "c2r1",
+     "witness": {
+      "node": "4244242442633",
+      "devCol": 0,
+      "devCols": [
+       0,
+       2,
+       6
+      ],
+      "oppPlies": 0
+     },
+     "terminal": "fork",
+     "forkCase": "B",
+     "forkCells": [
+      "c2r3"
+     ],
+     "forkWindows": [
+      [
+       "c1r3",
+       "c2r3",
+       "c3r3",
+       "c4r3"
+      ]
+     ],
+     "tacticTag": "double_threat",
+     "tacticCells": [
+      "c2r3"
+     ],
+     "tacticFromDiff": false,
+     "anchorCells": [
+      "c1r1"
+     ]
+    },
+    "opponentPunishment": {
+     "kind": "winning_line",
+     "register": "parity",
+     "completingCell": "c2r4",
+     "window": [
+      "c1r3",
+      "c2r4",
+      "c3r5",
+      "c4r6"
+     ],
+     "pliesToEnd": 23,
+     "line": null,
+     "finalMovestring": "424424244263501331000002526333666611",
+     "entryCell": "c1r1",
+     "terminal": "win",
+     "parityAttribution": {
+      "nameable": true,
+      "controllingGroup": [
+       "c1r3",
+       "c2r4",
+       "c3r5",
+       "c4r6"
+      ],
+      "ownDiscs": 0,
+      "empties": [
+       {
+        "cell": "c1r3",
+        "zcount": 3,
+        "parity": "odd"
+       },
+       {
+        "cell": "c2r4",
+        "zcount": 4,
+        "parity": "even"
+       },
+       {
+        "cell": "c3r5",
+        "zcount": 1,
+        "parity": "odd"
+       },
+       {
+        "cell": "c4r6",
+        "zcount": 5,
+        "parity": "odd"
+       }
+      ],
+      "completingCell": "c2r4",
+      "parityNamingDeferred": true,
+      "namedRule": null
+     },
+     "tacticTag": "minor_threat",
+     "tacticCells": [
+      "c1r1",
+      "c2r1",
+      "c2r4",
+      "c4r2",
+      "c4r4",
+      "c6r4"
+     ],
+     "tacticFromDiff": false,
+     "tie": {
+      "kind": "temporal",
+      "playedPlies": 23,
+      "swindlePlies": 15,
+      "tied": false
+     }
+    },
+    "replyHistogram": {
+     "afterBest": 1,
+     "afterPlayed": 6
+    },
+    "gate": {
+     "ran": true,
+     "verdict": "Blunder",
+     "witness": {
+      "node": "4244242442633",
+      "devCols": [
+       0,
+       2,
+       6
+      ],
+      "devCol": 0,
+      "devVal": -6,
+      "oppPlies": 0
+     },
+     "nodesVisited": 1
+    }
+   },
+   "render_decision": {
+    "case": "lose_to_faster_lose",
+    "route": "sign",
+    "direction": null,
+    "patternOnAfterBestBoard": null,
+    "link": {
+     "id": "L7",
+     "confidence": "high",
+     "covers": [
+      "route",
+      "lostResource.kind",
+      "opponentPunishment.kind",
+      "opponentPunishment.verdict",
+      "lostResource.terminal",
+      "opponentPunishment.terminal",
+      "lostResource.forkCase",
+      "opponentPunishment.forkCase",
+      "opponentPunishment.tie.kind",
+      "opponentPunishment.tie.tied",
+      "lostResource.register",
+      "opponentPunishment.register"
+     ],
+     "guardrail": "Do not claim the better move wins, and do NOT tell the player they are lost; frame the better move as the toughest, most resilient defense that keeps the practical swindle alive. Do not add a closing caveat like \"but the position is still lost,\" \"both lines end poorly,\" \"the result still goes against you,\" or \"you still lose either way\" — the practical-resistance framing must stand on its own, with no defeatist final clause.",
+     "text": "Column 4 is your most stubborn defense: it keeps a practical swindle alive — one slip by your opponent (watch columns 1, 3, 7) could let you climb back in. The move you played gives that up and lets your opponent finish faster."
+    },
+    "boards": [
+     {
+      "id": "decision",
+      "shown": true,
+      "reason": "the position under judgment"
+     },
+     {
+      "id": "afterBest",
+      "shown": true,
+      "reason": "the better move — changes the tactical picture"
+     },
+     {
+      "id": "afterPlayed",
+      "shown": false,
+      "reason": "the move you played — tag-set identical to the decision board, omitted"
+     },
+     {
+      "id": "projectedDeep",
+      "shown": true,
+      "reason": "where the deep forced_sequence resource resolves — your line"
+     },
+     {
+      "id": "projectedDeepOpp",
+      "shown": true,
+      "reason": "where the deep parity resource resolves — your opponent's line"
+     }
+    ],
+    "resource": {
+     "completingCell": {
+      "cell": "c2r4",
+      "status": "empty",
+      "horizon": "deep-parity",
+      "reachableInPlies": 35,
+      "role": "where the load-bearing resource completes"
+     },
+     "registerToHorizon": {
+      "register": "parity",
+      "horizon": "deep-parity"
+     }
+    },
+    "fieldPartition": {
+     "rendered": [
+      "movestring",
+      "playedCol",
+      "bestCol",
+      "boardState",
+      "player",
+      "opponent",
+      "case",
+      "lostResource.completingCell",
+      "lostResource.window[]",
+      "lostResource.pliesToEnd",
+      "lostResource.line[].ply",
+      "lostResource.line[].mover",
+      "lostResource.line[].col",
+      "lostResource.line[].cell",
+      "lostResource.finalMovestring",
+      "lostResource.entryCell",
+      "lostResource.witness.devCol",
+      "lostResource.witness.devCols[]",
+      "lostResource.witness.oppPlies",
+      "lostResource.forkCells[]",
+      "lostResource.forkWindows[][]",
+      "lostResource.tacticTag",
+      "lostResource.tacticCells[]",
+      "lostResource.anchorCells[]",
+      "opponentPunishment.completingCell",
+      "opponentPunishment.window[]",
+      "opponentPunishment.pliesToEnd",
+      "opponentPunishment.finalMovestring",
+      "opponentPunishment.entryCell",
+      "opponentPunishment.parityAttribution.controllingGroup[]",
+      "opponentPunishment.parityAttribution.ownDiscs",
+      "opponentPunishment.parityAttribution.empties[].cell",
+      "opponentPunishment.parityAttribution.empties[].zcount",
+      "opponentPunishment.parityAttribution.empties[].parity",
+      "opponentPunishment.parityAttribution.completingCell",
+      "opponentPunishment.tacticTag",
+      "opponentPunishment.tacticCells[]",
+      "opponentPunishment.tie.playedPlies",
+      "opponentPunishment.tie.swindlePlies",
+      "replyHistogram.afterBest",
+      "replyHistogram.afterPlayed",
+      "gate.verdict",
+      "gate.witness.devCols[]",
+      "gate.witness.devCol",
+      "gate.witness.oppPlies"
+     ],
+     "covered": [
+      "lostResource.kind",
+      "lostResource.register",
+      "lostResource.terminal",
+      "lostResource.forkCase",
+      "opponentPunishment.kind",
+      "opponentPunishment.register",
+      "opponentPunishment.terminal",
+      "opponentPunishment.tie.kind",
+      "opponentPunishment.tie.tied"
+     ],
+     "excluded": [
+      "discs",
+      "notABlunder",
+      "lostResource.witness.node",
+      "lostResource.tacticFromDiff",
+      "opponentPunishment.parityAttribution.nameable",
+      "opponentPunishment.parityAttribution.parityNamingDeferred",
+      "opponentPunishment.tacticFromDiff",
+      "gate.ran",
+      "gate.witness.node",
+      "gate.witness.devVal",
+      "gate.nodesVisited"
+     ]
+    },
+    "finalMovestring": "424424244263501331000002526333666611",
+    "openingContext": null,
+    "zones": {
+     "aliases": [
+      {
+       "handle": "better-col",
+       "spec": "col4",
+       "role": "the column of the better move",
+       "truthBoard": "decision",
+       "kbId": null
+      },
+      {
+       "handle": "played-col",
+       "spec": "col6",
+       "role": "the column you played",
+       "truthBoard": "decision",
+       "kbId": null
+      },
+      {
+       "handle": "you-major",
+       "spec": "c2r2",
+       "role": "the lower one in column 2: a single square completing your four-in-a-row line",
+       "truthBoard": "afterBest",
+       "kbId": null
+      },
+      {
+       "handle": "you-major-line",
+       "spec": "windows:c2r2,c3r2,c4r2,c5r2",
+       "role": "the line across columns 2–5 on row 2: the whole four-in-a-row line you are playing for (a LINE of four squares, not a single square — use this handle, not a single-square handle, whenever your words say \"line\", \"strip\" or \"row of four\")",
+       "truthBoard": "afterBest",
+       "kbId": null
+      },
+      {
+       "handle": "you-double",
+       "spec": "windows:c2r2,c6r2",
+       "role": "the fork squares where you get winning squares at once",
+       "truthBoard": "afterBest",
+       "kbId": "double_threat"
+      },
+      {
+       "handle": "you-major-2",
+       "spec": "c2r4",
+       "role": "the upper one in column 2: a single square completing your four-in-a-row line",
+       "truthBoard": "afterBest",
+       "kbId": null
+      },
+      {
+       "handle": "you-major-line-2",
+       "spec": "windows:c5r1,c4r2,c3r3,c2r4",
+       "role": "the diagonal line falling from column 2 on row 4 to column 5 on row 1: the whole four-in-a-row line you are playing for (a LINE of four squares, not a single square — use this handle, not a single-square handle, whenever your words say \"line\", \"strip\" or \"row of four\")",
+       "truthBoard": "afterBest",
+       "kbId": null
+      },
+      {
+       "handle": "you-major-3",
+       "spec": "c6r2",
+       "role": "the one in column 6: a single square completing your four-in-a-row line",
+       "truthBoard": "afterBest",
+       "kbId": null
+      },
+      {
+       "handle": "you-major-line-3",
+       "spec": "windows:c3r2,c4r2,c5r2,c6r2",
+       "role": "the line across columns 3–6 on row 2: the whole four-in-a-row line you are playing for (a LINE of four squares, not a single square — use this handle, not a single-square handle, whenever your words say \"line\", \"strip\" or \"row of four\")",
+       "truthBoard": "afterBest",
+       "kbId": null
+      },
+      {
+       "handle": "you-future-fork",
+       "spec": "future:c2r3",
+       "role": "a single square on your four-in-a-row line — it matters later, once the forced sequence reaches it, not a threat right now",
+       "truthBoard": "projectedDeep",
+       "kbId": "double_threat"
+      },
+      {
+       "handle": "you-key-line",
+       "spec": "future:windows:c1r3,c2r3,c3r3,c4r3",
+       "role": "the whole four-in-a-row line you are playing for — it decides this later, once the forced sequence reaches it, not a threat right now (a LINE of four squares, not a single square — use this handle, not a single-square handle, whenever your words say \"line\", \"strip\" or \"row of four\")",
+       "truthBoard": "projectedDeep",
+       "kbId": null
+      },
+      {
+       "handle": "you-fork-pivot",
+       "spec": "future:c1r3",
+       "role": "the square you play to CREATE the fork — the move that makes both winning squares live at once; it matters later, once the forced sequence reaches it — it is NOT the move to play right now",
+       "truthBoard": "projectedDeep",
+       "kbId": null
+      },
+      {
+       "handle": "opp-key-line",
+       "spec": "future:windows:c1r3,c2r4,c3r5,c4r6",
+       "role": "the whole four-in-a-row line your opponent is playing for — it decides this later, once the forced sequence reaches it, not a threat right now (a LINE of four squares, not a single square — use this handle, not a single-square handle, whenever your words say \"line\", \"strip\" or \"row of four\")",
+       "truthBoard": "projectedDeepOpp",
+       "kbId": null
+      }
+     ],
+     "terms": [
+      {
+       "slug": "double_threat",
+       "kbId": "double_threat",
+       "canonicalPhrase": "double threat (two winning squares at once)",
+       "description": "two winning squares at once — your opponent cannot block both"
+      }
+     ]
+    },
+    "requiredSet": [
+     {
+      "half": "lostResource",
+      "spec": "future:c2r3",
+      "handle": "you-future-fork",
+      "role": "a single square on your four-in-a-row line — it matters later, once the forced sequence reaches it, not a threat right now",
+      "truthBoard": "projectedDeep"
+     },
+     {
+      "half": "opponentPunishment",
+      "spec": "c2r4",
+      "handle": "you-major-2",
+      "role": "the upper one in column 2: a single square completing your four-in-a-row line",
+      "truthBoard": "afterBest"
+     },
+     {
+      "half": "lostResource",
+      "spec": "future:c1r3",
+      "handle": "you-fork-pivot",
+      "role": "the square you play to CREATE the fork — the move that makes both winning squares live at once; it matters later, once the forced sequence reaches it — it is NOT the move to play right now",
+      "truthBoard": "projectedDeep"
+     }
+    ]
+   },
+   "answer": {
+    "better_move": 4,
+    "played_outcome": "loss",
+    "best_outcome": "loss",
+    "mechanism": "Your [zone:col4]column 4[/zone:col4] defense is the toughest one because it keeps the central fight alive and preserves your [zone:c2r4]upper square in column 2[/zone:c2r4] as part of the swindle. By contrast, the move you actually played gives your opponent a cleaner finish: it opens the path to their forcing line while your own [zone:future:c2r3]later fork square[/zone:future:c2r3] and [zone:future:c1r3]fork-making pivot[/zone:future:c1r3] never get the chance to matter. ",
+    "key_cells": [
+     "c1r3",
+     "c2r3",
+     "c2r4",
+     "c4r1",
+     "c4r2",
+     "c4r3",
+     "c4r4",
+     "c4r5",
+     "c4r6"
+    ],
+    "fields_relied_on": [
+     "lostResource.completingCell",
+     "lostResource.window",
+     "lostResource.pliesToEnd",
+     "lostResource.forkCells",
+     "lostResource.tacticTag",
+     "opponentPunishment.completingCell",
+     "opponentPunishment.window",
+     "opponentPunishment.pliesToEnd",
+     "opponentPunishment.parityAttribution.controllingGroup",
+     "opponentPunishment.parityAttribution.ownDiscs",
+     "replyHistogram.afterBest",
+     "replyHistogram.afterPlayed",
+     "gate.verdict"
+    ],
+    "unsure_about": "",
+    "confidence": "high"
+   },
+   "servedExplanation": "Your [zone:col4]column 4[/zone:col4] defense is the toughest one because it keeps the central fight alive and preserves your [zone:c2r4]upper square in column 2[/zone:c2r4] as part of the swindle. By contrast, the move you actually played gives your opponent a cleaner finish: it opens the path to their forcing line while your own [zone:future:c2r3]later fork square[/zone:future:c2r3] and [zone:future:c1r3]fork-making pivot[/zone:future:c1r3] never get the chance to matter. ",
+   "better_col_repaired": false,
+   "mechanism_pre_repair": null,
+   "retry_fired": true,
+   "served_attempt": "retry",
+   "precomputed": {
+    "A1": "pass",
+    "A2": "pass",
+    "A6": "pass",
+    "G7a_offered": "pass",
+    "G7b_offered": "pass",
+    "notes": ""
+   }
+  },
+  {
+   "run_index": 1,
+   "feature_vector": {
+    "movestring": "424424244263",
+    "playedCol": 5,
+    "bestCol": 3,
+    "discs": 12,
+    "boardState": "opening",
+    "player": 1,
+    "opponent": 2,
+    "case": "lose_to_faster_lose",
+    "notABlunder": false,
+    "lostResource": {
+     "kind": "conditional_swindle",
+     "register": "forced_sequence",
+     "completingCell": "c2r3",
+     "window": [
+      "c1r3",
+      "c2r3",
+      "c3r3",
+      "c4r3"
+     ],
+     "pliesToEnd": 15,
+     "line": [
+      {
+       "ply": 15,
+       "mover": 1,
+       "col": 1,
+       "cell": "c2r1"
+      },
+      {
+       "ply": 16,
+       "mover": 2,
+       "col": 1,
+       "cell": "c2r2"
+      },
+      {
+       "ply": 17,
+       "mover": 1,
+       "col": 3,
+       "cell": "c4r3"
+      },
+      {
+       "ply": 18,
+       "mover": 2,
+       "col": 2,
+       "cell": "c3r5"
+      },
+      {
+       "ply": 19,
+       "mover": 1,
+       "col": 2,
+       "cell": "c3r6"
+      },
+      {
+       "ply": 20,
+       "mover": 2,
+       "col": 3,
+       "cell": "c4r4"
+      },
+      {
+       "ply": 21,
+       "mover": 1,
+       "col": 3,
+       "cell": "c4r5"
+      },
+      {
+       "ply": 22,
+       "mover": 2,
+       "col": 3,
+       "cell": "c4r6"
+      },
+      {
+       "ply": 23,
+       "mover": 1,
+       "col": 6,
+       "cell": "c7r2"
+      },
+      {
+       "ply": 24,
+       "mover": 2,
+       "col": 6,
+       "cell": "c7r3"
+      },
+      {
+       "ply": 25,
+       "mover": 1,
+       "col": 6,
+       "cell": "c7r4"
+      },
+      {
+       "ply": 26,
+       "mover": 2,
+       "col": 6,
+       "cell": "c7r5"
+      },
+      {
+       "ply": 27,
+       "mover": 1,
+       "col": 6,
+       "cell": "c7r6"
+      },
+      {
+       "ply": 28,
+       "mover": 2,
+       "col": 0,
+       "cell": "c1r2"
+      },
+      {
+       "ply": 29,
+       "mover": 1,
+       "col": 0,
+       "cell": "c1r3"
+      }
+     ],
+     "finalMovestring": "42442424426330113223336666600",
+     "entryCell": "c2r1",
+     "witness": {
+      "node": "4244242442633",
+      "devCol": 0,
+      "devCols": [
+       0,
+       2,
+       6
+      ],
+      "oppPlies": 0
+     },
+     "terminal": "fork",
+     "forkCase": "B",
+     "forkCells": [
+      "c2r3"
+     ],
+     "forkWindows": [
+      [
+       "c1r3",
+       "c2r3",
+       "c3r3",
+       "c4r3"
+      ]
+     ],
+     "tacticTag": "double_threat",
+     "tacticCells": [
+      "c2r3"
+     ],
+     "tacticFromDiff": false,
+     "anchorCells": [
+      "c1r1"
+     ]
+    },
+    "opponentPunishment": {
+     "kind": "winning_line",
+     "register": "parity",
+     "completingCell": "c2r4",
+     "window": [
+      "c1r3",
+      "c2r4",
+      "c3r5",
+      "c4r6"
+     ],
+     "pliesToEnd": 23,
+     "line": null,
+     "finalMovestring": "424424244263501331000002526333666611",
+     "entryCell": "c1r1",
+     "terminal": "win",
+     "parityAttribution": {
+      "nameable": true,
+      "controllingGroup": [
+       "c1r3",
+       "c2r4",
+       "c3r5",
+       "c4r6"
+      ],
+      "ownDiscs": 0,
+      "empties": [
+       {
+        "cell": "c1r3",
+        "zcount": 3,
+        "parity": "odd"
+       },
+       {
+        "cell": "c2r4",
+        "zcount": 4,
+        "parity": "even"
+       },
+       {
+        "cell": "c3r5",
+        "zcount": 1,
+        "parity": "odd"
+       },
+       {
+        "cell": "c4r6",
+        "zcount": 5,
+        "parity": "odd"
+       }
+      ],
+      "completingCell": "c2r4",
+      "parityNamingDeferred": true,
+      "namedRule": null
+     },
+     "tacticTag": "minor_threat",
+     "tacticCells": [
+      "c1r1",
+      "c2r1",
+      "c2r4",
+      "c4r2",
+      "c4r4",
+      "c6r4"
+     ],
+     "tacticFromDiff": false,
+     "tie": {
+      "kind": "temporal",
+      "playedPlies": 23,
+      "swindlePlies": 15,
+      "tied": false
+     }
+    },
+    "replyHistogram": {
+     "afterBest": 1,
+     "afterPlayed": 6
+    },
+    "gate": {
+     "ran": true,
+     "verdict": "Blunder",
+     "witness": {
+      "node": "4244242442633",
+      "devCols": [
+       0,
+       2,
+       6
+      ],
+      "devCol": 0,
+      "devVal": -6,
+      "oppPlies": 0
+     },
+     "nodesVisited": 1
+    }
+   },
+   "render_decision": {
+    "case": "lose_to_faster_lose",
+    "route": "sign",
+    "direction": null,
+    "patternOnAfterBestBoard": null,
+    "link": {
+     "id": "L7",
+     "confidence": "high",
+     "covers": [
+      "route",
+      "lostResource.kind",
+      "opponentPunishment.kind",
+      "opponentPunishment.verdict",
+      "lostResource.terminal",
+      "opponentPunishment.terminal",
+      "lostResource.forkCase",
+      "opponentPunishment.forkCase",
+      "opponentPunishment.tie.kind",
+      "opponentPunishment.tie.tied",
+      "lostResource.register",
+      "opponentPunishment.register"
+     ],
+     "guardrail": "Do not claim the better move wins, and do NOT tell the player they are lost; frame the better move as the toughest, most resilient defense that keeps the practical swindle alive. Do not add a closing caveat like \"but the position is still lost,\" \"both lines end poorly,\" \"the result still goes against you,\" or \"you still lose either way\" — the practical-resistance framing must stand on its own, with no defeatist final clause.",
+     "text": "Column 4 is your most stubborn defense: it keeps a practical swindle alive — one slip by your opponent (watch columns 1, 3, 7) could let you climb back in. The move you played gives that up and lets your opponent finish faster."
+    },
+    "boards": [
+     {
+      "id": "decision",
+      "shown": true,
+      "reason": "the position under judgment"
+     },
+     {
+      "id": "afterBest",
+      "shown": true,
+      "reason": "the better move — changes the tactical picture"
+     },
+     {
+      "id": "afterPlayed",
+      "shown": false,
+      "reason": "the move you played — tag-set identical to the decision board, omitted"
+     },
+     {
+      "id": "projectedDeep",
+      "shown": true,
+      "reason": "where the deep forced_sequence resource resolves — your line"
+     },
+     {
+      "id": "projectedDeepOpp",
+      "shown": true,
+      "reason": "where the deep parity resource resolves — your opponent's line"
+     }
+    ],
+    "resource": {
+     "completingCell": {
+      "cell": "c2r4",
+      "status": "empty",
+      "horizon": "deep-parity",
+      "reachableInPlies": 35,
+      "role": "where the load-bearing resource completes"
+     },
+     "registerToHorizon": {
+      "register": "parity",
+      "horizon": "deep-parity"
+     }
+    },
+    "fieldPartition": {
+     "rendered": [
+      "movestring",
+      "playedCol",
+      "bestCol",
+      "boardState",
+      "player",
+      "opponent",
+      "case",
+      "lostResource.completingCell",
+      "lostResource.window[]",
+      "lostResource.pliesToEnd",
+      "lostResource.line[].ply",
+      "lostResource.line[].mover",
+      "lostResource.line[].col",
+      "lostResource.line[].cell",
+      "lostResource.finalMovestring",
+      "lostResource.entryCell",
+      "lostResource.witness.devCol",
+      "lostResource.witness.devCols[]",
+      "lostResource.witness.oppPlies",
+      "lostResource.forkCells[]",
+      "lostResource.forkWindows[][]",
+      "lostResource.tacticTag",
+      "lostResource.tacticCells[]",
+      "lostResource.anchorCells[]",
+      "opponentPunishment.completingCell",
+      "opponentPunishment.window[]",
+      "opponentPunishment.pliesToEnd",
+      "opponentPunishment.finalMovestring",
+      "opponentPunishment.entryCell",
+      "opponentPunishment.parityAttribution.controllingGroup[]",
+      "opponentPunishment.parityAttribution.ownDiscs",
+      "opponentPunishment.parityAttribution.empties[].cell",
+      "opponentPunishment.parityAttribution.empties[].zcount",
+      "opponentPunishment.parityAttribution.empties[].parity",
+      "opponentPunishment.parityAttribution.completingCell",
+      "opponentPunishment.tacticTag",
+      "opponentPunishment.tacticCells[]",
+      "opponentPunishment.tie.playedPlies",
+      "opponentPunishment.tie.swindlePlies",
+      "replyHistogram.afterBest",
+      "replyHistogram.afterPlayed",
+      "gate.verdict",
+      "gate.witness.devCols[]",
+      "gate.witness.devCol",
+      "gate.witness.oppPlies"
+     ],
+     "covered": [
+      "lostResource.kind",
+      "lostResource.register",
+      "lostResource.terminal",
+      "lostResource.forkCase",
+      "opponentPunishment.kind",
+      "opponentPunishment.register",
+      "opponentPunishment.terminal",
+      "opponentPunishment.tie.kind",
+      "opponentPunishment.tie.tied"
+     ],
+     "excluded": [
+      "discs",
+      "notABlunder",
+      "lostResource.witness.node",
+      "lostResource.tacticFromDiff",
+      "opponentPunishment.parityAttribution.nameable",
+      "opponentPunishment.parityAttribution.parityNamingDeferred",
+      "opponentPunishment.tacticFromDiff",
+      "gate.ran",
+      "gate.witness.node",
+      "gate.witness.devVal",
+      "gate.nodesVisited"
+     ]
+    },
+    "finalMovestring": "424424244263501331000002526333666611",
+    "openingContext": null,
+    "zones": {
+     "aliases": [
+      {
+       "handle": "better-col",
+       "spec": "col4",
+       "role": "the column of the better move",
+       "truthBoard": "decision",
+       "kbId": null
+      },
+      {
+       "handle": "played-col",
+       "spec": "col6",
+       "role": "the column you played",
+       "truthBoard": "decision",
+       "kbId": null
+      },
+      {
+       "handle": "you-major",
+       "spec": "c2r2",
+       "role": "the lower one in column 2: a single square completing your four-in-a-row line",
+       "truthBoard": "afterBest",
+       "kbId": null
+      },
+      {
+       "handle": "you-major-line",
+       "spec": "windows:c2r2,c3r2,c4r2,c5r2",
+       "role": "the line across columns 2–5 on row 2: the whole four-in-a-row line you are playing for (a LINE of four squares, not a single square — use this handle, not a single-square handle, whenever your words say \"line\", \"strip\" or \"row of four\")",
+       "truthBoard": "afterBest",
+       "kbId": null
+      },
+      {
+       "handle": "you-double",
+       "spec": "windows:c2r2,c6r2",
+       "role": "the fork squares where you get winning squares at once",
+       "truthBoard": "afterBest",
+       "kbId": "double_threat"
+      },
+      {
+       "handle": "you-major-2",
+       "spec": "c2r4",
+       "role": "the upper one in column 2: a single square completing your four-in-a-row line",
+       "truthBoard": "afterBest",
+       "kbId": null
+      },
+      {
+       "handle": "you-major-line-2",
+       "spec": "windows:c5r1,c4r2,c3r3,c2r4",
+       "role": "the diagonal line falling from column 2 on row 4 to column 5 on row 1: the whole four-in-a-row line you are playing for (a LINE of four squares, not a single square — use this handle, not a single-square handle, whenever your words say \"line\", \"strip\" or \"row of four\")",
+       "truthBoard": "afterBest",
+       "kbId": null
+      },
+      {
+       "handle": "you-major-3",
+       "spec": "c6r2",
+       "role": "the one in column 6: a single square completing your four-in-a-row line",
+       "truthBoard": "afterBest",
+       "kbId": null
+      },
+      {
+       "handle": "you-major-line-3",
+       "spec": "windows:c3r2,c4r2,c5r2,c6r2",
+       "role": "the line across columns 3–6 on row 2: the whole four-in-a-row line you are playing for (a LINE of four squares, not a single square — use this handle, not a single-square handle, whenever your words say \"line\", \"strip\" or \"row of four\")",
+       "truthBoard": "afterBest",
+       "kbId": null
+      },
+      {
+       "handle": "you-future-fork",
+       "spec": "future:c2r3",
+       "role": "a single square on your four-in-a-row line — it matters later, once the forced sequence reaches it, not a threat right now",
+       "truthBoard": "projectedDeep",
+       "kbId": "double_threat"
+      },
+      {
+       "handle": "you-key-line",
+       "spec": "future:windows:c1r3,c2r3,c3r3,c4r3",
+       "role": "the whole four-in-a-row line you are playing for — it decides this later, once the forced sequence reaches it, not a threat right now (a LINE of four squares, not a single square — use this handle, not a single-square handle, whenever your words say \"line\", \"strip\" or \"row of four\")",
+       "truthBoard": "projectedDeep",
+       "kbId": null
+      },
+      {
+       "handle": "you-fork-pivot",
+       "spec": "future:c1r3",
+       "role": "the square you play to CREATE the fork — the move that makes both winning squares live at once; it matters later, once the forced sequence reaches it — it is NOT the move to play right now",
+       "truthBoard": "projectedDeep",
+       "kbId": null
+      },
+      {
+       "handle": "opp-key-line",
+       "spec": "future:windows:c1r3,c2r4,c3r5,c4r6",
+       "role": "the whole four-in-a-row line your opponent is playing for — it decides this later, once the forced sequence reaches it, not a threat right now (a LINE of four squares, not a single square — use this handle, not a single-square handle, whenever your words say \"line\", \"strip\" or \"row of four\")",
+       "truthBoard": "projectedDeepOpp",
+       "kbId": null
+      }
+     ],
+     "terms": [
+      {
+       "slug": "double_threat",
+       "kbId": "double_threat",
+       "canonicalPhrase": "double threat (two winning squares at once)",
+       "description": "two winning squares at once — your opponent cannot block both"
+      }
+     ]
+    },
+    "requiredSet": [
+     {
+      "half": "lostResource",
+      "spec": "future:c2r3",
+      "handle": "you-future-fork",
+      "role": "a single square on your four-in-a-row line — it matters later, once the forced sequence reaches it, not a threat right now",
+      "truthBoard": "projectedDeep"
+     },
+     {
+      "half": "opponentPunishment",
+      "spec": "c2r4",
+      "handle": "you-major-2",
+      "role": "the upper one in column 2: a single square completing your four-in-a-row line",
+      "truthBoard": "afterBest"
+     },
+     {
+      "half": "lostResource",
+      "spec": "future:c1r3",
+      "handle": "you-fork-pivot",
+      "role": "the square you play to CREATE the fork — the move that makes both winning squares live at once; it matters later, once the forced sequence reaches it — it is NOT the move to play right now",
+      "truthBoard": "projectedDeep"
+     }
+    ]
+   },
+   "answer": {
+    "better_move": 4,
+    "played_outcome": "loss",
+    "best_outcome": "loss",
+    "mechanism": "Column 4 is the toughest defense because it keeps your practical swindle alive: you preserve the central fight and the fork resource that can still come to life later, instead of handing your opponent a faster finish. By playing column 6, you let them settle into the key diagonal and reduce your ways to keep the pressure; the move in [zone:future:c1r3]c2r3[/zone:future:c1r3] is the square that would create the fork later, while [zone:future:c2r3]c2r3[/zone:future:c2r3] is the square you still need to reach for your own counterplay, and [zone:c2r4]c2r4[/zone:c2r4] is the other central square that keeps the line alive longer.",
+    "key_cells": [
+     "c1r3",
+     "c2r3",
+     "c2r4"
+    ],
+    "fields_relied_on": [
+     "case",
+     "lostResource.tacticTag",
+     "lostResource.completingCell",
+     "lostResource.pliesToEnd",
+     "opponentPunishment.completingCell",
+     "opponentPunishment.parityAttribution.controllingGroup",
+     "opponentPunishment.parityAttribution.ownDiscs",
+     "opponentPunishment.tie.playedPlies",
+     "opponentPunishment.tie.swindlePlies",
+     "replyHistogram.afterBest",
+     "replyHistogram.afterPlayed",
+     "gate.verdict"
+    ],
+    "unsure_about": "",
+    "confidence": "high"
+   },
+   "servedExplanation": "Column 4 is the toughest defense because it keeps your practical swindle alive: you preserve the central fight and the fork resource that can still come to life later, instead of handing your opponent a faster finish. By playing column 6, you let them settle into the key diagonal and reduce your ways to keep the pressure; the move in column 2 is the square that would create the fork later, while [zone:future:c2r3]column 2, row 3[/zone:future:c2r3] is the square you still need to reach for your own counterplay, and [zone:c2r4]column 2, row 4[/zone:c2r4] is the other central square that keeps the line alive longer.",
+   "better_col_repaired": false,
+   "mechanism_pre_repair": null,
+   "retry_fired": true,
+   "served_attempt": "retry",
+   "precomputed": {
+    "A1": "pass",
+    "A2": "pass",
+    "A6": "pass",
+    "G7a_offered": "pass",
+    "G7b_offered": "pass",
+    "notes": ""
+   }
+  },
+  {
+   "run_index": 2,
+   "feature_vector": {
+    "movestring": "424424244263",
+    "playedCol": 5,
+    "bestCol": 3,
+    "discs": 12,
+    "boardState": "opening",
+    "player": 1,
+    "opponent": 2,
+    "case": "lose_to_faster_lose",
+    "notABlunder": false,
+    "lostResource": {
+     "kind": "conditional_swindle",
+     "register": "forced_sequence",
+     "completingCell": "c2r3",
+     "window": [
+      "c1r3",
+      "c2r3",
+      "c3r3",
+      "c4r3"
+     ],
+     "pliesToEnd": 15,
+     "line": [
+      {
+       "ply": 15,
+       "mover": 1,
+       "col": 1,
+       "cell": "c2r1"
+      },
+      {
+       "ply": 16,
+       "mover": 2,
+       "col": 1,
+       "cell": "c2r2"
+      },
+      {
+       "ply": 17,
+       "mover": 1,
+       "col": 3,
+       "cell": "c4r3"
+      },
+      {
+       "ply": 18,
+       "mover": 2,
+       "col": 2,
+       "cell": "c3r5"
+      },
+      {
+       "ply": 19,
+       "mover": 1,
+       "col": 2,
+       "cell": "c3r6"
+      },
+      {
+       "ply": 20,
+       "mover": 2,
+       "col": 3,
+       "cell": "c4r4"
+      },
+      {
+       "ply": 21,
+       "mover": 1,
+       "col": 3,
+       "cell": "c4r5"
+      },
+      {
+       "ply": 22,
+       "mover": 2,
+       "col": 3,
+       "cell": "c4r6"
+      },
+      {
+       "ply": 23,
+       "mover": 1,
+       "col": 6,
+       "cell": "c7r2"
+      },
+      {
+       "ply": 24,
+       "mover": 2,
+       "col": 6,
+       "cell": "c7r3"
+      },
+      {
+       "ply": 25,
+       "mover": 1,
+       "col": 6,
+       "cell": "c7r4"
+      },
+      {
+       "ply": 26,
+       "mover": 2,
+       "col": 6,
+       "cell": "c7r5"
+      },
+      {
+       "ply": 27,
+       "mover": 1,
+       "col": 6,
+       "cell": "c7r6"
+      },
+      {
+       "ply": 28,
+       "mover": 2,
+       "col": 0,
+       "cell": "c1r2"
+      },
+      {
+       "ply": 29,
+       "mover": 1,
+       "col": 0,
+       "cell": "c1r3"
+      }
+     ],
+     "finalMovestring": "42442424426330113223336666600",
+     "entryCell": "c2r1",
+     "witness": {
+      "node": "4244242442633",
+      "devCol": 0,
+      "devCols": [
+       0,
+       2,
+       6
+      ],
+      "oppPlies": 0
+     },
+     "terminal": "fork",
+     "forkCase": "B",
+     "forkCells": [
+      "c2r3"
+     ],
+     "forkWindows": [
+      [
+       "c1r3",
+       "c2r3",
+       "c3r3",
+       "c4r3"
+      ]
+     ],
+     "tacticTag": "double_threat",
+     "tacticCells": [
+      "c2r3"
+     ],
+     "tacticFromDiff": false,
+     "anchorCells": [
+      "c1r1"
+     ]
+    },
+    "opponentPunishment": {
+     "kind": "winning_line",
+     "register": "parity",
+     "completingCell": "c2r4",
+     "window": [
+      "c1r3",
+      "c2r4",
+      "c3r5",
+      "c4r6"
+     ],
+     "pliesToEnd": 23,
+     "line": null,
+     "finalMovestring": "424424244263501331000002526333666611",
+     "entryCell": "c1r1",
+     "terminal": "win",
+     "parityAttribution": {
+      "nameable": true,
+      "controllingGroup": [
+       "c1r3",
+       "c2r4",
+       "c3r5",
+       "c4r6"
+      ],
+      "ownDiscs": 0,
+      "empties": [
+       {
+        "cell": "c1r3",
+        "zcount": 3,
+        "parity": "odd"
+       },
+       {
+        "cell": "c2r4",
+        "zcount": 4,
+        "parity": "even"
+       },
+       {
+        "cell": "c3r5",
+        "zcount": 1,
+        "parity": "odd"
+       },
+       {
+        "cell": "c4r6",
+        "zcount": 5,
+        "parity": "odd"
+       }
+      ],
+      "completingCell": "c2r4",
+      "parityNamingDeferred": true,
+      "namedRule": null
+     },
+     "tacticTag": "minor_threat",
+     "tacticCells": [
+      "c1r1",
+      "c2r1",
+      "c2r4",
+      "c4r2",
+      "c4r4",
+      "c6r4"
+     ],
+     "tacticFromDiff": false,
+     "tie": {
+      "kind": "temporal",
+      "playedPlies": 23,
+      "swindlePlies": 15,
+      "tied": false
+     }
+    },
+    "replyHistogram": {
+     "afterBest": 1,
+     "afterPlayed": 6
+    },
+    "gate": {
+     "ran": true,
+     "verdict": "Blunder",
+     "witness": {
+      "node": "4244242442633",
+      "devCols": [
+       0,
+       2,
+       6
+      ],
+      "devCol": 0,
+      "devVal": -6,
+      "oppPlies": 0
+     },
+     "nodesVisited": 1
+    }
+   },
+   "render_decision": {
+    "case": "lose_to_faster_lose",
+    "route": "sign",
+    "direction": null,
+    "patternOnAfterBestBoard": null,
+    "link": {
+     "id": "L7",
+     "confidence": "high",
+     "covers": [
+      "route",
+      "lostResource.kind",
+      "opponentPunishment.kind",
+      "opponentPunishment.verdict",
+      "lostResource.terminal",
+      "opponentPunishment.terminal",
+      "lostResource.forkCase",
+      "opponentPunishment.forkCase",
+      "opponentPunishment.tie.kind",
+      "opponentPunishment.tie.tied",
+      "lostResource.register",
+      "opponentPunishment.register"
+     ],
+     "guardrail": "Do not claim the better move wins, and do NOT tell the player they are lost; frame the better move as the toughest, most resilient defense that keeps the practical swindle alive. Do not add a closing caveat like \"but the position is still lost,\" \"both lines end poorly,\" \"the result still goes against you,\" or \"you still lose either way\" — the practical-resistance framing must stand on its own, with no defeatist final clause.",
+     "text": "Column 4 is your most stubborn defense: it keeps a practical swindle alive — one slip by your opponent (watch columns 1, 3, 7) could let you climb back in. The move you played gives that up and lets your opponent finish faster."
+    },
+    "boards": [
+     {
+      "id": "decision",
+      "shown": true,
+      "reason": "the position under judgment"
+     },
+     {
+      "id": "afterBest",
+      "shown": true,
+      "reason": "the better move — changes the tactical picture"
+     },
+     {
+      "id": "afterPlayed",
+      "shown": false,
+      "reason": "the move you played — tag-set identical to the decision board, omitted"
+     },
+     {
+      "id": "projectedDeep",
+      "shown": true,
+      "reason": "where the deep forced_sequence resource resolves — your line"
+     },
+     {
+      "id": "projectedDeepOpp",
+      "shown": true,
+      "reason": "where the deep parity resource resolves — your opponent's line"
+     }
+    ],
+    "resource": {
+     "completingCell": {
+      "cell": "c2r4",
+      "status": "empty",
+      "horizon": "deep-parity",
+      "reachableInPlies": 35,
+      "role": "where the load-bearing resource completes"
+     },
+     "registerToHorizon": {
+      "register": "parity",
+      "horizon": "deep-parity"
+     }
+    },
+    "fieldPartition": {
+     "rendered": [
+      "movestring",
+      "playedCol",
+      "bestCol",
+      "boardState",
+      "player",
+      "opponent",
+      "case",
+      "lostResource.completingCell",
+      "lostResource.window[]",
+      "lostResource.pliesToEnd",
+      "lostResource.line[].ply",
+      "lostResource.line[].mover",
+      "lostResource.line[].col",
+      "lostResource.line[].cell",
+      "lostResource.finalMovestring",
+      "lostResource.entryCell",
+      "lostResource.witness.devCol",
+      "lostResource.witness.devCols[]",
+      "lostResource.witness.oppPlies",
+      "lostResource.forkCells[]",
+      "lostResource.forkWindows[][]",
+      "lostResource.tacticTag",
+      "lostResource.tacticCells[]",
+      "lostResource.anchorCells[]",
+      "opponentPunishment.completingCell",
+      "opponentPunishment.window[]",
+      "opponentPunishment.pliesToEnd",
+      "opponentPunishment.finalMovestring",
+      "opponentPunishment.entryCell",
+      "opponentPunishment.parityAttribution.controllingGroup[]",
+      "opponentPunishment.parityAttribution.ownDiscs",
+      "opponentPunishment.parityAttribution.empties[].cell",
+      "opponentPunishment.parityAttribution.empties[].zcount",
+      "opponentPunishment.parityAttribution.empties[].parity",
+      "opponentPunishment.parityAttribution.completingCell",
+      "opponentPunishment.tacticTag",
+      "opponentPunishment.tacticCells[]",
+      "opponentPunishment.tie.playedPlies",
+      "opponentPunishment.tie.swindlePlies",
+      "replyHistogram.afterBest",
+      "replyHistogram.afterPlayed",
+      "gate.verdict",
+      "gate.witness.devCols[]",
+      "gate.witness.devCol",
+      "gate.witness.oppPlies"
+     ],
+     "covered": [
+      "lostResource.kind",
+      "lostResource.register",
+      "lostResource.terminal",
+      "lostResource.forkCase",
+      "opponentPunishment.kind",
+      "opponentPunishment.register",
+      "opponentPunishment.terminal",
+      "opponentPunishment.tie.kind",
+      "opponentPunishment.tie.tied"
+     ],
+     "excluded": [
+      "discs",
+      "notABlunder",
+      "lostResource.witness.node",
+      "lostResource.tacticFromDiff",
+      "opponentPunishment.parityAttribution.nameable",
+      "opponentPunishment.parityAttribution.parityNamingDeferred",
+      "opponentPunishment.tacticFromDiff",
+      "gate.ran",
+      "gate.witness.node",
+      "gate.witness.devVal",
+      "gate.nodesVisited"
+     ]
+    },
+    "finalMovestring": "424424244263501331000002526333666611",
+    "openingContext": null,
+    "zones": {
+     "aliases": [
+      {
+       "handle": "better-col",
+       "spec": "col4",
+       "role": "the column of the better move",
+       "truthBoard": "decision",
+       "kbId": null
+      },
+      {
+       "handle": "played-col",
+       "spec": "col6",
+       "role": "the column you played",
+       "truthBoard": "decision",
+       "kbId": null
+      },
+      {
+       "handle": "you-major",
+       "spec": "c2r2",
+       "role": "the lower one in column 2: a single square completing your four-in-a-row line",
+       "truthBoard": "afterBest",
+       "kbId": null
+      },
+      {
+       "handle": "you-major-line",
+       "spec": "windows:c2r2,c3r2,c4r2,c5r2",
+       "role": "the line across columns 2–5 on row 2: the whole four-in-a-row line you are playing for (a LINE of four squares, not a single square — use this handle, not a single-square handle, whenever your words say \"line\", \"strip\" or \"row of four\")",
+       "truthBoard": "afterBest",
+       "kbId": null
+      },
+      {
+       "handle": "you-double",
+       "spec": "windows:c2r2,c6r2",
+       "role": "the fork squares where you get winning squares at once",
+       "truthBoard": "afterBest",
+       "kbId": "double_threat"
+      },
+      {
+       "handle": "you-major-2",
+       "spec": "c2r4",
+       "role": "the upper one in column 2: a single square completing your four-in-a-row line",
+       "truthBoard": "afterBest",
+       "kbId": null
+      },
+      {
+       "handle": "you-major-line-2",
+       "spec": "windows:c5r1,c4r2,c3r3,c2r4",
+       "role": "the diagonal line falling from column 2 on row 4 to column 5 on row 1: the whole four-in-a-row line you are playing for (a LINE of four squares, not a single square — use this handle, not a single-square handle, whenever your words say \"line\", \"strip\" or \"row of four\")",
+       "truthBoard": "afterBest",
+       "kbId": null
+      },
+      {
+       "handle": "you-major-3",
+       "spec": "c6r2",
+       "role": "the one in column 6: a single square completing your four-in-a-row line",
+       "truthBoard": "afterBest",
+       "kbId": null
+      },
+      {
+       "handle": "you-major-line-3",
+       "spec": "windows:c3r2,c4r2,c5r2,c6r2",
+       "role": "the line across columns 3–6 on row 2: the whole four-in-a-row line you are playing for (a LINE of four squares, not a single square — use this handle, not a single-square handle, whenever your words say \"line\", \"strip\" or \"row of four\")",
+       "truthBoard": "afterBest",
+       "kbId": null
+      },
+      {
+       "handle": "you-future-fork",
+       "spec": "future:c2r3",
+       "role": "a single square on your four-in-a-row line — it matters later, once the forced sequence reaches it, not a threat right now",
+       "truthBoard": "projectedDeep",
+       "kbId": "double_threat"
+      },
+      {
+       "handle": "you-key-line",
+       "spec": "future:windows:c1r3,c2r3,c3r3,c4r3",
+       "role": "the whole four-in-a-row line you are playing for — it decides this later, once the forced sequence reaches it, not a threat right now (a LINE of four squares, not a single square — use this handle, not a single-square handle, whenever your words say \"line\", \"strip\" or \"row of four\")",
+       "truthBoard": "projectedDeep",
+       "kbId": null
+      },
+      {
+       "handle": "you-fork-pivot",
+       "spec": "future:c1r3",
+       "role": "the square you play to CREATE the fork — the move that makes both winning squares live at once; it matters later, once the forced sequence reaches it — it is NOT the move to play right now",
+       "truthBoard": "projectedDeep",
+       "kbId": null
+      },
+      {
+       "handle": "opp-key-line",
+       "spec": "future:windows:c1r3,c2r4,c3r5,c4r6",
+       "role": "the whole four-in-a-row line your opponent is playing for — it decides this later, once the forced sequence reaches it, not a threat right now (a LINE of four squares, not a single square — use this handle, not a single-square handle, whenever your words say \"line\", \"strip\" or \"row of four\")",
+       "truthBoard": "projectedDeepOpp",
+       "kbId": null
+      }
+     ],
+     "terms": [
+      {
+       "slug": "double_threat",
+       "kbId": "double_threat",
+       "canonicalPhrase": "double threat (two winning squares at once)",
+       "description": "two winning squares at once — your opponent cannot block both"
+      }
+     ]
+    },
+    "requiredSet": [
+     {
+      "half": "lostResource",
+      "spec": "future:c2r3",
+      "handle": "you-future-fork",
+      "role": "a single square on your four-in-a-row line — it matters later, once the forced sequence reaches it, not a threat right now",
+      "truthBoard": "projectedDeep"
+     },
+     {
+      "half": "opponentPunishment",
+      "spec": "c2r4",
+      "handle": "you-major-2",
+      "role": "the upper one in column 2: a single square completing your four-in-a-row line",
+      "truthBoard": "afterBest"
+     },
+     {
+      "half": "lostResource",
+      "spec": "future:c1r3",
+      "handle": "you-fork-pivot",
+      "role": "the square you play to CREATE the fork — the move that makes both winning squares live at once; it matters later, once the forced sequence reaches it — it is NOT the move to play right now",
+      "truthBoard": "projectedDeep"
+     }
+    ]
+   },
+   "answer": {
+    "better_move": 4,
+    "played_outcome": "loss",
+    "best_outcome": "loss",
+    "mechanism": "Your move in column 4 is the tougher defense because it keeps your [term:double_threat]double threat[/term:double_threat] alive on [zone:future:c2r3]the future fork square[/zone:future:c2r3] and preserves the practical swindle on the key four-in-a-row line. By playing column 6 instead, you give up that extra pressure and let your opponent answer more cleanly, so they can finish faster. The stubborn resource is the one that would come from [zone:future:c1r3]the fork-creating square[/zone:future:c1r3] and from [zone:c2r4]the upper square in column 2[/zone:c2r4], which is why column 4 is the more resilient defense.",
+    "key_cells": [
+     "c1r3",
+     "c2r3",
+     "c2r4"
+    ],
+    "fields_relied_on": [
+     "decision",
+     "afterBest",
+     "projectedDeep",
+     "projectedDeepOpp",
+     "lostResource.tacticTag",
+     "lostResource.completingCell",
+     "lostResource.forkCells",
+     "lostResource.pliesToEnd",
+     "opponentPunishment.completingCell",
+     "opponentPunishment.parityAttribution.controllingGroup",
+     "opponentPunishment.parityAttribution.ownDiscs",
+     "opponentPunishment.pliesToEnd",
+     "replyHistogram.afterBest",
+     "replyHistogram.afterPlayed",
+     "gate.verdict"
+    ],
+    "unsure_about": "",
+    "confidence": "high"
+   },
+   "servedExplanation": "Your move in column 4 is the tougher defense because it keeps your [term:double_threat]double threat[/term:double_threat] alive on [zone:future:c2r3]the future fork square[/zone:future:c2r3] and preserves the practical swindle on the key four-in-a-row line. By playing column 6 instead, you give up that extra pressure and let your opponent answer more cleanly, so they can finish faster. The stubborn resource is the one that would come from [zone:future:c1r3]the fork-creating square[/zone:future:c1r3] and from [zone:c2r4]the upper square in column 2[/zone:c2r4], which is why column 4 is the more resilient defense.",
+   "better_col_repaired": false,
+   "mechanism_pre_repair": null,
+   "retry_fired": false,
+   "served_attempt": "attempt1",
+   "precomputed": {
+    "A1": "pass",
+    "A2": "pass",
+    "A6": "pass",
+    "G7a_offered": "pass",
+    "G7b_offered": "pass",
+    "notes": ""
+   }
+  }
+ ]
+}

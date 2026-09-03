@@ -135,7 +135,7 @@ utility axes):
 | **A3 mechanism real & load-bearing** | the named tactic/threat and `key_cells` actually exist on the relevant board AND are the **decisive** reason (not a true-but-peripheral one). *Condition D:* zone-derived `key_cells` are display-overlay cells (the highlighted regions from an emitted `[zone:…]`, e.g. a whole column or window), not per-cell threat assertions — grade A3 on the tactic(s) the `mechanism` actually names and rests on, not on every cell the overlay spans; zone offered/board-truth fidelity is G7 (and G5 for spec board-truth on the truthBoard). | board (`visualize_board.sh`) + solver | **high** |
 | **A4 no fabrication** | every concrete claim (cells, threats, lines) is true on the board; `unsure_about` content is **excluded**. *Condition D:* do NOT treat an empty cell inside an emitted `[zone:…]` (e.g. a non-landing cell of a highlighted column or window) as an A4 fabrication — it is a display-overlay cell, not a per-cell threat claim; the zones' own offered/board-truth fidelity is covered by G7/G5. | board verification | **high (zero tolerance)** |
 | **A5 coach voice** | the `mechanism` reads as a coach speaking directly to the player: 2nd-person address, **no internal/vector terminology**, and (player-2 opening only) **no defeatist "you're losing / both lose" framing — a hold-the-line reframe instead**. Full rules in **"A5 — coach voice"** below | read the `mechanism` prose (+ render text for triage) | **high** |
-| **A6 actionable better move** | the **`mechanism` prose itself** names the column the player should have played — not only the `better_move` JSON field. Full rules in **"A6 — actionable better move"** below | read the `mechanism` prose | **high** |
+| **A6 actionable better move** | the **`mechanism` prose itself** names the column the player should have played — not only the `better_move` JSON field. Full rules in **"A6 — actionable better move"** below | read `mechanism_pre_repair ?? mechanism` (D63) | **high** |
 | **A7 utility to the blunderer** | the explanation has a real chance of *teaching* the player who just made this move: it names a cause rather than restating the outcome, every specific referent is locatable, a fork's pivot is named and not just its effects, and the idea is concrete-and-transferable. Four sub-tests, all must hold. Full rules in **"A7 — utility to the blunderer"** below | read the `mechanism` prose + board | **high** |
 
 A1/A2 are **sanity checks**: the vector already gives `bestCol` and the outcome labels, so a miss
@@ -143,9 +143,11 @@ there is a **glossary-read** failure (the model couldn't even read the vector), 
 glossary counterexample. The substance is **A3/A4/A5/A6/A7**.
 
 **A1 vs A6 — these are deliberately different questions, do not collapse them.** A1 asks whether the
-model *knew* the better column (a JSON field it fills every time). A6 asks whether the *player is
-told* it, in the prose that actually ships. Production serves `mechanism`; it does not serve
-`better_move`. The combination **A1 pass + A6 fail** is a real, measured regression — on 3 of the 4
+model *knew* the better column (a JSON field it fills every time). A6 asks whether the *model itself*
+told the player, in prose — not whether the shipped text ends up containing the column. Since D63 a
+deterministic post-repair appends the column when the model omitted it, so A6 reads
+`mechanism_pre_repair` (the model's own text) when present, falling back to `mechanism`. Production
+serves `mechanism`; it does not serve `better_move`. The combination **A1 pass + A6 fail** is a real, measured regression — on 3 of the 4
 spec-058 feedback boards the explanation never named the better column in prose — and it is
 invisible to any grader that checks only the field.
 
@@ -252,26 +254,35 @@ NOT fail A5 for the mere presence of a `[zone:…]`/`[term:…]` tag.
 - A missing field that would have let the coach reframe (e.g. no opening hold-the-line frame exists for
   this board at all) → **`missing_info`**.
 
-## A6 — actionable better move (the player is TOLD which column, in the prose)
+## A6 — actionable better move (the MODEL names the column, in its own prose)
 
 A deep reveal that never names the column the player should have played instead is not something the
-player can act on. **A6 grades the `mechanism` prose only** — the same field A5 grades, and the only
-field production actually serves. `better_move` is a separate JSON key that the answer schema forces
-the model to fill on every run; it is grader-facing, never shown to a player. A1 already covers it.
+player can act on. **A6 grades whether the MODEL named the column unaided**, not the served text.
+`better_move` is a separate JSON key that the answer schema forces the model to fill on every run; it
+is grader-facing, never shown to a player. A1 already covers it.
 
-**How to score: A6 is decided by `grade_mechanical.mjs`, not by you.** It calls production's own
-`mentionsBetterColumn(attempt, bestCol, locale)` (`server/mechanismExplainer.mjs`), which tests the
-mechanism through the guard's `stripInternalTokens` — **the closest available prediction of the text
-the player is actually served**. Copy its verdict through.
+**How to score: A6 is decided by `grade_mechanical.mjs`, not by you.** It reads
+`row.mechanism_pre_repair ?? answer.mechanism` (D63/OI-224) and calls production's own
+`mentionsBetterColumn(attempt, bestCol, locale)` (`server/mechanismExplainer.mjs`) on that text,
+which tests it through the guard's `stripInternalTokens`. On a `--retry` run, `compute.mjs`'s
+deterministic repair (`ensureBetterColumnMention`, `server/retryDecision.mjs`) can append a
+"you should have played column N" sentence to `answer.mechanism` when the model's own text never
+named the column; `mechanism_pre_repair` holds the text as the model produced it, BEFORE that
+repair, and is what A6 actually grades whenever the repair fired. **A6 is therefore no longer a
+served-text predictor on a `--retry` run** — it measures whether the model named the column
+unaided, which is what keeps it comparable with the pre-D63 189-run baseline. Copy its verdict
+through.
 
-**The standard is what the PLAYER receives, not what the eval artifact literally contains.** The guard
+**The standard is the model's prose as the guard would NORMALIZE it — not the raw artifact bytes, and (since D63) not the post-repair served string either.** The guard
 rewrites a bare `cNrM` / `colN` in prose into "column N" (locale-aware) before serving, so
 "the blocking square at c6r2" reaches the player as "the blocking square at column 6" and **passes**.
 An earlier revision of this rubric failed that form; re-graded against production's own function it
 moved 15 of 126 runs from fail to pass on the 2026-08-06 corpus, and it collapsed the measured gap
 between the parenthetical "(col N)" and prose "Column N" template forms from 50%→9% to 9%→0%. Grading
-the raw artifact instead of the served text was measurably the wrong standard and drove a plan toward
-rewriting templates that were not broken.
+the raw artifact instead of the normalized text was measurably the wrong standard and drove a plan toward
+rewriting templates that were not broken. **D63 scoping:** that normalization argument is unchanged and
+still applies — it is applied to `mechanism_pre_repair` when a repair fired. What changed is only WHOSE
+text is normalized: A6 measures the MODEL unaided, so it must never read the appended repair sentence.
 
 - **Pass:** "the better move was column 6"; "you should have dropped in column 4 instead"; and also
   "you had to take c4r1" — the guard serves that as "column 4".
@@ -281,7 +292,7 @@ rewriting templates that were not broken.
   (`mentionsBetterColumn` returns `true` there because it is a retry trigger — for grading that is a
   fail, and `grade_mechanical.mjs` already inverts it).
 - **Whether "the blocking square at column 6" is GOOD coach prose is an A5/A7 question, not A6's.**
-  A6 asks only whether the player is told which column. Do not re-litigate it here.
+  A6 asks only whether the MODEL's own prose named the column. Do not re-litigate it here.
 - **Fail:** the prose names a *different* column as the better move than `feature_vector.bestCol + 1`.
   (If it names the right one somewhere and a wrong one elsewhere, that is an A6 fail *and* likely an
   A4 fabrication — record both.)
@@ -861,7 +872,7 @@ cell BEFORE calling the field wrong. Never ground on an alternate optimal solver
         the board at all → `missing_info`.
 - A6 (ACTIONABLE BETTER MOVE): **PRE-COMPUTED — copy it through, do not re-derive.** It was decided by
       `grade_mechanical.mjs` via production's own `mentionsBetterColumn`, which tests the mechanism
-      through the guard's `stripInternalTokens` — the closest prediction of what the PLAYER is served.
+      through the guard's `stripInternalTokens`. (D63: it now scores `mechanism_pre_repair ?? mechanism`, i.e. the MODEL's own text, NOT the served string.)
       A bare `cNrM` in prose PASSES (the guard rewrites it to "column N"); a column surviving only as a
       `[zone:…]` handle/spec FAILS (the guard skips zone delimiters byte-for-byte). Whether the phrasing
       is GOOD prose is A5/A7's question, not A6's. If the prose names a DIFFERENT column as the better

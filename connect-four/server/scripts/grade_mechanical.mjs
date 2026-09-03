@@ -37,12 +37,21 @@ export function gradeMechanicalRow(row, locale = 'en') {
   const A2 = exp && a.best_outcome === exp.best && a.played_outcome === exp.played ? 'pass' : 'fail';
   if (A2 === 'fail') notes.push(`A2: case ${fv.case} implies ${exp?.best}/${exp?.played}, got ${a.best_outcome}/${a.played_outcome}`);
 
-  // A6 — production's own predictor of what the player is served. mentionsBetterColumn abstains
+  // A6 — whether the MODEL named the better column unaided. mentionsBetterColumn abstains
   // `true` on an empty mechanism (it is a retry trigger, :116-118); for grading that is a fail.
-  const A6 = (a.mechanism ?? '').trim()
-    ? (mentionsBetterColumn({ mechanism: a.mechanism }, fv.bestCol, locale) ? 'pass' : 'fail')
+  // D63 (owner decision): grade the PRE-repair text, not `a.mechanism`. Task 4's harness repair
+  // overwrites `answer.mechanism` with a deterministic "you should have played column N" sentence
+  // whenever the model's own text omitted it — grading that field would make A6 read a constant
+  // 'pass' on every --retry run and stop measuring whether the MODEL named the column unaided, which
+  // is what keeps A6 comparable with the pre-D63 189-run baseline. `row.mechanism_pre_repair` is the
+  // text as the model produced it (null when no repair fired, including every pre-D63 row and every
+  // row where the repair never triggered), so falling back to `a.mechanism` there reproduces the
+  // old, correct behavior exactly.
+  const mechanismForA6 = row.mechanism_pre_repair ?? a.mechanism;
+  const A6 = (mechanismForA6 ?? '').trim()
+    ? (mentionsBetterColumn({ mechanism: mechanismForA6 }, fv.bestCol, locale) ? 'pass' : 'fail')
     : 'fail';
-  if (A6 === 'fail') notes.push(`A6: prose never names column ${fv.bestCol + 1}`);
+  if (A6 === 'fail') notes.push(`A6: model's prose (pre-repair) never names column ${fv.bestCol + 1}`);
 
   // G7a/G7b — read `raw`, the model's ORIGINAL text. answer.mechanism is post-processAnnotations
   // (handles already expanded to specs, unoffered tags already stripped), so it cannot show a

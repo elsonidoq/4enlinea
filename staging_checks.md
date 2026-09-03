@@ -2165,3 +2165,38 @@ browser pass on `/admin/grounding-diff`. What that cannot confirm is the deploye
   - **Expected**: Spanish output is not systematically worse than English on naming the better column.
     If it is, OI-213 is the cause and blocks any Spanish quality measurement.
   - **Source**: 2026-08-28 spec 059 code review; OI-213, OI-176.
+
+## Epic 12 — Deep-Reveal Remediation (spec 059) — D63 render/repair changes, added 2026-09-03
+
+Both checks below exist because the D63 changes are only observable in a **freshly generated** deep
+reveal. `explanation_cache` is keyed on `{position_hash, locale}` with no render-version
+discriminator, so a cached position keeps serving pre-change text — locally this is indistinguishable
+from the change not working. See `docs/deployment_steps.md`'s 2026-09-02 cache-purge entry; these
+checks must run **after** that purge.
+
+- **What**: After the code deploy and the `explanation_cache` purge, open a deep reveal on a blunder
+  whose explanation previously failed to name the better column, and confirm the served text names it
+  — either in the model's own prose or via the appended sentence ("Your better move was column N." /
+  "Tu mejor jugada era la columna N."). Repeat once with the app in Spanish.
+  **Why staging**: the repair fires only on a real generation whose model output omits the column;
+  it cannot be forced locally without either a live LLM call or a hand-built fixture, and the
+  fixture path proves nothing about production. In an 8-board × 3-run offline probe (2026-09-03) the
+  repair fired **0 times** — the retry alone named the column every time — so its real-traffic
+  frequency is unmeasured.
+  **Expected**: the column is named in the served prose; under `es` the sentence is Spanish, with no
+  English fallback leaking (`Tu mejor jugada era la columna N.`, never "Your better move was…").
+  **Source**: D63 / OI-224, `ensureBetterColumnMention` (`server/retryDecision.mjs`).
+  - [ ] signed off by ______ on ______
+
+- **What**: On a fork board (a position whose deep reveal discusses a double threat), confirm the
+  served explanation does not describe a fork's winning square as one that "completes" a
+  four-in-a-row on the board being shown.
+  **Why staging**: D63 changed the **role text handed to the model**, not the model's paraphrase — so
+  this is only observable in real generated output, and only on a cache miss. It cannot be asserted
+  by string-matching the served text either (the model rewords), which is why the deployment note
+  says to verify the alias role rather than the prose.
+  **Expected**: no claim that an empty fork prong completes a line on the current board; the framing
+  is horizon-qualified ("…once the fork is set up"). Judge the *claim*, not the wording.
+  **Source**: D63 / OI-225, `roleText`'s `fork-square` kind
+  (`server/scripts/reason_engine/zoneAnnotations.mjs`).
+  - [ ] signed off by ______ on ______

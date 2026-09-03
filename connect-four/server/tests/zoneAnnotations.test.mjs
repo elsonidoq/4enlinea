@@ -963,3 +963,241 @@ test('T033/FR-024 (OI-184): double_threat term description attributes ownership 
   assert.ok(checked > 0, 'expected at least one corpus record firing double_threat');
   assert.deepEqual(violations, [], violations.join('\n'));
 });
+
+// ── `-key-square` cellKind must be board-true, not merely register/horizon-true (2026-09) ─────────
+//
+// Defect: `cellKind` at the half-resource loop (`isFuture ? 'future' : 'major'`) was derived ONLY
+// from `horizonForRegister(half.register)`, never checked against the truthBoard the alias itself
+// names ('decision' for every near-term half offer). `half.completingCell` is defined against that
+// half's OWN `finalMovestring` (feature-vector-glossary.md:167) — not always identical to the
+// decision board even when `register: 'immediate'`. `roleText('major')` then unconditionally says
+// "a single square completing <owner>'s four-in-a-row line", fabricating geometry the shown board
+// does not have. Coordinator's corpus-wide probe (buildBoard/winningWindows-equivalent check over
+// all 63 stored render_decisions) measured this on 11/11 of the corpus's near-term `-key-square`
+// aliases across 9 records (eval-42, eval-44, eval-48, eval-49, eval-50,
+// pin-L1-completes-your-tactic, pin-L2-enabled-opponent [x2], pin-branch-invariance-false [x2]).
+import { readFileSync as _readFileSync2 } from 'node:fs';
+import { fileURLToPath as _fileURLToPath2 } from 'node:url';
+import { dirname as _dirname2, join as _join2 } from 'node:path';
+
+test('GROUP 1 corpus-wide soundness: every near-term `-key-square` role matches independently '
+  + 'computed board truth (checkWin), across the WHOLE corpus', async () => {
+  // Ground-truth oracle, deliberately NOT the code under test: `checkWin` (classifier.js) reused the
+  // same way `keySquareKind` does, applied here from the test side to every corpus record
+  // independently — this is what stops the test from just restating the implementation's own belief
+  // (CLAUDE.md "Verifying any claim about this codebase" — a green test that encodes the author's
+  // assumption is worth nothing). The evidence.jsonl corpus is shared with other concurrent agents
+  // in this worktree and its exact contents can change between runs, so this test asserts a SOUNDNESS
+  // INVARIANT across whatever the corpus currently contains, rather than pinning one record's cell.
+  const { toNarratorVector, pruneVector } = await import('../scripts/reasonNarratorVector.mjs');
+  const { boardSelectionDecisions } = await import('../scripts/reasonBoardSelect.mjs');
+  const { parseBoardState, checkWin } = await import('../classifier.js');
+  const here = _dirname2(_fileURLToPath2(import.meta.url));
+  const rows = _readFileSync2(_join2(here, '../scripts/reason_corpus/evidence.jsonl'), 'utf8')
+    .trim().split('\n').map((l) => JSON.parse(l));
+
+  let checked = 0;
+  let sawDowngrade = false;
+  const violations = [];
+  for (const row of rows) {
+    if (!row.evidence || row.error) continue;
+    let fv, zones;
+    try {
+      fv = pruneVector(toNarratorVector(row.evidence));
+      zones = buildAnnotationOffer(fv, boardSelectionDecisions(fv));
+    } catch { continue; }
+    const decisionMs = boardSelectionDecisions(fv).find((b) => b.id === 'decision')?.movestring;
+    if (!decisionMs) continue;
+    const { board } = parseBoardState(decisionMs);
+    for (const a of zones.aliases) {
+      if (!/key-square/.test(a.handle) || a.spec.startsWith('future:')) continue;
+      const m = /^c(\d+)r(\d+)$/.exec(a.spec);
+      if (!m) continue;
+      const col = Number(m[1]) - 1, row0 = Number(m[2]) - 1;
+      if (board[row0]?.[col] !== 0) continue;                 // occupied -> not this test's ground truth
+      const owner = a.handle.startsWith('you') ? 'you' : 'opp';
+      const player = owner === 'you' ? fv.player : (fv.player === 1 ? 2 : 1);
+      const trulyCompletes = checkWin(board, row0, col, player);
+      checked += 1;
+      const claimsCompleting = /\bcompleting\b/.test(a.role);
+      const claimsDowngraded = /does not complete/i.test(a.role);
+      if (claimsDowngraded) sawDowngrade = true;
+      if (trulyCompletes && !claimsCompleting) {
+        violations.push(`${row.id} ${a.handle} ${a.spec}: board-true but role doesn't say "completing": "${a.role}"`);
+      }
+      if (!trulyCompletes && claimsCompleting) {
+        violations.push(`${row.id} ${a.handle} ${a.spec}: board-FALSE but role still says "completing": "${a.role}"`);
+      }
+    }
+  }
+  assert.ok(checked > 0, 'expected at least one checkable near-term -key-square alias in the corpus');
+  assert.ok(sawDowngrade, 'expected at least one board-false completingCell in the corpus (the defect this fixes)');
+  assert.deepEqual(violations, [], violations.join('\n'));
+});
+
+test('a board-true completingCell keeps the unchanged "completing" wording (no behaviour change)', () => {
+  // Quick-smoke movestring (CLAUDE.md exception: hand-built ok for a quick smoke test), verified
+  // directly against the production board model:
+  //   parseBoardState('06162').board row0 = [1,1,1,0,0,0,2] (cols 0,1,2 = player 1; col 6 = player 2
+  //   twice), colHeights = [1,1,1,0,0,0,2] -> col3/row0 is empty AND gravity-top.
+  //   checkWin(board, 0, 3, 1) === true: dropping player 1 at c4r1 (col3,row0) completes
+  //   c1r1-c2r1-c3r1-c4r1.
+  const pruned = { player: 1, bestCol: 2, playedCol: 4,
+    lostResource: { register: 'immediate', completingCell: 'c4r1', kind: 'winning_line' },
+    opponentPunishment: {} };
+  const boards = [{ id: 'decision', shown: true, movestring: '06162', tags: [] }];
+  const { aliases } = buildAnnotationOffer(pruned, boards);
+  const keySquare = aliases.find((a) => a.handle === 'you-key-square');
+  assert.ok(keySquare, 'expected a you-key-square alias');
+  assert.equal(keySquare.spec, 'c4r1');
+  assert.equal(keySquare.truthBoard, 'decision');
+  assert.equal(keySquare.role, 'a single square completing your four-in-a-row line',
+    'the board-true case must keep TODAY\'S exact wording — no behaviour change');
+});
+
+test('abstains (keeps the unchanged wording) when the decision board is unavailable — I2, never guess', () => {
+  // Same half shape as the "board-true" test above, but `boards: []` — no 'decision' board to check
+  // against. Per I2 ("abstain, never guess"), missing evidence must NOT be treated as evidence of
+  // falsehood: the role stays the original 'major' wording rather than being downgraded on no
+  // information.
+  const pruned = { player: 1, bestCol: 2, playedCol: 4,
+    lostResource: { register: 'immediate', completingCell: 'c4r1', kind: 'winning_line' },
+    opponentPunishment: {} };
+  const { aliases } = buildAnnotationOffer(pruned, []);
+  const keySquare = aliases.find((a) => a.handle === 'you-key-square');
+  assert.ok(keySquare, 'expected a you-key-square alias');
+  assert.equal(keySquare.role, 'a single square completing your four-in-a-row line',
+    'missing board -> abstain to the unchanged wording, never a guessed downgrade');
+});
+
+test('OI-225 corpus-wide: every near-term `-fork-square` role carries the horizon qualifier and '
+  + 'never the board-false "completing" claim', async () => {
+  // D61 deliberately left this family alone and locked the old wording in with a test. The owner
+  // has since decided the fix (D63): a fork's prongs complete NOTHING on the board the alias names
+  // — they only become winning squares once the pivot is played — so the honest wording is a
+  // HORIZON QUALIFIER, not the `-key-square` downgrade (which would deny what makes a fork
+  // decisive). Corpus-wide rather than pinned to one record's cell, because evidence.jsonl is
+  // shared with concurrent agents in this worktree and its contents can change between runs.
+  const { toNarratorVector, pruneVector } = await import('../scripts/reasonNarratorVector.mjs');
+  const { boardSelectionDecisions } = await import('../scripts/reasonBoardSelect.mjs');
+  const here = _dirname2(_fileURLToPath2(import.meta.url));
+  const rows = _readFileSync2(_join2(here, '../scripts/reason_corpus/evidence.jsonl'), 'utf8')
+    .trim().split('\n').map((l) => JSON.parse(l));
+
+  let checked = 0;
+  const violations = [];
+  for (const row of rows) {
+    if (!row.evidence || row.error) continue;
+    let fv, zones;
+    try {
+      fv = pruneVector(toNarratorVector(row.evidence));
+      zones = buildAnnotationOffer(fv, boardSelectionDecisions(fv));
+    } catch { continue; }
+    for (const a of zones.aliases) {
+      if (!/^(?:you|opp)-fork-square(?:-\d+)?$/.test(a.handle)) continue;
+      if (a.spec.startsWith('future:')) continue;
+      checked += 1;
+      if (/\bcompleting\b/.test(a.role)) {
+        violations.push(`${row.id} ${a.handle} ${a.spec}: still claims "completing" — "${a.role}"`);
+      }
+      if (!/once the fork is set up/.test(a.role)) {
+        violations.push(`${row.id} ${a.handle} ${a.spec}: missing the horizon qualifier — "${a.role}"`);
+      }
+    }
+  }
+  assert.ok(checked > 0, 'expected at least one checkable near-term -fork-square alias in the corpus');
+  assert.deepEqual(violations, [], violations.join('\n'));
+});
+
+test('OI-225 corpus-wide: no alias claiming "completing" is board-false on the board it names', async () => {
+  // The complement of the test above: after D63 the ONLY aliases still saying "completing" must be
+  // ones where dropping the owner's disc on that empty cell genuinely completes a four on the board
+  // the alias's own `truthBoard` names. Oracle is `checkWin` (classifier.js), deliberately NOT the
+  // `winningWindows` helper the coordinator's scratch probe used — two independent helpers agreeing
+  // is what makes this evidence rather than a fixture agreeing with its author.
+  const { toNarratorVector, pruneVector } = await import('../scripts/reasonNarratorVector.mjs');
+  const { boardSelectionDecisions } = await import('../scripts/reasonBoardSelect.mjs');
+  const { parseBoardState, checkWin } = await import('../classifier.js');
+  const here = _dirname2(_fileURLToPath2(import.meta.url));
+  const rows = _readFileSync2(_join2(here, '../scripts/reason_corpus/evidence.jsonl'), 'utf8')
+    .trim().split('\n').map((l) => JSON.parse(l));
+
+  let checked = 0;
+  const violations = [];
+  for (const row of rows) {
+    if (!row.evidence || row.error) continue;
+    let fv, zones;
+    try {
+      fv = pruneVector(toNarratorVector(row.evidence));
+      zones = buildAnnotationOffer(fv, boardSelectionDecisions(fv));
+    } catch { continue; }
+    for (const a of zones.aliases) {
+      if (!/completing (?:your|your opponent's) four-in-a-row line/.test(a.role)) continue;
+      const m = /^(?:future:)?c(\d+)r(\d+)$/.exec(String(a.spec));
+      if (!m) continue;                                  // window specs are not single-cell claims
+      const ms = a.truthBoard === 'decision' ? fv.movestring
+        : a.truthBoard === 'afterPlayed' ? fv.movestring + String(fv.playedCol)
+        : a.truthBoard === 'afterBest' ? fv.movestring + String(fv.bestCol) : null;
+      if (ms == null) continue;                          // projectedDeep: no movestring to check
+      let grid;
+      try { ({ board: grid } = parseBoardState(ms)); } catch { continue; }
+      const col = Number(m[1]) - 1, r0 = Number(m[2]) - 1;
+      if (grid[r0]?.[col] !== 0) continue;               // occupied: not a placeable claim
+      const owner = a.handle.startsWith('opp-') ? 'opp' : 'you';
+      const player = owner === 'you' ? fv.player : (fv.player === 1 ? 2 : 1);
+      checked += 1;
+      if (!checkWin(grid, r0, col, player)) {
+        violations.push(`${row.id} ${a.handle}=${a.spec} (${a.truthBoard}) claims "completing" but does not complete`);
+      }
+    }
+  }
+  assert.ok(checked > 0, 'expected at least one checkable "completing" alias in the corpus');
+  assert.deepEqual(violations, [], violations.join('\n'));
+});
+
+test('OI-225 corpus-wide (M5): every alias claiming the horizon wording ("once the fork is set up") ' +
+     'is board-FALSE on the board it names', async () => {
+  // Mirror of the "completing" checkWin test above, in the other direction: `fork-square`'s role
+  // text (roleText, zoneAnnotations.mjs) deliberately says the cell "completes nothing yet" — a
+  // cell that already completes a four on its own truthBoard would make that claim board-false, and
+  // nothing else pins it. Same independent oracle (`checkWin`, classifier.js), same skip rules
+  // (window specs, unresolvable/`projectedDeep` truthBoards, occupied cells) as the "completing" test.
+  const { toNarratorVector, pruneVector } = await import('../scripts/reasonNarratorVector.mjs');
+  const { boardSelectionDecisions } = await import('../scripts/reasonBoardSelect.mjs');
+  const { parseBoardState, checkWin } = await import('../classifier.js');
+  const here = _dirname2(_fileURLToPath2(import.meta.url));
+  const rows = _readFileSync2(_join2(here, '../scripts/reason_corpus/evidence.jsonl'), 'utf8')
+    .trim().split('\n').map((l) => JSON.parse(l));
+
+  let checked = 0;
+  const violations = [];
+  for (const row of rows) {
+    if (!row.evidence || row.error) continue;
+    let fv, zones;
+    try {
+      fv = pruneVector(toNarratorVector(row.evidence));
+      zones = buildAnnotationOffer(fv, boardSelectionDecisions(fv));
+    } catch { continue; }
+    for (const a of zones.aliases) {
+      if (!/once the fork is set up/.test(a.role)) continue;
+      const m = /^(?:future:)?c(\d+)r(\d+)$/.exec(String(a.spec));
+      if (!m) continue;                                  // window specs are not single-cell claims
+      const ms = a.truthBoard === 'decision' ? fv.movestring
+        : a.truthBoard === 'afterPlayed' ? fv.movestring + String(fv.playedCol)
+        : a.truthBoard === 'afterBest' ? fv.movestring + String(fv.bestCol) : null;
+      if (ms == null) continue;                          // projectedDeep: no movestring to check
+      let grid;
+      try { ({ board: grid } = parseBoardState(ms)); } catch { continue; }
+      const col = Number(m[1]) - 1, r0 = Number(m[2]) - 1;
+      if (grid[r0]?.[col] !== 0) continue;               // occupied: not a placeable claim
+      const owner = a.handle.startsWith('opp-') ? 'opp' : 'you';
+      const player = owner === 'you' ? fv.player : (fv.player === 1 ? 2 : 1);
+      checked += 1;
+      if (checkWin(grid, r0, col, player)) {
+        violations.push(`${row.id} ${a.handle}=${a.spec} (${a.truthBoard}) claims "not yet complete" but board-checks as complete`);
+      }
+    }
+  }
+  assert.ok(checked > 0, 'expected at least one checkable horizon-wording alias in the corpus');
+  assert.deepEqual(violations, [], violations.join('\n'));
+});

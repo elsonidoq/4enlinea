@@ -327,6 +327,9 @@ PK: `(position_hash, locale)` — composite (migration 059). Was `position_hash`
 | template_version | text | YES | (none) |
 | audio_path | text | YES | (none) |
 | audio_generated_at | timestamptz | YES | (none) |
+| retry_fired | boolean | NO | `false` |
+| retry_reason | jsonb | YES | (none) |
+| served_attempt | smallint | YES | (none) |
 
 **`locale`**: NOT NULL, default `'en'` (added in migration 059, which also promoted the PK to `(position_hash, locale)`). Language of the cached explanation — one of `'en'`/`'es'`. English and Spanish explanations for the same position are **distinct rows** sharing a `position_hash`. Existing rows backfilled to `'en'` via the default. **Trap:** any reader querying by `position_hash` alone with `.single()`/`.maybeSingle()` now risks matching two rows — every single-row reader must either scope by locale (use `buildCacheFilter(hash, locale)` from `server/explainCacheKey.mjs`) or `.limit(1)`. Locale reaches the endpoint via `req.locale` (from the `Accept-Language` header) except the TTS audio GET, which reads an explicit `?lang=` query param (see `api-conventions.md`).
 
@@ -347,6 +350,42 @@ exactly the string the LLM wrote inside the tag, **not necessarily the KB file s
 fall back to a legacy `fullText` key from pre-Epic-3 rows (`index.js:3919`,
 `reasonRenderGuard.mjs:493`); `index.js:1330` reads `deep_reveal_json.terms ?? {}` to guard against
 older rows that predate the `terms` field.
+
+**`retry_fired`** (added migration 066): NOT NULL boolean, default `false`. Retry telemetry for the
+`/api/explain-move-llm` generation path (`server/mechanismExplainer.mjs`'s `computeMechanism`,
+D61-era retry chooser). `true` iff the CONTENT-triggered retry fired — a required-square/line miss
+and/or an unnamed better column (`decideRetry`, `server/retryDecision.mjs`). **Deliberately does
+NOT cover the separate LLM-error retry** (a same-prompt resend when the first call/parse fails,
+the `isLlmError` branch of `computeMechanism`): that resend has no content "reason" to log, since
+attempt1 had no usable content to compare against. A row with `retry_fired: false` may still have
+been served by a resent attempt for that unrelated trigger — this column answers "did the content
+check ask for a second try", not "was more than one LLM call made".
+
+**`retry_reason`** (added migration 066): nullable jsonb, `null` when `retry_fired` is `false`.
+Shape: `{ "missingHandles": ["you-fork-pivot", ...], "missingBetterCol": true|false }` —
+`missingHandles` is the list of required-set group handles attempt 1 omitted (mirrors
+`computeMechanism`'s own `missingHandles` return field, kept as a **separate** column rather than
+overloading the existing one — see OI-181 for why that field must not change meaning);
+`missingBetterCol` is whether attempt 1 failed to name the column the player should have played
+instead (`mentionsBetterColumn`). Both can be true at once — the retry budget is a single shared
+retry that folds both misses into one amended prompt.
+
+**`served_attempt`** (added migration 066): nullable smallint, `1` = the first attempt's content
+was served, `2` = the retried attempt's content was served (`chooseRetryWinner` can still pick
+attempt 1 even after a content retry fired, if the retry regressed). Same 1/2 convention as
+`deep_reveal_failures.served_attempt` (migration 065) for the same concept — do not introduce a
+third convention for this event elsewhere. `NULL` only on pre-migration rows.
+
+**Telemetry caveat, all three columns**: the cache row is written **only on a cache miss**
+(`server/index.js`'s `/api/explain-move-llm` handler, ~line 1449) — a cache HIT never re-runs
+`computeMechanism` and never re-writes this row. These columns therefore describe the *generation
+event* that produced the cached text, not an ongoing property of the position: a position whose
+explanation was cached before this migration, or before a later render-layer change, keeps
+whatever retry telemetry (or `NULL`) was true at generation time even if the position would retry
+differently today. The other `explanation_cache` insert (`server/index.js`, ~line 1252, the
+`/api/explain-move` one-liner path) never runs the retry chooser at all and always writes `false` /
+`null` / `NULL` implicitly via the column defaults for these three fields — it does not set them
+explicitly.
 
 ---
 

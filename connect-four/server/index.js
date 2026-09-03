@@ -1446,12 +1446,23 @@ app.post('/api/explain-move-llm', async (req, res) => {
     }
 
     if (supabase) {
+      // Retry telemetry (migration 066): `retry_fired`/`retry_reason` describe ONLY the
+      // content-triggered retry (result.contentRetryFired) — the pre-existing LLM-error resend
+      // (isLlmError branch of computeMechanism) has no content reason to log and is intentionally
+      // not represented here (see db-schema.md §explanation_cache). `served_attempt` maps the
+      // in-memory 'attempt1'/'retry' string to the smallint 1/2 convention migration 065 already
+      // established on deep_reveal_failures.served_attempt for the same concept.
       supabase.from('explanation_cache').insert({
         position_hash: positionHash,
         locale,
         one_liner: '',
         deep_reveal_json: { explanation, prompt, terms: termsMap },
         template_version: 'v3',
+        retry_fired: result.contentRetryFired,
+        retry_reason: result.contentRetryFired
+          ? { missingHandles: result.missingHandles.map((g) => g.handle), missingBetterCol: result.missingBetterCol }
+          : null,
+        served_attempt: result.servedAttempt === 'retry' ? 2 : 1,
       }).then(() => {}).catch(err => console.error('[cache write]', err.message));
     }
 

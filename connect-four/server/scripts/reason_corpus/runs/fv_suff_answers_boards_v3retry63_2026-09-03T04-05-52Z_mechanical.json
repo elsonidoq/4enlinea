@@ -1,0 +1,194 @@
+{
+ "eval-3|D|0": {
+  "A1": "pass",
+  "A2": "pass",
+  "A6": "pass",
+  "G7a_offered": "pass",
+  "G7b_offered": "pass",
+  "notes": ""
+ },
+ "eval-3|D|1": {
+  "A1": "pass",
+  "A2": "pass",
+  "A6": "pass",
+  "G7a_offered": "pass",
+  "G7b_offered": "pass",
+  "notes": ""
+ },
+ "eval-3|D|2": {
+  "A1": "pass",
+  "A2": "pass",
+  "A6": "pass",
+  "G7a_offered": "pass",
+  "G7b_offered": "pass",
+  "notes": ""
+ },
+ "eval-16|D|0": {
+  "A1": "pass",
+  "A2": "pass",
+  "A6": "pass",
+  "G7a_offered": "pass",
+  "G7b_offered": "pass",
+  "notes": ""
+ },
+ "eval-16|D|1": {
+  "A1": "pass",
+  "A2": "pass",
+  "A6": "pass",
+  "G7a_offered": "pass",
+  "G7b_offered": "pass",
+  "notes": ""
+ },
+ "eval-16|D|2": {
+  "A1": "pass",
+  "A2": "pass",
+  "A6": "pass",
+  "G7a_offered": "pass",
+  "G7b_offered": "pass",
+  "notes": ""
+ },
+ "eval-34|D|0": {
+  "A1": "pass",
+  "A2": "pass",
+  "A6": "pass",
+  "G7a_offered": "pass",
+  "G7b_offered": "pass",
+  "notes": ""
+ },
+ "eval-34|D|1": {
+  "A1": "pass",
+  "A2": "pass",
+  "A6": "pass",
+  "G7a_offered": "pass",
+  "G7b_offered": "pass",
+  "notes": ""
+ },
+ "eval-34|D|2": {
+  "A1": "pass",
+  "A2": "pass",
+  "A6": "pass",
+  "G7a_offered": "pass",
+  "G7b_offered": "pass",
+  "notes": ""
+ },
+ "eval-43|D|0": {
+  "A1": "pass",
+  "A2": "pass",
+  "A6": "pass",
+  "G7a_offered": "pass",
+  "G7b_offered": "pass",
+  "notes": ""
+ },
+ "eval-43|D|1": {
+  "A1": "pass",
+  "A2": "pass",
+  "A6": "pass",
+  "G7a_offered": "pass",
+  "G7b_offered": "pass",
+  "notes": ""
+ },
+ "eval-43|D|2": {
+  "A1": "pass",
+  "A2": "pass",
+  "A6": "pass",
+  "G7a_offered": "pass",
+  "G7b_offered": "pass",
+  "notes": ""
+ },
+ "eval-44|D|0": {
+  "A1": "pass",
+  "A2": "pass",
+  "A6": "pass",
+  "G7a_offered": "pass",
+  "G7b_offered": "pass",
+  "notes": ""
+ },
+ "eval-44|D|1": {
+  "A1": "pass",
+  "A2": "pass",
+  "A6": "pass",
+  "G7a_offered": "pass",
+  "G7b_offered": "pass",
+  "notes": ""
+ },
+ "eval-44|D|2": {
+  "A1": "pass",
+  "A2": "pass",
+  "A6": "pass",
+  "G7a_offered": "pass",
+  "G7b_offered": "pass",
+  "notes": ""
+ },
+ "pin-L2-enabled-opponent|D|0": {
+  "A1": "pass",
+  "A2": "pass",
+  "A6": "pass",
+  "G7a_offered": "pass",
+  "G7b_offered": "pass",
+  "notes": ""
+ },
+ "pin-L2-enabled-opponent|D|1": {
+  "A1": "pass",
+  "A2": "pass",
+  "A6": "pass",
+  "G7a_offered": "pass",
+  "G7b_offered": "pass",
+  "notes": ""
+ },
+ "pin-L2-enabled-opponent|D|2": {
+  "A1": "pass",
+  "A2": "pass",
+  "A6": "pass",
+  "G7a_offered": "pass",
+  "G7b_offered": "pass",
+  "notes": ""
+ },
+ "pin-L7-practical-swindle|D|0": {
+  "A1": "pass",
+  "A2": "pass",
+  "A6": "pass",
+  "G7a_offered": "pass",
+  "G7b_offered": "pass",
+  "notes": ""
+ },
+ "pin-L7-practical-swindle|D|1": {
+  "A1": "pass",
+  "A2": "pass",
+  "A6": "pass",
+  "G7a_offered": "pass",
+  "G7b_offered": "pass",
+  "notes": ""
+ },
+ "pin-L7-practical-swindle|D|2": {
+  "A1": "pass",
+  "A2": "pass",
+  "A6": "pass",
+  "G7a_offered": "pass",
+  "G7b_offered": "pass",
+  "notes": ""
+ },
+ "pin-branch-invariance-false|D|0": {
+  "A1": "pass",
+  "A2": "pass",
+  "A6": "pass",
+  "G7a_offered": "pass",
+  "G7b_offered": "pass",
+  "notes": ""
+ },
+ "pin-branch-invariance-false|D|1": {
+  "A1": "pass",
+  "A2": "pass",
+  "A6": "pass",
+  "G7a_offered": "pass",
+  "G7b_offered": "pass",
+  "notes": ""
+ },
+ "pin-branch-invariance-false|D|2": {
+  "A1": "pass",
+  "A2": "pass",
+  "A6": "pass",
+  "G7a_offered": "pass",
+  "G7b_offered": "pass",
+  "notes": ""
+ }
+}

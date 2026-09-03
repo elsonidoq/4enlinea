@@ -857,6 +857,11 @@ the choke-point. It is not, and that wrong premise cost spec 047 a full critique
 - `POST /api/explain-move-llm` → `computeMechanism` (`mechanismExplainer.mjs`) → its internal
   **`defaultCallLLM`**. This is the OpenAI chat path that actually serves users. `computeMechanism`'s
   `callLLM` option is a **test-injection seam only**.
+- After the LLM call and `chooseRetryWinner`, `computeMechanism` applies one more deterministic step
+  to the CHOSEN attempt: `ensureBetterColumnMention` (`retryDecision.mjs`, D63/OI-224) appends a
+  localized "you should have played column N" sentence when the served mechanism never names the
+  better column. This is a pure text repair, not a second LLM call — `betterColRepaired` reports
+  whether it fired.
 - **`callLLM` in `server/llmCoachHelpers.js` captures no production traffic** — it is used only by the
   offline `run_eval.mjs` harness. Instrumenting it alone records nothing real.
 - **`composeExplanation` (`index.js:616`) is dead code.** Its only call site (`index.js:1241`) sits

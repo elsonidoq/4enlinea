@@ -2029,6 +2029,116 @@ test('D-2026-09-01 (fix round 1): an offered LINE remains the preferred victim, 
   assert.ok(!req.some((g) => g.handle === 'opp-key-line'), 'the LINE is the victim: ' + req.map((g) => g.handle));
 });
 
+// ── Offer/require seam mismatch fix: deriveRequiredSet's pivot loop falls back to an
+// already-offered `*-fork-pivot` alias for the half's owner when `forkPivotCell(half)` abstains.
+// zoneAnnotations.mjs mints a `*-fork-pivot` alias via THREE paths (half-based `forkPivotCell`,
+// board-tag `boardTagPivotCell`, and the realized-pattern loop); `deriveRequiredSet` used to call
+// only `forkPivotCell`, so a pivot minted by either of the other two paths was structurally
+// impossible to require even though it was offered. Measured on the 63-record corpus: 25 records
+// offer a `*-fork-pivot` alias, 10 never required it — 6 of the 10 (eval-30, eval-43, eval-44,
+// eval-46, pin-L3-no-causation, pin-branch-invariance-true-1) are fixed by this fallback (each had a
+// free `better-col` slot the pivot now wins instead); the other 4 stay correctly unresolved for
+// reasons pinned below (eval-36: neither half's OWNER is the pivot's owner; eval-47: cap already
+// full with a different pivot for the same owner already required; eval-48/pin-L1-completes-your-
+// tactic: the fallback candidate's spec is the SAME cell as a group already required under a
+// different handle name, and the existing no-duplicate-spec guard correctly declines to require it
+// twice under two names).
+const FORK_PIVOT_FALLBACK_ALIASES = [
+  { handle: 'you-key-square', spec: 'c1r1', role: 'the square you needed', truthBoard: 'decision', kbId: null },
+  { handle: 'opp-key-square', spec: 'c3r5', role: 'the square the opponent took', truthBoard: 'decision', kbId: null },
+  // Not derivable via forkPivotCell: no half below carries a `tacticTag`/`line`, so this alias can
+  // only have been minted by the board-tag or realized-pattern path (paths 2/3 in the task brief).
+  { handle: 'you-fork-pivot', spec: 'c2r1', role: 'the square you play to CREATE the fork', truthBoard: 'decision', kbId: null },
+  { handle: 'better-col', spec: 'col4', role: 'the column of the better move', truthBoard: 'decision', kbId: null },
+];
+
+test('fork-pivot fallback: a pivot offered by the HALF-BASED path (forkPivotCell matches directly) is still required — no regression', () => {
+  const pruned = {
+    lostResource: { tacticTag: 'double_threat', completingCell: 'c3r5', forkCells: ['c3r5', 'c7r1'],
+                    line: [{ cell: 'c4r3' }, { cell: 'c5r4' }] },
+    opponentPunishment: {},
+  };
+  const aliases = [
+    { handle: 'you-future-fork', spec: 'windows:c3r5,c7r1', role: 'both fork squares', truthBoard: 'projectedDeep', kbId: 'double_threat' },
+    { handle: 'you-fork-pivot', spec: 'c5r4', role: 'the square that creates the fork', truthBoard: 'projectedDeep', kbId: null },
+  ];
+  const req = deriveRequiredSet(pruned, { aliases });
+  assert.deepEqual(req.map((g) => g.handle), ['you-future-fork', 'you-fork-pivot']);
+  assert.equal(req.find((g) => g.handle === 'you-fork-pivot').spec, 'c5r4');
+});
+
+test('fork-pivot fallback: a pivot offered ONLY by a non-half path (forkPivotCell abstains) is now required, by owner', () => {
+  // lostResource carries no `tacticTag`, so forkPivotCell(lostResource) returns null (abstains) —
+  // exactly the shape a board-tag- or realized-pattern-minted pivot leaves behind. The fallback must
+  // find the offered `you-fork-pivot` alias by OWNER (halfOwner(lostResource, 'you') === 'you' here,
+  // since `kind` is not 'denial'/'neutralization') and require it, without deriving new geometry.
+  const pruned = { lostResource: { completingCell: 'c1r1' }, opponentPunishment: {} };
+  const aliases = FORK_PIVOT_FALLBACK_ALIASES.filter((a) => a.handle !== 'opp-key-square' && a.handle !== 'better-col');
+  const req = deriveRequiredSet(pruned, { aliases });
+  assert.deepEqual(req.map((g) => g.handle), ['you-key-square', 'you-fork-pivot']);
+  assert.equal(req.find((g) => g.handle === 'you-fork-pivot').spec, 'c2r1');
+});
+
+test('fork-pivot fallback: a half whose OWNER does not match the offered pivot never requires it (denial/neutralization flip)', () => {
+  // halfOwner flips a 'denial'/'neutralization' half to the OTHER side's owner (D47) — a `you-`
+  // pivot offered on the board has no half to anchor to when both halves resolve to 'opp'. This is
+  // the eval-36 shape: the fallback must not require a handle whose owner neither half maps to.
+  const pruned = {
+    lostResource: { kind: 'denial', completingCell: 'c1r1' },       // halfOwner -> 'opp'
+    opponentPunishment: { completingCell: 'c3r5' },                  // halfOwner -> 'opp'
+  };
+  const aliases = FORK_PIVOT_FALLBACK_ALIASES.map((a) => (a.handle === 'you-key-square'
+    ? { ...a, handle: 'opp-key-square-x', spec: 'c1r1' } : a)).filter((a) => a.handle !== 'better-col');
+  const req = deriveRequiredSet(pruned, { aliases });
+  assert.ok(!req.some((g) => g.handle === 'you-fork-pivot'),
+    'no half owns "you" in this record — the you-fork-pivot alias must stay offered-only: ' + req.map((g) => g.handle));
+});
+
+test('fork-pivot fallback: better-col yields its free slot to the fallback pivot (Q2 priority — pivot beats the provisional better-col fill)', () => {
+  const pruned = {
+    lostResource: { completingCell: 'c1r1' },
+    opponentPunishment: { completingCell: 'c3r5' },
+    bestCol: 3,
+  };
+  const withPivot = deriveRequiredSet(pruned, { aliases: FORK_PIVOT_FALLBACK_ALIASES });
+  assert.deepEqual(withPivot.map((g) => g.handle), ['you-key-square', 'opp-key-square', 'you-fork-pivot']);
+  assert.ok(!withPivot.some((g) => g.handle === 'better-col'), 'the pivot must win the slot over better-col');
+  // Control: with the pivot alias NOT offered, the exact same record falls through to better-col —
+  // proving the slot really was free (this is not slot starvation, matching the task's own finding).
+  const withoutPivot = deriveRequiredSet(pruned,
+    { aliases: FORK_PIVOT_FALLBACK_ALIASES.filter((a) => a.handle !== 'you-fork-pivot') });
+  assert.deepEqual(withoutPivot.map((g) => g.handle), ['you-key-square', 'opp-key-square', 'better-col']);
+});
+
+test('fork-pivot fallback: the 3-slot cap still holds even when both halves have a fallback pivot on offer', () => {
+  const pruned = {
+    lostResource: { completingCell: 'c1r1' },
+    opponentPunishment: { completingCell: 'c3r5' },
+    bestCol: 3,
+  };
+  const aliases = [...FORK_PIVOT_FALLBACK_ALIASES,
+    { handle: 'opp-fork-pivot', spec: 'c4r5', role: 'the square the opponent plays to CREATE the fork', truthBoard: 'decision', kbId: null }];
+  const req = deriveRequiredSet(pruned, { aliases });
+  assert.equal(req.length, 3);
+  // First-half-first fills the pivot slot with 'you'; the opponent's fallback pivot is a legitimate
+  // group that is correctly left offered-but-unrequired once the cap is reached, same as any other
+  // FR-005 cap overflow — not a fresh bug this fallback introduces.
+  assert.deepEqual(req.map((g) => g.handle), ['you-key-square', 'opp-key-square', 'you-fork-pivot']);
+});
+
+test('fork-pivot fallback: never double-requires the same cell under two different handles (no-duplicate-spec guard, eval-48/pin-L1 shape)', () => {
+  // The fallback candidate's spec is the SAME geometry as a group already required under a
+  // different handle name — the pre-existing "a subset has no duplicates" guard (see `push`, D2)
+  // must decline the fallback rather than print the identical square twice under two labels.
+  const pruned = { lostResource: { completingCell: 'c1r1' }, opponentPunishment: {} };
+  const aliases = [
+    { handle: 'you-key-square', spec: 'c1r1', role: 'the key square', truthBoard: 'decision', kbId: null },
+    { handle: 'you-fork-pivot', spec: 'c1r1', role: 'the square you play to CREATE the fork', truthBoard: 'decision', kbId: null },
+  ];
+  const req = deriveRequiredSet(pruned, { aliases });
+  assert.equal(req.length, 1, 'the same cell must not be required twice under two different handles');
+});
+
 // ── Task 9: by-design OMITs raise a typed NotABlunder error instead of falling through to
 // classifyCausalLink's opaque "no rule matched" (I4/D3/D4/D23). Minimal vector shape per the task
 // brief — the guard keys only on `case` and `gate.verdict`, so this exercises the real branch

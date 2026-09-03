@@ -67,12 +67,19 @@ const STRINGS = {
     // `315444233213134122` was explicitly about the lost row ("the text says 'column 1' but the
     // coach speaks c1r3 which is much more precise").
     cell: (c, r) => `column ${c}, row ${r}`,
+    // D63 / OI-224. The deterministic better-column post-repair sentence, appended by
+    // `retryDecision.mjs`'s `ensureBetterColumnMention` when the served explanation never names the
+    // column the player should have played. `n` is already 1-indexed (display) at the call site.
+    // It MUST contain the exact `column ${n}` substring that `mentionsBetterColumn` searches for —
+    // that check is what declared the mention missing, and the repair has to satisfy it.
+    betterColumnRepair: (n) => `Your better move was column ${n}.`,
   },
   es: {
     notABlunder: 'Esta jugada mantiene la partida en su mejor camino — no hay una alternativa mejor para destacar acá.',
     column: (n) => `columna ${n}`,
     columnRange: (a, b) => `columnas ${a} a ${b}`,
     cell: (c, r) => `columna ${c}, fila ${r}`,
+    betterColumnRepair: (n) => `Tu mejor jugada era la columna ${n}.`,
   },
 };
 

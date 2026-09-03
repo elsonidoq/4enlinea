@@ -38,7 +38,7 @@ import { loadEnv } from './reason_engine/lib/boardUtils.mjs';
 import { callOpenAIChat } from '../llmChat.js';
 import { Board } from '../classifier.js';
 import { guardExplainMoveLlmPayload, toAllowedSet } from '../reasonRenderGuard.mjs';
-import { decideRetry } from '../retryDecision.mjs';
+import { decideRetry, chooseRetryWinner, ensureBetterColumnMention } from '../retryDecision.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -89,17 +89,23 @@ Options:
                         task, matching production's locale-aware prompt. Default: en.
   --sentence-budget <t> Answer-length instruction for the mechanism field, as prose (e.g. "1-3",
                         "4-6"). Default: 1-3. Used by the budget-ablation arm.
-  --retry               Reproduce production's real retry decision (decideRetry, retryDecision.mjs)
-                        instead of scoring a single attempt. IMPORTANT: a --retry run is NOT
-                        comparable to historical single-attempt runs on any judgment axis — it
-                        reproduces production's two CONTENT triggers only (a missing required
-                        square/line and/or an unnamed better column); rows that hit a call/parse
-                        error remain single-attempt (that is a separate, pre-existing LLM-error
-                        retry trigger, out of scope here). It is gated to condition D — on A/B/C,
-                        render_decision is null and the content triggers are inert. A6 is NOT an
-                        independent measure on a --retry run: it is one of the retry's own
+  --retry               Reproduce production's full post-LLM content pipeline instead of scoring a
+                        single attempt: the real retry decision (decideRetry, retryDecision.mjs),
+                        the keep-the-better-attempt chooser (chooseRetryWinner), and the
+                        better-column post-repair (ensureBetterColumnMention, D63/OI-224). IMPORTANT:
+                        a --retry run is NOT comparable to historical single-attempt runs on any
+                        judgment axis — it reproduces production's two CONTENT triggers only (a
+                        missing required square/line and/or an unnamed better column); rows that hit
+                        a call/parse error remain single-attempt (that is a separate, pre-existing
+                        LLM-error retry trigger, out of scope here). It is gated to condition D — on
+                        A/B/C, render_decision is null and the content triggers are inert. A6 is NOT
+                        an independent measure on a --retry run: it is one of the retry's own
                         triggers, so report it separately and never against a single-attempt
-                        baseline.
+                        baseline. The better-column post-repair (D63/OI-224) can also append a
+                        deterministic sentence to answer.mechanism/servedExplanation on rows marked
+                        better_col_repaired: true — the judgment axes (A3/A4/A5/A7/G1-G6) grade that
+                        appended text too, so segment or exclude those rows before comparing a
+                        --retry run's judgment axes against a pre-D63 --retry run.
   -h, --help            Show this help and exit.
 
 Requires OPENAI_API_KEY (and a model) for --llm; loaded from connect-four/server/.env.`;
@@ -455,6 +461,8 @@ async function runLlm(evidenceRows) {
   let done = 0, failed = 0;
   // Retry summary (Step 4): how many runs retried, and the trigger split.
   let retriedTotal = 0, retriedMissingHandlesOnly = 0, retriedMissingBetterColOnly = 0, retriedBoth = 0;
+  // D63/OI-224: rows where the better-column post-repair fired (see the `if (repaired)` branch below).
+  let betterColRepairedTotal = 0;
   for (const row of evidenceRows) {
     if (!row.evidence || row.evidence.notABlunder) continue; // error row or non-blunder: nothing to narrate
     // toNarratorVector produces the UN-pruned narrator vector; per-condition pruning happens inside
@@ -486,6 +494,9 @@ async function runLlm(evidenceRows) {
           retry_fired: false,
           retry_reason: null,
           attempt1: null,
+          served_attempt: 'attempt1',
+          better_col_repaired: false,
+          mechanism_pre_repair: null,
         };
         appendFileSync(answersOut, JSON.stringify(line) + '\n');
         failed++;
@@ -525,6 +536,12 @@ async function runLlm(evidenceRows) {
         // LLM-error retry trigger (mechanismExplainer.mjs's isLlmError), out of scope here.
         let retryOutcome = { shouldRetry: false };
         const attempt1Row = { raw, answer, parse_error, call_error, guardDiagnostics, annotationRepairs, servedExplanation };
+        // served_attempt (additive): which attempt's content ended up in the top-level fields —
+        // 'attempt1' both when no retry fired and when a retry fired but attempt1 won the
+        // keep-the-better-attempt comparison below; 'retry' when the retried attempt was served.
+        // Mirrors production's mechanismExplainer.mjs `servedAttempt` — harness/production alignment
+        // is the entire purpose of --retry (D51 follow-up).
+        let served_attempt = 'attempt1';
         if (useRetry && condition === 'D' && !call_error && !parse_error) {
           retryOutcome = decideRetry({
             attempt1: { mechanism: answer?.mechanism ?? null, usedSpecs, answer },
@@ -549,19 +566,38 @@ async function runLlm(evidenceRows) {
             } catch (err) {
               call_error2 = err.message;
             }
-            const { answer: postAnswer2, repairs: annotationRepairs2 } = postprocessAnswer(answer2, render_decision);
+            const { answer: postAnswer2, repairs: annotationRepairs2, usedSpecs: usedSpecs2 } = postprocessAnswer(answer2, render_decision);
             const { servedExplanation: servedExplanation2, guardDiagnostics: guardDiagnostics2 } = computeServedExplanation(
               postAnswer2?.mechanism, render_decision, nv.movestring, locale,
             );
-            // Top-level fields now describe the FINAL (retried) attempt — what production would
-            // serve; attempt1Row above preserves the discarded first one.
-            raw = raw2;
-            answer = postAnswer2;
-            parse_error = parse_error2;
-            call_error = call_error2;
-            annotationRepairs = annotationRepairs2;
-            servedExplanation = servedExplanation2;
-            guardDiagnostics = guardDiagnostics2;
+
+            // Keep the better of the two (retryDecision.mjs D51 follow-up, chooseRetryWinner):
+            // prefer the retried attempt, but fall back to attempt1 when it is strictly better on
+            // the two content requirements the retry exists to enforce. Reproduces production's
+            // mechanismExplainer.mjs decision exactly, not a hand-rolled proxy (I12).
+            const { chosen } = chooseRetryWinner({
+              attempt1: { mechanism: answer?.mechanism ?? null, usedSpecs },
+              retriedAttempt: { mechanism: postAnswer2?.mechanism ?? null, usedSpecs: usedSpecs2 },
+              renderDecision: render_decision,
+              movestring: nv.movestring,
+              bestCol: nv?.bestCol ?? null,
+              locale,
+            });
+            served_attempt = chosen;
+            if (chosen === 'retry') {
+              // Top-level fields now describe the FINAL (retried) attempt — what production would
+              // serve; attempt1Row above preserves the discarded first one.
+              raw = raw2;
+              answer = postAnswer2;
+              parse_error = parse_error2;
+              call_error = call_error2;
+              annotationRepairs = annotationRepairs2;
+              servedExplanation = servedExplanation2;
+              guardDiagnostics = guardDiagnostics2;
+            }
+            // else: attempt1 won — top-level fields already hold attempt1's values (set above the
+            // retry block); attempt1Row is then a duplicate of the served content, which is
+            // expected (shapeRetryFields always preserves attempt1's row shape once a retry fired).
 
             retriedTotal++;
             const missedHandles = retryOutcome.missing?.length > 0;
@@ -569,6 +605,36 @@ async function runLlm(evidenceRows) {
             if (missedHandles && missedBetterCol) retriedBoth++;
             else if (missedHandles) retriedMissingHandlesOnly++;
             else if (missedBetterCol) retriedMissingBetterColOnly++;
+          }
+        }
+        // ── Better-column post-repair (D63 / OI-224), mirroring production ────────────────────
+        // Production (mechanismExplainer.mjs) applies this to EVERY served explanation. Here it is
+        // gated on `--retry` on purpose: a run without --retry is the single-attempt BASELINE other
+        // measurements compare against, and silently repairing those rows would move a baseline.
+        // `--retry`'s whole purpose is production alignment (D51), so the repair sits behind the
+        // same gate as the chooser it follows. Deliberate divergence, not an oversight.
+        //
+        // `mechanism_pre_repair` (owner decision). grade_mechanical.mjs's A6 axis measures whether
+        // the MODEL named the better column unaided (`grade_mechanical.mjs:40-45`); if A6 graded the
+        // repaired text instead it would read a constant 'pass' on every `--retry` run and stop being
+        // a measurement, silently breaking comparability with the pre-D63 189-run baseline. So this
+        // row additionally captures the mechanism as it stood BEFORE the repair — null when no repair
+        // fired — and Task 4b changes A6 to grade that field instead of the (now-repaired) `answer`.
+        let better_col_repaired = false;
+        let mechanism_pre_repair = null;
+        if (useRetry && condition === 'D' && !call_error && !parse_error) {
+          const { mechanism: repairedMechanism, repaired } =
+            ensureBetterColumnMention(answer?.mechanism ?? null, nv?.bestCol ?? null, locale);
+          if (repaired) {
+            better_col_repaired = true;
+            mechanism_pre_repair = answer?.mechanism ?? null;
+            answer = { ...answer, mechanism: repairedMechanism };
+            // servedExplanation/guardDiagnostics describe the string production would SERVE, so
+            // they must be recomputed from the repaired mechanism — through the real guard, never a
+            // reimplementation (FR-001/FR-002).
+            ({ servedExplanation, guardDiagnostics } = computeServedExplanation(
+              repairedMechanism, render_decision, nv.movestring, locale));
+            betterColRepairedTotal++;
           }
         }
         const { retry_fired, retry_reason, attempt1 } = shapeRetryFields(retryOutcome, attempt1Row);
@@ -591,6 +657,9 @@ async function runLlm(evidenceRows) {
           retry_fired,
           retry_reason,
           attempt1,
+          served_attempt,
+          better_col_repaired,
+          mechanism_pre_repair,
         };
         appendFileSync(answersOut, JSON.stringify(line) + '\n');
         if (call_error || parse_error) {
@@ -607,7 +676,9 @@ async function runLlm(evidenceRows) {
   if (useRetry) {
     console.log(`Retried: ${retriedTotal} run(s) — ${retriedMissingHandlesOnly} missing-handles only, `
       + `${retriedMissingBetterColOnly} missing-better-column only, ${retriedBoth} both.`);
-    console.log('--retry reproduces production\'s two content triggers only; call/parse-error rows remain single-attempt.');
+    console.log(`Better-column repaired: ${betterColRepairedTotal} run(s) (D63/OI-224 post-repair).`);
+    console.log('--retry reproduces production\'s full post-LLM content pipeline: the retry decision, '
+      + 'the keep-the-better-attempt chooser, and the better-column post-repair; call/parse-error rows remain single-attempt.');
     console.log('A6 on a --retry run is not an independent measure — it is one of the retry\'s own triggers. '
       + 'Report it separately and never against a single-attempt baseline.');
   }

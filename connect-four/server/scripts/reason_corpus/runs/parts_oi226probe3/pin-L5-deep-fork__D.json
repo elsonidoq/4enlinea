@@ -1,0 +1,1743 @@
+{
+ "id": "pin-L5-deep-fork",
+ "condition": "D",
+ "runs": [
+  {
+   "run_index": 0,
+   "precomputed": {
+    "A1": "pass",
+    "A2": "pass",
+    "A6": "pass",
+    "G7a_offered": "pass",
+    "G7b_offered": "pass",
+    "notes": ""
+   },
+   "feature_vector": {
+    "movestring": "422242532",
+    "playedCol": 6,
+    "bestCol": 0,
+    "discs": 9,
+    "boardState": "opening",
+    "player": 2,
+    "opponent": 1,
+    "case": "win_to_draw",
+    "notABlunder": false,
+    "lostResource": {
+     "kind": "winning_line",
+     "register": "forced_sequence",
+     "completingCell": "c4r3",
+     "window": [
+      "c4r3",
+      "c5r4",
+      "c6r5",
+      "c7r6"
+     ],
+     "pliesToEnd": 28,
+     "line": [
+      {
+       "ply": 11,
+       "mover": 1,
+       "col": 1,
+       "cell": "c2r1"
+      },
+      {
+       "ply": 12,
+       "mover": 2,
+       "col": 1,
+       "cell": "c2r2"
+      },
+      {
+       "ply": 13,
+       "mover": 1,
+       "col": 0,
+       "cell": "c1r2"
+      },
+      {
+       "ply": 14,
+       "mover": 2,
+       "col": 0,
+       "cell": "c1r3"
+      },
+      {
+       "ply": 15,
+       "mover": 1,
+       "col": 1,
+       "cell": "c2r3"
+      },
+      {
+       "ply": 16,
+       "mover": 2,
+       "col": 3,
+       "cell": "c4r2"
+      },
+      {
+       "ply": 17,
+       "mover": 1,
+       "col": 4,
+       "cell": "c5r3"
+      },
+      {
+       "ply": 18,
+       "mover": 2,
+       "col": 4,
+       "cell": "c5r4"
+      },
+      {
+       "ply": 19,
+       "mover": 1,
+       "col": 0,
+       "cell": "c1r4"
+      },
+      {
+       "ply": 20,
+       "mover": 2,
+       "col": 0,
+       "cell": "c1r5"
+      },
+      {
+       "ply": 21,
+       "mover": 1,
+       "col": 1,
+       "cell": "c2r4"
+      },
+      {
+       "ply": 22,
+       "mover": 2,
+       "col": 0,
+       "cell": "c1r6"
+      },
+      {
+       "ply": 23,
+       "mover": 1,
+       "col": 1,
+       "cell": "c2r5"
+      },
+      {
+       "ply": 24,
+       "mover": 2,
+       "col": 1,
+       "cell": "c2r6"
+      },
+      {
+       "ply": 25,
+       "mover": 1,
+       "col": 2,
+       "cell": "c3r6"
+      },
+      {
+       "ply": 26,
+       "mover": 2,
+       "col": 4,
+       "cell": "c5r5"
+      },
+      {
+       "ply": 27,
+       "mover": 1,
+       "col": 4,
+       "cell": "c5r6"
+      },
+      {
+       "ply": 28,
+       "mover": 2,
+       "col": 6,
+       "cell": "c7r1"
+      },
+      {
+       "ply": 29,
+       "mover": 1,
+       "col": 5,
+       "cell": "c6r2"
+      },
+      {
+       "ply": 30,
+       "mover": 2,
+       "col": 5,
+       "cell": "c6r3"
+      },
+      {
+       "ply": 31,
+       "mover": 1,
+       "col": 5,
+       "cell": "c6r4"
+      },
+      {
+       "ply": 32,
+       "mover": 2,
+       "col": 5,
+       "cell": "c6r5"
+      },
+      {
+       "ply": 33,
+       "mover": 1,
+       "col": 5,
+       "cell": "c6r6"
+      },
+      {
+       "ply": 34,
+       "mover": 2,
+       "col": 6,
+       "cell": "c7r2"
+      },
+      {
+       "ply": 35,
+       "mover": 1,
+       "col": 6,
+       "cell": "c7r3"
+      },
+      {
+       "ply": 36,
+       "mover": 2,
+       "col": 6,
+       "cell": "c7r4"
+      },
+      {
+       "ply": 37,
+       "mover": 1,
+       "col": 6,
+       "cell": "c7r5"
+      },
+      {
+       "ply": 38,
+       "mover": 2,
+       "col": 6,
+       "cell": "c7r6"
+      }
+     ],
+     "finalMovestring": "42224253201100134400101124465555566666",
+     "entryCell": "c2r1",
+     "terminal": "fork",
+     "forkCase": "B",
+     "forkCells": [
+      "c4r3"
+     ],
+     "forkWindows": [
+      [
+       "c4r3",
+       "c5r4",
+       "c6r5",
+       "c7r6"
+      ]
+     ],
+     "tacticTag": "double_threat",
+     "tacticCells": [
+      "c4r3"
+     ],
+     "tacticFromDiff": false,
+     "anchorCells": [
+      "c4r3",
+      "c5r4",
+      "c6r5",
+      "c7r6"
+     ]
+    },
+    "opponentPunishment": {
+     "kind": "denial",
+     "verdict": "occupation",
+     "register": "forced_sequence",
+     "line": [
+      {
+       "ply": 11,
+       "mover": 1,
+       "col": 3,
+       "cell": "c4r2"
+      },
+      {
+       "ply": 12,
+       "mover": 2,
+       "col": 5,
+       "cell": "c6r2"
+      },
+      {
+       "ply": 13,
+       "mover": 1,
+       "col": 4,
+       "cell": "c5r3"
+      },
+      {
+       "ply": 14,
+       "mover": 2,
+       "col": 4,
+       "cell": "c5r4"
+      },
+      {
+       "ply": 15,
+       "mover": 1,
+       "col": 5,
+       "cell": "c6r3"
+      },
+      {
+       "ply": 16,
+       "mover": 2,
+       "col": 0,
+       "cell": "c1r1"
+      },
+      {
+       "ply": 17,
+       "mover": 1,
+       "col": 1,
+       "cell": "c2r1"
+      },
+      {
+       "ply": 18,
+       "mover": 2,
+       "col": 1,
+       "cell": "c2r2"
+      },
+      {
+       "ply": 19,
+       "mover": 1,
+       "col": 1,
+       "cell": "c2r3"
+      },
+      {
+       "ply": 20,
+       "mover": 2,
+       "col": 5,
+       "cell": "c6r4"
+      },
+      {
+       "ply": 21,
+       "mover": 1,
+       "col": 5,
+       "cell": "c6r5"
+      }
+     ],
+     "finalMovestring": "422242532635445011155",
+     "completingCell": "c6r5",
+     "window": [
+      "c4r3",
+      "c5r4",
+      "c6r5",
+      "c7r6"
+     ],
+     "cell": "c6r5",
+     "exhaustive": true,
+     "entryCell": "c6r5",
+     "tie": {
+      "kind": "tied",
+      "sharedCells": [
+       "c6r5"
+      ]
+     }
+    },
+    "replyHistogram": {
+     "afterBest": 0,
+     "afterPlayed": 2
+    },
+    "gate": null
+   },
+   "render_decision": {
+    "case": "win_to_draw",
+    "route": "sign",
+    "direction": null,
+    "patternOnAfterBestBoard": null,
+    "link": {
+     "id": "L5",
+     "confidence": "high",
+     "covers": [
+      "route",
+      "lostResource.kind",
+      "opponentPunishment.kind",
+      "opponentPunishment.verdict",
+      "lostResource.terminal",
+      "opponentPunishment.terminal",
+      "lostResource.forkCase",
+      "opponentPunishment.forkCase",
+      "opponentPunishment.tie.kind",
+      "opponentPunishment.tie.tied",
+      "lostResource.register",
+      "opponentPunishment.register"
+     ],
+     "guardrail": "You had a forced win; state its horizon honestly (may be deep). The played move let the opponent deny it.",
+     "text": "You had a forced win — it resolves deep on a forced line via a fork completing at column 4. Column 1 was the move that kept it; the played move let the opponent deny it at column 6. Your winning line ran through that square: the played move gave your opponent the time to take it first, and taking it is what kills the win."
+    },
+    "boards": [
+     {
+      "id": "decision",
+      "shown": true,
+      "reason": "the position under judgment"
+     },
+     {
+      "id": "afterBest",
+      "shown": true,
+      "reason": "the better move — changes the tactical picture"
+     },
+     {
+      "id": "afterPlayed",
+      "shown": false,
+      "reason": "the move you played — tag-set identical to the decision board, omitted"
+     },
+     {
+      "id": "projectedDeep",
+      "shown": true,
+      "reason": "where the deep forced_sequence resource resolves — your line"
+     },
+     {
+      "id": "projectedDeepOpp",
+      "shown": true,
+      "reason": "where the deep forced_sequence resource resolves — your opponent's line"
+     }
+    ],
+    "resource": {
+     "completingCell": {
+      "cell": "c4r3",
+      "status": "empty",
+      "horizon": "deep-forced-line",
+      "reachableInPlies": null,
+      "role": "where the load-bearing resource completes"
+     },
+     "registerToHorizon": {
+      "register": "forced_sequence",
+      "horizon": "deep-forced-line"
+     }
+    },
+    "fieldPartition": {
+     "rendered": [
+      "movestring",
+      "playedCol",
+      "bestCol",
+      "boardState",
+      "player",
+      "opponent",
+      "case",
+      "lostResource.completingCell",
+      "lostResource.window[]",
+      "lostResource.pliesToEnd",
+      "lostResource.line[].ply",
+      "lostResource.line[].mover",
+      "lostResource.line[].col",
+      "lostResource.line[].cell",
+      "lostResource.finalMovestring",
+      "lostResource.entryCell",
+      "lostResource.forkCells[]",
+      "lostResource.forkWindows[][]",
+      "lostResource.tacticTag",
+      "lostResource.tacticCells[]",
+      "lostResource.anchorCells[]",
+      "opponentPunishment.line[].ply",
+      "opponentPunishment.line[].mover",
+      "opponentPunishment.line[].col",
+      "opponentPunishment.line[].cell",
+      "opponentPunishment.finalMovestring",
+      "opponentPunishment.completingCell",
+      "opponentPunishment.window[]",
+      "opponentPunishment.cell",
+      "opponentPunishment.entryCell",
+      "opponentPunishment.tie.sharedCells[]",
+      "replyHistogram.afterBest",
+      "replyHistogram.afterPlayed"
+     ],
+     "covered": [
+      "lostResource.kind",
+      "lostResource.register",
+      "lostResource.terminal",
+      "lostResource.forkCase",
+      "opponentPunishment.kind",
+      "opponentPunishment.verdict",
+      "opponentPunishment.register",
+      "opponentPunishment.tie.kind"
+     ],
+     "excluded": [
+      "discs",
+      "notABlunder",
+      "lostResource.tacticFromDiff",
+      "opponentPunishment.exhaustive"
+     ]
+    },
+    "finalMovestring": "42224253201100134400101124465555566666",
+    "openingContext": null,
+    "zones": {
+     "aliases": [
+      {
+       "handle": "better-col",
+       "spec": "col1",
+       "role": "the column of the better move",
+       "truthBoard": "decision",
+       "kbId": null
+      },
+      {
+       "handle": "played-col",
+       "spec": "col7",
+       "role": "the column you played",
+       "truthBoard": "decision",
+       "kbId": null
+      },
+      {
+       "handle": "you-immediate",
+       "spec": "c2r1",
+       "role": "the single square where you can make four next move",
+       "truthBoard": "afterBest",
+       "kbId": "immediate_threat"
+      },
+      {
+       "handle": "you-immediate-line",
+       "spec": "windows:c1r1,c2r1,c3r1,c4r1",
+       "role": "the whole four-in-a-row line you are playing for (a LINE of four squares, not a single square — use this handle, not a single-square handle, whenever your words say \"line\", \"strip\" or \"row of four\")",
+       "truthBoard": "afterBest",
+       "kbId": null
+      },
+      {
+       "handle": "you-future-fork",
+       "spec": "future:c4r3",
+       "role": "the one in column 4: a single square on your four-in-a-row line — it matters later, once the forced sequence reaches it, not a threat right now",
+       "truthBoard": "projectedDeep",
+       "kbId": "double_threat"
+      },
+      {
+       "handle": "you-key-line",
+       "spec": "future:windows:c4r3,c5r4,c6r5,c7r6",
+       "role": "the whole four-in-a-row line you are playing for — it decides this later, once the forced sequence reaches it, not a threat right now (a LINE of four squares, not a single square — use this handle, not a single-square handle, whenever your words say \"line\", \"strip\" or \"row of four\")",
+       "truthBoard": "projectedDeep",
+       "kbId": null
+      },
+      {
+       "handle": "you-fork-pivot",
+       "spec": "future:c7r6",
+       "role": "the square you play to CREATE the fork — the move that makes both winning squares live at once; it matters later, once the forced sequence reaches it — it is NOT the move to play right now",
+       "truthBoard": "projectedDeep",
+       "kbId": null
+      },
+      {
+       "handle": "you-key-square",
+       "spec": "future:c6r5",
+       "role": "the one in column 6: a single square on your four-in-a-row line — it matters later, once the forced sequence reaches it, not a threat right now",
+       "truthBoard": "projectedDeep",
+       "kbId": null
+      }
+     ],
+     "terms": [
+      {
+       "slug": "double_threat",
+       "kbId": "double_threat",
+       "canonicalPhrase": "double threat (two winning squares at once)",
+       "description": "two winning squares at once — your opponent cannot block both"
+      },
+      {
+       "slug": "immediate_threat",
+       "kbId": "immediate_threat",
+       "canonicalPhrase": "threat to make four next move",
+       "description": "a square where four-in-a-row completes on the very next move (true after the better move, not on the current board)"
+      }
+     ]
+    },
+    "requiredSet": [
+     {
+      "half": "lostResource",
+      "spec": "future:c4r3",
+      "handle": "you-future-fork",
+      "role": "the one in column 4: a single square on your four-in-a-row line — it matters later, once the forced sequence reaches it, not a threat right now",
+      "truthBoard": "projectedDeep"
+     },
+     {
+      "half": "opponentPunishment",
+      "spec": "future:c6r5",
+      "handle": "you-key-square",
+      "role": "the one in column 6: a single square on your four-in-a-row line — it matters later, once the forced sequence reaches it, not a threat right now",
+      "truthBoard": "projectedDeep"
+     },
+     {
+      "half": "lostResource",
+      "spec": "future:c7r6",
+      "handle": "you-fork-pivot",
+      "role": "the square you play to CREATE the fork — the move that makes both winning squares live at once; it matters later, once the forced sequence reaches it — it is NOT the move to play right now",
+      "truthBoard": "projectedDeep"
+     }
+    ]
+   },
+   "answer": {
+    "better_move": 1,
+    "played_outcome": "draw",
+    "best_outcome": "win",
+    "mechanism": "By playing [zone:col1]column 1[/zone:col1], you keep the key fork alive: later the forced line reaches [zone:future:c7r6]the square that creates the fork[/zone:future:c7r6], and then your winning line still runs through [zone:future:c4r3]the square in column 4[/zone:future:c4r3] and [zone:future:c6r5]the square in column 6[/zone:future:c6r5]. Your played move gave your opponent time to occupy that shared path first, so the fork disappears and the game slips to a draw instead of a win.",
+    "key_cells": [
+     "c1r1",
+     "c1r2",
+     "c1r3",
+     "c1r4",
+     "c1r5",
+     "c1r6",
+     "c4r3",
+     "c6r5",
+     "c7r6"
+    ],
+    "fields_relied_on": [
+     "case",
+     "lostResource.completingCell",
+     "lostResource.window",
+     "lostResource.pliesToEnd",
+     "lostResource.entryCell",
+     "lostResource.forkCells",
+     "lostResource.forkWindows",
+     "lostResource.tacticTag",
+     "lostResource.anchorCells",
+     "opponentPunishment.completingCell",
+     "opponentPunishment.window",
+     "opponentPunishment.cell",
+     "opponentPunishment.entryCell",
+     "opponentPunishment.tie.sharedCells"
+    ],
+    "unsure_about": "",
+    "confidence": "high"
+   },
+   "raw": "{\n  \"better_move\": 1,\n  \"played_outcome\": \"draw\",\n  \"best_outcome\": \"win\",\n  \"mechanism\": \"By playing [zone:better-col]column 1[/zone:better-col], you keep the key fork alive: later the forced line reaches [zone:you-fork-pivot]the square that creates the fork[/zone:you-fork-pivot], and then your winning line still runs through [zone:you-future-fork]the square in column 4[/zone:you-future-fork] and [zone:you-key-square]the square in column 6[/zone:you-key-square]. Your played move gave your opponent time to occupy that shared path first, so the fork disappears and the game slips to a draw instead of a win.\",\n  \"key_cells\": [\"c4r3\", \"c6r5\"],\n  \"fields_relied_on\": [\"case\", \"lostResource.completingCell\", \"lostResource.window\", \"lostResource.pliesToEnd\", \"lostResource.entryCell\", \"lostResource.forkCells\", \"lostResource.forkWindows\", \"lostResource.tacticTag\", \"lostResource.anchorCells\", \"opponentPunishment.completingCell\", \"opponentPunishment.window\", \"opponentPunishment.cell\", \"opponentPunishment.entryCell\", \"opponentPunishment.tie.sharedCells\"],\n  \"unsure_about\": \"\",\n  \"confidence\": \"high\"\n}",
+   "servedExplanation": "By playing [zone:col1]column 1[/zone:col1], you keep the key fork alive: later the forced line reaches [zone:future:c7r6]the square that creates the fork[/zone:future:c7r6], and then your winning line still runs through [zone:future:c4r3]the square in column 4[/zone:future:c4r3] and [zone:future:c6r5]the square in column 6[/zone:future:c6r5]. Your played move gave your opponent time to occupy that shared path first, so the fork disappears and the game slips to a draw instead of a win.",
+   "better_col_repaired": false,
+   "mechanism_pre_repair": null,
+   "retry_fired": true,
+   "served_attempt": "retry"
+  },
+  {
+   "run_index": 1,
+   "precomputed": {
+    "A1": "pass",
+    "A2": "pass",
+    "A6": "pass",
+    "G7a_offered": "pass",
+    "G7b_offered": "pass",
+    "notes": ""
+   },
+   "feature_vector": {
+    "movestring": "422242532",
+    "playedCol": 6,
+    "bestCol": 0,
+    "discs": 9,
+    "boardState": "opening",
+    "player": 2,
+    "opponent": 1,
+    "case": "win_to_draw",
+    "notABlunder": false,
+    "lostResource": {
+     "kind": "winning_line",
+     "register": "forced_sequence",
+     "completingCell": "c4r3",
+     "window": [
+      "c4r3",
+      "c5r4",
+      "c6r5",
+      "c7r6"
+     ],
+     "pliesToEnd": 28,
+     "line": [
+      {
+       "ply": 11,
+       "mover": 1,
+       "col": 1,
+       "cell": "c2r1"
+      },
+      {
+       "ply": 12,
+       "mover": 2,
+       "col": 1,
+       "cell": "c2r2"
+      },
+      {
+       "ply": 13,
+       "mover": 1,
+       "col": 0,
+       "cell": "c1r2"
+      },
+      {
+       "ply": 14,
+       "mover": 2,
+       "col": 0,
+       "cell": "c1r3"
+      },
+      {
+       "ply": 15,
+       "mover": 1,
+       "col": 1,
+       "cell": "c2r3"
+      },
+      {
+       "ply": 16,
+       "mover": 2,
+       "col": 3,
+       "cell": "c4r2"
+      },
+      {
+       "ply": 17,
+       "mover": 1,
+       "col": 4,
+       "cell": "c5r3"
+      },
+      {
+       "ply": 18,
+       "mover": 2,
+       "col": 4,
+       "cell": "c5r4"
+      },
+      {
+       "ply": 19,
+       "mover": 1,
+       "col": 0,
+       "cell": "c1r4"
+      },
+      {
+       "ply": 20,
+       "mover": 2,
+       "col": 0,
+       "cell": "c1r5"
+      },
+      {
+       "ply": 21,
+       "mover": 1,
+       "col": 1,
+       "cell": "c2r4"
+      },
+      {
+       "ply": 22,
+       "mover": 2,
+       "col": 0,
+       "cell": "c1r6"
+      },
+      {
+       "ply": 23,
+       "mover": 1,
+       "col": 1,
+       "cell": "c2r5"
+      },
+      {
+       "ply": 24,
+       "mover": 2,
+       "col": 1,
+       "cell": "c2r6"
+      },
+      {
+       "ply": 25,
+       "mover": 1,
+       "col": 2,
+       "cell": "c3r6"
+      },
+      {
+       "ply": 26,
+       "mover": 2,
+       "col": 4,
+       "cell": "c5r5"
+      },
+      {
+       "ply": 27,
+       "mover": 1,
+       "col": 4,
+       "cell": "c5r6"
+      },
+      {
+       "ply": 28,
+       "mover": 2,
+       "col": 6,
+       "cell": "c7r1"
+      },
+      {
+       "ply": 29,
+       "mover": 1,
+       "col": 5,
+       "cell": "c6r2"
+      },
+      {
+       "ply": 30,
+       "mover": 2,
+       "col": 5,
+       "cell": "c6r3"
+      },
+      {
+       "ply": 31,
+       "mover": 1,
+       "col": 5,
+       "cell": "c6r4"
+      },
+      {
+       "ply": 32,
+       "mover": 2,
+       "col": 5,
+       "cell": "c6r5"
+      },
+      {
+       "ply": 33,
+       "mover": 1,
+       "col": 5,
+       "cell": "c6r6"
+      },
+      {
+       "ply": 34,
+       "mover": 2,
+       "col": 6,
+       "cell": "c7r2"
+      },
+      {
+       "ply": 35,
+       "mover": 1,
+       "col": 6,
+       "cell": "c7r3"
+      },
+      {
+       "ply": 36,
+       "mover": 2,
+       "col": 6,
+       "cell": "c7r4"
+      },
+      {
+       "ply": 37,
+       "mover": 1,
+       "col": 6,
+       "cell": "c7r5"
+      },
+      {
+       "ply": 38,
+       "mover": 2,
+       "col": 6,
+       "cell": "c7r6"
+      }
+     ],
+     "finalMovestring": "42224253201100134400101124465555566666",
+     "entryCell": "c2r1",
+     "terminal": "fork",
+     "forkCase": "B",
+     "forkCells": [
+      "c4r3"
+     ],
+     "forkWindows": [
+      [
+       "c4r3",
+       "c5r4",
+       "c6r5",
+       "c7r6"
+      ]
+     ],
+     "tacticTag": "double_threat",
+     "tacticCells": [
+      "c4r3"
+     ],
+     "tacticFromDiff": false,
+     "anchorCells": [
+      "c4r3",
+      "c5r4",
+      "c6r5",
+      "c7r6"
+     ]
+    },
+    "opponentPunishment": {
+     "kind": "denial",
+     "verdict": "occupation",
+     "register": "forced_sequence",
+     "line": [
+      {
+       "ply": 11,
+       "mover": 1,
+       "col": 3,
+       "cell": "c4r2"
+      },
+      {
+       "ply": 12,
+       "mover": 2,
+       "col": 5,
+       "cell": "c6r2"
+      },
+      {
+       "ply": 13,
+       "mover": 1,
+       "col": 4,
+       "cell": "c5r3"
+      },
+      {
+       "ply": 14,
+       "mover": 2,
+       "col": 4,
+       "cell": "c5r4"
+      },
+      {
+       "ply": 15,
+       "mover": 1,
+       "col": 5,
+       "cell": "c6r3"
+      },
+      {
+       "ply": 16,
+       "mover": 2,
+       "col": 0,
+       "cell": "c1r1"
+      },
+      {
+       "ply": 17,
+       "mover": 1,
+       "col": 1,
+       "cell": "c2r1"
+      },
+      {
+       "ply": 18,
+       "mover": 2,
+       "col": 1,
+       "cell": "c2r2"
+      },
+      {
+       "ply": 19,
+       "mover": 1,
+       "col": 1,
+       "cell": "c2r3"
+      },
+      {
+       "ply": 20,
+       "mover": 2,
+       "col": 5,
+       "cell": "c6r4"
+      },
+      {
+       "ply": 21,
+       "mover": 1,
+       "col": 5,
+       "cell": "c6r5"
+      }
+     ],
+     "finalMovestring": "422242532635445011155",
+     "completingCell": "c6r5",
+     "window": [
+      "c4r3",
+      "c5r4",
+      "c6r5",
+      "c7r6"
+     ],
+     "cell": "c6r5",
+     "exhaustive": true,
+     "entryCell": "c6r5",
+     "tie": {
+      "kind": "tied",
+      "sharedCells": [
+       "c6r5"
+      ]
+     }
+    },
+    "replyHistogram": {
+     "afterBest": 0,
+     "afterPlayed": 2
+    },
+    "gate": null
+   },
+   "render_decision": {
+    "case": "win_to_draw",
+    "route": "sign",
+    "direction": null,
+    "patternOnAfterBestBoard": null,
+    "link": {
+     "id": "L5",
+     "confidence": "high",
+     "covers": [
+      "route",
+      "lostResource.kind",
+      "opponentPunishment.kind",
+      "opponentPunishment.verdict",
+      "lostResource.terminal",
+      "opponentPunishment.terminal",
+      "lostResource.forkCase",
+      "opponentPunishment.forkCase",
+      "opponentPunishment.tie.kind",
+      "opponentPunishment.tie.tied",
+      "lostResource.register",
+      "opponentPunishment.register"
+     ],
+     "guardrail": "You had a forced win; state its horizon honestly (may be deep). The played move let the opponent deny it.",
+     "text": "You had a forced win — it resolves deep on a forced line via a fork completing at column 4. Column 1 was the move that kept it; the played move let the opponent deny it at column 6. Your winning line ran through that square: the played move gave your opponent the time to take it first, and taking it is what kills the win."
+    },
+    "boards": [
+     {
+      "id": "decision",
+      "shown": true,
+      "reason": "the position under judgment"
+     },
+     {
+      "id": "afterBest",
+      "shown": true,
+      "reason": "the better move — changes the tactical picture"
+     },
+     {
+      "id": "afterPlayed",
+      "shown": false,
+      "reason": "the move you played — tag-set identical to the decision board, omitted"
+     },
+     {
+      "id": "projectedDeep",
+      "shown": true,
+      "reason": "where the deep forced_sequence resource resolves — your line"
+     },
+     {
+      "id": "projectedDeepOpp",
+      "shown": true,
+      "reason": "where the deep forced_sequence resource resolves — your opponent's line"
+     }
+    ],
+    "resource": {
+     "completingCell": {
+      "cell": "c4r3",
+      "status": "empty",
+      "horizon": "deep-forced-line",
+      "reachableInPlies": null,
+      "role": "where the load-bearing resource completes"
+     },
+     "registerToHorizon": {
+      "register": "forced_sequence",
+      "horizon": "deep-forced-line"
+     }
+    },
+    "fieldPartition": {
+     "rendered": [
+      "movestring",
+      "playedCol",
+      "bestCol",
+      "boardState",
+      "player",
+      "opponent",
+      "case",
+      "lostResource.completingCell",
+      "lostResource.window[]",
+      "lostResource.pliesToEnd",
+      "lostResource.line[].ply",
+      "lostResource.line[].mover",
+      "lostResource.line[].col",
+      "lostResource.line[].cell",
+      "lostResource.finalMovestring",
+      "lostResource.entryCell",
+      "lostResource.forkCells[]",
+      "lostResource.forkWindows[][]",
+      "lostResource.tacticTag",
+      "lostResource.tacticCells[]",
+      "lostResource.anchorCells[]",
+      "opponentPunishment.line[].ply",
+      "opponentPunishment.line[].mover",
+      "opponentPunishment.line[].col",
+      "opponentPunishment.line[].cell",
+      "opponentPunishment.finalMovestring",
+      "opponentPunishment.completingCell",
+      "opponentPunishment.window[]",
+      "opponentPunishment.cell",
+      "opponentPunishment.entryCell",
+      "opponentPunishment.tie.sharedCells[]",
+      "replyHistogram.afterBest",
+      "replyHistogram.afterPlayed"
+     ],
+     "covered": [
+      "lostResource.kind",
+      "lostResource.register",
+      "lostResource.terminal",
+      "lostResource.forkCase",
+      "opponentPunishment.kind",
+      "opponentPunishment.verdict",
+      "opponentPunishment.register",
+      "opponentPunishment.tie.kind"
+     ],
+     "excluded": [
+      "discs",
+      "notABlunder",
+      "lostResource.tacticFromDiff",
+      "opponentPunishment.exhaustive"
+     ]
+    },
+    "finalMovestring": "42224253201100134400101124465555566666",
+    "openingContext": null,
+    "zones": {
+     "aliases": [
+      {
+       "handle": "better-col",
+       "spec": "col1",
+       "role": "the column of the better move",
+       "truthBoard": "decision",
+       "kbId": null
+      },
+      {
+       "handle": "played-col",
+       "spec": "col7",
+       "role": "the column you played",
+       "truthBoard": "decision",
+       "kbId": null
+      },
+      {
+       "handle": "you-immediate",
+       "spec": "c2r1",
+       "role": "the single square where you can make four next move",
+       "truthBoard": "afterBest",
+       "kbId": "immediate_threat"
+      },
+      {
+       "handle": "you-immediate-line",
+       "spec": "windows:c1r1,c2r1,c3r1,c4r1",
+       "role": "the whole four-in-a-row line you are playing for (a LINE of four squares, not a single square — use this handle, not a single-square handle, whenever your words say \"line\", \"strip\" or \"row of four\")",
+       "truthBoard": "afterBest",
+       "kbId": null
+      },
+      {
+       "handle": "you-future-fork",
+       "spec": "future:c4r3",
+       "role": "the one in column 4: a single square on your four-in-a-row line — it matters later, once the forced sequence reaches it, not a threat right now",
+       "truthBoard": "projectedDeep",
+       "kbId": "double_threat"
+      },
+      {
+       "handle": "you-key-line",
+       "spec": "future:windows:c4r3,c5r4,c6r5,c7r6",
+       "role": "the whole four-in-a-row line you are playing for — it decides this later, once the forced sequence reaches it, not a threat right now (a LINE of four squares, not a single square — use this handle, not a single-square handle, whenever your words say \"line\", \"strip\" or \"row of four\")",
+       "truthBoard": "projectedDeep",
+       "kbId": null
+      },
+      {
+       "handle": "you-fork-pivot",
+       "spec": "future:c7r6",
+       "role": "the square you play to CREATE the fork — the move that makes both winning squares live at once; it matters later, once the forced sequence reaches it — it is NOT the move to play right now",
+       "truthBoard": "projectedDeep",
+       "kbId": null
+      },
+      {
+       "handle": "you-key-square",
+       "spec": "future:c6r5",
+       "role": "the one in column 6: a single square on your four-in-a-row line — it matters later, once the forced sequence reaches it, not a threat right now",
+       "truthBoard": "projectedDeep",
+       "kbId": null
+      }
+     ],
+     "terms": [
+      {
+       "slug": "double_threat",
+       "kbId": "double_threat",
+       "canonicalPhrase": "double threat (two winning squares at once)",
+       "description": "two winning squares at once — your opponent cannot block both"
+      },
+      {
+       "slug": "immediate_threat",
+       "kbId": "immediate_threat",
+       "canonicalPhrase": "threat to make four next move",
+       "description": "a square where four-in-a-row completes on the very next move (true after the better move, not on the current board)"
+      }
+     ]
+    },
+    "requiredSet": [
+     {
+      "half": "lostResource",
+      "spec": "future:c4r3",
+      "handle": "you-future-fork",
+      "role": "the one in column 4: a single square on your four-in-a-row line — it matters later, once the forced sequence reaches it, not a threat right now",
+      "truthBoard": "projectedDeep"
+     },
+     {
+      "half": "opponentPunishment",
+      "spec": "future:c6r5",
+      "handle": "you-key-square",
+      "role": "the one in column 6: a single square on your four-in-a-row line — it matters later, once the forced sequence reaches it, not a threat right now",
+      "truthBoard": "projectedDeep"
+     },
+     {
+      "half": "lostResource",
+      "spec": "future:c7r6",
+      "handle": "you-fork-pivot",
+      "role": "the square you play to CREATE the fork — the move that makes both winning squares live at once; it matters later, once the forced sequence reaches it — it is NOT the move to play right now",
+      "truthBoard": "projectedDeep"
+     }
+    ]
+   },
+   "answer": {
+    "better_move": 1,
+    "played_outcome": "draw",
+    "best_outcome": "win",
+    "mechanism": "By playing column 1, you keep the forced line alive and set up the later fork through [zone:future:c7r6]the square that creates the fork[/zone:future:c7r6]. That line is still about [zone:future:c4r3]the square in column 4[/zone:future:c4r3] and [zone:future:c6r5]the square in column 6[/zone:future:c6r5]; if you miss it, your opponent gets there first and can deny your two-way attack. Column 7 lets your opponent take away that shared path, so the win turns into only a draw.",
+    "key_cells": [
+     "c4r3",
+     "c6r5",
+     "c7r6"
+    ],
+    "fields_relied_on": [
+     "case",
+     "lostResource.completingCell",
+     "lostResource.window",
+     "lostResource.pliesToEnd",
+     "lostResource.entryCell",
+     "lostResource.forkCells",
+     "lostResource.forkWindows",
+     "lostResource.tacticTag",
+     "lostResource.anchorCells",
+     "opponentPunishment.completingCell",
+     "opponentPunishment.window",
+     "opponentPunishment.cell",
+     "opponentPunishment.entryCell",
+     "opponentPunishment.tie.sharedCells",
+     "replyHistogram.afterBest",
+     "replyHistogram.afterPlayed"
+    ],
+    "unsure_about": "",
+    "confidence": "high"
+   },
+   "raw": "{\"better_move\":1,\"played_outcome\":\"draw\",\"best_outcome\":\"win\",\"mechanism\":\"By playing column 1, you keep the forced line alive and set up the later fork through [zone:you-fork-pivot]the square that creates the fork[/zone:you-fork-pivot]. That line is still about [zone:you-future-fork]the square in column 4[/zone:you-future-fork] and [zone:you-key-square]the square in column 6[/zone:you-key-square]; if you miss it, your opponent gets there first and can deny your two-way attack. Column 7 lets your opponent take away that shared path, so the win turns into only a draw.\",\"key_cells\":[\"c4r3\",\"c6r5\",\"c7r6\"],\"fields_relied_on\":[\"case\",\"lostResource.completingCell\",\"lostResource.window\",\"lostResource.pliesToEnd\",\"lostResource.entryCell\",\"lostResource.forkCells\",\"lostResource.forkWindows\",\"lostResource.tacticTag\",\"lostResource.anchorCells\",\"opponentPunishment.completingCell\",\"opponentPunishment.window\",\"opponentPunishment.cell\",\"opponentPunishment.entryCell\",\"opponentPunishment.tie.sharedCells\",\"replyHistogram.afterBest\",\"replyHistogram.afterPlayed\"],\"unsure_about\":\"\",\"confidence\":\"high\"}",
+   "servedExplanation": "By playing column 1, you keep the forced line alive and set up the later fork through [zone:future:c7r6]the square that creates the fork[/zone:future:c7r6]. That line is still about [zone:future:c4r3]the square in column 4[/zone:future:c4r3] and [zone:future:c6r5]the square in column 6[/zone:future:c6r5]; if you miss it, your opponent gets there first and can deny your two-way attack. Column 7 lets your opponent take away that shared path, so the win turns into only a draw.",
+   "better_col_repaired": false,
+   "mechanism_pre_repair": null,
+   "retry_fired": true,
+   "served_attempt": "retry"
+  },
+  {
+   "run_index": 2,
+   "precomputed": {
+    "A1": "pass",
+    "A2": "pass",
+    "A6": "pass",
+    "G7a_offered": "pass",
+    "G7b_offered": "pass",
+    "notes": ""
+   },
+   "feature_vector": {
+    "movestring": "422242532",
+    "playedCol": 6,
+    "bestCol": 0,
+    "discs": 9,
+    "boardState": "opening",
+    "player": 2,
+    "opponent": 1,
+    "case": "win_to_draw",
+    "notABlunder": false,
+    "lostResource": {
+     "kind": "winning_line",
+     "register": "forced_sequence",
+     "completingCell": "c4r3",
+     "window": [
+      "c4r3",
+      "c5r4",
+      "c6r5",
+      "c7r6"
+     ],
+     "pliesToEnd": 28,
+     "line": [
+      {
+       "ply": 11,
+       "mover": 1,
+       "col": 1,
+       "cell": "c2r1"
+      },
+      {
+       "ply": 12,
+       "mover": 2,
+       "col": 1,
+       "cell": "c2r2"
+      },
+      {
+       "ply": 13,
+       "mover": 1,
+       "col": 0,
+       "cell": "c1r2"
+      },
+      {
+       "ply": 14,
+       "mover": 2,
+       "col": 0,
+       "cell": "c1r3"
+      },
+      {
+       "ply": 15,
+       "mover": 1,
+       "col": 1,
+       "cell": "c2r3"
+      },
+      {
+       "ply": 16,
+       "mover": 2,
+       "col": 3,
+       "cell": "c4r2"
+      },
+      {
+       "ply": 17,
+       "mover": 1,
+       "col": 4,
+       "cell": "c5r3"
+      },
+      {
+       "ply": 18,
+       "mover": 2,
+       "col": 4,
+       "cell": "c5r4"
+      },
+      {
+       "ply": 19,
+       "mover": 1,
+       "col": 0,
+       "cell": "c1r4"
+      },
+      {
+       "ply": 20,
+       "mover": 2,
+       "col": 0,
+       "cell": "c1r5"
+      },
+      {
+       "ply": 21,
+       "mover": 1,
+       "col": 1,
+       "cell": "c2r4"
+      },
+      {
+       "ply": 22,
+       "mover": 2,
+       "col": 0,
+       "cell": "c1r6"
+      },
+      {
+       "ply": 23,
+       "mover": 1,
+       "col": 1,
+       "cell": "c2r5"
+      },
+      {
+       "ply": 24,
+       "mover": 2,
+       "col": 1,
+       "cell": "c2r6"
+      },
+      {
+       "ply": 25,
+       "mover": 1,
+       "col": 2,
+       "cell": "c3r6"
+      },
+      {
+       "ply": 26,
+       "mover": 2,
+       "col": 4,
+       "cell": "c5r5"
+      },
+      {
+       "ply": 27,
+       "mover": 1,
+       "col": 4,
+       "cell": "c5r6"
+      },
+      {
+       "ply": 28,
+       "mover": 2,
+       "col": 6,
+       "cell": "c7r1"
+      },
+      {
+       "ply": 29,
+       "mover": 1,
+       "col": 5,
+       "cell": "c6r2"
+      },
+      {
+       "ply": 30,
+       "mover": 2,
+       "col": 5,
+       "cell": "c6r3"
+      },
+      {
+       "ply": 31,
+       "mover": 1,
+       "col": 5,
+       "cell": "c6r4"
+      },
+      {
+       "ply": 32,
+       "mover": 2,
+       "col": 5,
+       "cell": "c6r5"
+      },
+      {
+       "ply": 33,
+       "mover": 1,
+       "col": 5,
+       "cell": "c6r6"
+      },
+      {
+       "ply": 34,
+       "mover": 2,
+       "col": 6,
+       "cell": "c7r2"
+      },
+      {
+       "ply": 35,
+       "mover": 1,
+       "col": 6,
+       "cell": "c7r3"
+      },
+      {
+       "ply": 36,
+       "mover": 2,
+       "col": 6,
+       "cell": "c7r4"
+      },
+      {
+       "ply": 37,
+       "mover": 1,
+       "col": 6,
+       "cell": "c7r5"
+      },
+      {
+       "ply": 38,
+       "mover": 2,
+       "col": 6,
+       "cell": "c7r6"
+      }
+     ],
+     "finalMovestring": "42224253201100134400101124465555566666",
+     "entryCell": "c2r1",
+     "terminal": "fork",
+     "forkCase": "B",
+     "forkCells": [
+      "c4r3"
+     ],
+     "forkWindows": [
+      [
+       "c4r3",
+       "c5r4",
+       "c6r5",
+       "c7r6"
+      ]
+     ],
+     "tacticTag": "double_threat",
+     "tacticCells": [
+      "c4r3"
+     ],
+     "tacticFromDiff": false,
+     "anchorCells": [
+      "c4r3",
+      "c5r4",
+      "c6r5",
+      "c7r6"
+     ]
+    },
+    "opponentPunishment": {
+     "kind": "denial",
+     "verdict": "occupation",
+     "register": "forced_sequence",
+     "line": [
+      {
+       "ply": 11,
+       "mover": 1,
+       "col": 3,
+       "cell": "c4r2"
+      },
+      {
+       "ply": 12,
+       "mover": 2,
+       "col": 5,
+       "cell": "c6r2"
+      },
+      {
+       "ply": 13,
+       "mover": 1,
+       "col": 4,
+       "cell": "c5r3"
+      },
+      {
+       "ply": 14,
+       "mover": 2,
+       "col": 4,
+       "cell": "c5r4"
+      },
+      {
+       "ply": 15,
+       "mover": 1,
+       "col": 5,
+       "cell": "c6r3"
+      },
+      {
+       "ply": 16,
+       "mover": 2,
+       "col": 0,
+       "cell": "c1r1"
+      },
+      {
+       "ply": 17,
+       "mover": 1,
+       "col": 1,
+       "cell": "c2r1"
+      },
+      {
+       "ply": 18,
+       "mover": 2,
+       "col": 1,
+       "cell": "c2r2"
+      },
+      {
+       "ply": 19,
+       "mover": 1,
+       "col": 1,
+       "cell": "c2r3"
+      },
+      {
+       "ply": 20,
+       "mover": 2,
+       "col": 5,
+       "cell": "c6r4"
+      },
+      {
+       "ply": 21,
+       "mover": 1,
+       "col": 5,
+       "cell": "c6r5"
+      }
+     ],
+     "finalMovestring": "422242532635445011155",
+     "completingCell": "c6r5",
+     "window": [
+      "c4r3",
+      "c5r4",
+      "c6r5",
+      "c7r6"
+     ],
+     "cell": "c6r5",
+     "exhaustive": true,
+     "entryCell": "c6r5",
+     "tie": {
+      "kind": "tied",
+      "sharedCells": [
+       "c6r5"
+      ]
+     }
+    },
+    "replyHistogram": {
+     "afterBest": 0,
+     "afterPlayed": 2
+    },
+    "gate": null
+   },
+   "render_decision": {
+    "case": "win_to_draw",
+    "route": "sign",
+    "direction": null,
+    "patternOnAfterBestBoard": null,
+    "link": {
+     "id": "L5",
+     "confidence": "high",
+     "covers": [
+      "route",
+      "lostResource.kind",
+      "opponentPunishment.kind",
+      "opponentPunishment.verdict",
+      "lostResource.terminal",
+      "opponentPunishment.terminal",
+      "lostResource.forkCase",
+      "opponentPunishment.forkCase",
+      "opponentPunishment.tie.kind",
+      "opponentPunishment.tie.tied",
+      "lostResource.register",
+      "opponentPunishment.register"
+     ],
+     "guardrail": "You had a forced win; state its horizon honestly (may be deep). The played move let the opponent deny it.",
+     "text": "You had a forced win — it resolves deep on a forced line via a fork completing at column 4. Column 1 was the move that kept it; the played move let the opponent deny it at column 6. Your winning line ran through that square: the played move gave your opponent the time to take it first, and taking it is what kills the win."
+    },
+    "boards": [
+     {
+      "id": "decision",
+      "shown": true,
+      "reason": "the position under judgment"
+     },
+     {
+      "id": "afterBest",
+      "shown": true,
+      "reason": "the better move — changes the tactical picture"
+     },
+     {
+      "id": "afterPlayed",
+      "shown": false,
+      "reason": "the move you played — tag-set identical to the decision board, omitted"
+     },
+     {
+      "id": "projectedDeep",
+      "shown": true,
+      "reason": "where the deep forced_sequence resource resolves — your line"
+     },
+     {
+      "id": "projectedDeepOpp",
+      "shown": true,
+      "reason": "where the deep forced_sequence resource resolves — your opponent's line"
+     }
+    ],
+    "resource": {
+     "completingCell": {
+      "cell": "c4r3",
+      "status": "empty",
+      "horizon": "deep-forced-line",
+      "reachableInPlies": null,
+      "role": "where the load-bearing resource completes"
+     },
+     "registerToHorizon": {
+      "register": "forced_sequence",
+      "horizon": "deep-forced-line"
+     }
+    },
+    "fieldPartition": {
+     "rendered": [
+      "movestring",
+      "playedCol",
+      "bestCol",
+      "boardState",
+      "player",
+      "opponent",
+      "case",
+      "lostResource.completingCell",
+      "lostResource.window[]",
+      "lostResource.pliesToEnd",
+      "lostResource.line[].ply",
+      "lostResource.line[].mover",
+      "lostResource.line[].col",
+      "lostResource.line[].cell",
+      "lostResource.finalMovestring",
+      "lostResource.entryCell",
+      "lostResource.forkCells[]",
+      "lostResource.forkWindows[][]",
+      "lostResource.tacticTag",
+      "lostResource.tacticCells[]",
+      "lostResource.anchorCells[]",
+      "opponentPunishment.line[].ply",
+      "opponentPunishment.line[].mover",
+      "opponentPunishment.line[].col",
+      "opponentPunishment.line[].cell",
+      "opponentPunishment.finalMovestring",
+      "opponentPunishment.completingCell",
+      "opponentPunishment.window[]",
+      "opponentPunishment.cell",
+      "opponentPunishment.entryCell",
+      "opponentPunishment.tie.sharedCells[]",
+      "replyHistogram.afterBest",
+      "replyHistogram.afterPlayed"
+     ],
+     "covered": [
+      "lostResource.kind",
+      "lostResource.register",
+      "lostResource.terminal",
+      "lostResource.forkCase",
+      "opponentPunishment.kind",
+      "opponentPunishment.verdict",
+      "opponentPunishment.register",
+      "opponentPunishment.tie.kind"
+     ],
+     "excluded": [
+      "discs",
+      "notABlunder",
+      "lostResource.tacticFromDiff",
+      "opponentPunishment.exhaustive"
+     ]
+    },
+    "finalMovestring": "42224253201100134400101124465555566666",
+    "openingContext": null,
+    "zones": {
+     "aliases": [
+      {
+       "handle": "better-col",
+       "spec": "col1",
+       "role": "the column of the better move",
+       "truthBoard": "decision",
+       "kbId": null
+      },
+      {
+       "handle": "played-col",
+       "spec": "col7",
+       "role": "the column you played",
+       "truthBoard": "decision",
+       "kbId": null
+      },
+      {
+       "handle": "you-immediate",
+       "spec": "c2r1",
+       "role": "the single square where you can make four next move",
+       "truthBoard": "afterBest",
+       "kbId": "immediate_threat"
+      },
+      {
+       "handle": "you-immediate-line",
+       "spec": "windows:c1r1,c2r1,c3r1,c4r1",
+       "role": "the whole four-in-a-row line you are playing for (a LINE of four squares, not a single square — use this handle, not a single-square handle, whenever your words say \"line\", \"strip\" or \"row of four\")",
+       "truthBoard": "afterBest",
+       "kbId": null
+      },
+      {
+       "handle": "you-future-fork",
+       "spec": "future:c4r3",
+       "role": "the one in column 4: a single square on your four-in-a-row line — it matters later, once the forced sequence reaches it, not a threat right now",
+       "truthBoard": "projectedDeep",
+       "kbId": "double_threat"
+      },
+      {
+       "handle": "you-key-line",
+       "spec": "future:windows:c4r3,c5r4,c6r5,c7r6",
+       "role": "the whole four-in-a-row line you are playing for — it decides this later, once the forced sequence reaches it, not a threat right now (a LINE of four squares, not a single square — use this handle, not a single-square handle, whenever your words say \"line\", \"strip\" or \"row of four\")",
+       "truthBoard": "projectedDeep",
+       "kbId": null
+      },
+      {
+       "handle": "you-fork-pivot",
+       "spec": "future:c7r6",
+       "role": "the square you play to CREATE the fork — the move that makes both winning squares live at once; it matters later, once the forced sequence reaches it — it is NOT the move to play right now",
+       "truthBoard": "projectedDeep",
+       "kbId": null
+      },
+      {
+       "handle": "you-key-square",
+       "spec": "future:c6r5",
+       "role": "the one in column 6: a single square on your four-in-a-row line — it matters later, once the forced sequence reaches it, not a threat right now",
+       "truthBoard": "projectedDeep",
+       "kbId": null
+      }
+     ],
+     "terms": [
+      {
+       "slug": "double_threat",
+       "kbId": "double_threat",
+       "canonicalPhrase": "double threat (two winning squares at once)",
+       "description": "two winning squares at once — your opponent cannot block both"
+      },
+      {
+       "slug": "immediate_threat",
+       "kbId": "immediate_threat",
+       "canonicalPhrase": "threat to make four next move",
+       "description": "a square where four-in-a-row completes on the very next move (true after the better move, not on the current board)"
+      }
+     ]
+    },
+    "requiredSet": [
+     {
+      "half": "lostResource",
+      "spec": "future:c4r3",
+      "handle": "you-future-fork",
+      "role": "the one in column 4: a single square on your four-in-a-row line — it matters later, once the forced sequence reaches it, not a threat right now",
+      "truthBoard": "projectedDeep"
+     },
+     {
+      "half": "opponentPunishment",
+      "spec": "future:c6r5",
+      "handle": "you-key-square",
+      "role": "the one in column 6: a single square on your four-in-a-row line — it matters later, once the forced sequence reaches it, not a threat right now",
+      "truthBoard": "projectedDeep"
+     },
+     {
+      "half": "lostResource",
+      "spec": "future:c7r6",
+      "handle": "you-fork-pivot",
+      "role": "the square you play to CREATE the fork — the move that makes both winning squares live at once; it matters later, once the forced sequence reaches it — it is NOT the move to play right now",
+      "truthBoard": "projectedDeep"
+     }
+    ]
+   },
+   "answer": {
+    "better_move": 1,
+    "played_outcome": "draw",
+    "best_outcome": "win",
+    "mechanism": "You should have played column 1, which keeps your [term:double_threat]double threat[/term:double_threat] alive and leaves your opponent with no clean answer. The move you played let them take the key blocking square later, so your fork never fully comes together and the game settles for a draw instead of the win that column 1 preserves. That winning idea depends on the fork pivot at [zone:future:c7r6]the square you create the fork from[/zone:future:c7r6], with the two later winning squares at [zone:future:c4r3]the square in column 4[/zone:future:c4r3] and [zone:future:c6r5]the square in column 6[/zone:future:c6r5].",
+    "key_cells": [
+     "c4r3",
+     "c6r5",
+     "c7r6"
+    ],
+    "fields_relied_on": [
+     "case",
+     "lostResource.tacticTag",
+     "lostResource.pliesToEnd",
+     "lostResource.forkCells",
+     "lostResource.anchorCells",
+     "opponentPunishment.completingCell",
+     "opponentPunishment.tie.sharedCells",
+     "replyHistogram.afterBest",
+     "replyHistogram.afterPlayed"
+    ],
+    "unsure_about": "",
+    "confidence": "high"
+   },
+   "raw": "{\"better_move\":1,\"played_outcome\":\"draw\",\"best_outcome\":\"win\",\"mechanism\":\"You should have played column 1, which keeps your [term:double_threat]double threat[/term:double_threat] alive and leaves your opponent with no clean answer. The move you played let them take the key blocking square later, so your fork never fully comes together and the game settles for a draw instead of the win that column 1 preserves. That winning idea depends on the fork pivot at [zone:you-fork-pivot]the square you create the fork from[/zone:you-fork-pivot], with the two later winning squares at [zone:you-future-fork]the square in column 4[/zone:you-future-fork] and [zone:you-key-square]the square in column 6[/zone:you-key-square].\",\"key_cells\":[\"c4r3\",\"c6r5\"],\"fields_relied_on\":[\"case\",\"lostResource.tacticTag\",\"lostResource.pliesToEnd\",\"lostResource.forkCells\",\"lostResource.anchorCells\",\"opponentPunishment.completingCell\",\"opponentPunishment.tie.sharedCells\",\"replyHistogram.afterBest\",\"replyHistogram.afterPlayed\"],\"unsure_about\":\"\",\"confidence\":\"high\"}",
+   "servedExplanation": "You should have played column 1, which keeps your [term:double_threat]double threat[/term:double_threat] alive and leaves your opponent with no clean answer. The move you played let them take the key blocking square later, so your fork never fully comes together and the game settles for a draw instead of the win that column 1 preserves. That winning idea depends on the fork pivot at [zone:future:c7r6]the square you create the fork from[/zone:future:c7r6], with the two later winning squares at [zone:future:c4r3]the square in column 4[/zone:future:c4r3] and [zone:future:c6r5]the square in column 6[/zone:future:c6r5].",
+   "better_col_repaired": false,
+   "mechanism_pre_repair": null,
+   "retry_fired": true,
+   "served_attempt": "retry"
+  }
+ ]
+}

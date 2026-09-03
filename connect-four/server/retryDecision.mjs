@@ -103,30 +103,117 @@ ${blocks.join('\n\n')}
 Return the full JSON object again (all fields), not just the changed part.`;
 }
 
-// ── Decide whether production would retry `attempt1`, and with what prompt ───────────────────
-// Pure extraction of computeMechanism's `else` branch (D51's guard-aware required-set check, run
-// BEFORE the retry decision, on attempt1). No LLM call, no solver, no network; may log
-// (guardExplainMoveLlmPayload can console.warn via the annotation gate).
-export function decideRetry({ attempt1, renderDecision, prompt, movestring, bestCol, locale = 'en' }) {
-  const requiredSet = renderDecision?.requiredSet ?? [];
-  // FR-013 / OI-177 / Design Decision 1 (plan.md): `attempt1.usedSpecs` is derived by
-  // `processAnnotations` from the model's `[zone:…]` tags BEFORE the guard runs — a spec can be
-  // "successfully offered-and-resolved" there and still have its span stripped later by
-  // `guardExplainMoveLlmPayload` (served text, index.js) for an unrelated reason (e.g. a raw
-  // coordinate the guard's P6 check rejects). Re-run the guard here, guard-aware, on `attempt1`
-  // BEFORE the existing retry check — this is a NEW, first invocation used only to decide the
-  // retry; the endpoint's own guard call on `finalAttempt.mechanism` (index.js) is unaffected.
+// ── Guard-aware content scoring for ONE attempt ───────────────────────────────────────────────
+// Pure extraction of computeMechanism's `else` branch (D51's guard-aware required-set check). Scores
+// ANY attempt (attempt1 OR a retried attempt) against the two content requirements the retry exists
+// to enforce: the required-set (spec 058 US2 FR-007/FR-008) and the better-column mention. No LLM
+// call, no solver, no network; may log (guardExplainMoveLlmPayload can console.warn via the
+// annotation gate).
+//
+// FR-013 / OI-177 / Design Decision 1 (plan.md): `attempt.usedSpecs` is derived by
+// `processAnnotations` from the model's `[zone:…]` tags BEFORE the guard runs — a spec can be
+// "successfully offered-and-resolved" there and still have its span stripped later by
+// `guardExplainMoveLlmPayload` (served text, index.js) for an unrelated reason (e.g. a raw
+// coordinate the guard's P6 check rejects). Re-run the guard here, guard-aware, on `attempt`
+// BEFORE trusting its `usedSpecs` — this is a NEW invocation used only for scoring; the endpoint's
+// own guard call on the ultimately-served mechanism (index.js) is unaffected.
+export function scoreAttempt({ attempt, requiredSet, renderDecision, movestring, bestCol, locale = 'en' }) {
   const board = new Board(movestring);
   const allowedSet = toAllowedSet(renderDecision?.zones?.aliases ?? []);
   const { diagnostics } = guardExplainMoveLlmPayload({
-    explanation: attempt1.mechanism, board, allowedSet, diagnostics: true,
+    explanation: attempt.mechanism, board, allowedSet, diagnostics: true,
   });
-  const survivedSpecs = (attempt1.usedSpecs ?? []).filter((s) => !diagnostics.strippedSpecs.includes(s));
-  const missing = missingRequiredGroups(requiredSet, { usedSpecs: survivedSpecs });
-  const missingBetterColPhrase = mentionsBetterColumn(attempt1, bestCol, locale)
+  const survivedSpecs = (attempt.usedSpecs ?? []).filter((s) => !diagnostics.strippedSpecs.includes(s));
+  const missing = missingRequiredGroups(requiredSet ?? [], { usedSpecs: survivedSpecs });
+  const missingBetterColPhrase = mentionsBetterColumn(attempt, bestCol, locale)
     ? null
     : serverT(locale, 'column')(bestCol + 1);
+  return { missing, missingBetterColPhrase, survivedSpecs };
+}
+
+// ── Decide whether production would retry `attempt1`, and with what prompt ───────────────────
+// Calls `scoreAttempt` on attempt1 (D51's guard-aware required-set check, run BEFORE the retry
+// decision) rather than re-implementing the guard/filter logic here.
+export function decideRetry({ attempt1, renderDecision, prompt, movestring, bestCol, locale = 'en' }) {
+  const requiredSet = renderDecision?.requiredSet ?? [];
+  const { missing, missingBetterColPhrase } = scoreAttempt({
+    attempt: attempt1, requiredSet, renderDecision, movestring, bestCol, locale,
+  });
   const shouldRetry = missing.length > 0 || Boolean(missingBetterColPhrase);
   const retryPrompt = shouldRetry ? buildRetryPrompt(prompt, missing, missingBetterColPhrase) : null;
   return { shouldRetry, missing, missingBetterColPhrase, retryPrompt };
+}
+
+// ── Keep-the-better-attempt chooser (D51 follow-up: the retry can lose ground) ────────────────
+// Measured over all 81 retry firings in the v3retry63 corpus (2026-09-01), scored with production's
+// own `mentionsBetterColumn`/`missingRequiredGroups`: required-set 58 fixed / 6 regressed;
+// better-column 18 fixed / 11 regressed. Retry is strongly net-positive but the regressions (the
+// retried attempt satisfying FEWER of the two content requirements than attempt1 already did) are
+// unnecessary — `decideRetry`'s retry-or-not TRIGGER is unchanged; this only decides which of the
+// two already-computed attempts gets served.
+//
+// Semantics: prefer the retried attempt. Fall back to attempt1 only when attempt1 is STRICTLY
+// better — it satisfies more required groups, or an equal number of required groups AND it names
+// the better column while the retry does not. Ties (including "both equally miss everything") go to
+// the retried attempt, since it also carries any LLM-quality improvement the retry prompt aimed for.
+export function chooseRetryWinner({ attempt1, retriedAttempt, renderDecision, movestring, bestCol, locale = 'en' }) {
+  const requiredSet = renderDecision?.requiredSet ?? [];
+  const score1 = scoreAttempt({ attempt: attempt1, requiredSet, renderDecision, movestring, bestCol, locale });
+  const scoreRetry = scoreAttempt({ attempt: retriedAttempt, requiredSet, renderDecision, movestring, bestCol, locale });
+  const satisfied1 = requiredSet.length - score1.missing.length;
+  const satisfiedRetry = requiredSet.length - scoreRetry.missing.length;
+  const namesCol1 = score1.missingBetterColPhrase == null;
+  const namesColRetry = scoreRetry.missingBetterColPhrase == null;
+  const attempt1StrictlyBetter = satisfied1 > satisfiedRetry
+    || (satisfied1 === satisfiedRetry && namesCol1 && !namesColRetry);
+  return attempt1StrictlyBetter
+    ? { chosen: 'attempt1', attempt: attempt1, score1, scoreRetry }
+    : { chosen: 'retry', attempt: retriedAttempt, score1, scoreRetry };
+}
+
+// ── Deterministic better-column post-repair (D63, OI-224) ────────────────────────────────────
+// The problem this closes: after `chooseRetryWinner` picks a winner, the served text can STILL
+// never name the column the player should have played. Measured over all 189 runs of the v3retry63
+// corpus, scoring the SERVED attempt: 13 runs — 10 where the retry traded the column away for
+// required handles ("Category B"), and 3 where the chooser reverted to an attempt 1 that named no
+// column (`eval-8|0`, `eval-34|2`, `eval-35|0`, the class D61 introduced).
+//
+// WHY A REPAIR AND NOT A DIFFERENT CHOOSER RANKING. Replaying the same 189 runs under five
+// alternative rankings, every rule that cut the column count cost strictly more required-set than it
+// bought (column-first lexicographic: column 13 -> 0, but required-set misses 14 -> 26 runs and
+// 15 -> 38 groups; column-weighted-2: 13 -> 5 but 14 -> 21 runs). Re-ranking is dominated. The
+// better column is GROUND TRUTH already in the prompt verbatim (`renderDecision`'s
+// "- Better move: column N (lands at cNrM)"), so it can be stated without an LLM call at all.
+// Simulated over the same 189 runs, this repair measured column 13 -> 0 with the required-set axis
+// UNCHANGED at 14 — it dissolves the tradeoff rather than picking a side.
+//
+// SAFETY. The appended sentence carries no `[zone:…]`/`[term:…]` tag and no raw `cNrM`/`colN`
+// token, so `guardExplainMoveLlmPayload` has nothing to rewrite or strip in it: it cannot fail P6,
+// and `stripFailingZoneSpans` cannot delete it. It is deliberately plain prose rather than a
+// `[zone:better-col]` highlight — `mentionsBetterColumn` tests the PROSE the reader sees
+// (a bare zone tag is explicitly not a mention, see that function's comment), so a tag would not
+// satisfy the very check that declared the mention missing.
+//
+// TRIGGER UNCHANGED. This runs strictly AFTER the retry decision and the chooser; it does not
+// influence whether a retry fires (`decideRetry`) or which attempt wins (`chooseRetryWinner`).
+//
+// @param {string|null} mechanism  POST-processAnnotations mechanism of the CHOSEN attempt.
+// @param {number|null} bestCol    0-indexed, like every other coordinate in server code.
+// @param {string} [locale='en']
+// @returns {{ mechanism: string|null, repaired: boolean }}
+export function ensureBetterColumnMention(mechanism, bestCol, locale = 'en') {
+  if (bestCol == null) return { mechanism, repaired: false };                 // nothing to require (I2)
+  if (typeof mechanism !== 'string' || mechanism.trim() === '') {
+    return { mechanism, repaired: false };                                    // LLM-error case; that path owns it
+  }
+  if (mentionsBetterColumn({ mechanism }, bestCol, locale)) return { mechanism, repaired: false };
+  // The +1 is the display conversion, matching renderDecision()'s own `column ${col + 1}`.
+  const sentence = serverT(locale, 'betterColumnRepair')(bestCol + 1);
+  const trimmed = mechanism.trimEnd();
+  // M7: avoid a run-on ("…tempo You should have played column 3 instead."). Check the last
+  // NON-TAG character, so a mechanism ending in a closing `[/zone:…]`/`[/term:…]` tag is judged on
+  // the prose before it, not the tag's own punctuation-free syntax.
+  const lastProseChar = trimmed.replace(/\[\/?(?:zone|term):[^\]]*\]\s*$/, '').trimEnd().slice(-1);
+  const needsPeriod = trimmed !== '' && !['.', '!', '?', '…'].includes(lastProseChar);
+  return { mechanism: `${trimmed}${needsPeriod ? '.' : ''} ${sentence}`, repaired: true };
 }

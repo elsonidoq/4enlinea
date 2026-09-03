@@ -899,6 +899,19 @@ Mechanics:
 (`` `- [zone:${g.handle}] = ${g.role}` ``), or an explicit `(none for this explanation — do not
 invent one)` when the set is empty (FR-006 must be visible in the prompt, not silently omitted).
 
+**Amended 2026-09-02 (D61).** The Rule now has a THIRD derivation source, and one bullet above is
+no longer unconditionally true. "A match failure drops the group silently" still holds for every
+group EXCEPT a fork pivot: when `forkPivotCell(half)` abstains, `deriveRequiredSet` falls back to the
+already-offered `${owner}-fork-pivot` alias in `zones.aliases`, keyed by `halfOwner(half, side)`.
+`required ⊆ offered` is preserved by construction, because the fallback SELECTS an offered alias
+instead of deriving a spec to match. Why it was needed: `zoneAnnotations.mjs` mints pivots from three
+places and the Rule could only reproduce one of them — the board-tag path's gate (`if (!hasTaggedFork)`)
+is the exact complement of the half path's, so it necessarily mints pivots the Rule could not derive.
+Measured: 25 of 63 records offer a pivot, **10 never required it before this change, 3 after** (two of
+those three already require the same cell under a different handle; the third is OI-223). The cap
+stays 3 and the pivot outranks `better-col`, which is the priority this file's own Q2 note already
+states. See `reason-DECISIONS.md` D61.
+
 **Amended 2026-08-05 (D45).** See `reason-DECISIONS.md` D45 for the measurement, the rejected
 alternative (fork-lines-first), and the one-step reversal recipe.
 
@@ -963,6 +976,16 @@ geometry keeps it — a present structural alias is never re-offered under a `fu
    a `windows:` alias satisfiable only as the whole window, so a correct single-cell fork highlight
    was being stripped. Offering the cells standalone admits them without weakening Decision A — a
    window member that is never offered standalone still fails.
+
+   **Amended 2026-09-02 (D63).** This family (`forkCells`, `tacticTag === 'double_threat'`) is a
+   DIFFERENT code path from the realized-pattern fork loop (`opponentPunishment.kind ===
+   'realized_pattern'`, `half.cells`, `zoneAnnotations.mjs:585-702`) — the loop that offers
+   `<owner>-double` (both prongs, ≥2 cells) and each prong individually as `<owner>-fork-square`
+   (`zoneAnnotations.mjs:656`, single-cell prongs included: `:613`/`:649`). Neither this section
+   nor family 4 below previously described that loop. Its `<owner>-fork-square` role now carries the
+   same D63 horizon qualifier described in family 4's amendment, for the same reason: the prong
+   completes nothing on the board the alias names until the pivot is played. See `reason-DECISIONS.md`
+   D63 / OI-225.
 4. **Half-resource geometry** — each of `lostResource` / `opponentPunishment` offers its own
    `completingCell` (`<owner>-key-square`), its `window` (`<owner>-key-line`), for a
    `double_threat` half with ≥2 `forkWindows` all of them as one multi-line
@@ -970,6 +993,19 @@ geometry keeps it — a present structural alias is never re-offered under a `fu
    (`<owner>-fork-square`). **Present vs future** is decided by
    `horizonForRegister(half.register) !== 'immediate'` — the same register→horizon mapping the
    prompt's READING_KEY already explains to the model — never by a `pliesToEnd` threshold.
+
+   **Amended 2026-09-02 (D63).** A near-term `<owner>-fork-square` no longer takes the shared
+   "a single square completing <owner> four-in-a-row line" wording. A fork's prongs complete nothing
+   on the board the alias names — they become winning squares only once the pivot is played — so they
+   carry a HORIZON QUALIFIER ("…it completes nothing yet; it only becomes a winning square once the
+   fork is set up"), not the `-key-square` downgrade, which would deny what makes a fork decisive. No
+   cardinality is claimed ("a square", not "two squares") — a fork half is not always a pair; see
+   `reason-DECISIONS.md` D63. Measured: 4 of 4 near-term `-fork-square` aliases were board-false
+   before, 0 after; the 9 `future:` ones were already board-true and are unchanged. This family's own
+   `<owner>-fork-square` offer (`zoneAnnotations.mjs:520`) produced ZERO of the 4 measured defects —
+   all 4 came from the realized-pattern loop described in family 3's amendment above — but it was
+   fixed for the same reason (I12: fix the case-space, not the motivating instance). See
+   `reason-DECISIONS.md` D63 / OI-225.
 
 **Opening records suppress family 4 entirely** (`opts.openingHorizon`). Their own guardrail says
 "Do NOT ground a specific deep completing cell; the deep resolution is a horizon, not a teachable

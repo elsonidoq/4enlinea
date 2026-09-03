@@ -286,19 +286,28 @@ tells graders which field is now the correct one to read per axis.
 v1 (`:137-138`) says A6 is PRE-COMPUTED by `grade_mechanical.mjs` and must be copied through, never
 re-derived. That script imports production's own `mentionsBetterColumn` directly
 (`connect-four/server/scripts/grade_mechanical.mjs:12`) and calls it as
-`mentionsBetterColumn({ mechanism: a.mechanism }, fv.bestCol, locale)`
-(`connect-four/server/scripts/grade_mechanical.mjs:42-43`) — **confirmed present at these lines by
-reading the file for this addendum.**
+`mentionsBetterColumn({ mechanism: mechanismForA6 }, fv.bestCol, locale)`, where
+`mechanismForA6 = row.mechanism_pre_repair ?? a.mechanism` (`grade_mechanical.mjs`, the `A6` block).
+
+**AMENDED 2026-09-02 (D63/OI-224) — do NOT "correct" this back.** A deterministic post-repair now
+appends a sentence naming the better column when the model omitted it, and the harness OVERWRITES
+`answer.mechanism` with the repaired text. Grading that field would make A6 a constant `pass` on every
+`--retry` run — a confident number that measures nothing. So the harness also emits
+`mechanism_pre_repair` (the model's own text; `null` when no repair fired) and A6 reads it in
+preference. **A6 now measures whether the MODEL named the column unaided, and is deliberately NOT a
+served-text predictor on a `--retry` run.** The `??` is load-bearing: `||` would fall through on the
+empty string and grade the repaired text again.
 
 This reads the pre-guard `mechanism` field, not `servedExplanation` — but it is still an accurate
 predictor of the post-guard result, and this is deliberate, not an oversight:
 `mentionsBetterColumn` (`connect-four/server/mechanismExplainer.mjs:115-122`) runs the mechanism
 through `stripInternalTokens` **internally**, the very same final-pass function
 `guardExplainMoveLlmPayload` applies before serving (`reasonRenderGuard.mjs:99`), before testing for
-the "column N" phrase. So A6, though it reads the `mechanism` field, is checking exactly the transform
-production's own retry-trigger applies to that field before deciding whether to retry — it is
-"production's own predictor of what the player is served" (`grade_mechanical.mjs:40`), not a raw-string
-regex.
+the "column N" phrase. So A6 is checking exactly the transform
+production's own retry-trigger applies before deciding whether to retry, rather than a raw-string
+regex. Note the normalization argument is about HOW the text is compared and is unchanged by D63; what
+D63 changed is WHOSE text is compared — the model's own (`mechanism_pre_repair`), not the served
+string. `grade_mechanical.mjs`'s header now reads "whether the MODEL named the better column unaided".
 
 **One documented residual gap** (`mechanismExplainer.mjs:110-113`, "Residual, accepted imprecision"):
 the real serving path can additionally run `stripFailingZoneSpans` *before* its own final

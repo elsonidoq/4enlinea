@@ -14,6 +14,10 @@
 // together and folded into ONE amended prompt (never one retry each). Evidence + prompt are
 // computed a single time and reused across the retry (the solver pass is the expensive part).
 // `postprocessAnswer` already repairs zone tags silently, so there is no annotation-repair retry.
+// After the retry decision (and `chooseRetryWinner`) settle which attempt is served, a deterministic
+// post-repair (`ensureBetterColumnMention`, D63/OI-224) can still append a plain-prose "you should
+// have played column N" sentence to that attempt's `mechanism` — so the served text is not always
+// exactly what the LLM produced. See `betterColRepaired` below.
 //
 // Errors: LLM errors never throw — they surface in callError/parseError so the endpoint can log to
 // deep_reveal_failures and return 500. A genuine terminal board (computeReason throwing) DOES
@@ -27,7 +31,7 @@ import {
   postprocessAnswer,
 } from './scripts/compute.mjs';
 import { callOpenAIChat } from './llmChat.js';
-import { decideRetry, mentionsBetterColumn } from './retryDecision.mjs';
+import { decideRetry, mentionsBetterColumn, chooseRetryWinner, ensureBetterColumnMention } from './retryDecision.mjs';
 
 // ── OpenAI call (thin wrapper around the unified, instrumented helper; spec 047 US5) ─────────
 // Preserves the pre-existing bare-string-content contract for computeMechanism's callers.
@@ -89,13 +93,34 @@ export { mentionsBetterColumn };
 //   { notABlunder: true, evidence }                       — played move is not a blunder
 //   { notABlunder: false, evidence, nv, prompt, renderDecision,
 //     raw, answer, mechanism, parseError, callError, annotationRepairs, usedSpecs,
-//     attempt1, missingHandles }
-// The top-level raw/answer/mechanism/... fields are always the LAST attempt made (attempt2 when a
-// retry happened, attempt1 otherwise) — `attempt1` is additionally always present so the caller
-// never silently loses the first attempt, and `missingHandles` is the (possibly empty) list of
-// required-set groups attempt 1 omitted, when that is what triggered the retry (FR-009/FR-010: the
-// second attempt is always served, deterministically, never re-evaluated for quality against the
-// first — even if the second attempt itself still misses a required square).
+//     attempt1, missingHandles, servedAttempt }
+// The top-level raw/answer/mechanism/... fields are the CHOSEN attempt (`chooseRetryWinner`,
+// retryDecision.mjs D51 follow-up): the retried attempt when a retry happened UNLESS attempt1 was
+// strictly better on the two content requirements the retry exists to enforce, in which case
+// attempt1 is kept — never the retried attempt unconditionally (a retry firing on an LLM-error
+// trigger, `isLlmError`, is unaffected: there the "retry" is a same-prompt resend, not a
+// content-graded alternative, so its result is always served as-is). `attempt1` is additionally
+// always present so the caller never silently loses the first attempt; `missingHandles` is the
+// (possibly empty) list of required-set groups attempt 1 omitted, when that is what triggered the
+// retry. `servedAttempt` (additive field) is `'attempt1'` or `'retry'` and records which attempt's
+// content is in the top-level fields — `'attempt1'` both when no retry fired and when a retry fired
+// but attempt1 won the comparison.
+// `contentRetryFired` (additive field, OI-181 adjacent) is `true` iff the CONTENT-trigger branch
+// (`decideRetry`, retryDecision.mjs) decided to retry — a required-square/line miss and/or an
+// unnamed better column. It is `false` when no retry fired AND when the pre-existing LLM-error
+// retry fired instead (the `isLlmError` branch below): that resend has no content reason to report
+// (attempt1 had no usable content to compare against), so it is intentionally NOT covered by this
+// flag. `missingBetterCol` (additive field) is `true` iff attempt1 failed to name the better
+// column (`mentionsBetterColumn`) — the OI-181 signal that was previously discarded because
+// widening `missingHandles` to carry it would have changed the meaning of that existing field.
+// Both default to `false` and are only ever set inside the content-trigger branch.
+// `betterColRepaired` (additive field, D63/OI-224) is `true` iff the deterministic better-column
+// post-repair (`ensureBetterColumnMention`, retryDecision.mjs) actually appended the "you should
+// have played column N" sentence to the CHOSEN attempt's mechanism. It is applied after
+// `chooseRetryWinner` and therefore after `servedAttempt` is decided — the two fields describe
+// different stages and neither implies the other. `attempt1` is deliberately left UNREPAIRED so a
+// caller can still see the first attempt exactly as the model produced it. Not persisted: D62's
+// `explanation_cache` telemetry columns are closed and are not extended for this.
 // `callLLM` may be injected (tests); otherwise defaultCallLLM(model, OPENAI_API_KEY) is used.
 export async function computeMechanism(movestring, col, { solver, model, callLLM, userId = null, locale = 'en' } = {}) {
   const evidence = await computeReason(movestring, col, { solver }); // terminal boards throw → propagate
@@ -120,11 +145,16 @@ export async function computeMechanism(movestring, col, { solver, model, callLLM
   const attempt1 = await runLlmAttempt(prompt, renderDecision, call);
   let finalAttempt = attempt1;
   let missingHandles = [];
+  let servedAttempt = 'attempt1';
+  let contentRetryFired = false;
+  let missingBetterCol = false;
 
   if (isLlmError(attempt1)) {
     // Pre-existing retry trigger: resend the identical prompt once (an LLM-level failure, not a
-    // content problem the prompt can address).
+    // content problem the prompt can address). No content comparison here — attempt1 has no usable
+    // content to compare against (call/parse failure), so the resend is always served as-is.
     finalAttempt = await runLlmAttempt(prompt, renderDecision, call);
+    servedAttempt = 'retry';
   } else {
     // Content triggers: attempt 1 succeeded as an LLM call but (a) omitted one or more required
     // squares/lines (spec 058, US2, FR-008) and/or (b) never named the column the player should
@@ -135,14 +165,47 @@ export async function computeMechanism(movestring, col, { solver, model, callLLM
     // retry, shared: spending it on the column and then having none left for a missing required
     // square (or vice versa) would just move the regression.
     // bestCol is 0-indexed on the narrator vector, exactly as on the evidence it came from.
-    const { shouldRetry, missing, retryPrompt } = decideRetry({
+    const { shouldRetry, missing, missingBetterColPhrase, retryPrompt } = decideRetry({
       attempt1, renderDecision, prompt, movestring, bestCol: nv?.bestCol ?? null, locale,
     });
     if (shouldRetry) {
       missingHandles = missing;
-      finalAttempt = await runLlmAttempt(retryPrompt, renderDecision, call);
+      contentRetryFired = true;
+      missingBetterCol = Boolean(missingBetterColPhrase);
+      const retriedAttempt = await runLlmAttempt(retryPrompt, renderDecision, call);
+      // Keep the better of the two (retryDecision.mjs D51 follow-up): the retry existed to fix a
+      // content miss, but nothing previously re-checked whether it actually did — a retry could,
+      // and measurably did, lose ground attempt1 already held. `chooseRetryWinner` prefers the
+      // retried attempt and falls back to attempt1 only when attempt1 is strictly better.
+      const { chosen, attempt } = chooseRetryWinner({
+        attempt1, retriedAttempt, renderDecision, movestring, bestCol: nv?.bestCol ?? null, locale,
+      });
+      finalAttempt = attempt;
+      servedAttempt = chosen;
     }
   }
 
-  return { notABlunder: false, evidence, nv, prompt, renderDecision, ...finalAttempt, attempt1, missingHandles };
+  // ── Better-column post-repair (D63 / OI-224) ───────────────────────────────────────────────
+  // Runs on the FINAL chosen attempt, after `chooseRetryWinner` — never before it, so it cannot
+  // influence which attempt is served. It also covers the paths the retry never reaches: the
+  // LLM-error resend, and a first attempt that was compliant enough not to trigger a retry at all.
+  // Abstains on a null/blank mechanism (the LLM-error branch owns that case).
+  const { mechanism: repairedMechanism, repaired: betterColRepaired } =
+    ensureBetterColumnMention(finalAttempt.mechanism, nv?.bestCol ?? null, locale);
+  if (betterColRepaired) {
+    // Spread rather than mutate: `finalAttempt` may be `attempt1`, which is ALSO returned as its own
+    // top-level field, and the caller must still see the unrepaired first attempt there.
+    finalAttempt = {
+      ...finalAttempt,
+      mechanism: repairedMechanism,
+      answer: finalAttempt.answer
+        ? { ...finalAttempt.answer, mechanism: repairedMechanism }
+        : finalAttempt.answer,
+    };
+  }
+
+  return {
+    notABlunder: false, evidence, nv, prompt, renderDecision, ...finalAttempt, attempt1, missingHandles,
+    servedAttempt, contentRetryFired, missingBetterCol, betterColRepaired,
+  };
 }

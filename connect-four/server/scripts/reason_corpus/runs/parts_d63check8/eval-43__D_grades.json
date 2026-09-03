@@ -1,0 +1,5 @@
+{"id":"eval-43","condition":"D","n_runs":3,"per_run":[
+ {"run_index":0,"A1":"pass","A2":"pass","A3":"pass","A4":"pass","A5":"pass","A6":"pass","A7":"pass","A7_failed_subtests":[],"G1":"pass","G2":"pass","G3":"pass","G4":"pass","G5":"pass","G6":"pass","G7":"pass","unsure_about":"annotationRepairs field not present in this data to verify G7c directly, but no other evidence of a repair having fired (better_col_repaired=false, mechanism_pre_repair=null)."},
+ {"run_index":1,"A1":"pass","A2":"pass","A3":"pass","A4":"pass","A5":"pass","A6":"pass","A7":"pass","A7_failed_subtests":[],"G1":"pass","G2":"pass","G3":"pass","G4":"pass","G5":"pass","G6":"pass","G7":"pass","unsure_about":"Same annotationRepairs caveat as run 0."},
+ {"run_index":2,"A1":"pass","A2":"pass","A3":"pass","A4":"pass","A5":"pass","A6":"pass","A7":"pass","A7_failed_subtests":[],"G1":"pass","G2":"pass","G3":"pass","G4":"pass","G5":"pass","G6":"pass","G7":"pass","unsure_about":"Same annotationRepairs caveat as run 0."}
+]}

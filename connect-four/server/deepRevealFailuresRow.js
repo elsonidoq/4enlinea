@@ -39,6 +39,11 @@ export function buildMissingRequiredSquaresRow({
     attempt1_raw_llm_output: attempt1?.raw ?? null,
     attempt1_mechanism: attempt1?.mechanism ?? null,
     attempt2_raw_llm_output: raw,
+    // M6/D63/OI-224: `mechanism` is `result.mechanism` (server/index.js), which by this point may
+    // carry the deterministic "you should have played column N" sentence ensureBetterColumnMention
+    // (retryDecision.mjs) appends — it is NOT necessarily the model's own unaided text. Read
+    // `attempt2_raw_llm_output` above for the model's own text; do not attribute the appended
+    // sentence to the model when reading this column.
     attempt2_mechanism: mechanism,
     missing_handles: missingHandles,
     served_attempt: 2,

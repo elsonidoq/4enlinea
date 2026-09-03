@@ -6829,6 +6829,15 @@ the meaning of an existing log row and of the `missing_required_squares` failure
 queries and the spec-058 acceptance evidence both read. Better to add a distinct signal than to
 overload one.
 
+**UPDATE 2026-09-02 (D62): the field-naming half of this is now DECIDED — do not invent a rival
+convention.** `computeMechanism` now returns `missingBetterCol` as a distinct boolean alongside an
+unchanged `missingHandles`, exactly as the paragraph below prescribes, and `explanation_cache` records
+it (migration 066: `retry_fired`, `retry_reason`, `served_attempt smallint` 1/2, matching
+`deep_reveal_failures.served_attempt` from migration 065). **This issue stays OPEN**: it is about
+`deep_reveal_failures` specifically — a column-only retry that still fails is silent in THAT table, and
+no distinct `failure_reason` kind was added. What is now available to whoever picks it up is the field
+name, the boolean, and a precedent for the smallint mapping. See D62.
+
 **If picked up**: add a separate field (e.g. `missingBetterCol`) threaded alongside `missingHandles`
 and a distinct `deep_reveal_failures` kind, rather than folding it into the existing row. Note this
 is the only way to get a real measurement of whether the retry actually changes model behaviour —
@@ -7963,3 +7972,499 @@ or a real coverage gap that costs a player their explanation.
 
 **If picked up**: log the thrown error per case in the probe, group by message, and decide per class
 whether refusal is correct. Reproduce with the seed above for a deterministic sample.
+
+---
+
+## OI-223 — one record offers a fork pivot that belongs to neither half, so the required-set derivation has nothing to anchor it to
+
+**Status**: open, deliberately not fixed (n=1). **No action unless a second case appears.**
+**Area**: `connect-four/server/scripts/renderReasonModel.mjs` (`deriveRequiredSet`)
+**Discovered**: 2026-09-02, verifying D61's fix corpus-wide.
+
+D61 made `deriveRequiredSet` fall back to an offered `*-fork-pivot` alias, keyed by the half's owner.
+`eval-36` is the one corpus record where that key cannot match: `lostResource.kind` is `denial` (so
+`halfOwner` flips `you`→`opp`) and `opponentPunishment.kind` is `winning_line` (stays `opp`), so BOTH
+halves resolve to `opp` while the offered pivot is `you-fork-pivot = c6r3`. The player's own geometry
+on this record (`you-double`, `you-major`, `you-fork-pivot`) comes from the board-tag path and belongs
+to no half at all, while `deriveRequiredSet` is entirely half-driven.
+
+Measured: **1 of 63.** The other 24 pivot-offering records anchor cleanly.
+
+Not fixed because requiring a handle that no half anchors means obliging the model to build around
+geometry the causal frame may not cover — this is an L8 (denial) record whose story is about the
+opponent — and that is how confident, unsupported narration gets produced. The current output is
+incomplete, not wrong: it requires the opponent's major threat, its line, and the better column.
+
+**Trigger to revisit**: a second record with an unanchored pivot. Re-measure with the corpus-wide
+probe in D61 (rebuild all 63 render decisions; compare each offered `*-fork-pivot` owner against the
+set of `halfOwner` values). Generalizing a mechanism from n=1 is how this project has manufactured
+scope before.
+
+---
+
+## OI-224 — 13 runs serve text that never names the better column; D61's own chooser causes 3 of them
+
+**Status**: ✅ RESOLVED 2026-09-02 (D63). All five plausible chooser re-rankings were replayed over
+the same 189 runs, scoring the SERVED attempt on both axes (table in D63) — every rule that cuts the
+no-better-column count costs strictly more required-set than it buys, so option (e) (an explicit,
+tunable ranking) is **dominated**, not merely unattractive. The resolution is option (d): the better
+column is ground truth already in the prompt, so `ensureBetterColumnMention` (`retryDecision.mjs`)
+deterministically appends one localized sentence to the served attempt when it is missing — no LLM
+call. Replayed with the real shipped function over the same 189 runs: **13 -> 0, required-set
+unchanged at 14.** `chooseRetryWinner`'s ranking itself is untouched. Accepted, unmeasured cost: the
+appended sentence is not coach voice at its best; that cost was not graded (out of scope). See D63 for
+the full table, the A6-preservation fix this required, and citations.
+**Area**: `connect-four/server/retryDecision.mjs` (`chooseRetryWinner`), the retry prompt
+**Discovered**: 2026-09-02, measuring D61's retry chooser over all 81 firings.
+
+D61 stopped the retry from discarding a strictly better first attempt, recovering 5 of 15 measured
+regressions. The remaining **10** are a genuine tradeoff: the retried answer satisfied MORE required
+handles but lost the "column N" mention that attempt 1 had. Neither attempt is fully compliant, and
+`chooseRetryWinner` prefers the required set — so ~12% of retry firings still serve text that never
+names the better column.
+
+The affected runs (from `fv_suff_answers_boards_v3retry63_2026-09-01T20-55-54Z`): `eval-1|2`,
+`eval-3|0`, `eval-7|1`, `eval-10|0`, `eval-16|2`, `eval-20|0`, `eval-31|1`, `eval-48|1`,
+`pin-L6-lost-win-and-gave-one|1`, `pin-L7-practical-swindle|0`.
+
+Options, none free: (a) accept and document; (b) strengthen the retry prompt so it stops trading the
+column away — note prompt wording alone was measured INERT for this instruction class (0/12) while the
+required-set retry moved it (12/12), so this is not obviously available; (c) spend a second retry on
+the ~12%; (d) a deterministic post-repair — the better column is known ground truth and the guard layer
+already rewrites served text, so the mention could be ensured with no extra LLM call, at some cost to
+coach voice. (d) is the cheapest and is untested.
+
+**CORRECTED 2026-09-02, same day, before this entry was acted on.** The original entry scoped this
+issue to the 10 "Category B" regressions above. That scoping was wrong, and it hid a regression D61
+introduced. Measured over all 189 runs by replaying `chooseRetryWinner` and scoring the SERVED attempt:
+**13 runs serve text naming no better column, not 10.**
+
+| cause | n | runs |
+|---|---|---|
+| retry lost the column attempt 1 had (Category B) | 10 | the list above |
+| **`chooseRetryWinner` reverted to attempt 1, which lacks the column** | **3** | `eval-8\|0`, `eval-34\|2`, `eval-35\|0` |
+
+The three new ones are caused by D61. On each, the retry DID name the column but lost required handles;
+attempt 1 held every required handle and named no column; the chooser prefers required handles and
+reverts. Before D61 those runs served the retry and named the column.
+
+**So D61's chooser is a trade, not a pure win: required-set +4, better-column −2** (11 runs lacked the
+column before the chooser, 13 after). The original D61 write-up reported "recovers 5 of 15" and did not
+measure the reverse direction. `chooseRetryWinner` (`retryDecision.mjs`) ranks required-set
+lexicographically above the column — `satisfied1 > satisfiedRetry` wins outright and the column is only
+consulted on an exact tie. That rule was justified for Category B and never examined firing in reverse.
+
+**This widens the decision.** It is no longer "what do we do about 10 runs"; it is "what is the right
+objective when neither attempt is compliant". Options (c) a second retry and (d) a deterministic
+post-repair both dissolve the tradeoff entirely rather than picking a side, which now makes them more
+attractive than (a)/(b). A third option is newly available: make the chooser's ranking explicit and
+tunable instead of implicitly lexicographic.
+
+Verify with the replay in D61's "Validation method" — score the SERVED attempt (post-chooser), not the
+stored final answer; the stored `_mechanical.json` A6 figure (178/189) predates the chooser and will not
+show these 3.
+
+Cross-refs: OI-183, OI-187, OI-205, D51, D61.
+
+---
+
+## OI-225 — a fork's two winning squares are described as "completing your four-in-a-row line" on a board where they complete nothing
+
+**Status**: ✅ RESOLVED 2026-09-02 (D63). `roleText` gained a `fork-square` kind, worded verbatim: "a
+square that will finish <owner> four-in-a-row — it completes nothing yet; it only becomes a winning
+square once the fork is set up." No cardinality claim is made ("a square", never "one of the two
+squares" or "two squares") — a fork half is not always a pair; measured over the corpus, single-cell
+realized/half-resource fork halves are common, not an edge case (D63). The corpus-wide role-truth
+probe went **4 violations of 4 checked -> 0 of 4**, with `-major` unchanged at 0 of 52. The 9
+`future:` fork-squares were deliberately left alone — already board-true, no measured defect. See D63
+for the full measurement and the case-space split by cardinality.
+**Area**: `connect-four/server/scripts/reason_engine/zoneAnnotations.mjs` (`roleText`; the
+`${owner}-fork-square` offers at `:520` (half-resource) and `:656` (realized-pattern))
+**Discovered**: 2026-09-02, corpus-wide role-truth probe (D61).
+
+D61 fixed 11 board-false `-key-square` roles. It deliberately left **4** `-fork-square` roles that
+carry the same "completing" wording: `eval-43` (c6r2), `eval-44` (c7r1), `pin-L2-enabled-opponent`
+(c6r1), `pin-branch-invariance-false` (c6r1).
+
+These are a fork's two winning squares. On the decision board they complete nothing — they only become
+winning squares once the pivot is played (`forkPivotCell`'s own comment: the fork cells are "the
+gravity-next squares above it, which is precisely why the last ply makes both live at once"). So the
+current label is false now and true a move later. Applying the `-key-square` downgrade would be false
+in the OTHER direction, denying exactly what makes a fork decisive.
+
+The fix is a **horizon qualifier**, not a downgrade: wording along the lines of "play here first, and
+then this square finishes the line". That is a copy decision — it must stay in coach voice and must not
+reintroduce internal jargon — which is why it was not folded into a correctness fix.
+
+Verify with the D61 probe, restricted to `-fork-square` handles: it currently reports exactly 4.
+
+---
+
+## OI-226 — the model credits the fork to a threat square that is never occupied, instead of the pivot that actually creates it
+
+**Status**: open. Pre-existing (predates D63); surfaced by the 2026-09-03 8-board spot-check.
+**Area**: the deep-reveal narration on fork boards — candidate causes span
+`connect-four/server/scripts/reason_engine/zoneAnnotations.mjs` (the `-fork-pivot` vs denial-cell
+offer set) and `causalLinks.mjs`'s frame text. **Root cause not yet located** — do not assume the
+render layer is at fault without measuring.
+**Discovered**: 2026-09-03, grading `fv_suff_answers_boards_v3retry63_2026-09-03T04-05-52Z.jsonl`.
+
+On `eval-44` (stored `movestring` is `443`; the fork board discussed below — `443` + played `1` +
+reply `5` — is `44315`, `draw_to_lose`) the served explanation says the opponent
+**"takes column 3"** to create the double threat. That is board-false: `c3r1` is never occupied — it
+stays an empty gravity-top threat square. The disc that actually makes both winning squares live at
+once is **`c6r1`**, offered as `opp-fork-pivot`. The model credits the *denial* cell with the causal
+role that belongs to the *pivot*.
+
+**It is a real defect, but the apparent "regression" that surfaced it is a measurement artifact.**
+Both statements are true and neither should be dropped:
+
+- The 2026-09-01 grades recorded `eval-44` A3 2/2 and A4 2/2 — clean. Those grades were
+  **sub-sampled to runs 0–1**; run 2 was never graded on those axes and carries the same error.
+- Measured across all runs of both corpora: **old 1 of 3 runs affected, new 2 of 3.** At n=3 that is
+  sampling noise, not a change in behaviour.
+- **D63 did not cause it.** The only role text D63 changed on this board is
+  `opp-fork-square = c7r1`, and **no run in either corpus mentions column 7 at all** — the changed
+  handle is never used. Verified by scanning every served explanation for both corpora.
+
+**Why it matters more than one board.** The same class — conflating a cell that is *denied* with the
+cell that *acts* — showed up independently on `pin-L7-practical-swindle` run 1 (a `future:c1r3` zone
+wrapped around the literal text "c2r3"; the guard stripped the tag but left the false sentence "the
+move in column 2 is the square that would create the fork later", when the real pivot is column 1).
+Two different boards, same confusion, so this is probably not a one-record quirk.
+
+**Do NOT fix from these two examples (I12).** Before changing anything, measure the case space. It
+has now been enumerated: rebuilding all 63 render decisions, **22 of 63 records offer BOTH a
+`*-fork-pivot` and at least one competing single-cell handle** (`-key-square` / `-major` /
+`-fork-square`) at a different spec — i.e. 22 records where the model has two plausible cells to
+credit and could pick the wrong one:
+
+`eval-7, eval-8, eval-13, eval-15, eval-17, eval-18, eval-19, eval-20, eval-22, eval-23, eval-25,
+eval-26, eval-30, eval-36, eval-43, eval-44, eval-46, eval-47, pin-L3-no-causation, pin-L5-deep-fork,
+pin-L7-practical-swindle, pin-branch-invariance-true-1`
+
+**UPDATE 2026-09-03 — 3 more of the 22 probed (n=3 each), symptom did NOT reproduce.**
+`eval-18`, `eval-47` and `pin-L5-deep-fork` were run and graded. Result:
+
+| board | OI-226 symptom | notes |
+|---|---|---|
+| `eval-18` | **clean** | all 3 runs credit the pivot `future:c5r4`, verified occupied at ply 39; 9/9 axes pass |
+| `pin-L5-deep-fork` | **clean** | all 3 runs credit the pivot `future:c7r6`, verified occupied at ply 38 |
+| `eval-47` | **clean for OI-226** | runs 0/2 correctly credit column 5; run 1 fails a different way (below) |
+
+So the running tally is **6 of 22 observed, 1 clear hit (`eval-44`) and 1 adjacent
+(`pin-L7-practical-swindle`)**. The original "2 of 3" framing looks like small-sample bad luck rather
+than a systemic rate; on current evidence this is a low-frequency defect, not a broad one. Do not
+size it from 6 boards either — 16 of the 22 remain unobserved.
+
+**Two DISTINCT defects surfaced while probing, both now tracked separately.** Neither is the OI-226
+symptom, and folding them in here would repeat the scoping error D61's CORRECTION block records:
+
+1. **The guard strips a bad zone tag but leaves the false sentence** — `pin-L7-practical-swindle`
+   run 1 and `eval-47` run 1, two different boards. In both, a `[zone:…]` wrapped text naming the
+   wrong column; `stripFailingZoneSpans` removed the tag and the false prose reached the served
+   string ("the move in column 2 is the square that would create the fork later", when the pivot is
+   column 1; "the square in column 3 that finishes it", when the threat cell is column 5). The gate
+   protects the highlight, not the sentence. **Not yet filed — needs its own OI.**
+2. **`-fork-pivot` role text over-claims cardinality** — filed as **OI-227**.
+
+The next step for THIS issue is still to run the remaining 16 at n=3 and count how many attribute the
+fork to a cell that is never occupied, BEFORE proposing any fix. A fix aimed at `eval-44` alone would
+be the motivating-example trap this project has hit before.
+
+**Cross-refs**: OI-225 (the fork-square wording, resolved by D63 — different defect, same family),
+D61's CORRECTION block (the same "graded only the runs that motivated it" lesson).
+
+---
+
+## OI-227 — the fork-pivot role claims "both winning squares live at once" on 11 aliases where only one square is actually playable
+
+**Status**: open. Pre-existing; the same cardinality over-claim class D63 removed from `-fork-square`,
+left standing one branch over in `-fork-pivot`.
+**Area**: `connect-four/server/scripts/reason_engine/zoneAnnotations.mjs`, `roleText`'s `fork-pivot`
+and `fork-pivot-now` branches.
+**Discovered**: 2026-09-03, by a grader probing `pin-L5-deep-fork` for OI-226.
+
+`roleText`'s pivot branches read *"the square <owner> plays to CREATE the fork — the move that makes
+**both winning squares** live at once"*. That claim is unconditional, but the fork it describes does
+not always have two squares.
+
+**Measured over the 63-record corpus, board-verified.** 25 `-fork-pivot` aliases carry the phrase.
+**11 of the 20 that can be checked are board-false**, 5 undecidable (pivot cell already occupied, or
+not gravity-top / unreachable, on the board the alias names) ⇒ 20 checked − 11 violations = **9
+checked-and-clean**.
+
+Method that matters, because a first attempt got this wrong three times: place the owner's disc on
+the pivot cell — on the alias's own `truthBoard`, or for a `projectedDeep` alias on the owning half's
+`finalMovestring` minus its last ply — but ONLY when the cell is empty AND gravity-top on that base
+board (an unreachable pivot is undecidable, not board-false — see the `pin-branch-invariance-true-1`
+correction below). Then count winning squares that are **gravity-top**, i.e. actually playable.
+"Live at once" means playable at once; a stack of completing cells in one column is NOT two live
+squares (the upper ones are unreachable until the lower fills, and the opponent can simply answer the
+bottom one).
+
+**A third proxy — this time in the audit harness itself — also produced a wrong number.** The first
+harness draft placed the pivot disc after checking only that the cell was empty, not that it was
+gravity-top. On `pin-branch-invariance-true-1` (`opp-fork-pivot = c5r3`, `truthBoard: decision`) the
+cell is empty but sits one row above the column's actual height (`colHeights[4] === 1`, the pivot's
+row is `2`) — the harness dropped a floating disc over an empty row and reported **0 live winning
+squares**, which is not a real board state. With the reachability guard added, this record is
+**undecidable** (the opponent cannot play there right now) and is excluded from both the checked and
+the violation counts — it is not one of the 11.
+
+**Two measurement caveats, so 11 is read as a floor, not an exact rate:**
+- On 4–5 records the harness places an `opp-` pivot on the alias's `decision` truthBoard where it is
+  actually the *player's* turn to move, not the opponent's — the verdicts above hold, but the
+  reachability model is an approximation of whose turn it really is.
+- `liveWins` counts every gravity-top completing cell for the pivot's owner after the pivot is
+  placed, including cells that were already live *before* the pivot and cells unrelated to this
+  particular fork. It does not isolate "squares this fork specifically created," so **11 is a floor
+  on the violation count, not an exact one**.
+
+The 11 board-false, with the live count after the pivot:
+
+| record | alias | live winning squares after pivot |
+|---|---|---|
+| `eval-7` | `you-fork-pivot=future:c2r4` | 1 (`c2r5`) |
+| `eval-8` | `you-fork-pivot=future:c2r4` | 1 (`c2r5`) |
+| `eval-15` | `you-fork-pivot=future:c7r2` | 1 (`c7r3`) |
+| `eval-16` | `you-fork-pivot=future:c7r2` | 1 (`c7r3`) |
+| `eval-26` | `opp-fork-pivot=future:c5r4` | 1 (`c5r5`) |
+| `eval-30` | `opp-fork-pivot=future:c3r5` | 1 (`c6r2`) |
+| `eval-43` | `opp-fork-pivot=c4r2` | 1 (`c4r3`) |
+| `eval-46` | `opp-fork-pivot=c6r2` | 1 (`c6r3`) |
+| `pin-L3-no-causation` | `opp-fork-pivot=c4r2` | 1 (`c4r3`) |
+| `pin-L5-deep-fork` | `you-fork-pivot=future:c7r6` | 1 (`c4r3`) |
+| `pin-L7-practical-swindle` | `you-fork-pivot=future:c1r3` | 1 (`c2r3`) |
+
+`pin-branch-invariance-true-1` (`opp-fork-pivot=c5r3`) is **not** in this table. Its pivot is not
+gravity-top reachable on the `decision` board the alias names (`colHeights[4] === 1`, pivot row `2`),
+so the claim cannot be evaluated there — it is undecidable, not board-false. See the harness
+correction above.
+
+**Three oracles that looked reasonable and were wrong — record this, it cost three passes:**
+
+1. **`forkCells.length < 2` (the first proxy).** Wrong in BOTH directions, and wrong for a reason
+   deeper than a bad threshold: `eval-43`'s half carries **no `forkCells` key at all** — its
+   `opponentPunishment` is `kind: realized_pattern`, `cells: ["c4r3","c6r2"]`, `forkCells: undefined`
+   — and its `opp-fork-pivot = c4r2` is minted by `boardTagPivotCell` (the structural board-tag path
+   in `zoneAnnotations.mjs`), not by `forkPivotCell`, which is the only function that reads
+   `forkCells`. A `forkCells`-based denominator is not merely loose on this alias, it is *inapplicable*
+   — the proxy read a field that path never populates, on a pivot that doesn't come from the function
+   the proxy was modeling. The proxy separately false-flagged `eval-30`'s `you-fork-pivot`.
+   `forkCells` records one half's own line prongs — not the set of winning squares the pivot makes
+   playable, and several fork halves have no `forkCells` at all.
+2. **Counting ALL empty completing cells (the second attempt).** Reported **0 violations** and nearly
+   caused this entire issue to be retracted as a proxy artifact. It is too permissive: on
+   `pin-L5-deep-fork` it counted three completing cells (`c4r3`, `c4r4`, `c4r5`) — all stacked in
+   column 4, only one playable. Gravity-top is the discriminator.
+
+This is I12 in miniature: the property was only decidable through the board, and three hand-rolled
+denominators — including the audit harness's own first draft — each produced a confident wrong
+number before the direct, reachability-checked test did.
+
+**First spotted by a grader, and its read was the correct one.** On `pin-L5-deep-fork` the grader
+traced `finalMovestring` at ply 37 vs 38 and found that playing the pivot `c7r6` leaves exactly
+**one** gravity-top winning square (`c4r3`). The coordinator's own broader board count initially
+disagreed (it found three completing cells) and nearly retracted this issue; the grader was right and
+the broader count was measuring the wrong thing — the other two cells sit stacked above `c4r3` in the
+same column.
+
+**This is the T031/OI-180 defect class, and the fix is the same shape.** T031 already removed a
+singular "fork square" claim from the `double` role for exactly this reason (see the T031 comment in
+`roleText`), and D63/OI-225 removed "one of the two squares" from `-fork-square` after the owner
+struck it — because 6 realized and 11 half-resource fork halves carry a single cell. `-fork-pivot` was
+not audited at the time. The wording should stop asserting a count, or assert one derived from the
+half's actual cell count.
+
+**Why the model amplifies it.** All three `pin-L5-deep-fork` runs echoed the offered role text almost
+verbatim, so this is not a model fabrication — the render layer hands it a false claim and the model
+faithfully repeats it. That is the same "fails the no-fabrication axis **by complying**" pattern D61
+recorded for `-key-square`, and it is why a graded run scored these runs as passes: the grader checks
+the model against the offered role, not the role against the board.
+
+**Do not fix blind (I12).** The **9** checked-and-clean cases (25 aliases carry the phrase, 5
+undecidable, 20 checked, 11 board-false ⇒ 20 − 11 = 9) must keep wording that conveys the fork's
+decisiveness; a flat removal would weaken those. They are `eval-13, eval-17, eval-18, eval-19,
+eval-20, eval-22, eval-23, eval-25, eval-44`. Only **two** branches carry the "both winning squares
+live at once" phrase — `fork-pivot` and `fork-pivot-now` (verify by symbol in
+`zoneAnnotations.mjs`); validate the fix against all 25 aliases across those two. **`fork-pivot-played`
+does NOT carry this phrase** — its text is "the square your last move just filled — that move is what
+set up the fork," a different, non-cardinality claim. Leave `fork-pivot-played` alone under this
+issue; it is a separate hypothesis under OI-226 (the "confusable handle" investigation), and editing
+it here would silently change OI-226's evidence base.
+
+**Cross-refs**: OI-225 / D63 (same class, `-fork-square`), OI-180 / T031 (same class, `double`),
+OI-226 (the fork-attribution probe that surfaced this).
+
+---
+
+## OI-228 — the annotation gate strips a mis-anchored zone TAG but leaves its false SENTENCE in the served text
+
+**Status**: open. Pre-existing. Observed on 2 of 6 boards probed 2026-09-03.
+**Area**: `stripFailingZoneSpans` is a module-private function in
+`connect-four/server/reasonRenderGuard.mjs` (NOT `annotationGate.js`), called from within that same
+file's `guardExplainMoveLlmPayload`. `checkP2` and `checkP6` — the predicates whose failure triggers
+the strip — live in `connect-four/server/annotationGate.js`. The serving seam is `index.js`'s call to
+`guardExplainMoveLlmPayload` (`server/index.js:1481`; a comment at `server/index.js:1475` calls it
+"the ONLY guardExplainMoveLlmPayload call site" with a `renderDecision` in scope). `index.js` never
+names `stripFailingZoneSpans` directly.
+**Discovered**: 2026-09-03, grading `pin-L7-practical-swindle` and `eval-47` while probing OI-226.
+
+When the model wraps a `[zone:X]` tag around prose that names a DIFFERENT square than `X` points at,
+the gate correctly refuses the highlight — but it strips only the tag. The sentence survives, and it
+is board-false. The player is served a confident wrong claim with no highlight to contradict it.
+
+Two independent instances, different boards, same shape:
+
+| board / run | tag | prose said | truth |
+|---|---|---|---|
+| `pin-L7-practical-swindle` run 1 | `[zone:future:c1r3]` wrapped the literal text "c2r3" | "the move in **column 2** is the square that would create the fork later" | the pivot is **column 1** (`c1r3`) |
+| `eval-47` run 1 | `you-immediate-3`, spec `c5r4` | "a threat to make four next move on the square in **column 3** that finishes it" | the only completing/threat cell is **column 5** (`c5r4`); nothing in column 3 |
+
+Both were board-verified with `visualize_board.sh` against the run's own after-played board.
+
+**Why this is worse than it looks.** The gate's own design intent (P6, `checkP6` / Decision A) is
+"no raw internal coordinate and no mis-anchored highlight reaches the user". Stripping the span
+satisfies the letter of that while leaving the reader with the fabrication the span was evidence of.
+A mis-anchored tag is a signal that the SENTENCE is wrong, not just the markup — treating it as a
+markup problem is the defect.
+
+**Not the same as OI-226.** OI-226 is the model crediting a never-occupied cell; here the model names
+the wrong column and the gate half-cleans it. They co-occur on `pin-L7` but are separate mechanisms —
+do not merge them.
+
+**Options, none yet costed**: (a) drop the whole SENTENCE containing a stripped span rather than just
+the tag; (b) treat a P2/P6 span failure as a retry trigger instead of a strip; (c) accept and
+document. (a) risks deleting a sentence that carried the only better-column mention — check against
+D63/OI-224's `mentionsBetterColumn` before choosing it, since that function already documents this
+exact interaction as an accepted residual imprecision.
+
+**Measure before fixing (I12)**: count, across a full corpus run, how many served explanations have a
+`stripFailingZoneSpans` diagnostic AND retain a column claim contradicting the render decision. 2 of
+18 runs here is not a rate.
+
+**Cross-refs**: OI-226 (co-occurring on `pin-L7`), OI-172 / Decision A (the strip rule), D63/OI-224
+(`mentionsBetterColumn`'s stated residual imprecision about stripped spans).
+
+---
+
+## OI-229 — `test:fast` registers a test file that does not exist, and the registration is silently ignored
+
+**Status**: open, trivial to fix, filed because the failure mode is invisible.
+**Area**: `connect-four/package.json` (`test:fast` script), `tests/unit/detectClaimodd.test.js`
+**Discovered**: 2026-09-03, by an adversarial reviewer sanity-checking the suite baseline.
+
+`connect-four/package.json`'s `test:fast` string lists `tests/unit/detectClaimodd.test.js`. **That file
+does not exist on disk.** `node --test` given a *list* of paths silently ignores a missing one and
+still exits 0, so the run is green and the suite count looks normal — 188 registered paths, 187 real.
+
+`docs/architecture/testing-conventions.md` already documents this exact hazard ("Node emits
+`Could not find '<path>'` **only** when the missing file is the *sole* argument… Do not rely on
+[exit code or stderr]. The only check that works: confirm the test's own uniquely-named cases appear in
+the run output"). This is that hazard, live in the repo.
+
+**Fix**: either restore the file or drop the path from `test:fast`. Before dropping it, check git
+history for what it covered — `detectClaimodd` suggests a claimodd detector whose tests may have been
+lost rather than deliberately retired. **Do not simply delete the entry** without establishing which.
+
+**Not urgent** — nothing depends on it and the suite is otherwise green — but every day it stays,
+the "188 test files" figure quoted in reviews is wrong by one, and a genuinely deleted-by-accident test
+looks identical to a deliberate removal.
+
+---
+
+## OI-230 — the deep-reveal answers-row JSONL shape is documented only in a stale code comment
+
+**Status**: open, documentation gap.
+**Area**: `connect-four/server/scripts/compute.mjs` (file header, ~:18-20); no architecture doc covers it.
+**Discovered**: 2026-09-03, while adding two fields to the row.
+
+The header comment reads:
+
+```
+// Answers row shape:   { id, pattern_category, condition, run_index, model, feature_vector,
+//                        answer, raw, parse_error, call_error }
+```
+
+The row actually written carries at least ten more fields: `render_decision`, `annotationRepairs`,
+`servedExplanation`, `guardDiagnostics`, `retry_fired`, `retry_reason`, `attempt1`, `served_attempt`,
+and (D63) `better_col_repaired`, `mechanism_pre_repair`. The comment has been stale across several
+changes; this session added two more without fixing it.
+
+No file in `docs/architecture/` documents this row either — `data-model.md` covers the
+`deep_reveal_failures` **table**, which is a different shape. So the only description of the artifact
+every grader and every replay probe reads is a code comment that is wrong.
+
+**Why it matters more than a stale comment usually does**: graders and probes are routinely written by
+fresh-context agents against this row. Two separate agents this session mis-read which field to use
+(`answer.mechanism` vs `raw`, and the wrapper-vs-value shape of `parseAnswer`/`postprocessAnswer`), and
+a correct row-shape reference is the cheapest defence against that class of error.
+
+**Fix**: update the header comment, and add a short "answers row" section to
+`docs/architecture/feature-vector-sufficiency-experiment.md` naming each field, which layer it is at
+(raw / post-`processAnnotations` / post-guard), and which axes read it. Cross-ref
+`grade_mechanical.mjs`'s A6 (`mechanism_pre_repair ?? answer.mechanism`, D63).
+
+---
+
+## OI-231 — the deterministic role-claim audit lives in a scratchpad, not the repo
+
+**Status**: open — a decision, not a defect. Needs an owner call.
+**Area**: no file yet; candidate home `connect-four/server/tests/` (as a corpus-wide test) or
+`connect-four/server/scripts/`.
+**Discovered**: 2026-09-03.
+
+The audit that found OI-227 (and corrected its own first two numbers) is a ~120-line pure script that
+rebuilds all 63 render decisions and checks every factual claim a role text makes against the board its
+`truthBoard` names — "completes", "does not complete", "four next move", "both winning squares live at
+once", "the whole four-in-a-row line", "the column of the better move", "your last move just filled".
+It runs in seconds, costs nothing, needs no LLM, and covers **416 claims across 11 claim types**.
+
+Current state: **it exists only in a session scratchpad and in the body of
+`docs/superpowers/handoffs/2026-09-03-oi226-227-228-prompt.md`.** When that handoff is consumed it is
+gone. The durable guards in `zoneAnnotations.test.mjs` cover three claim types; the other eight are
+unguarded.
+
+**The case for promoting it**: every render-layer defect found in the last two sessions (OI-225,
+OI-227, and the correction to OI-227's own count) was found by a pure function over stored evidence,
+not by a graded run. A regression in any of the other eight claim types would currently ship silently.
+
+**The case against, honestly**: it reads `runs/reason_evidence_v3retry63.jsonl`, a corpus snapshot, so
+as a test it pins behaviour to a frozen dataset; the existing corpus-wide tests read
+`scripts/reason_corpus/evidence.jsonl`, which is shared with concurrent agents and can shift. Promoting
+it means choosing which corpus it guards and accepting that maintenance.
+
+**Also carry over its four known latent bugs** if it is promoted (all dormant on today's corpus): a
+`parse()` returning null is scored as a violation rather than skipped in the `C10` branch; an
+out-of-range row silently passes via optional chaining; the role-prefix strip allows 80 chars against a
+69-char observed maximum, and a longer locator would break two `^…$`-anchored claims into 63 false
+violations each; and five claim types validate only the first cell of a multi-cell spec.
+
+---
+
+## OI-232 — four small hygiene items deferred from the D63 implementation
+
+**Status**: open, low priority. All four were raised by review, judged not worth a fix round mid-plan,
+and recorded here so they survive the session.
+**Area**: `connect-four/server/` — `locale.mjs`, `mechanismExplainer.mjs`, and their tests.
+**Discovered**: 2026-09-02/03, during the D63 task reviews and final whole-branch review.
+
+1. **A test's name promises a case it does not assert.** `tests/mechanismExplainer.test.mjs`, the
+   `ensureBetterColumnMention` abstention test titled "…empty text, or a non-string", asserts only
+   `null`, `''` and `'   '` — no genuinely non-string value. The behaviour is correct (probed:
+   `f(42, 2, 'en')` → `{ mechanism: 42, repaired: false }`); the coverage does not match the title.
+   One line closes it.
+2. **The Spanish locale entry carries no warning comment.** `locale.mjs`'s `es.betterColumnRepair`
+   MUST contain the literal `columna ${n}` that `mentionsBetterColumn` searches for; the `en` entry
+   explains this at length, the `es` one does not. A translator polishing it to e.g. "en la tercera
+   columna" would silently break the repair. (Mitigating: the `es` test would fail loudly — it asserts
+   the round-trip through `mentionsBetterColumn` — so this is a comment gap, not an unguarded risk.)
+3. **`betterColRepaired` is `undefined` on one return path.** `mechanismExplainer.mjs`'s `notABlunder`
+   early return (`return { notABlunder: true, evidence }`) omits the field, making it the only path
+   where it is not a boolean. Harmless today — `index.js` short-circuits on `notABlunder` before
+   reading it — but an unguarded `res.betterColRepaired === false` check elsewhere would misread it.
+4. **A test pins one half of an invariant.** The "attempt1 stays UNREPAIRED" test asserts
+   `result.attempt1.mechanism` but not the nested `result.attempt1.answer.mechanism` — and the nested
+   one is the half the spread-not-mutate implementation has to handle separately. Verified correct by
+   live probe during review, but a partial-mutation regression there would be silent.

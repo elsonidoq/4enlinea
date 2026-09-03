@@ -2012,3 +2012,242 @@ that the model can see is a surface it can echo, and the never-repeat list has t
   the D5 "dead fork offered as live" class that does not exist — only `pin-L6-lost-win-and-gave-one`
   supports D5. Lesson: two graders returning near-identical prose about the same cell for different
   records is a contamination signal, not a coincidence.
+
+### D61 — the offered-but-not-required fork pivot, the board-false "completing" role, and the retry that discarded a better first attempt: three fixes, measured without a graded run
+
+Executes the constraint D60's own title named as next. Three independent defects, all found by the
+2026-09-01 v3+retry grading (`fv_suff_answers_boards_v3retry63_2026-09-01T20-55-54Z`) and all fixed
+2026-09-02. Every number below is from a deterministic replay over the 63-record corpus — **no LLM
+call and no grader was used to validate any of the three**, which is the point: these are properties
+of pure functions, so grading them would have been strictly worse than asserting them.
+
+**1. The require side could not see two of the three ways a pivot is offered.**
+`zoneAnnotations.mjs` mints a `*-fork-pivot` alias from three places: the half-based path (`:449`,
+gated on `FORK_TAGS.has(half.tacticTag)`), the board-tag path (`:341-364`), and the realized-pattern
+path (`:509`, gated on `half.tag`). `deriveRequiredSet` (`renderReasonModel.mjs`) called only
+`forkPivotCell(pruned[half])` — the first. The board-tag path's gate is the exact complement of the
+half path's (`if (!hasTaggedFork)`), so it is *guaranteed* to mint pivots the require side cannot
+derive. Measured before: 25 records offer a pivot, **10 never required it**. Critically this was NOT
+slot starvation — in all 10 a slot was free when the pivot loop ran (`better-col` filled slot 3
+afterwards, and `better-col` only fills a free slot). An earlier reading of this session called it
+starvation and was wrong; the corrected diagnosis is a derivation/match failure.
+**Fix**: when `forkPivotCell` abstains, fall back to the already-offered `${owner}-fork-pivot` alias
+from `zones.aliases` (which `deriveRequiredSet` already receives and indexes), keyed by the exported
+`halfOwner(half, side)`. FR-004 (`required ⊆ offered`) holds *by construction* — the fallback selects
+an offered alias rather than deriving new geometry. Cap stays 3; the pivot beats `better-col`, which
+is the priority the code already documents (`better-col` is a provisional 4th-priority fill that must
+never displace a cell/pivot/line group). **After: 22/25 require their pivot.**
+Three do not, and all three are correct or accepted: `eval-48` and `pin-L1-completes-your-tactic`
+already require the same CELL under another handle (the no-duplicate-spec guard declines to name one
+square twice), and `eval-36` is the single unanchored case — see OI-223.
+
+**2. `cellKind` was derived from the horizon and never from the board.**
+`zoneAnnotations.mjs:418` read `const cellKind = isFuture ? 'future' : 'major'`, and `:145` turned
+`'major'` into *"a single square completing <owner> four-in-a-row line"*. Nothing checked that the
+cell completes anything on the truthBoard the alias names. The comment on that line guards *timing*
+("never over-claims immediacy"); the defect was *geometry*. This is the worst class of render defect
+in this engine, because the model fails the no-fabrication axis **by complying** with the role it was
+handed. Measured over the corpus (place the owner's disc on the cell, test for a new winning window):
+**11 of 52 checkable `-key-square` roles were board-false → 0 after the fix.** Four grader-flagged
+records (`eval-48/49/50`, `pin-branch-invariance-false`) plus five no grader caught
+(`eval-42`, `eval-44`, `pin-L1`, `pin-L2`, and a second `eval-42` alias).
+**Fix**: check the cell against the decision board via the production `checkWin`, downgrade only on
+positive evidence, and abstain to the unchanged wording when the board is unavailable (I2).
+
+**3. The retry replaced attempt 1 unconditionally, including when attempt 1 was better.**
+`decideRetry` scores **attempt 1 only**; `mechanismExplainer.mjs` then overwrote `finalAttempt` with
+the retried answer whatever it contained. Nothing re-checked the requirements the retry existed to
+enforce. Measured over all 81 firings, guard-aware: retry is strongly net-positive, but 15 runs
+regressed.
+**Fix**: `scoreAttempt` (extracted from `decideRetry`, so the guard-aware `survivedSpecs` filter is
+computed once and reused — I8) plus `chooseRetryWinner`, which prefers the retry and falls back to
+attempt 1 only when attempt 1 is strictly better. The retry TRIGGER is unchanged. Mirrored into
+`compute.mjs`'s `--retry` path, because harness/production alignment is that flag's whole purpose.
+**Recovers 5 of 15.** The other 10 are a real tradeoff: the retry fixed the required set and lost the
+better column, so neither attempt is fully compliant and the chooser prefers the required set.
+
+**CORRECTION (2026-09-02, hours after this entry was written).** "Recovers 5 of 15" measured only one
+direction and is not the whole effect. Replaying `chooseRetryWinner` over all 189 runs and scoring the
+SERVED attempt shows the chooser also LOSES the better column on 3 runs — `eval-8|0`, `eval-34|2`,
+`eval-35|0` — where the retry named the column but dropped required handles, so the chooser reverts to
+an attempt 1 that names no column. Those three named the column before this change.
+**Net: required-set +4, better-column −2** (11 runs lacked the column pre-chooser, 13 after).
+`chooseRetryWinner` ranks required-set lexicographically above the column (`satisfied1 > satisfiedRetry`
+wins outright; the column is consulted only on an exact tie) — a rule justified for the Category B
+direction and never examined firing in reverse. This is a trade, not a pure win, and the full 13-run
+population plus the widened decision are tracked in **OI-224**. Lesson, and it is the same one this
+D-log has recorded before: a fix validated only on the cases that motivated it measures its benefit and
+not its cost — score the FINAL SERVED artifact across the whole population, not the delta on the
+motivating set.
+
+**Deliberately NOT fixed: the `-fork-square` roles (4 records).** A fork's two winning squares do not
+complete anything on the decision board — they only do so once the pivot is played. Downgrading them
+the way (2) downgrades `-key-square` would be board-false in the opposite direction, denying the very
+thing that makes a fork decisive. The honest fix is a horizon qualifier ("play here first, then this
+square finishes it"), which is a copy decision, not a correctness fix. Tracked as OI-225.
+
+**Validation method, stated because it generalizes.** `deriveRequiredSet` and `buildAnnotationOffer`
+are pure over stored evidence, so both render fixes were verified by rebuilding all 63 render
+decisions and asserting an invariant — exhaustive and deterministic, versus 3 sampled runs per board
+carrying ±20-24% grader disagreement. The role-truth probe deliberately used `winningWindows`
+(`lib/boardUtils.mjs`) while the fix uses `checkWin` (`classifier.js`): different helpers reaching the
+same verdict, so the check is not a fixture agreeing with its own author. `test:fast` 2102 -> 2118, green.
+
+### D62 — retry behaviour is now observable in `explanation_cache`, because D61's chooser made "which attempt did we serve?" a question with a real answer
+
+Before D61 the answer was always "the retry", so there was nothing to record. D61 made the served
+attempt a *decision* — and its CORRECTION block shows that decision is a trade (required-set +4,
+better-column −2), measured on a 63-record corpus by replay. Owner request, 2026-09-02: make it
+visible in production data instead, so the OI-224 objective question is settled against real traffic
+rather than a corpus.
+
+Migration 066 adds three additive columns to `public.explanation_cache`, written at the deep-reveal
+cache-miss insert (`server/index.js` ~:1449): `retry_fired`, `retry_reason` (jsonb —
+`{missingHandles, missingBetterCol}`), `served_attempt` (smallint). `computeMechanism` gained
+`contentRetryFired` and `missingBetterCol` to feed them. The combination the owner specifically asked
+for — *retried, then kept the first answer anyway* — is `retry_fired = true AND served_attempt = 1`,
+which is exactly the class D61 introduced.
+
+Three decisions worth not relitigating:
+
+- **`served_attempt` is `smallint` 1/2, not text.** Migration 065 already added
+  `deep_reveal_failures.served_attempt smallint` for the same concept. Two tables describing one event
+  must not disagree on representation, so the in-memory `'attempt1'`/`'retry'` string is mapped at the
+  DB boundary rather than a second convention being introduced.
+- **`missingHandles` was NOT widened to carry the better-column miss.** OI-181 documents why: it would
+  change the meaning of an existing logged field that other queries and the spec-058 acceptance evidence
+  read. `missingBetterCol` is a distinct field, which is the resolution OI-181's own "If picked up"
+  paragraph prescribes.
+- **The LLM-error retry is excluded.** It is a different trigger with no content reason to log; folding
+  it in would make `retry_fired` mean two things. Stated in `db-schema.md` so the exclusion is not
+  rediscovered as a bug.
+
+**Read the data with one caveat, recorded in `db-schema.md`**: the cache row is written only on a cache
+MISS, so these columns describe *generation events*, not positions — a cached position never re-records,
+and the table is therefore not a time series. If trend-across-deploys is ever wanted, that needs an
+append-only event table; it was deliberately not built.
+
+**Deploy ordering is load-bearing and its failure is silent**: PostgREST drops unknown columns from a
+write and returns success, so shipping the code before migration 066 records nothing while appearing to
+work. See the 2026-09-02 entry in `docs/deployment_steps.md`.
+
+### D63 — the better column is ground truth, so state it deterministically; and a fork's prongs get a horizon qualifier, not a downgrade
+
+Closes OI-224 and OI-225, the two items D61 deferred as "decisions with tradeoffs, not defects with
+a right answer". Both were settled by deterministic replay over the 63-record / 189-run v3retry63
+corpus — **no LLM call and no grader**, the same method D61's "Validation method" note describes.
+
+**1. OI-224: re-ranking the chooser is measurably dominated; a post-repair dissolves the tradeoff.**
+
+D61's CORRECTION block established the population: 13 runs serve text that never names the better
+column — 10 where the retry traded the column away for required handles, and 3 (`eval-8|0`,
+`eval-34|2`, `eval-35|0`) where `chooseRetryWinner` reverted to an attempt 1 that names none. Before
+acting, all five plausible re-rankings were replayed over the same 189 runs, scoring the SERVED
+attempt on BOTH axes:
+
+| chooser rule | serves no better column | runs missing >=1 required group | required groups missed |
+|---|---|---|---|
+| current (required-set lexicographic) | 13 | 14 | 15 |
+| always-retry (pre-D61) | 11 | 17 | 21 |
+| column-first lexicographic | 0 | 26 | 38 |
+| total-misses, column weighted 1 | 12 | 15 | 16 |
+| total-misses, column weighted 2 | 5 | 21 | 25 |
+| fully-compliant-first, else current | 13 | 14 | 15 |
+
+Every rule that cuts the column count costs strictly more required-set than it buys. **Option (e)
+— an explicit, tunable ranking — is not merely unattractive, it is dominated**, and that is the
+finding, not a preference. Option (b) is unavailable (prompt wording measured INERT for this
+instruction class, 0/12); option (c) cannot be evaluated without an LLM run.
+
+The resolution is option (d): the better column is **ground truth already in the prompt verbatim**
+(`renderDecision`'s "- Better move: column N (lands at cNrM)"), so it can be stated with no model
+involved at all. `ensureBetterColumnMention` (`retryDecision.mjs`) appends one localized sentence to
+the CHOSEN attempt's mechanism when `mentionsBetterColumn` says the column is absent. Replayed over
+the same 189 runs with the REAL shipped function: **13 repaired, no-better-column 13 -> 0,
+required-set unchanged at 14.** It dissolves the tradeoff rather than picking a side, which is exactly
+why it was preferred over re-ranking.
+
+`decideRetry`'s trigger and `chooseRetryWinner`'s ranking are **unchanged** — the repair runs strictly
+after both, in `computeMechanism` (production, `mechanismExplainer.mjs`) and behind `--retry` in
+`compute.mjs` (harness). The harness gate is a deliberate divergence: a run without `--retry` is the
+single-attempt baseline other measurements compare against, and repairing those rows would move a
+baseline.
+
+Two things deliberately NOT done: the sentence is plain prose, not a `[zone:better-col]` highlight
+(`mentionsBetterColumn` tests the prose the reader sees — a bare zone tag is explicitly not a
+mention, so a tag would not satisfy the check that declared the mention missing); and
+`better_col_repaired` is **not** persisted — D62's `explanation_cache` columns stay closed.
+
+**A6 preservation (owner decision, Task 4b).** `grade_mechanical.mjs`'s A6 axis reads
+`answer.mechanism` to measure whether the served text names the better column. Left untouched, the
+harness repair would overwrite exactly that field, so A6 would read a constant `pass` on every
+`--retry` run and silently stop measuring anything — the repair would have destroyed the axis it was
+meant to fix. `compute.mjs --retry` additionally emits `mechanism_pre_repair` (the mechanism as the
+model produced it, before the repair; `null` when no repair fired), and `grade_mechanical.mjs`'s A6
+now reads `row.mechanism_pre_repair ?? a.mechanism` — the pre-repair text when a repair happened,
+falling back to the unchanged `answer.mechanism` otherwise (which reproduces the exact old behavior
+on every non-repaired and pre-D63 row). The operator is `??`, deliberately not `||`: an empty-string
+`mechanism_pre_repair` is falsy under `||` and would fall through to the repaired `a.mechanism`,
+silently grading the repaired text instead of the model's own. A6 therefore keeps measuring whether
+the MODEL named the column unaided, and stays comparable with the pre-D63 189-run baseline.
+
+**Accepted, unmeasured cost**: one appended sentence is not coach voice at its best. That cost cannot
+be quantified without a graded eval run, which was explicitly out of scope — no such run was
+performed for this decision. Recorded here so it is a known trade, not a discovery.
+
+**Comparability beyond A6 (I2).** Only A6 was protected from the repair; it was not. The appended
+sentence lands in both `answer.mechanism` and `servedExplanation` on the 13 repaired rows (`13/189`,
+~7%), and every judgment axis (A3/A4/A5/A7/G1-G6) grades those same fields — so on a `--retry` run
+those axes are grading text that a pre-D63 run never produced. They are not strictly comparable to a
+pre-D63 `--retry` run without segmenting or excluding the `better_col_repaired: true` rows.
+
+**2. OI-225: a fork's prongs take a horizon qualifier.**
+
+`roleText` gains a `fork-square` kind: *"a square that will finish <owner>
+four-in-a-row — it completes nothing yet; it only becomes a winning square once the fork is set up"*.
+Applying D61's `-key-square` downgrade (`key-cell`, "it does not complete the line on this board")
+would have been board-false in the OTHER direction, denying exactly what makes a fork decisive.
+
+No cardinality claim ("two squares") is made, by owner decision — a fork half is not always a pair.
+Measured over the corpus: realized fork halves (`half.cells`) split `cells.length === 1` -> 6 (all
+`register: 'immediate'`) and `=== 2` -> 7; half-resource fork halves (`forkCells`) split
+`forkCells.length === 1` -> 11 and `=== 2` -> 9 (all `forced_sequence`). A "two squares" wording would
+have been board-false for every single-cell half — the same over-claim class T031/OI-180 already fixed
+for the sibling `double` role (`zoneAnnotations.mjs:109-115`). Single-cell realized fork halves are not
+an edge case: `zoneAnnotations.mjs:613` ("6 of the 10 realized-fork records carry a single-cell
+`cells`, which is a realized pattern, not a prong pair") and `:649` ("Offered for every realized
+fork half, single-cell ones included — there the cell IS the pattern") show they are deliberately
+offered by the same loop that offers the pair.
+
+Both `-fork-square` emitters route to it. All 4 measured defects came from the realized-pattern
+emitter (`zoneAnnotations.mjs:656`, the `half.cells` loop) — every one of the four records has an
+`opponentPunishment` with `kind: 'realized_pattern'`, `tag: 'double_threat'`, `register: 'immediate'`
+and a two-element `cells` array, so the half-resource emitter (`zoneAnnotations.mjs:520`) never fired
+for them — it has ZERO near-term `-fork-square` instances in this corpus. It was fixed anyway: same
+defect class, and I12 says fix the case-space, not the motivating instance.
+
+The 9 `future:` fork-squares are unchanged (owner decision) — they already carry the "matters later"
+contrast, were board-true, and changing them would add vocabulary the model echoes for no measured
+defect.
+
+Corpus-wide role-truth probe, rebuilding all 63 render decisions and checking every alias whose role
+claims "completing <owner> four-in-a-row line": **`-fork-square` 4 violations of 4 checked -> 0 of 4;
+`-major` 0 violations of 52 checked, unchanged.** A regression on that second line would be a
+correctness regression, not a wording one, which is why the probe checks it too. Counting the family
+by HANDLE rather than by role text tells the same story a different way: before `{ future: 9,
+horizon: 0, completing: 4 }`, after `{ future: 9, horizon: 4, completing: 0 }`.
+
+**A labelling note worth recording**, because it cost time: D61 and OI-225 both call the 52 checkable
+roles "`-key-square` roles". They are not — after D61 no `-key-square` alias carries the "completing"
+wording at all (53 are `future`, 11 are the `key-cell` downgrades). The 52 sit under the `-major`
+handle family, from the structural loop. The numbers reproduce exactly; only the family label in the
+prose was loose.
+
+**Validation method** (unchanged from D61, and it generalizes): `deriveRequiredSet`,
+`buildAnnotationOffer`, `scoreAttempt` and `chooseRetryWinner` are pure over stored evidence, so both
+issues were settled by asserting invariants over the WHOLE corpus rather than sampling runs against
+±20-24% grader disagreement. The role-truth probe used `winningWindows` (`lib/boardUtils.mjs`) while
+the committed test uses `checkWin` (`classifier.js`): two independent helpers reaching the same
+verdict, so neither is a fixture agreeing with its own author.
+
+`test:fast` 2123 -> 2136, green.

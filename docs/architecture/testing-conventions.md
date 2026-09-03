@@ -238,6 +238,15 @@ cd connect-four && npm test
 ```
 Tests are **explicitly listed** in the `test` and `test:fast` scripts in `package.json` — there is no automatic discovery.
 
+> **`test:fast` now takes ~35s of test time but exceeds a 120s foreground tool timeout end-to-end**
+> (measured 2026-09-03 at 2141 tests / 282 suites, lint included). Run it in the **background** and
+> poll its output file rather than in the foreground — a foreground call is killed mid-run and reads
+> as a hang. Two consequences worth knowing: an agent that re-runs it after the timeout doubles the
+> cost for no information, and a subagent that launches it in the background may not be able to
+> observe its own run (one stalled indefinitely waiting on a result it could not see). If you dispatch
+> work that ends in a full-suite run, either have the dispatcher run the suite, or tell the subagent
+> explicitly how it will observe the result.
+
 > **`test:fast` runs lint first and will fail before any test executes.** Since spec 055 (Epic 8) the
 > script string is `eslint . && node --test …`, so a lint **error** anywhere in the tree stops the run
 > at the lint step — you get ESLint output and no test summary at all. That is the gate working, not a

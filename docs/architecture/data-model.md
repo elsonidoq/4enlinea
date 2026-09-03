@@ -220,7 +220,7 @@ Records LLM outputs that failed annotation validation after retry, for offline a
 | `attempt1_raw_llm_output` | `text` | nullable — the FIRST attempt's raw LLM output, before any retry (spec 058, US2) |
 | `attempt1_mechanism` | `text` | nullable — the first attempt's post-processed `mechanism` text (spec 058, US2) |
 | `attempt2_raw_llm_output` | `text` | nullable — the retry attempt's raw LLM output, if a retry occurred (spec 058, US2) |
-| `attempt2_mechanism` | `text` | nullable — the retry attempt's post-processed `mechanism` text (spec 058, US2) |
+| `attempt2_mechanism` | `text` | nullable — the retry attempt's post-processed `mechanism` text (spec 058, US2). **Since D63 this is the SERVED text, which may include a deterministic appended sentence naming the better column (`ensureBetterColumnMention`, `server/retryDecision.mjs`) — it is not purely the model's own words. `attempt2_raw_llm_output` is.** |
 | `missing_handles` | `jsonb` | nullable — the required-set handles the first attempt failed to use, i.e. what triggered the retry (spec 058, US2) |
 | `served_attempt` | `smallint` | nullable — `1` or `2`, which attempt's output was actually served to the user (spec 058, US2) |
 

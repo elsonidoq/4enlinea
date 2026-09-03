@@ -2059,3 +2059,130 @@ text names a column in prose and does not describe the opponent's line as yours.
 **Not reversible** — the cleared explanations are regenerated on next request from the current render
 layer, which is the intent. Nothing user-authored is lost; `deep_reveal_json` is derived content. Both
 databases are disposable pre-launch (see CLAUDE.md), so no backup is required.
+
+---
+
+## 2026-09-02 — purge `explanation_cache` after the D61 render-layer deploy
+
+**What**: D61 changed the text the deep-reveal coach is given and therefore the text it produces —
+`-key-square` roles no longer claim a square completes a four when it does not, `requiredSet` now
+obliges the fork-creating pivot on 7 more records, and a retry that lost ground no longer overwrites a
+better first attempt. Any explanation cached before this deploy was generated under the old behaviour.
+
+**Why it needs a step at all**: the cache key carries no render-layer version. It is
+`sha256(<movestring>:<col>)` plus locale (`connect-four/server/index.js`, `positionHash` +
+`buildCacheFilter`), so a cached row for a position keeps being served indefinitely and the fix is
+invisible to any player who reaches a position someone has already seen. This is the same class of trap
+as a detector change silently invalidating stored rows.
+
+**When**: AFTER the code deploy. Purging before it just refills the cache with pre-fix text.
+
+**Action** (pre-launch): the databases are disposable and nobody is using staging or production, so
+**delete every `explanation_cache` row** rather than engineering a selective invalidation. Deleting all
+rows is safe: they are a regenerable cache, and each row is recomputed on the next request for that
+position.
+
+**Also expire the audio**: rows carry `audio_path`/`audio_generated_at` for synthesized narration of the
+cached text. Audio generated from pre-fix text will not match the new text — TTS in this project is keyed
+by text content, so stale clips are a real symptom, not a theoretical one. `explanationCacheCleanup.js`
+already implements audio expiry; a full row purge subsumes it.
+
+**Verify**: request a deep reveal for one of the records D61 changed (e.g. `eval-43`, whose required set
+now obliges `opp-fork-pivot`) and confirm the served text names the fork-creating square. A response that
+still reads like the pre-fix wording means the purge did not take.
+
+**Rollback**: none needed — the cache refills itself. There is nothing in it worth preserving.
+
+**This entry expires at launch.** Once there are real users, "delete every row" stops being acceptable
+and this becomes a staged invalidation with a warm-up.
+
+---
+
+## 2026-09-02 — apply migration 066 (`explanation_cache` retry telemetry) before the code deploy
+
+**What**: migration 066 adds three additive columns to `public.explanation_cache` — `retry_fired`
+(boolean, default `false`), `retry_reason` (jsonb, nullable), `served_attempt` (smallint, nullable)
+— so retry behaviour in the `/api/explain-move-llm` deep-reveal generation path is observable in
+the DB instead of being discarded at the endpoint (`server/mechanismExplainer.mjs`'s
+`computeMechanism` already computes it; `server/index.js`'s cache-miss insert, ~line 1449, now
+writes it).
+
+**Why order matters**: PostgREST silently drops unknown columns from an insert and returns success
+— an unapplied migration does not error, it just persists nothing into these three columns. The
+migration must be applied **before or together with** this code deploy; deploying the code first
+against an un-migrated table means every generation event in that window writes normally except
+these columns quietly vanish, with no error surfaced anywhere.
+
+**Action**: run `server/migrations/066_explanation_cache_retry_telemetry.sql` against the target
+database (same mechanism as prior numbered migrations in this file).
+
+**Verify**: after deploy, trigger a fresh (cache-miss) deep reveal for a blunder that is known to
+require a retry (e.g. a record from the D61 corpus with a required-set miss), then:
+
+```sql
+SELECT retry_fired, retry_reason, served_attempt
+FROM explanation_cache
+ORDER BY created_at DESC
+LIMIT 1;
+```
+
+Success condition: the row exists with the three columns populated (not silently absent/erroring),
+and `retry_fired`/`served_attempt` are consistent with whether that generation actually retried.
+
+**No backfill**: pre-launch disposability rule (CLAUDE.md) — existing rows keep the column
+defaults/`NULL`; no historical-row repair is planned. Only rows written after this migration and
+code both land carry real telemetry — see db-schema.md §`explanation_cache` for the cache-miss-only
+caveat.
+
+**Rollback**: the columns are purely additive and unread by any other code path; dropping them is
+safe if ever needed, but there is no reason to — this is a documentation/telemetry entry, not a
+behavioural change.
+
+---
+
+## 2026-09-02 — purge `explanation_cache` after deploying D63 (fork-square wording + better-column repair)
+
+> **One purge satisfies this entry and the D61 entry above.** Both describe the same action on the
+> same table for different causes (D61's `-key-square` role fix; D63's `-fork-square` wording + the
+> better-column repair). If both ship in the same deploy, run the purge once and tick both — do not
+> treat them as two sequential steps. They are recorded separately so that shipping only one of the
+> two changes still carries its own reason.
+
+**What**: D63 changes the text of served deep reveals in two ways — `-fork-square` aliases carry new
+role wording (so the model narrates them differently), and every served explanation that fails to
+name the better column now has a sentence appended.
+
+**Why order matters**: `explanation_cache` cache hits are filtered on `{position_hash, locale}` only
+(`buildCacheFilter`, `server/explainCacheKey.mjs:7`) — see memory `project_blunder_serving_dual_paths`
+and `db-schema.md`. A `template_version: 'v3'` column IS written on insert
+(`server/index.js:1460`), but it is never included in that filter, so it has no effect on which row a
+lookup returns. A cached row for a position is served verbatim on the next hit regardless of
+`template_version`, so **neither change is visible on any position that is already cached**. Deploying
+without a purge means the fix silently applies to new positions only, and any verification done on a
+previously-viewed board will show the OLD text and look like the deploy failed.
+
+**Action**: after the code deploy, delete all rows from `explanation_cache`.
+
+```sql
+DELETE FROM explanation_cache;
+```
+
+Pre-launch, this table is disposable (CLAUDE.md: nobody uses staging or production) — a full delete
+is the simplest correct action and no row is worth preserving. It costs only the regeneration of
+explanations on next view.
+
+**Note**: this also discards the D62 retry-telemetry rows written before the purge. That is fine and
+expected — those columns describe generation events, not positions, and the table was never a time
+series (db-schema.md §`explanation_cache`). The same table also carries `audio_path` /
+`audio_generated_at` (written by `GET /api/user/tts/deep-reveal`, `server/index.js:4016`), so the
+purge discards cached TTS audio too: that endpoint 404s (`server/index.js:3925`, "no explanation
+cached for this position") for a purged position until its deep reveal is regenerated and its audio
+re-synthesized.
+
+**Verify**: re-view a blunder board that previously showed a deep reveal, confirm the explanation is
+regenerated (a fresh `explanation_cache` row appears). The `-fork-square` wording change itself is
+checkable in the alias role text of the rebuilt render decision (`roleText`'s `fork-square` kind,
+D63/OI-225) — NOT reliably in the served prose, which the model paraphrases; don't expect the literal
+word "completing" to vanish from what's shown on screen.
+
+**Rollback**: none needed — a purge only forces regeneration.

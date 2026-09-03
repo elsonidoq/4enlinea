@@ -9,7 +9,7 @@ import { selectBoards, renderThreatList, patternOnAfterBestBoard, boardSelection
 import { groundCell, horizonForRegister } from './reasonCellGrounding.mjs';
 import { parseBoardState } from '../classifier.js';
 import { composeOpeningFrame, centralityQualitative } from './reason_engine/openingFrame.mjs';
-import { buildAnnotationOffer, forkPivotCell, OFFERABLE_TERM_SLUGS, FORK_TAGS } from './reason_engine/zoneAnnotations.mjs';
+import { buildAnnotationOffer, forkPivotCell, halfOwner, OFFERABLE_TERM_SLUGS, FORK_TAGS } from './reason_engine/zoneAnnotations.mjs';
 
 // The pruned vector minus fields the board carries (transformed) or statically excluded.
 // Path-precise: recurse into plain-object containers; classify arrays/primitives by their own path;
@@ -238,9 +238,27 @@ export function deriveRequiredSet(pruned, zones, linkId = undefined) {
     }
     // The fork pivot earns a slot when the half is a fork: naming both endpoints without the move that
     // creates them is the A7c failure (OI-182) — the endpoints are the effect, the pivot is the cause.
+    //
+    // Require/offer seam mismatch (Task 9): `forkPivotCell(half)` only ever matches a pivot
+    // minted by the half-based path in zoneAnnotations.mjs (gated on `half.tacticTag` in FORK_TAGS).
+    // Two OTHER offer paths mint a `*-fork-pivot` alias for the same owner that this call can never
+    // see — the board-tag path (fires exactly when the half-based path does NOT, i.e. `!hasTaggedFork`)
+    // and the realized-pattern path (gated on `half.kind === 'realized_pattern'` + `half.tag`, a field
+    // `forkPivotCell` never reads). Measured on the 63-record corpus: 25 records offer a `*-fork-pivot`
+    // alias and 10 never require it, all 10 because the derivation above can only look at path 1.
+    // Falling back to whichever `*-fork-pivot` alias this half's OWNER already has on offer keeps
+    // required ⊆ offered by construction (FR-004) — no new geometry is derived here, only an existing
+    // offered alias is selected. `halfOwner` is the SAME owner mapping zoneAnnotations.mjs itself uses
+    // (D47) — never reinvented here.
     for (const half of HALVES) {
       if (groups.length >= 3) break;
-      push(half, forkPivotCell(pruned?.[half]));
+      const h = pruned?.[half];
+      if (push(half, forkPivotCell(h))) continue;
+      const owner = halfOwner(h, half === 'lostResource' ? 'you' : 'opp');
+      const pivotHandleRx = new RegExp(`^${owner}-fork-pivot(-\\d+)?$`);
+      const fallback = (zones?.aliases ?? []).find(
+        (a) => pivotHandleRx.test(a.handle) && !groups.some((g) => g.spec === a.spec));
+      if (fallback) push(half, unprefix(fallback.spec));
     }
     // The single line/window slot (FR-005: "plus at most one line/window"), lostResource first.
     for (const half of HALVES) {

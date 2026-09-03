@@ -7,12 +7,15 @@
 
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync as _readFileSync2 } from 'node:fs';
+import { join as _join2, dirname as _dirname2 } from 'node:path';
+import { fileURLToPath as _fileURLToPath2 } from 'node:url';
 import { createSolverProcess } from '../c4solver-wrapper.js';
 import { computeMechanism, parseAnswer, mentionsBetterColumn } from '../mechanismExplainer.mjs';
 import { computeReason } from '../scripts/reason_engine/reasonEngine.mjs';
 import { toNarratorVector } from '../scripts/reasonNarratorVector.mjs';
 import { renderDecisionForCondition, postprocessAnswer, shapeRetryFields } from '../scripts/compute.mjs';
-import { decideRetry } from '../retryDecision.mjs';
+import { decideRetry, chooseRetryWinner, ensureBetterColumnMention } from '../retryDecision.mjs';
 
 const MOVESTRING = '3325';
 const PLAYED_COL = 5;
@@ -192,9 +195,12 @@ test('a required-set miss that is STILL missed on the retry is still served — 
   const res = await computeMechanism(MOVESTRING, PLAYED_COL, { solver, callLLM });
 
   assert.equal(calls, 2, 'still exactly one retry — no third attempt even though the retry also missed');
-  assert.equal(res.mechanism, 'You gave up the win here.'); // attempt 2's mechanism is served regardless
+  // attempt 2's mechanism is served regardless — and, since it never names the column either, the
+  // D63/OI-224 post-repair (Task 3) appends the deterministic sentence to the SERVED text only.
+  assert.equal(res.mechanism, 'You gave up the win here. Your better move was column 2.');
+  assert.equal(res.betterColRepaired, true);
   assert.equal(res.missingHandles.length, 3);
-  assert.equal(res.attempt1.mechanism, 'You gave up the win here.');
+  assert.equal(res.attempt1.mechanism, 'You gave up the win here.', 'attempt1 stays unrepaired');
 });
 
 test('an empty required set is a clean no-op — no retry triggered solely by the required-set check', async () => {
@@ -463,4 +469,343 @@ test('shapeRetryFields: a column-only miss reports missingHandles: [] and missin
   assert.equal(shaped.retry_fired, true);
   assert.deepEqual(shaped.retry_reason.missingHandles, []);
   assert.equal(shaped.retry_reason.missingBetterCol, true);
+});
+
+// ── chooseRetryWinner (D51 follow-up: keep the better attempt) ───────────────────────────────
+// Measured over the v3retry63 corpus: the retry can lose ground the first attempt already held
+// (required-set: 6/81 regressed; better-column: 11/81 regressed) even though it is net-positive
+// overall. `chooseRetryWinner` prefers the retry, falling back to attempt1 only when attempt1 is
+// STRICTLY better (more required groups satisfied, or equal groups + attempt1 names the column and
+// the retry does not). Every case below is scored against this fixture's REAL requiredSet
+// (`c1r1`/`you-immediate`, `c2r1`/`you-key-square`, `windows:c1r1,c2r1,c3r1,c4r1`/`you-immediate-line`
+// — harvested via computeReason/toNarratorVector/renderDecisionForCondition, never hand-authored,
+// per I12) — only the attempts themselves (`mechanism` + `usedSpecs`) are hand-built, mirroring the
+// `decideRetry` extraction tests above. `scoreAttempt`'s guard pass only strips a spec whose zone tag
+// is actually present-but-invalid in `mechanism`; a spec listed in `usedSpecs` with no corresponding
+// tag in the text is never stripped, so a bare `usedSpecs` list is a valid, guard-safe stand-in for
+// "this many required groups were satisfied" without needing real zone-tag text for each case.
+test('chooseRetryWinner: retry satisfies more required groups than attempt1 → retry served', async () => {
+  const nv = toNarratorVector(await computeReason(MOVESTRING, PLAYED_COL, { solver }));
+  const renderDecision = renderDecisionForCondition(nv, 'D');
+  const attempt1 = { mechanism: 'You gave up the win here.', usedSpecs: [] };
+  const retriedAttempt = {
+    mechanism: 'You gave up the win here, with more detail.',
+    usedSpecs: ['c1r1', 'c2r1', 'windows:c1r1,c2r1,c3r1,c4r1'],
+  };
+  const { chosen, attempt } = chooseRetryWinner({
+    attempt1, retriedAttempt, renderDecision, movestring: MOVESTRING, bestCol: nv?.bestCol ?? null, locale: 'en',
+  });
+  assert.equal(chosen, 'retry');
+  assert.equal(attempt, retriedAttempt);
+});
+
+test('chooseRetryWinner: retry regresses on the required set → attempt1 served', async () => {
+  const nv = toNarratorVector(await computeReason(MOVESTRING, PLAYED_COL, { solver }));
+  const renderDecision = renderDecisionForCondition(nv, 'D');
+  // attempt1 satisfies 2/3 required groups and names the column — this is what triggered the
+  // retry in the first place (missing the 3rd group).
+  const attempt1 = {
+    mechanism: 'You gave up the win here. Playing column 2 instead would have kept the win.',
+    usedSpecs: ['c1r1', 'windows:c1r1,c2r1,c3r1,c4r1'],
+  };
+  // The retry loses ALL of it — a genuine regression the retry never should have shipped.
+  const retriedAttempt = { mechanism: 'You gave up the win here.', usedSpecs: [] };
+  const { chosen, attempt } = chooseRetryWinner({
+    attempt1, retriedAttempt, renderDecision, movestring: MOVESTRING, bestCol: nv?.bestCol ?? null, locale: 'en',
+  });
+  assert.equal(chosen, 'attempt1');
+  assert.equal(attempt, attempt1);
+});
+
+test('chooseRetryWinner: equal required-groups but retry regresses on the better column only → attempt1 served', async () => {
+  const nv = toNarratorVector(await computeReason(MOVESTRING, PLAYED_COL, { solver }));
+  const renderDecision = renderDecisionForCondition(nv, 'D');
+  const sharedUsedSpecs = ['c1r1', 'windows:c1r1,c2r1,c3r1,c4r1']; // same 2/3 groups on both attempts
+  const attempt1 = {
+    mechanism: 'You gave up the win here. Playing column 2 instead would have kept the win.',
+    usedSpecs: sharedUsedSpecs,
+  };
+  const retriedAttempt = {
+    mechanism: 'You gave up the win here, explained differently, but never says which column.',
+    usedSpecs: sharedUsedSpecs,
+  };
+  const { chosen, attempt } = chooseRetryWinner({
+    attempt1, retriedAttempt, renderDecision, movestring: MOVESTRING, bestCol: nv?.bestCol ?? null, locale: 'en',
+  });
+  assert.equal(chosen, 'attempt1');
+  assert.equal(attempt, attempt1);
+});
+
+test('chooseRetryWinner: a tie (equal required-groups, equal column status) goes to the retry', async () => {
+  const nv = toNarratorVector(await computeReason(MOVESTRING, PLAYED_COL, { solver }));
+  const renderDecision = renderDecisionForCondition(nv, 'D');
+  const attempt1 = { mechanism: 'You gave up the win here.', usedSpecs: [] };
+  const retriedAttempt = { mechanism: 'You gave up the win here, phrased differently.', usedSpecs: [] };
+  const { chosen, attempt } = chooseRetryWinner({
+    attempt1, retriedAttempt, renderDecision, movestring: MOVESTRING, bestCol: nv?.bestCol ?? null, locale: 'en',
+  });
+  assert.equal(chosen, 'retry');
+  assert.equal(attempt, retriedAttempt);
+});
+
+// ── computeMechanism wiring (mechanismExplainer.mjs:143-147) — servedAttempt end-to-end ──────
+test('computeMechanism: retry improves the required set → servedAttempt is "retry" and the retried mechanism is served', async () => {
+  let calls = 0;
+  const callLLM = async () => { calls++; return calls === 1 ? missingAnswer : okAnswer; };
+  const res = await computeMechanism(MOVESTRING, PLAYED_COL, { solver, callLLM });
+  assert.equal(calls, 2);
+  assert.equal(res.servedAttempt, 'retry');
+  assert.equal(res.mechanism, OK_MECHANISM);
+});
+
+test('computeMechanism: retry regresses the required set → servedAttempt is "attempt1" and attempt1\'s mechanism is served', async () => {
+  // Attempt 1: names the column, wraps 2 of the 3 required groups (missing you-key-square) — a
+  // genuine trigger. Attempt 2 (the retry, injected as a worse answer): loses all zone coverage.
+  const partialAnswerWithCol = JSON.stringify({
+    better_move: 4, played_outcome: 'draw', best_outcome: 'win',
+    mechanism: 'You gave up the win at [zone:you-immediate]this square[/zone:you-immediate] on '
+      + '[zone:you-immediate-line]the bottom row of four[/zone:you-immediate-line]. Playing column 2 instead would have kept the win.',
+    key_cells: [], fields_relied_on: [], unsure_about: '', confidence: 'high',
+  });
+  let calls = 0;
+  const callLLM = async () => { calls++; return calls === 1 ? partialAnswerWithCol : missingAnswer; };
+  const res = await computeMechanism(MOVESTRING, PLAYED_COL, { solver, callLLM });
+  assert.equal(calls, 2, 'the retry still fires — attempt1 missed a required group');
+  assert.equal(res.servedAttempt, 'attempt1');
+  assert.equal(res.mechanism, res.attempt1.mechanism, 'attempt1 is what gets served, not the regressed retry');
+  assert.ok(res.attempt1.usedSpecs.includes('c1r1'));
+  assert.ok(!res.usedSpecs.includes('c2r1'), 'the served (attempt1) mechanism never covered you-key-square either');
+});
+
+// ── computeMechanism: contentRetryFired / missingBetterCol (migration 066 telemetry fields) ──
+test('no retry: contentRetryFired and missingBetterCol are both false, servedAttempt is "attempt1"', async () => {
+  const res = await computeMechanism(MOVESTRING, PLAYED_COL, {
+    solver, callLLM: async () => okAnswer,
+  });
+  assert.equal(res.contentRetryFired, false);
+  assert.equal(res.missingBetterCol, false);
+  assert.equal(res.servedAttempt, 'attempt1');
+});
+
+test('content retry fired and the retry is served: contentRetryFired true, servedAttempt "retry"', async () => {
+  let calls = 0;
+  const callLLM = async () => { calls++; return calls === 1 ? missingAnswer : okAnswer; };
+  const res = await computeMechanism(MOVESTRING, PLAYED_COL, { solver, callLLM });
+  assert.equal(calls, 2);
+  assert.equal(res.contentRetryFired, true);
+  assert.equal(res.missingBetterCol, true, 'missingAnswer also misses the column, not only the required set');
+  assert.equal(res.servedAttempt, 'retry');
+});
+
+test('content retry fired but attempt1 is served (retry regressed): contentRetryFired stays true, servedAttempt "attempt1"', async () => {
+  // Same fixture as the "retry regresses the required set" servedAttempt test above: attempt1
+  // names the column and wraps 2 of 3 required groups (a genuine trigger); the retry loses all
+  // zone coverage and is rejected by chooseRetryWinner. contentRetryFired records that a retry was
+  // ATTEMPTED, independent of which attempt chooseRetryWinner ultimately serves.
+  const partialAnswerWithCol = JSON.stringify({
+    better_move: 4, played_outcome: 'draw', best_outcome: 'win',
+    mechanism: 'You gave up the win at [zone:you-immediate]this square[/zone:you-immediate] on '
+      + '[zone:you-immediate-line]the bottom row of four[/zone:you-immediate-line]. Playing column 2 instead would have kept the win.',
+    key_cells: [], fields_relied_on: [], unsure_about: '', confidence: 'high',
+  });
+  let calls = 0;
+  const callLLM = async () => { calls++; return calls === 1 ? partialAnswerWithCol : missingAnswer; };
+  const res = await computeMechanism(MOVESTRING, PLAYED_COL, { solver, callLLM });
+  assert.equal(calls, 2);
+  assert.equal(res.contentRetryFired, true);
+  assert.equal(res.missingBetterCol, false, 'partialAnswerWithCol already named the column — only the required set triggered the retry');
+  assert.equal(res.servedAttempt, 'attempt1');
+});
+
+test('a column-only miss sets missingBetterCol true with an empty missingHandles list', async () => {
+  let calls = 0;
+  const callLLM = async () => { calls++; return calls === 1 ? noColumnAnswer : okAnswer; };
+  const res = await computeMechanism(MOVESTRING, PLAYED_COL, { solver, callLLM });
+  assert.equal(calls, 2);
+  assert.equal(res.contentRetryFired, true);
+  assert.equal(res.missingBetterCol, true);
+  assert.equal(res.missingHandles.length, 0);
+});
+
+test('an LLM-error retry (call/parse failure) does NOT set contentRetryFired — a different trigger, no content reason', async () => {
+  let calls = 0;
+  const callLLM = async () => {
+    calls++;
+    if (calls === 1) throw new Error('network boom');
+    return okAnswer;
+  };
+  const res = await computeMechanism(MOVESTRING, PLAYED_COL, { solver, callLLM });
+  assert.equal(calls, 2, 'the LLM-error retry still fires — unaffected by this change');
+  assert.equal(res.servedAttempt, 'retry', 'the resent attempt is served as-is');
+  assert.equal(res.contentRetryFired, false, 'contentRetryFired covers only the content-trigger branch, not the LLM-error resend');
+  assert.equal(res.missingBetterCol, false);
+});
+
+// ── D63 / OI-224: deterministic better-column post-repair ─────────────────────────────────────
+// WHY this exists and not a re-ranked chooser: replaying all 189 runs of the v3retry63 corpus and
+// scoring the SERVED attempt, every alternative chooser ranking that cut the "no better column"
+// count cost strictly MORE required-set than it bought (column-first: column 13->0 but required-set
+// misses 14->26 runs / 15->38 groups). The repair is not a ranking — simulated over the same 189
+// runs it measured column 13->0 with the required-set axis unchanged at 14. See D63.
+
+test('ensureBetterColumnMention: appends the localized column sentence when the text lacks it', () => {
+  const { mechanism, repaired } = ensureBetterColumnMention(
+    'You handed your opponent the tempo here.', 2, 'en');
+  assert.equal(repaired, true);
+  // bestCol is 0-indexed; the reader sees 1-indexed.
+  assert.match(mechanism, /\bcolumn 3\b/);
+  assert.ok(mechanism.startsWith('You handed your opponent the tempo here.'));
+});
+
+test('ensureBetterColumnMention: the repaired text satisfies mentionsBetterColumn (the check that '
+  + 'declared it missing)', () => {
+  const before = 'You handed your opponent the tempo here.';
+  assert.equal(mentionsBetterColumn({ mechanism: before }, 2, 'en'), false);
+  const { mechanism } = ensureBetterColumnMention(before, 2, 'en');
+  assert.equal(mentionsBetterColumn({ mechanism }, 2, 'en'), true);
+});
+
+test('ensureBetterColumnMention: no-ops when the column is already named (prose or raw coordinate)', () => {
+  const plain = ensureBetterColumnMention('Play column 3 instead.', 2, 'en');
+  assert.equal(plain.repaired, false);
+  assert.equal(plain.mechanism, 'Play column 3 instead.');
+  // The guard rewrites a raw cNrM to "column N" before serving, so mentionsBetterColumn counts it —
+  // the repair must respect that and not double up.
+  const raw = ensureBetterColumnMention('You should have played c3r1.', 2, 'en');
+  assert.equal(raw.repaired, false);
+});
+
+test('ensureBetterColumnMention: abstains on no better column, empty text, or a non-string', () => {
+  assert.deepEqual(ensureBetterColumnMention('anything', null, 'en'),
+    { mechanism: 'anything', repaired: false });
+  assert.deepEqual(ensureBetterColumnMention(null, 2, 'en'), { mechanism: null, repaired: false });
+  assert.deepEqual(ensureBetterColumnMention('', 2, 'en'), { mechanism: '', repaired: false });
+  assert.deepEqual(ensureBetterColumnMention('   ', 2, 'en'), { mechanism: '   ', repaired: false });
+});
+
+test('ensureBetterColumnMention: locale "es" appends the Spanish wording and satisfies the es check', () => {
+  const before = 'Le regalaste el tempo a tu rival.';
+  assert.equal(mentionsBetterColumn({ mechanism: before }, 2, 'es'), false);
+  const { mechanism, repaired } = ensureBetterColumnMention(before, 2, 'es');
+  assert.equal(repaired, true);
+  assert.match(mechanism, /\bcolumna 3\b/);
+  assert.equal(mentionsBetterColumn({ mechanism }, 2, 'es'), true);
+  // Must NOT ship the English string under es (the silent-English-fallback trap).
+  assert.doesNotMatch(mechanism, /\bcolumn 3\b/);
+});
+
+test('ensureBetterColumnMention: the appended sentence carries no zone tag and no raw coordinate, '
+  + 'so the annotation gate cannot strip it', () => {
+  const { mechanism } = ensureBetterColumnMention('Some coach prose.', 2, 'en');
+  const appended = mechanism.slice('Some coach prose.'.length);
+  assert.doesNotMatch(appended, /\[\/?zone:/);
+  assert.doesNotMatch(appended, /\[\/?term:/);
+  assert.doesNotMatch(appended, /\bc\d+r\d+\b/i);
+  assert.doesNotMatch(appended, /\bcol\d+\b/i);
+});
+
+// M7: the repair must not produce a run-on sentence when the mechanism ends without punctuation.
+test('ensureBetterColumnMention: inserts a "." before the appended sentence when the mechanism ' +
+  'does not already end in sentence punctuation', () => {
+  const { mechanism } = ensureBetterColumnMention('You gave up the tempo', 2, 'en');
+  assert.equal(mechanism, 'You gave up the tempo. Your better move was column 3.');
+});
+
+test('ensureBetterColumnMention: does not double up punctuation when the mechanism already ends ' +
+  'in ".", "!", "?" or "…" (including trailing whitespace)', () => {
+  assert.equal(
+    ensureBetterColumnMention('You gave up the tempo.', 2, 'en').mechanism,
+    'You gave up the tempo. Your better move was column 3.');
+  assert.equal(
+    ensureBetterColumnMention('You gave up the tempo!', 2, 'en').mechanism,
+    'You gave up the tempo! Your better move was column 3.');
+  assert.equal(
+    ensureBetterColumnMention('Did you see that coming?', 2, 'en').mechanism,
+    'Did you see that coming? Your better move was column 3.');
+  assert.equal(
+    ensureBetterColumnMention('You gave up the tempo…', 2, 'en').mechanism,
+    'You gave up the tempo… Your better move was column 3.');
+  // Trailing whitespace before the punctuation must not defeat the check.
+  assert.equal(
+    ensureBetterColumnMention('You gave up the tempo.   ', 2, 'en').mechanism,
+    'You gave up the tempo. Your better move was column 3.');
+});
+
+test('ensureBetterColumnMention: checks the last NON-TAG character when the mechanism ends in a ' +
+  'closing [/zone:...] tag', () => {
+  const { mechanism } = ensureBetterColumnMention(
+    'The threat sat at [zone:opp-major]c4r3[/zone:opp-major]', 2, 'en');
+  assert.equal(mechanism,
+    'The threat sat at [zone:opp-major]c4r3[/zone:opp-major]. Your better move was column 3.');
+  const { mechanism: alreadyPunctuated } = ensureBetterColumnMention(
+    'The threat sat at [zone:opp-major]c4r3[/zone:opp-major].', 2, 'en');
+  assert.equal(alreadyPunctuated,
+    'The threat sat at [zone:opp-major]c4r3[/zone:opp-major]. Your better move was column 3.');
+});
+
+// ── computeMechanism wiring for the D63/OI-224 post-repair (Task 3) ──────────────────────────
+test('computeMechanism: a served answer that never names the better column is repaired, and the '
+  + 'repair is reported via betterColRepaired', async () => {
+  // Both attempts omit the column (noColumnAnswer, reused for both calls): the required set is
+  // fully satisfied so the chooser ties and serves the retry, but the served text still lacks the
+  // column — exactly the 13-run population OI-224 measured. Production must not ship that.
+  const result = await computeMechanism(MOVESTRING, PLAYED_COL, {
+    solver, callLLM: async () => noColumnAnswer,
+  });
+  assert.equal(result.betterColRepaired, true);
+  assert.equal(mentionsBetterColumn({ mechanism: result.mechanism }, result.nv.bestCol), true);
+  assert.equal(result.answer.mechanism, result.mechanism, 'answer.mechanism must carry the repair too');
+});
+
+test('computeMechanism: an answer that already names the better column is untouched '
+  + '(betterColRepaired false, text byte-identical)', async () => {
+  const result = await computeMechanism(MOVESTRING, PLAYED_COL, {
+    solver, callLLM: async () => okAnswer,
+  });
+  assert.equal(result.betterColRepaired, false);
+  assert.ok(!/Your better move was column/.test(result.mechanism));
+  assert.equal(result.mechanism, OK_MECHANISM, 'no repair means byte-identical to the pre-existing served text');
+});
+
+test('computeMechanism: attempt1 stays UNREPAIRED even when it is also the served attempt and the '
+  + 'repair fires', async () => {
+  // attempt1 = noColumnAnswer: satisfies the required set fully but omits the column, so
+  // chooseRetryWinner picks it over a strictly worse retry (missingAnswer, 0/3 required groups) —
+  // servedAttempt is 'attempt1' with no required-set trigger of its own, and the post-repair still
+  // has to run on it. Verifies the object-identity claim (spread-not-mutate) with a real fixture.
+  let calls = 0;
+  const callLLM = async () => { calls++; return calls === 1 ? noColumnAnswer : missingAnswer; };
+  const result = await computeMechanism(MOVESTRING, PLAYED_COL, { solver, callLLM });
+  assert.equal(result.servedAttempt, 'attempt1');
+  assert.equal(result.betterColRepaired, true);
+  assert.notEqual(result.mechanism, result.attempt1.mechanism,
+    'attempt1 must stay unrepaired even though it is what gets served');
+  assert.equal(mentionsBetterColumn({ mechanism: result.attempt1.mechanism }, result.nv.bestCol), false,
+    'attempt1.mechanism is the model\'s original text — still missing the column');
+});
+
+test('compute.mjs --retry parity: the harness applies the SAME better-column repair production '
+  + 'applies, via the same exported function (never a reimplementation)', () => {
+  // I12: probe the property through the production function, never a hand-rolled proxy.
+  // SHAPE, not a bare source regex: computePostGuard.test.mjs:55-70 pairs a source-import regex with
+  // a BEHAVIOURAL companion at :72 — a lone `assert.match(src, /better_col_repaired/)` would pass on
+  // the COMMENT this task's Step 4 inserts, before any field is emitted, so that half is dropped
+  // rather than kept as padding.
+  // The harness applies the repair inline — a 3-line block inside the un-exported `runLlm` — so
+  // there is no exported harness-side helper to call directly. The honest coverage is (a) this
+  // import check, that compute.mjs shares the ONE implementation rather than reimplementing it, plus
+  // (b) the direct `ensureBetterColumnMention` behaviour check already in Task 2. The harness's OWN
+  // wiring — that `runLlm` actually calls the imported function at the right point and the row field
+  // lands correctly — is covered by Task 6's probe re-run over real harness output, not by a unit
+  // test here.
+  const src = _readFileSync2(_join2(_dirname2(_fileURLToPath2(import.meta.url)),
+    '../scripts/compute.mjs'), 'utf8');
+  assert.match(src, /import\s*\{[^}]*\bensureBetterColumnMention\b[^}]*\}\s*from\s*'\.\.\/retryDecision\.mjs';/,
+    'compute.mjs must import the real ensureBetterColumnMention symbol from retryDecision.mjs, not reimplement it');
+  assert.doesNotMatch(src, /function\s+ensureBetterColumnMention/,
+    'compute.mjs must not define a local ensureBetterColumnMention');
+  // Behavioural half: same function, same contract — verified directly, never via compute.mjs's source.
+  const { mechanism, repaired } = ensureBetterColumnMention('No column named here.', 4, 'en');
+  assert.equal(repaired, true);
+  assert.match(mechanism, /\bcolumn 5\b/);
 });

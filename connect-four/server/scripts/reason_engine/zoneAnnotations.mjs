@@ -6,7 +6,7 @@
 import { expandSpec } from '../../zoneParser.js';
 import { TAG_PHRASE } from './causalLinks.mjs';   // single source of truth for canonical phrases (M1)
 import { horizonForRegister, statusOf } from '../reasonCellGrounding.mjs';
-import { parseBoardState } from '../../classifier.js';
+import { parseBoardState, checkWin } from '../../classifier.js';
 
 // Boards whose tags may become highlights: near-term only (spec decision #5 — the projected-deep board
 // stays horizon prose so an empty deep cell never reads as a present threat).
@@ -140,6 +140,46 @@ function roleText(owner, kind) {
   // the mover of an afterPlayed board is always the player, so a possessive like "your opponent's last
   // move" would be board-false here.
   if (kind === 'fork-pivot-played') return `the square your last move just filled — that move is what set up the fork`;
+  // GROUP 1 fix (see keySquareKind below): `half.completingCell` is defined against that half's OWN
+  // `finalMovestring` (feature-vector-glossary.md:167), not necessarily the 'decision' board this
+  // alias's truthBoard names — measured board-false on 11/67 corpus `-key-square` aliases across 9
+  // records (eval-42, eval-44, eval-48, eval-49, eval-50, pin-L1-completes-your-tactic,
+  // pin-L2-enabled-opponent, pin-branch-invariance-false). This branch states only what is verified
+  // board-true: the cell is part of the tactical idea, but does not name a false "completes" claim.
+  if (kind === 'key-cell') return `a square tied to ${possessive(owner)} four-in-a-row idea — it does not complete the line on this board`;
+  // OI-225 / D63. A fork's prongs complete NOTHING on the board the alias names — they become
+  // winning squares only once the PIVOT is played (`forkPivotCell`'s own comment: the prongs are
+  // "the gravity-next squares above it, which is precisely why the last ply makes both live at
+  // once"). Applying the `-key-square` downgrade (`key-cell`, "it does not complete the line on this
+  // board") here would be board-false in the OTHER direction — it denies exactly what makes a fork
+  // decisive. So this is a HORIZON QUALIFIER, not a downgrade. Measured over the v3retry63 corpus:
+  // 4 of 4 near-term `-fork-square` aliases were board-false under the old 'major' wording (eval-43
+  // c6r2, eval-44 c7r1, pin-L2-enabled-opponent c6r1, pin-branch-invariance-false c6r1) -> 0 after.
+  // The 9 `future:` fork-squares keep the 'future' role: they already carry the "matters later"
+  // contrast, were board-true, and changing them would add vocabulary the model echoes for no
+  // measured defect (owner decision, D63).
+  //
+  // NO CARDINALITY CLAIM ("two squares"), by owner decision. A fork half is not always a pair:
+  // measured over the corpus, REALIZED fork halves (the `half.cells` loop over the realized-pattern
+  // halves, below in this file) split `cells.length === 1` -> 6 (all `register: 'immediate'`) and
+  // `cells.length === 2` -> 7; HALF-RESOURCE fork halves (the `for (const fc of ...half.forkCells...)`
+  // loop that pushes `[\`${owner}-fork-square\`, fc, forkCellKind]`, inside the `halfPairs` loop below)
+  // split `forkCells.length === 1` -> 11 and `=== 2` -> 9 (all `forced_sequence`). A "two squares"
+  // wording would be board-false for every one of the single-cell halves — the exact defect class
+  // T031 / OI-180 already fixed for the sibling `double` role (see the T031 comment just above the
+  // `if (kind === 'double')` branch earlier in this function: "the role text no longer claims a
+  // singular 'fork square' — it names the squares generically, correct for 2 or more"). Single-cell
+  // realized fork halves are not an edge case being special-cased away — they are deliberately
+  // offered by the same loop that offers the pair (the comment on the `if (Array.isArray(half.cells)
+  // && half.cells.length >= 2)` block, verbatim: "6 of the 10 realized-fork records carry a
+  // single-cell `cells`, which is a realized pattern, not a prong pair"; and the comment on the
+  // `for (const fc of (half.cells ?? []))` loop just below it, verbatim: "Offered for every realized
+  // fork half, single-cell ones included (there the cell IS the pattern)"). So the role text says
+  // only "a square", never a count.
+  if (kind === 'fork-square') {
+    return `a square that will finish ${possessive(owner)} four-in-a-row — it completes nothing yet; `
+      + 'it only becomes a winning square once the fork is set up';
+  }
   // T030: was `${who}'s` — grammatical for "your opponent's" but produced "you's" for the owner
   // side. `possessive()` handles both.
   return `a single square completing ${possessive(owner)} four-in-a-row line`; // major
@@ -279,6 +319,42 @@ export function buildAnnotationOffer(pruned, boardDecisions, opts = {}) {
   // in both cases the landing cell is genuinely the pivot, not one of the fork's own finishing
   // squares.
   const decisionMovestring = boardDecisions.find((b) => b.id === 'decision')?.movestring ?? '';
+  // GROUP 1 fix (this session's task): the half-resource loop below always names 'decision' as the
+  // truthBoard for a near-term (`isFuture === false`) half offer, so board truth for that offer must
+  // be checked against the DECISION grid specifically — not derived from register/horizon alone.
+  // Parsed once, here, rather than per-cell: `decisionMovestring` is fixed for the whole render.
+  // A missing/unparseable 'decision' board abstains (I2) — `decisionBoardGrid` stays null and
+  // `keySquareKind` (below) falls back to the unchanged 'major' wording rather than guessing.
+  let decisionBoardGrid = null;
+  if (decisionMovestring) {
+    try { ({ board: decisionBoardGrid } = parseBoardState(decisionMovestring)); } catch { decisionBoardGrid = null; }
+  }
+  // The mover's own player number ('you' = the blundering player, `pruned.player`; 'opp' = the other
+  // side — same convention as `statusOf`'s `perspectivePlayer` above). Connect Four has exactly two
+  // players (1|2), so 'opp' is always the complement.
+  const playerForOwner = (owner) => (owner === 'you' ? pruned.player : (pruned.player === 1 ? 2 : 1));
+  // GROUP 1 fix. `half.completingCell` is defined against that half's OWN `finalMovestring`
+  // (feature-vector-glossary.md:167) — not necessarily the 'decision' board this alias's truthBoard
+  // names even when `register: 'immediate'` (`isFuture === false`). Verify directly with `checkWin`,
+  // the same production helper `causalLinks.mjs:20` (`isTerminalBestMove`) already uses for the
+  // identical "does dropping a disc here complete four" question, against the ACTUAL 'decision' grid
+  // — never re-derived from register/horizon. Measured board-false on 11/67 corpus `-key-square`
+  // aliases across 9 records (eval-42, eval-44, eval-48, eval-49, eval-50,
+  // pin-L1-completes-your-tactic, pin-L2-enabled-opponent, pin-branch-invariance-false).
+  // Abstains to the unchanged 'major' wording (I2) on any missing/unparseable/occupied evidence —
+  // it only downgrades on a POSITIVE check that the cell does not complete a four on this board.
+  // Deliberately NOT applied to `-fork-square` offers: a fork's prong genuinely completes the win
+  // once the pivot is played, so the `key-cell` downgrade ("it does not complete the line on this
+  // board") would trade one board-false claim for a different one. That family is handled by the
+  // horizon-qualified `fork-square` role instead (roleText, D63/OI-225) — not by this board check.
+  const keySquareKind = (cell, owner) => {
+    if (!decisionBoardGrid || !cell) return 'major';               // abstain (I2): no board to check
+    const m = /^c(\d+)r(\d+)$/.exec(cell);
+    if (!m) return 'major';                                         // abstain (I2): unparseable spec
+    const col = Number(m[1]) - 1, row = Number(m[2]) - 1;
+    if (decisionBoardGrid[row]?.[col] !== 0) return 'major';         // abstain (I2): occupied/out of range
+    return checkWin(decisionBoardGrid, row, col, playerForOwner(owner)) ? 'major' : 'key-cell';
+  };
   const pivotCreatingCol = (boardId) => (boardId === 'afterBest' ? pruned.bestCol
     : boardId === 'afterPlayed' ? pruned.playedCol : null);
   // A pivot may take the PRESENT-tense `fork-pivot-now` role ("the square <owner> plays to CREATE the
@@ -415,10 +491,18 @@ export function buildAnnotationOffer(pruned, boardDecisions, opts = {}) {
     const owner = halfOwner(half, side);
     const isFuture = horizonForRegister(half.register) !== 'immediate';
     const pre = isFuture ? 'future:' : '';
-    const cellKind = isFuture ? 'future' : 'major';   // 'major' never over-claims immediacy
+    // Feeds ONLY the `-fork-square` offer below (`grep -n cellKind` shows exactly this line, its
+    // comment, and that one use). D63: near-term fork prongs take the horizon-qualified role, not
+    // the 'major' "completing" wording. This emitter produces zero near-term `-fork-square` aliases
+    // in today's corpus — all 4 measured defects came from the realized-pattern loop further down —
+    // but it is the same defect class, so it is fixed here too rather than left to be rediscovered
+    // when a `tacticTag` fork half lands with an immediate register (I12: fix the case-space).
+    const forkCellKind = isFuture ? 'future' : 'fork-square';
+    // GROUP 1 fix: `-key-square` gets its OWN, board-checked kind (see keySquareKind above).
+    const keyCellKind = isFuture ? 'future' : keySquareKind(half.completingCell, owner);
     const lineKind = isFuture ? 'future-line' : 'line';
     const offers = [];
-    if (half.completingCell) offers.push([`${owner}-key-square`, half.completingCell, cellKind]);
+    if (half.completingCell) offers.push([`${owner}-key-square`, half.completingCell, keyCellKind]);
     if (Array.isArray(half.window) && half.window.length) {
       offers.push([`${owner}-key-line`, 'windows:' + half.window.join(','), lineKind]);
     }
@@ -430,8 +514,14 @@ export function buildAnnotationOffer(pruned, boardDecisions, opts = {}) {
     // whole window, so a correct single-cell fork highlight was being stripped (OI-172, measured:
     // c2r6 and c5r5 on 3154442332131341225551). Offering the cells individually closes that
     // without weakening Decision A — a window member that is never offered standalone still fails.
+    // NOT board-checked the way `-key-square` is (see the keySquareKind comment above): a fork prong
+    // genuinely completes the win once the pivot is played, so a board check against the decision
+    // board alone would be the wrong oracle here. Instead the role text itself (`fork-square` kind,
+    // D63/OI-225) carries the horizon qualifier — see roleText. This emitter produces zero near-term
+    // `-fork-square` aliases in today's corpus (all 4 measured defects came from the realized-pattern
+    // loop further down), but is fixed here too as the same defect class (I12: fix the case-space).
     for (const fc of (FORK_TAGS.has(half.tacticTag) ? half.forkCells ?? [] : [])) {
-      offers.push([`${owner}-fork-square`, fc, cellKind]);
+      offers.push([`${owner}-fork-square`, fc, forkCellKind]);
     }
     // The fork PIVOT (OI-182). forkCells are the squares the fork FINISHES on; the pivot is the move
     // that creates it — the only part a player can learn to see coming. Offered separately so an
@@ -567,7 +657,7 @@ export function buildAnnotationOffer(pruned, boardDecisions, opts = {}) {
       seen.add(fc);
       seen.add(cellSpec);
       const fh = mkHandle(`${owner}-fork-square`);
-      aliases.push({ handle: fh, spec: cellSpec, role: roleText(owner, isFuture ? 'future' : 'major'),
+      aliases.push({ handle: fh, spec: cellSpec, role: roleText(owner, isFuture ? 'future' : 'fork-square'),
                      truthBoard, kbId: null });
       zoneAliasMap[fh] = cellSpec;
     }

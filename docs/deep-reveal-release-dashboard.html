@@ -49,7 +49,7 @@ button[aria-pressed=true]{border-color:var(--accent);color:var(--accent)}
 <div class=wrap>
 <h1>Deep Reveal — Release Evidence</h1>
 <p class=sub id=stamp></p>
-<div class=caveat><b>Read every number with these three limits.</b> (1) The corpus is built for case-type coverage with rare cases over-sampled — its rates are <b>per case type, not per player encounter</b>; only §3's frequency panel is per encounter. (2) The eval harness is <b>single-attempt</b>; production retries once on exactly the two most common failures here, so these are a <b>floor on quality, not a player-facing defect rate</b> (OI-183). (3) The three judgment axes carry a measured <b>±20% grader disagreement</b> — see §3.</div>
+<div class=caveat><b>Read every number with these three limits.</b> (1) The corpus is built for case-type coverage with rare cases over-sampled — its rates are <b>per case type, not per player encounter</b>; only §3's frequency panel is per encounter. (2) Most runs here are <b>single-attempt</b> while production retries once, so their numbers are a <b>floor on quality, not a player-facing defect rate</b> (OI-183) — the exception is the <b>retry-on</b> run (chip B), the first ever to exercise that path, which is exactly why it is not comparable to the rows above it. (3) The three judgment axes carry a measured <b>±20% grader disagreement</b> — see §3.</div>
 <div id=app></div>
 </div>
 <script>
@@ -222,6 +222,7 @@ function render(){
 
   <div class=card>
    <h3>How often would a real player hit this?</h3>
+   <div class=caveat><b>Measured 2026-08-28, before the D61 render fixes of 2026-09-02.</b> Two of the rates below describe defects since fixed — board-false “completing” roles and the offered-but-unrequired fork pivot. Accurate as history; re-run <span class=mono>frequency_probe.mjs</span> before quoting them as current.</div>
    <p>Blunders harvested from <b>${D.frequency.games} simulated games</b> → <b>${D.frequency.blunders} blunders</b>, ${D.frequency.rendered} of which produced a render decision. Programmatic detectors only — no model, no graders, so no ±20%.</p>
    <div class=scroll><table><tr><th>Render defect</th><th>Rate per blunder</th><th></th></tr>
    ${D.frequency.detectors.map(d=>`<tr><td><b>${esc(d.name)}</b>${d.heuristic?' <span class="pill warn">heuristic</span>':''}<div style="color:var(--mut);font-size:12.5px">${esc(d.note)}</div></td><td class="num ${d.rate>=30?'bad':d.rate>=10?'warn':''}">${d.rate}%</td><td><div class=bar><i style="width:${d.rate}%;background:${d.rate>=30?'var(--bad)':'var(--accent)'}"></i></div></td></tr>`).join('')}

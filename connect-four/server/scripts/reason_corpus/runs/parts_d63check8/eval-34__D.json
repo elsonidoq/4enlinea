@@ -1,0 +1,1047 @@
+{
+ "id": "eval-34",
+ "condition": "D",
+ "runs": [
+  {
+   "run_index": 0,
+   "feature_vector": {
+    "movestring": "33333111155545355220244122462616660064",
+    "playedCol": 0,
+    "bestCol": 4,
+    "discs": 38,
+    "boardState": "closing",
+    "player": 1,
+    "opponent": 2,
+    "case": "win_to_draw",
+    "notABlunder": false,
+    "lostResource": {
+     "kind": "realized_pattern",
+     "tag": "immediate_threat",
+     "owner": 1,
+     "register": "immediate",
+     "cells": [
+      "c5r6"
+     ],
+     "windows": [
+      [
+       "c4r6",
+       "c5r6",
+       "c6r6",
+       "c7r6"
+      ],
+      [
+       "c3r6",
+       "c4r6",
+       "c5r6",
+       "c6r6"
+      ],
+      [
+       "c2r6",
+       "c3r6",
+       "c4r6",
+       "c5r6"
+      ]
+     ],
+     "completingCell": "c5r6",
+     "window": [
+      "c4r6",
+      "c5r6",
+      "c6r6",
+      "c7r6"
+     ],
+     "finalMovestring": "33333111155545355220244122462616660064",
+     "entryCell": "c5r6",
+     "anchorCells": [
+      "c5r6"
+     ]
+    },
+    "opponentPunishment": {
+     "kind": "denial",
+     "verdict": "occupation",
+     "register": "immediate",
+     "line": [
+      {
+       "ply": 40,
+       "mover": 2,
+       "col": 4,
+       "cell": "c5r6"
+      }
+     ],
+     "finalMovestring": "3333311115554535522024412246261666006404",
+     "completingCell": "c5r6",
+     "window": [
+      "c4r6",
+      "c5r6",
+      "c6r6",
+      "c7r6"
+     ],
+     "cell": "c5r6",
+     "exhaustive": true,
+     "entryCell": "c5r6",
+     "anchorCells": [
+      "c5r6"
+     ],
+     "tie": {
+      "kind": "tied",
+      "sharedCells": [
+       "c5r6"
+      ]
+     }
+    },
+    "replyHistogram": {
+     "afterBest": 0,
+     "afterPlayed": 1
+    },
+    "gate": null,
+    "route": "realized_denied",
+    "tag": "immediate_threat",
+    "direction": "missed_own"
+   },
+   "render_decision": {
+    "case": "win_to_draw",
+    "route": "realized_denied",
+    "direction": "missed_own",
+    "patternOnAfterBestBoard": null,
+    "link": {
+     "id": "L1",
+     "confidence": "high",
+     "covers": [
+      "route",
+      "tag",
+      "direction",
+      "lostResource.kind",
+      "lostResource.verdict",
+      "lostResource.register",
+      "lostResource.terminal",
+      "opponentPunishment.kind",
+      "opponentPunishment.verdict",
+      "opponentPunishment.register",
+      "opponentPunishment.terminal",
+      "opponentPunishment.tie.kind"
+     ],
+     "guardrail": "The correct move builds/completes YOUR pattern; do not attribute it to the opponent.",
+     "text": "Column 5 was the better move: it wins on the spot, completing four in column 5 — the game is over there. The played move let the opponent take column 5 instead, denying you that win."
+    },
+    "boards": [
+     {
+      "id": "decision",
+      "shown": true,
+      "reason": "the position under judgment"
+     },
+     {
+      "id": "afterBest",
+      "shown": true,
+      "reason": "the better move — wins outright; the game is over there"
+     },
+     {
+      "id": "afterPlayed",
+      "shown": false,
+      "reason": "the move you played — tag-set identical to the decision board, omitted"
+     },
+     {
+      "id": "projectedDeep",
+      "shown": false,
+      "reason": "the resource is not deep (register is immediate) — no projected board"
+     }
+    ],
+    "resource": {
+     "completingCell": {
+      "cell": "c5r6",
+      "status": "empty-playable-now",
+      "horizon": "immediate",
+      "reachableInPlies": 39,
+      "role": "where the load-bearing resource completes"
+     },
+     "registerToHorizon": {
+      "register": "immediate",
+      "horizon": "immediate"
+     }
+    },
+    "fieldPartition": {
+     "rendered": [
+      "movestring",
+      "playedCol",
+      "bestCol",
+      "boardState",
+      "player",
+      "opponent",
+      "case",
+      "lostResource.tag",
+      "lostResource.owner",
+      "lostResource.cells[]",
+      "lostResource.windows[][]",
+      "lostResource.completingCell",
+      "lostResource.window[]",
+      "lostResource.finalMovestring",
+      "lostResource.entryCell",
+      "lostResource.anchorCells[]",
+      "opponentPunishment.line[].ply",
+      "opponentPunishment.line[].mover",
+      "opponentPunishment.line[].col",
+      "opponentPunishment.line[].cell",
+      "opponentPunishment.finalMovestring",
+      "opponentPunishment.completingCell",
+      "opponentPunishment.window[]",
+      "opponentPunishment.cell",
+      "opponentPunishment.entryCell",
+      "opponentPunishment.anchorCells[]",
+      "opponentPunishment.tie.sharedCells[]",
+      "replyHistogram.afterBest",
+      "replyHistogram.afterPlayed"
+     ],
+     "covered": [
+      "lostResource.kind",
+      "lostResource.register",
+      "opponentPunishment.kind",
+      "opponentPunishment.verdict",
+      "opponentPunishment.register",
+      "opponentPunishment.tie.kind",
+      "route",
+      "tag",
+      "direction"
+     ],
+     "excluded": [
+      "discs",
+      "notABlunder",
+      "opponentPunishment.exhaustive"
+     ]
+    },
+    "finalMovestring": "3333311115554535522024412246261666006404",
+    "openingContext": null,
+    "zones": {
+     "aliases": [
+      {
+       "handle": "better-col",
+       "spec": "col5",
+       "role": "the column of the better move",
+       "truthBoard": "decision",
+       "kbId": null
+      },
+      {
+       "handle": "played-col",
+       "spec": "col1",
+       "role": "the column you played",
+       "truthBoard": "decision",
+       "kbId": null
+      },
+      {
+       "handle": "you-major",
+       "spec": "c1r6",
+       "role": "a single square completing your four-in-a-row line",
+       "truthBoard": "decision",
+       "kbId": null
+      },
+      {
+       "handle": "you-major-line",
+       "spec": "windows:c1r6,c2r6,c3r6,c4r6",
+       "role": "the line across columns 1–4 on row 6: the whole four-in-a-row line you are playing for (a LINE of four squares, not a single square — use this handle, not a single-square handle, whenever your words say \"line\", \"strip\" or \"row of four\")",
+       "truthBoard": "decision",
+       "kbId": null
+      },
+      {
+       "handle": "you-double",
+       "spec": "windows:c1r6,c5r6",
+       "role": "the fork squares where you get winning squares at once",
+       "truthBoard": "decision",
+       "kbId": "double_threat"
+      },
+      {
+       "handle": "you-immediate",
+       "spec": "c5r6",
+       "role": "the single square where you can make four next move",
+       "truthBoard": "decision",
+       "kbId": "immediate_threat"
+      },
+      {
+       "handle": "you-immediate-line",
+       "spec": "windows:c2r6,c3r6,c4r6,c5r6",
+       "role": "the line across columns 2–5 on row 6: the whole four-in-a-row line you are playing for (a LINE of four squares, not a single square — use this handle, not a single-square handle, whenever your words say \"line\", \"strip\" or \"row of four\")",
+       "truthBoard": "decision",
+       "kbId": null
+      },
+      {
+       "handle": "you-key-line",
+       "spec": "windows:c4r6,c5r6,c6r6,c7r6",
+       "role": "the line across columns 4–7 on row 6: the whole four-in-a-row line you are playing for (a LINE of four squares, not a single square — use this handle, not a single-square handle, whenever your words say \"line\", \"strip\" or \"row of four\")",
+       "truthBoard": "decision",
+       "kbId": null
+      }
+     ],
+     "terms": [
+      {
+       "slug": "double_threat",
+       "kbId": "double_threat",
+       "canonicalPhrase": "double threat (two winning squares at once)",
+       "description": "two winning squares at once — your opponent cannot block both"
+      },
+      {
+       "slug": "immediate_threat",
+       "kbId": "immediate_threat",
+       "canonicalPhrase": "threat to make four next move",
+       "description": "a square where four-in-a-row completes on the very next move"
+      }
+     ]
+    },
+    "requiredSet": [
+     {
+      "half": "lostResource",
+      "spec": "c5r6",
+      "handle": "you-immediate",
+      "role": "the single square where you can make four next move",
+      "truthBoard": "decision"
+     },
+     {
+      "half": "lostResource",
+      "spec": "windows:c4r6,c5r6,c6r6,c7r6",
+      "handle": "you-key-line",
+      "role": "the line across columns 4–7 on row 6: the whole four-in-a-row line you are playing for (a LINE of four squares, not a single square — use this handle, not a single-square handle, whenever your words say \"line\", \"strip\" or \"row of four\")",
+      "truthBoard": "decision"
+     },
+     {
+      "half": "decision",
+      "spec": "col5",
+      "handle": "better-col",
+      "role": "the column of the better move",
+      "truthBoard": "decision"
+     }
+    ]
+   },
+   "answer": {
+    "better_move": 5,
+    "played_outcome": "draw",
+    "best_outcome": "win",
+    "mechanism": "You should have taken [zone:c5r6]the square at c5r6[/zone:c5r6], because that wins on the spot by completing your [zone:windows:c4r6,c5r6,c6r6,c7r6]four-in-a-row line on row 6 from c4 to c7[/zone:windows:c4r6,c5r6,c6r6,c7r6]. Instead, [zone:col5]column 5[/zone:col5] was left open for your opponent to grab, so you gave up the direct finish and only reached a draw.",
+    "key_cells": [
+     "c4r6",
+     "c5r1",
+     "c5r2",
+     "c5r3",
+     "c5r4",
+     "c5r5",
+     "c5r6",
+     "c6r6",
+     "c7r6"
+    ],
+    "fields_relied_on": [
+     "case",
+     "lostResource.tag",
+     "lostResource.cells",
+     "lostResource.completingCell",
+     "lostResource.window",
+     "opponentPunishment.completingCell",
+     "replyHistogram.afterBest",
+     "replyHistogram.afterPlayed"
+    ],
+    "unsure_about": "",
+    "confidence": "high"
+   },
+   "servedExplanation": "You should have taken [zone:c5r6]the square at column 5, row 6[/zone:c5r6], because that wins on the spot by completing your [zone:windows:c4r6,c5r6,c6r6,c7r6]four-in-a-row line on row 6 from column 4 to column 7[/zone:windows:c4r6,c5r6,c6r6,c7r6]. Instead, [zone:col5]column 5[/zone:col5] was left open for your opponent to grab, so you gave up the direct finish and only reached a draw.",
+   "better_col_repaired": false,
+   "mechanism_pre_repair": null,
+   "retry_fired": false,
+   "served_attempt": "attempt1",
+   "precomputed": {
+    "A1": "pass",
+    "A2": "pass",
+    "A6": "pass",
+    "G7a_offered": "pass",
+    "G7b_offered": "pass",
+    "notes": ""
+   }
+  },
+  {
+   "run_index": 1,
+   "feature_vector": {
+    "movestring": "33333111155545355220244122462616660064",
+    "playedCol": 0,
+    "bestCol": 4,
+    "discs": 38,
+    "boardState": "closing",
+    "player": 1,
+    "opponent": 2,
+    "case": "win_to_draw",
+    "notABlunder": false,
+    "lostResource": {
+     "kind": "realized_pattern",
+     "tag": "immediate_threat",
+     "owner": 1,
+     "register": "immediate",
+     "cells": [
+      "c5r6"
+     ],
+     "windows": [
+      [
+       "c4r6",
+       "c5r6",
+       "c6r6",
+       "c7r6"
+      ],
+      [
+       "c3r6",
+       "c4r6",
+       "c5r6",
+       "c6r6"
+      ],
+      [
+       "c2r6",
+       "c3r6",
+       "c4r6",
+       "c5r6"
+      ]
+     ],
+     "completingCell": "c5r6",
+     "window": [
+      "c4r6",
+      "c5r6",
+      "c6r6",
+      "c7r6"
+     ],
+     "finalMovestring": "33333111155545355220244122462616660064",
+     "entryCell": "c5r6",
+     "anchorCells": [
+      "c5r6"
+     ]
+    },
+    "opponentPunishment": {
+     "kind": "denial",
+     "verdict": "occupation",
+     "register": "immediate",
+     "line": [
+      {
+       "ply": 40,
+       "mover": 2,
+       "col": 4,
+       "cell": "c5r6"
+      }
+     ],
+     "finalMovestring": "3333311115554535522024412246261666006404",
+     "completingCell": "c5r6",
+     "window": [
+      "c4r6",
+      "c5r6",
+      "c6r6",
+      "c7r6"
+     ],
+     "cell": "c5r6",
+     "exhaustive": true,
+     "entryCell": "c5r6",
+     "anchorCells": [
+      "c5r6"
+     ],
+     "tie": {
+      "kind": "tied",
+      "sharedCells": [
+       "c5r6"
+      ]
+     }
+    },
+    "replyHistogram": {
+     "afterBest": 0,
+     "afterPlayed": 1
+    },
+    "gate": null,
+    "route": "realized_denied",
+    "tag": "immediate_threat",
+    "direction": "missed_own"
+   },
+   "render_decision": {
+    "case": "win_to_draw",
+    "route": "realized_denied",
+    "direction": "missed_own",
+    "patternOnAfterBestBoard": null,
+    "link": {
+     "id": "L1",
+     "confidence": "high",
+     "covers": [
+      "route",
+      "tag",
+      "direction",
+      "lostResource.kind",
+      "lostResource.verdict",
+      "lostResource.register",
+      "lostResource.terminal",
+      "opponentPunishment.kind",
+      "opponentPunishment.verdict",
+      "opponentPunishment.register",
+      "opponentPunishment.terminal",
+      "opponentPunishment.tie.kind"
+     ],
+     "guardrail": "The correct move builds/completes YOUR pattern; do not attribute it to the opponent.",
+     "text": "Column 5 was the better move: it wins on the spot, completing four in column 5 — the game is over there. The played move let the opponent take column 5 instead, denying you that win."
+    },
+    "boards": [
+     {
+      "id": "decision",
+      "shown": true,
+      "reason": "the position under judgment"
+     },
+     {
+      "id": "afterBest",
+      "shown": true,
+      "reason": "the better move — wins outright; the game is over there"
+     },
+     {
+      "id": "afterPlayed",
+      "shown": false,
+      "reason": "the move you played — tag-set identical to the decision board, omitted"
+     },
+     {
+      "id": "projectedDeep",
+      "shown": false,
+      "reason": "the resource is not deep (register is immediate) — no projected board"
+     }
+    ],
+    "resource": {
+     "completingCell": {
+      "cell": "c5r6",
+      "status": "empty-playable-now",
+      "horizon": "immediate",
+      "reachableInPlies": 39,
+      "role": "where the load-bearing resource completes"
+     },
+     "registerToHorizon": {
+      "register": "immediate",
+      "horizon": "immediate"
+     }
+    },
+    "fieldPartition": {
+     "rendered": [
+      "movestring",
+      "playedCol",
+      "bestCol",
+      "boardState",
+      "player",
+      "opponent",
+      "case",
+      "lostResource.tag",
+      "lostResource.owner",
+      "lostResource.cells[]",
+      "lostResource.windows[][]",
+      "lostResource.completingCell",
+      "lostResource.window[]",
+      "lostResource.finalMovestring",
+      "lostResource.entryCell",
+      "lostResource.anchorCells[]",
+      "opponentPunishment.line[].ply",
+      "opponentPunishment.line[].mover",
+      "opponentPunishment.line[].col",
+      "opponentPunishment.line[].cell",
+      "opponentPunishment.finalMovestring",
+      "opponentPunishment.completingCell",
+      "opponentPunishment.window[]",
+      "opponentPunishment.cell",
+      "opponentPunishment.entryCell",
+      "opponentPunishment.anchorCells[]",
+      "opponentPunishment.tie.sharedCells[]",
+      "replyHistogram.afterBest",
+      "replyHistogram.afterPlayed"
+     ],
+     "covered": [
+      "lostResource.kind",
+      "lostResource.register",
+      "opponentPunishment.kind",
+      "opponentPunishment.verdict",
+      "opponentPunishment.register",
+      "opponentPunishment.tie.kind",
+      "route",
+      "tag",
+      "direction"
+     ],
+     "excluded": [
+      "discs",
+      "notABlunder",
+      "opponentPunishment.exhaustive"
+     ]
+    },
+    "finalMovestring": "3333311115554535522024412246261666006404",
+    "openingContext": null,
+    "zones": {
+     "aliases": [
+      {
+       "handle": "better-col",
+       "spec": "col5",
+       "role": "the column of the better move",
+       "truthBoard": "decision",
+       "kbId": null
+      },
+      {
+       "handle": "played-col",
+       "spec": "col1",
+       "role": "the column you played",
+       "truthBoard": "decision",
+       "kbId": null
+      },
+      {
+       "handle": "you-major",
+       "spec": "c1r6",
+       "role": "a single square completing your four-in-a-row line",
+       "truthBoard": "decision",
+       "kbId": null
+      },
+      {
+       "handle": "you-major-line",
+       "spec": "windows:c1r6,c2r6,c3r6,c4r6",
+       "role": "the line across columns 1–4 on row 6: the whole four-in-a-row line you are playing for (a LINE of four squares, not a single square — use this handle, not a single-square handle, whenever your words say \"line\", \"strip\" or \"row of four\")",
+       "truthBoard": "decision",
+       "kbId": null
+      },
+      {
+       "handle": "you-double",
+       "spec": "windows:c1r6,c5r6",
+       "role": "the fork squares where you get winning squares at once",
+       "truthBoard": "decision",
+       "kbId": "double_threat"
+      },
+      {
+       "handle": "you-immediate",
+       "spec": "c5r6",
+       "role": "the single square where you can make four next move",
+       "truthBoard": "decision",
+       "kbId": "immediate_threat"
+      },
+      {
+       "handle": "you-immediate-line",
+       "spec": "windows:c2r6,c3r6,c4r6,c5r6",
+       "role": "the line across columns 2–5 on row 6: the whole four-in-a-row line you are playing for (a LINE of four squares, not a single square — use this handle, not a single-square handle, whenever your words say \"line\", \"strip\" or \"row of four\")",
+       "truthBoard": "decision",
+       "kbId": null
+      },
+      {
+       "handle": "you-key-line",
+       "spec": "windows:c4r6,c5r6,c6r6,c7r6",
+       "role": "the line across columns 4–7 on row 6: the whole four-in-a-row line you are playing for (a LINE of four squares, not a single square — use this handle, not a single-square handle, whenever your words say \"line\", \"strip\" or \"row of four\")",
+       "truthBoard": "decision",
+       "kbId": null
+      }
+     ],
+     "terms": [
+      {
+       "slug": "double_threat",
+       "kbId": "double_threat",
+       "canonicalPhrase": "double threat (two winning squares at once)",
+       "description": "two winning squares at once — your opponent cannot block both"
+      },
+      {
+       "slug": "immediate_threat",
+       "kbId": "immediate_threat",
+       "canonicalPhrase": "threat to make four next move",
+       "description": "a square where four-in-a-row completes on the very next move"
+      }
+     ]
+    },
+    "requiredSet": [
+     {
+      "half": "lostResource",
+      "spec": "c5r6",
+      "handle": "you-immediate",
+      "role": "the single square where you can make four next move",
+      "truthBoard": "decision"
+     },
+     {
+      "half": "lostResource",
+      "spec": "windows:c4r6,c5r6,c6r6,c7r6",
+      "handle": "you-key-line",
+      "role": "the line across columns 4–7 on row 6: the whole four-in-a-row line you are playing for (a LINE of four squares, not a single square — use this handle, not a single-square handle, whenever your words say \"line\", \"strip\" or \"row of four\")",
+      "truthBoard": "decision"
+     },
+     {
+      "half": "decision",
+      "spec": "col5",
+      "handle": "better-col",
+      "role": "the column of the better move",
+      "truthBoard": "decision"
+     }
+    ]
+   },
+   "answer": {
+    "better_move": 5,
+    "played_outcome": "draw",
+    "best_outcome": "win",
+    "mechanism": "You should have played [zone:col5]column 5[/zone:col5], because it lands on the square that gives you [term:immediate_threat]an immediate threat[/term:immediate_threat] at [zone:c5r6]c5r6[/zone:c5r6] and completes your [zone:windows:c4r6,c5r6,c6r6,c7r6]four-in-a-row line on row 6 from columns 4 to 7[/zone:windows:c4r6,c5r6,c6r6,c7r6] on the spot. By playing elsewhere, you gave up that winning square and let your opponent take it instead, so your move only holds a draw.",
+    "key_cells": [
+     "c4r6",
+     "c5r1",
+     "c5r2",
+     "c5r3",
+     "c5r4",
+     "c5r5",
+     "c5r6",
+     "c6r6",
+     "c7r6"
+    ],
+    "fields_relied_on": [
+     "decision.better move",
+     "decision.played move",
+     "lostResource.cells",
+     "lostResource.completingCell",
+     "lostResource.window",
+     "opponentPunishment.completingCell",
+     "replyHistogram.afterBest",
+     "replyHistogram.afterPlayed"
+    ],
+    "unsure_about": "",
+    "confidence": "high"
+   },
+   "servedExplanation": "You should have played [zone:col5]column 5[/zone:col5], because it lands on the square that gives you [term:immediate_threat]an immediate threat[/term:immediate_threat] at [zone:c5r6]column 5, row 6[/zone:c5r6] and completes your [zone:windows:c4r6,c5r6,c6r6,c7r6]four-in-a-row line on row 6 from columns 4 to 7[/zone:windows:c4r6,c5r6,c6r6,c7r6] on the spot. By playing elsewhere, you gave up that winning square and let your opponent take it instead, so your move only holds a draw.",
+   "better_col_repaired": false,
+   "mechanism_pre_repair": null,
+   "retry_fired": true,
+   "served_attempt": "retry",
+   "precomputed": {
+    "A1": "pass",
+    "A2": "pass",
+    "A6": "pass",
+    "G7a_offered": "pass",
+    "G7b_offered": "pass",
+    "notes": ""
+   }
+  },
+  {
+   "run_index": 2,
+   "feature_vector": {
+    "movestring": "33333111155545355220244122462616660064",
+    "playedCol": 0,
+    "bestCol": 4,
+    "discs": 38,
+    "boardState": "closing",
+    "player": 1,
+    "opponent": 2,
+    "case": "win_to_draw",
+    "notABlunder": false,
+    "lostResource": {
+     "kind": "realized_pattern",
+     "tag": "immediate_threat",
+     "owner": 1,
+     "register": "immediate",
+     "cells": [
+      "c5r6"
+     ],
+     "windows": [
+      [
+       "c4r6",
+       "c5r6",
+       "c6r6",
+       "c7r6"
+      ],
+      [
+       "c3r6",
+       "c4r6",
+       "c5r6",
+       "c6r6"
+      ],
+      [
+       "c2r6",
+       "c3r6",
+       "c4r6",
+       "c5r6"
+      ]
+     ],
+     "completingCell": "c5r6",
+     "window": [
+      "c4r6",
+      "c5r6",
+      "c6r6",
+      "c7r6"
+     ],
+     "finalMovestring": "33333111155545355220244122462616660064",
+     "entryCell": "c5r6",
+     "anchorCells": [
+      "c5r6"
+     ]
+    },
+    "opponentPunishment": {
+     "kind": "denial",
+     "verdict": "occupation",
+     "register": "immediate",
+     "line": [
+      {
+       "ply": 40,
+       "mover": 2,
+       "col": 4,
+       "cell": "c5r6"
+      }
+     ],
+     "finalMovestring": "3333311115554535522024412246261666006404",
+     "completingCell": "c5r6",
+     "window": [
+      "c4r6",
+      "c5r6",
+      "c6r6",
+      "c7r6"
+     ],
+     "cell": "c5r6",
+     "exhaustive": true,
+     "entryCell": "c5r6",
+     "anchorCells": [
+      "c5r6"
+     ],
+     "tie": {
+      "kind": "tied",
+      "sharedCells": [
+       "c5r6"
+      ]
+     }
+    },
+    "replyHistogram": {
+     "afterBest": 0,
+     "afterPlayed": 1
+    },
+    "gate": null,
+    "route": "realized_denied",
+    "tag": "immediate_threat",
+    "direction": "missed_own"
+   },
+   "render_decision": {
+    "case": "win_to_draw",
+    "route": "realized_denied",
+    "direction": "missed_own",
+    "patternOnAfterBestBoard": null,
+    "link": {
+     "id": "L1",
+     "confidence": "high",
+     "covers": [
+      "route",
+      "tag",
+      "direction",
+      "lostResource.kind",
+      "lostResource.verdict",
+      "lostResource.register",
+      "lostResource.terminal",
+      "opponentPunishment.kind",
+      "opponentPunishment.verdict",
+      "opponentPunishment.register",
+      "opponentPunishment.terminal",
+      "opponentPunishment.tie.kind"
+     ],
+     "guardrail": "The correct move builds/completes YOUR pattern; do not attribute it to the opponent.",
+     "text": "Column 5 was the better move: it wins on the spot, completing four in column 5 — the game is over there. The played move let the opponent take column 5 instead, denying you that win."
+    },
+    "boards": [
+     {
+      "id": "decision",
+      "shown": true,
+      "reason": "the position under judgment"
+     },
+     {
+      "id": "afterBest",
+      "shown": true,
+      "reason": "the better move — wins outright; the game is over there"
+     },
+     {
+      "id": "afterPlayed",
+      "shown": false,
+      "reason": "the move you played — tag-set identical to the decision board, omitted"
+     },
+     {
+      "id": "projectedDeep",
+      "shown": false,
+      "reason": "the resource is not deep (register is immediate) — no projected board"
+     }
+    ],
+    "resource": {
+     "completingCell": {
+      "cell": "c5r6",
+      "status": "empty-playable-now",
+      "horizon": "immediate",
+      "reachableInPlies": 39,
+      "role": "where the load-bearing resource completes"
+     },
+     "registerToHorizon": {
+      "register": "immediate",
+      "horizon": "immediate"
+     }
+    },
+    "fieldPartition": {
+     "rendered": [
+      "movestring",
+      "playedCol",
+      "bestCol",
+      "boardState",
+      "player",
+      "opponent",
+      "case",
+      "lostResource.tag",
+      "lostResource.owner",
+      "lostResource.cells[]",
+      "lostResource.windows[][]",
+      "lostResource.completingCell",
+      "lostResource.window[]",
+      "lostResource.finalMovestring",
+      "lostResource.entryCell",
+      "lostResource.anchorCells[]",
+      "opponentPunishment.line[].ply",
+      "opponentPunishment.line[].mover",
+      "opponentPunishment.line[].col",
+      "opponentPunishment.line[].cell",
+      "opponentPunishment.finalMovestring",
+      "opponentPunishment.completingCell",
+      "opponentPunishment.window[]",
+      "opponentPunishment.cell",
+      "opponentPunishment.entryCell",
+      "opponentPunishment.anchorCells[]",
+      "opponentPunishment.tie.sharedCells[]",
+      "replyHistogram.afterBest",
+      "replyHistogram.afterPlayed"
+     ],
+     "covered": [
+      "lostResource.kind",
+      "lostResource.register",
+      "opponentPunishment.kind",
+      "opponentPunishment.verdict",
+      "opponentPunishment.register",
+      "opponentPunishment.tie.kind",
+      "route",
+      "tag",
+      "direction"
+     ],
+     "excluded": [
+      "discs",
+      "notABlunder",
+      "opponentPunishment.exhaustive"
+     ]
+    },
+    "finalMovestring": "3333311115554535522024412246261666006404",
+    "openingContext": null,
+    "zones": {
+     "aliases": [
+      {
+       "handle": "better-col",
+       "spec": "col5",
+       "role": "the column of the better move",
+       "truthBoard": "decision",
+       "kbId": null
+      },
+      {
+       "handle": "played-col",
+       "spec": "col1",
+       "role": "the column you played",
+       "truthBoard": "decision",
+       "kbId": null
+      },
+      {
+       "handle": "you-major",
+       "spec": "c1r6",
+       "role": "a single square completing your four-in-a-row line",
+       "truthBoard": "decision",
+       "kbId": null
+      },
+      {
+       "handle": "you-major-line",
+       "spec": "windows:c1r6,c2r6,c3r6,c4r6",
+       "role": "the line across columns 1–4 on row 6: the whole four-in-a-row line you are playing for (a LINE of four squares, not a single square — use this handle, not a single-square handle, whenever your words say \"line\", \"strip\" or \"row of four\")",
+       "truthBoard": "decision",
+       "kbId": null
+      },
+      {
+       "handle": "you-double",
+       "spec": "windows:c1r6,c5r6",
+       "role": "the fork squares where you get winning squares at once",
+       "truthBoard": "decision",
+       "kbId": "double_threat"
+      },
+      {
+       "handle": "you-immediate",
+       "spec": "c5r6",
+       "role": "the single square where you can make four next move",
+       "truthBoard": "decision",
+       "kbId": "immediate_threat"
+      },
+      {
+       "handle": "you-immediate-line",
+       "spec": "windows:c2r6,c3r6,c4r6,c5r6",
+       "role": "the line across columns 2–5 on row 6: the whole four-in-a-row line you are playing for (a LINE of four squares, not a single square — use this handle, not a single-square handle, whenever your words say \"line\", \"strip\" or \"row of four\")",
+       "truthBoard": "decision",
+       "kbId": null
+      },
+      {
+       "handle": "you-key-line",
+       "spec": "windows:c4r6,c5r6,c6r6,c7r6",
+       "role": "the line across columns 4–7 on row 6: the whole four-in-a-row line you are playing for (a LINE of four squares, not a single square — use this handle, not a single-square handle, whenever your words say \"line\", \"strip\" or \"row of four\")",
+       "truthBoard": "decision",
+       "kbId": null
+      }
+     ],
+     "terms": [
+      {
+       "slug": "double_threat",
+       "kbId": "double_threat",
+       "canonicalPhrase": "double threat (two winning squares at once)",
+       "description": "two winning squares at once — your opponent cannot block both"
+      },
+      {
+       "slug": "immediate_threat",
+       "kbId": "immediate_threat",
+       "canonicalPhrase": "threat to make four next move",
+       "description": "a square where four-in-a-row completes on the very next move"
+      }
+     ]
+    },
+    "requiredSet": [
+     {
+      "half": "lostResource",
+      "spec": "c5r6",
+      "handle": "you-immediate",
+      "role": "the single square where you can make four next move",
+      "truthBoard": "decision"
+     },
+     {
+      "half": "lostResource",
+      "spec": "windows:c4r6,c5r6,c6r6,c7r6",
+      "handle": "you-key-line",
+      "role": "the line across columns 4–7 on row 6: the whole four-in-a-row line you are playing for (a LINE of four squares, not a single square — use this handle, not a single-square handle, whenever your words say \"line\", \"strip\" or \"row of four\")",
+      "truthBoard": "decision"
+     },
+     {
+      "half": "decision",
+      "spec": "col5",
+      "handle": "better-col",
+      "role": "the column of the better move",
+      "truthBoard": "decision"
+     }
+    ]
+   },
+   "answer": {
+    "better_move": 5,
+    "played_outcome": "draw",
+    "best_outcome": "win",
+    "mechanism": "You should have played [zone:c5r6]c5r6[/zone:c5r6], because that square already completes your four-in-a-row and [zone:windows:c4r6,c5r6,c6r6,c7r6]the row of four across columns 4–7 on row 6[/zone:windows:c4r6,c5r6,c6r6,c7r6] is yours on the spot. By choosing column [zone:col5]5[/zone:col5], you took the immediate win; playing elsewhere let your opponent use that same winning square and turn a win into only a draw.",
+    "key_cells": [
+     "c4r6",
+     "c5r1",
+     "c5r2",
+     "c5r3",
+     "c5r4",
+     "c5r5",
+     "c5r6",
+     "c6r6",
+     "c7r6"
+    ],
+    "fields_relied_on": [
+     "case",
+     "lostResource.cells",
+     "lostResource.completingCell",
+     "lostResource.window",
+     "opponentPunishment.completingCell",
+     "opponentPunishment.tie.sharedCells",
+     "replyHistogram.afterBest",
+     "replyHistogram.afterPlayed"
+    ],
+    "unsure_about": "",
+    "confidence": "high"
+   },
+   "servedExplanation": "You should have played [zone:c5r6]column 5, row 6[/zone:c5r6], because that square already completes your four-in-a-row and [zone:windows:c4r6,c5r6,c6r6,c7r6]the row of four across columns 4–7 on row 6[/zone:windows:c4r6,c5r6,c6r6,c7r6] is yours on the spot. By choosing column [zone:col5]5[/zone:col5], you took the immediate win; playing elsewhere let your opponent use that same winning square and turn a win into only a draw.",
+   "better_col_repaired": false,
+   "mechanism_pre_repair": null,
+   "retry_fired": false,
+   "served_attempt": "attempt1",
+   "precomputed": {
+    "A1": "pass",
+    "A2": "pass",
+    "A6": "pass",
+    "G7a_offered": "pass",
+    "G7b_offered": "pass",
+    "notes": ""
+   }
+  }
+ ]
+}
