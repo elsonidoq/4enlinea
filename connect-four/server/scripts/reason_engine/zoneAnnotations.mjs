@@ -132,8 +132,32 @@ function roleText(owner, kind) {
   // carries an explicit "not right now" contrast (`not a threat right now` / `not right now`); this
   // branch omitted it, and the model conflated a fork-creating cell 28 plies away with the actual
   // immediate best move. The contrast must rule out "play this now", not merely omit a claim about it.
-  if (kind === 'fork-pivot') return `the square ${plays} to CREATE the fork — the move that makes both winning squares live at once; it matters later, once the forced sequence reaches it — it is NOT the move to play right now`;
-  if (kind === 'fork-pivot-now') return `the square ${plays} to CREATE the fork — the move that makes both winning squares live at once`;
+  // OI-227 / D64. "makes BOTH winning squares live at once" is a CARDINALITY claim, and it was
+  // unconditional. Measured over the v3retry63 corpus through the production `buildAnnotationOffer`:
+  // 25 `-fork-pivot` aliases carried the phrase, 20 were decidable (pivot cell empty AND gravity-top
+  // on the board the alias names — an unreachable pivot is undecidable, not board-false), and 11 of
+  // those 20 left exactly ONE gravity-top winning square after the pivot lands (eval-7, eval-8,
+  // eval-15, eval-16, eval-26, eval-30, eval-43, eval-46, pin-L3-no-causation, pin-L5-deep-fork,
+  // pin-L7-practical-swindle). "Live at once" means PLAYABLE at once: a stack of completing cells in
+  // one column is not two live squares — the upper ones are unreachable until the lower fills, and
+  // the opponent simply answers the bottom one. Gravity-top is the discriminator; a plain
+  // empty-completing-cell count reports 0 violations and a `forkCells.length` proxy is inapplicable
+  // (several fork halves carry no `forkCells` at all, and `boardTagPivotCell` mints pivots that
+  // never read it).
+  //
+  // Same defect class, same fix shape, as T031/OI-180 (`double`) and D63/OI-225 (`fork-square`):
+  // stop asserting a count the board does not guarantee. The count is the ONLY thing removed —
+  // "to CREATE the fork" still carries the decisiveness the 9 genuinely-multi-square cases need
+  // (eval-13, eval-17, eval-18, eval-19, eval-20, eval-22, eval-23, eval-25, eval-44), and "at once"
+  // still rules out "eventually". The residual claim ("a winning square goes live the moment this is
+  // played") is board-true on all 20 decidable aliases and is pinned corpus-wide in
+  // `zoneAnnotations.test.mjs`, so it cannot silently become unmeasurable.
+  //
+  // Deriving the count from the board was considered and is NOT available here: 8 of the 11 sit on a
+  // `projectedDeep` truthBoard, for which `boardSelectionDecisions` hands this function no
+  // movestring — abstaining to a count-free wording is the I2-correct move, not a workaround.
+  if (kind === 'fork-pivot') return `the square ${plays} to CREATE the fork — the move that makes a winning square live at once; it matters later, once the forced sequence reaches it — it is NOT the move to play right now`;
+  if (kind === 'fork-pivot-now') return `the square ${plays} to CREATE the fork — the move that makes a winning square live at once`;
   // Task 5 (eval-47's unsatisfiable required handle): on the afterPlayed board, `boardTagPivotCell`
   // names the played move's OWN landing square — already occupied on the board this alias names — so
   // "the square X plays to CREATE the fork" instructs playing a filled square. Owner-neutral wording:

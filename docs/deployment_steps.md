@@ -2142,11 +2142,12 @@ behavioural change.
 
 ## 2026-09-02 — purge `explanation_cache` after deploying D63 (fork-square wording + better-column repair)
 
-> **One purge satisfies this entry and the D61 entry above.** Both describe the same action on the
-> same table for different causes (D61's `-key-square` role fix; D63's `-fork-square` wording + the
-> better-column repair). If both ship in the same deploy, run the purge once and tick both — do not
-> treat them as two sequential steps. They are recorded separately so that shipping only one of the
-> two changes still carries its own reason.
+> **One purge satisfies this entry, the D61 entry above, and the D64 addendum below.** All three
+> describe the same action on the same table for different causes (D61's `-key-square` role fix;
+> D63's `-fork-square` wording + the better-column repair; D64's `-fork-pivot` wording). If they
+> ship in the same deploy, run the purge once and tick all of them — do not treat them as sequential
+> steps. They are recorded separately so that shipping only one of the changes still carries its own
+> reason.
 
 **What**: D63 changes the text of served deep reveals in two ways — `-fork-square` aliases carry new
 role wording (so the model narrates them differently), and every served explanation that fails to
@@ -2186,3 +2187,19 @@ D63/OI-225) — NOT reliably in the served prose, which the model paraphrases; d
 word "completing" to vanish from what's shown on screen.
 
 **Rollback**: none needed — a purge only forces regeneration.
+
+### Addendum 2026-09-03 — D64 (`-fork-pivot` wording, OI-227) rides on the SAME purge
+
+**What**: D64 changes `roleText`'s two `-fork-pivot` branches from "the move that makes **both
+winning squares** live at once" to "the move that makes **a** winning square live at once" — the
+count was board-false on 11 of the 20 decidable aliases in the corpus.
+
+**Why it needs the purge**: identical mechanism to the entry above — `explanation_cache` is keyed on
+`{position_hash, locale}` with no render-version discriminator, so a role-text change is invisible on
+every already-cached position. **Do not add a second purge step**: run the one `DELETE FROM
+explanation_cache;` above and this addendum is satisfied.
+
+**Verify**: as above, check the rebuilt render decision's alias role text (`roleText`'s `fork-pivot`
+/ `fork-pivot-now` kinds) — not the served prose, which the model paraphrases.
+
+**No migration, no config, no ordering constraint against the code deploy.** Code-only change.

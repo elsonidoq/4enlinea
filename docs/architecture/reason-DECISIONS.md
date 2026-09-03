@@ -2251,3 +2251,109 @@ the committed test uses `checkWin` (`classifier.js`): two independent helpers re
 verdict, so neither is a fixture agreeing with its own author.
 
 `test:fast` 2123 -> 2136, green.
+
+### D64 — the fork pivot's "both winning squares" was the third cardinality over-claim; and the annotation gate's strip is the mechanism that serves OI-226's false sentence
+
+Three issues, one session, 2026-09-03, all settled by deterministic replay over stored evidence —
+**no LLM call and no grader was used for any of them**, the method D61 and D63 both describe.
+
+**1. OI-227: `-fork-pivot` asserted a count the board does not support. RESOLVED.**
+
+`roleText`'s two pivot branches (`fork-pivot`, `fork-pivot-now`) read *"the square <owner> plays to
+CREATE the fork — the move that makes **both winning squares** live at once"*, unconditionally.
+Measured over the 63-record v3retry63 corpus through the production `buildAnnotationOffer`: **25
+aliases carried the phrase; 20 were decidable; 11 of those 20 left exactly ONE gravity-top winning
+square** after the pivot lands (`eval-7`, `eval-8`, `eval-15`, `eval-16`, `eval-26`, `eval-30`,
+`eval-43`, `eval-46`, `pin-L3-no-causation`, `pin-L5-deep-fork`, `pin-L7-practical-swindle`). The
+remaining 5 are undecidable — the pivot cell is already occupied, or is not gravity-top, on the board
+the alias names — and are excluded from both numerators and denominators rather than scored as passes.
+
+*Gravity-top is the whole discriminator.* "Live at once" means **playable** at once; completing cells
+stacked in one column are not two live squares. Three hand-rolled denominators each produced a
+confident wrong number first: `forkCells.length` (inapplicable — several fork halves carry no
+`forkCells` at all, and `boardTagPivotCell` mints pivots that never read it; it also false-flagged
+`eval-30`), a plain empty-completing-cell count (reported **0** violations and nearly retracted the
+issue), and a first draft of the audit harness that dropped a floating disc on a non-gravity-top cell
+(reported a false "0 live squares" on `pin-branch-invariance-true-1`, which is undecidable, not
+board-false). I12 in miniature.
+
+**Fix**, following T031/OI-180 (`double`) and D63/OI-225 (`fork-square`) exactly: remove the count,
+keep everything else. The phrase becomes *"the move that makes **a** winning square live at once"*.
+"to CREATE the fork" still carries the decisiveness the **9** genuinely-multi-square cases need
+(`eval-13, eval-17, eval-18, eval-19, eval-20, eval-22, eval-23, eval-25, eval-44`), and "at once"
+still rules out "eventually". Deriving the count from the board was considered and is **not
+available**: 8 of the 11 sit on a `projectedDeep` truthBoard, for which `boardSelectionDecisions`
+hands `roleText` no movestring — abstaining to count-free wording is the I2-correct move.
+
+**Measurement, unchanged audit harness, all 11 claim axes** (416 claims checked):
+`C4_bothLive` 20 checked / 11 violations **→ 0 checked / 0 violations**; every other axis byte-identical
+(`C1` 52/0, `C2` 11/0, `C3` 22/0, `C5` 9/0, `C6` 20/0, `C7` 4/0, `C8` 150/0, `C9` 63/0, `C9b` 63/0,
+`C10` 2/0). **`C4`'s `checked` dropping to 0 is stated loudly and is not the fix hiding**: the harness
+detects that axis by grepping for the false phrase itself, so removing the phrase necessarily empties
+that row — exactly as D63's `-fork-square` fix moved its family out of `C1` and into the new `C7` row.
+The successor claim is measured, not dropped: adding a `C4b_pivotMakesLive` row (`makes a winning
+square live at once`, threshold ≥1 live square) gives **20 checked / 0 violations / 5 skipped** — the
+identical denominator the false claim had. Total violations 11 → 0.
+
+Four existing assertions pinned the removed wording via `/creates|makes both/i`
+(`zoneAnnotations.test.mjs`, three unit + one `pin-L5-deep-fork` corpus test). They were retargeted to
+`/CREATE the fork/i` — the surviving, board-true half of the same intent — rather than deleted; a test
+that locks in a board-false claim is part of the bug. The new corpus-wide guard in
+`zoneAnnotations.test.mjs` asserts **both** directions (a "both" claim needs ≥2 live squares, a "a
+winning square" claim needs ≥1), so it cannot go green by the claim becoming unmeasurable. It was
+confirmed RED against the pre-fix wording, listing exactly the 11 named aliases. `test:fast` 2141 → 2142, green.
+
+**2. OI-226: root cause located, and it is NOT the offer set. Still open — the fix belongs to OI-228.**
+
+Four board-checkable hypotheses about the offered handle set were built and each **fails to
+discriminate**, measured over all 25 `-fork-pivot` aliases:
+
+| hypothesis | fires on | verdict |
+|---|---|---|
+| a competing causal single-cell handle on the SAME truthBoard | 4 of 25 records | excludes `eval-44`, the only confirmed hit |
+| a fork-causal handle whose cell set EXCLUDES the pivot | 15 of 24 | includes both observed-CLEAN records (`eval-18`, `eval-47`); excludes `pin-L7` |
+| the pivot cell named in NO other alias on its board | 9 of 25 | excludes `eval-44` |
+| `fork-pivot-played`'s wording (a grader's hypothesis) | offered on exactly **2** records (`eval-36`, `eval-47`) | **refuted at source** — neither symptomatic record is offered it at all, and `eval-47` graded clean for OI-226 on all 3 runs |
+
+What the evidence does show, read at the `raw` layer (not `answer.mechanism`, which is
+post-`processAnnotations`): on **all three** `eval-44` runs the model selects the **correct** handle,
+`[zone:opp-fork-pivot]`, and fills the span with the **wrong square's** text — verbatim run 0:
+`you let your opponent take [zone:opp-fork-pivot]c3r1[/zone:opp-fork-pivot]`. So OI-226's confirmed
+instance is a **span-content** error, not a handle-selection error, and no change to which handles are
+offered would have prevented it.
+
+**The gate already caught it and threw the catch away.** On `eval-44` runs 0 and 2 the raw coordinate
+inside that span tripped `P6:raw_coordinate:c6r1`, `stripFailingZoneSpans` removed the tag, and the
+false prose "you let your opponent take column 3" was served. OI-226's remedy is therefore OI-228's
+disposition, not a render-offer change. Ninety percent of the remaining OI-226 case space is still
+unobserved and sizing it needs model output — out of scope here, and recorded as such.
+
+**3. OI-228: measured corpus-wide for the first time, and the retry option is dominated.**
+
+Replaying the stored `guardDiagnostics` of all **222** runs across the three v3retry63 answer files
+(pure read, no LLM):
+
+- **9 runs (4.1%)** had at least one span stripped. Codes: `P6` ×6, `P2` ×2, `P5strong` ×1.
+- **4 of those 9 leave a board-false sentence in the served text** — `eval-44` runs 0 and 2,
+  `pin-L7-practical-swindle` run 1, `eval-47` run 1. That is **4 of 222 runs, 1.8%**. The other 5
+  survive as board-TRUE sentences whose tag was merely mis-anchored (`pin-L1` run 2's "the key square
+  at column 2" names a genuinely offered `you-immediate = c2r1`), so a blanket sentence-drop
+  over-deletes on 5 of 9.
+- **1 of the 9 stripped sentences carries the better-column mention** (`pin-L1` run 2: *"You should
+  have played column 3, …"*). `ensureBetterColumnMention` runs in `computeMechanism`, strictly BEFORE
+  `guardExplainMoveLlmPayload`, so a sentence-drop there **cannot be re-repaired** — this would
+  reopen the exact hole D63/OI-224 closed. `mentionsBetterColumn`'s own comment already names this
+  interaction as accepted residual imprecision; option (a) would promote it from rare to systematic.
+- **8 of the 9 had already fired the retry.** The retry budget is exactly one and shared, so
+  **option (b) is dominated on measurement, not on preference**: on 8 of 9 occurrences there is no
+  retry left to spend, and widening the budget is a separate decision D61/D63 deliberately did not take.
+
+**Recommendation (not yet implemented): option (a), narrowed, with a better-column carve-out.**
+Drop the containing SENTENCE only when the stripped span's surviving prose names a column that
+contradicts the span's own spec — the `P2:col_mismatch` shape and the `P6:raw_coordinate` shape whose
+coordinate sits in a different column. Reuse `mentionsBetterColumn` (I8) as a carve-out: if that
+sentence names the better column, strip the tag only, as today. Replayed over the same 222 runs this
+fires on exactly the **4 board-false** runs, leaves the 5 board-true strips untouched, and the
+carve-out protects `pin-L1` run 2. **PENDING — question for the owner:** whether a mid-paragraph
+sentence deletion reads acceptably in coach voice cannot be settled without a graded run, and none was
+performed. That is the only unmeasured term in the recommendation.

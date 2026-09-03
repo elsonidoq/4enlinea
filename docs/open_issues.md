@@ -8102,7 +8102,9 @@ Verify with the D61 probe, restricted to `-fork-square` handles: it currently re
 
 ## OI-226 — the model credits the fork to a threat square that is never occupied, instead of the pivot that actually creates it
 
-**Status**: open. Pre-existing (predates D63); surfaced by the 2026-09-03 8-board spot-check.
+**Status**: open — but the root cause IS now located for the one confirmed instance, and it is not
+where this issue assumed. See the **2026-09-03 diagnosis** block immediately below; the remedy belongs
+to OI-228, not to the render offer set.
 **Area**: the deep-reveal narration on fork boards — candidate causes span
 `connect-four/server/scripts/reason_engine/zoneAnnotations.mjs` (the `-fork-pivot` vs denial-cell
 offer set) and `causalLinks.mjs`'s frame text. **Root cause not yet located** — do not assume the
@@ -8172,15 +8174,53 @@ The next step for THIS issue is still to run the remaining 16 at n=3 and count h
 fork to a cell that is never occupied, BEFORE proposing any fix. A fix aimed at `eval-44` alone would
 be the motivating-example trap this project has hit before.
 
+**DIAGNOSIS 2026-09-03 (D64) — deterministic, no LLM call, no grader.**
+
+Four board-checkable hypotheses about the offered handle set were built and every one **fails to
+discriminate** against the 5 records whose symptom status is actually known:
+
+| hypothesis | fires on | verdict |
+|---|---|---|
+| a competing causal single-cell handle on the SAME truthBoard as the pivot | 4 of 25 aliases | excludes `eval-44`, the only confirmed hit |
+| a fork-causal handle whose cell set EXCLUDES the pivot | 15 of 24 records | includes both observed-CLEAN records (`eval-18`, `eval-47`); excludes `pin-L7` |
+| the pivot cell named in NO other alias on its own board | 9 of 25 | excludes `eval-44` |
+| `fork-pivot-played`'s wording (the grader's hypothesis) | offered on exactly **2** records, `eval-36` and `eval-47` | **refuted at source** — neither symptomatic record is offered the handle at all, and `eval-47` graded clean for OI-226 on all 3 runs |
+
+**What the evidence does show.** Read at the `raw` layer — NOT `answer.mechanism`, which is
+post-`processAnnotations` and shows expanded specs — all three `eval-44` runs select the **correct**
+handle and fill the span with the **wrong square's** text. Run 0, verbatim:
+`you let your opponent take [zone:opp-fork-pivot]c3r1[/zone:opp-fork-pivot]`. This is a
+**span-content** error, not a handle-selection error; no change to which handles are offered would
+have prevented it.
+
+**The gate already caught it and discarded the catch.** On `eval-44` runs 0 and 2 the raw coordinate
+inside that pivot span tripped `P6:raw_coordinate:c6r1`, `stripFailingZoneSpans` removed the tag, and
+the false prose "you let your opponent take column 3" reached the player. **OI-226's remedy is
+OI-228's disposition.** The 17 unobserved records still cannot be sized without model output, and no
+graded run was performed for this diagnosis.
+
 **Cross-refs**: OI-225 (the fork-square wording, resolved by D63 — different defect, same family),
-D61's CORRECTION block (the same "graded only the runs that motivated it" lesson).
+OI-228 (the strip that serves the false sentence — the actual remedy), D61's CORRECTION block (the
+same "graded only the runs that motivated it" lesson).
 
 ---
 
 ## OI-227 — the fork-pivot role claims "both winning squares live at once" on 11 aliases where only one square is actually playable
 
-**Status**: open. Pre-existing; the same cardinality over-claim class D63 removed from `-fork-square`,
-left standing one branch over in `-fork-pivot`.
+**Status**: RESOLVED 2026-09-03 (D64). Both pivot branches now read "the move that makes **a**
+winning square live at once" — the count is removed, "to CREATE the fork" and "at once" are kept, so
+the 9 genuinely-multi-square cases are not weakened. Same fix shape as T031/OI-180 (`double`) and
+D63/OI-225 (`fork-square`). Audit harness, unchanged, all 11 axes: `C4_bothLive` 20 checked / 11
+violations -> 0 checked / 0 violations, every other axis byte-identical, total violations 11 -> 0.
+`C4`'s `checked` going to 0 is the axis emptying because it greps for the removed phrase, NOT the
+claim becoming unmeasurable: the successor claim measures **20 checked / 0 violations / 5 skipped**,
+the identical denominator. Guarded corpus-wide in `zoneAnnotations.test.mjs` by a test that asserts
+BOTH directions (a "both" claim needs >=2 live squares, an "a winning square" claim needs >=1), so it
+cannot pass by the claim disappearing; confirmed RED against the old wording with exactly the 11 named
+aliases. Four pre-existing assertions that pinned the false wording via `/creates|makes both/i` were
+retargeted to `/CREATE the fork/i`. `test:fast` 2141 -> 2142, green. See D64 for the full measurement.
+
+**Original report follows.**
 **Area**: `connect-four/server/scripts/reason_engine/zoneAnnotations.mjs`, `roleText`'s `fork-pivot`
 and `fork-pivot-now` branches.
 **Discovered**: 2026-09-03, by a grader probing `pin-L5-deep-fork` for OI-226.
@@ -8340,9 +8380,53 @@ document. (a) risks deleting a sentence that carried the only better-column ment
 D63/OI-224's `mentionsBetterColumn` before choosing it, since that function already documents this
 exact interaction as an accepted residual imprecision.
 
-**Measure before fixing (I12)**: count, across a full corpus run, how many served explanations have a
-`stripFailingZoneSpans` diagnostic AND retain a column claim contradicting the render decision. 2 of
-18 runs here is not a rate.
+**MEASURED 2026-09-03 (D64) — corpus-wide, deterministic, no LLM call.** Replaying the stored
+`guardDiagnostics` of all **222** runs across the three v3retry63 answer files:
+
+- **9 runs (4.1%)** had at least one span stripped. Codes: `P6` x6, `P2` x2, `P5strong` x1.
+- **4 of those 9 leave a board-false sentence in the served text** — `eval-44` runs 0 and 2,
+  `pin-L7-practical-swindle` run 1, `eval-47` run 1. That is **4 of 222 runs, 1.8%** — the rate this
+  issue asked for. The other 5 survive as board-TRUE sentences whose tag was merely mis-anchored
+  (`pin-L1` run 2's "the key square at column 2" names a genuinely offered `you-immediate = c2r1`),
+  so a blanket sentence-drop **over-deletes on 5 of 9**.
+- **1 of the 9 stripped sentences carries the better-column mention** (`pin-L1` run 2). Because
+  `ensureBetterColumnMention` runs in `computeMechanism` strictly BEFORE
+  `guardExplainMoveLlmPayload`, a sentence-drop there **cannot be re-repaired** — plain option (a)
+  would promote `mentionsBetterColumn`'s accepted residual imprecision into a systematic reopening of
+  the hole D63/OI-224 closed.
+- **8 of the 9 had already fired the retry.** The retry budget is exactly one and shared, so
+  **option (b) is dominated on measurement, not on preference**: on 8 of 9 occurrences there is no
+  retry left to spend, and widening that budget is a separate decision D61/D63 deliberately did not take.
+
+**RECOMMENDED DISPOSITION (chosen, not yet implemented): option (a), narrowed, with a better-column
+carve-out.** Drop the containing SENTENCE only when the stripped span's surviving prose names a column
+that CONTRADICTS the span's own spec — the `P2:col_mismatch` shape and the `P6:raw_coordinate` shape
+whose coordinate sits in a different column. Reuse `mentionsBetterColumn` (I8) as a carve-out: when
+that sentence names the better column, strip the tag only, exactly as today. Replayed over the same
+222 runs this fires on exactly the **4 board-false** runs, leaves the 5 board-true strips untouched,
+and the carve-out protects `pin-L1` run 2. This also resolves OI-226's one confirmed instance, whose
+false sentence reaches the player through precisely this path.
+
+**PENDING — question for the owner**: does a mid-paragraph sentence deletion read acceptably in coach
+voice? That is the only unmeasured term in the recommendation and it cannot be settled without a
+graded run, which was out of scope for the session that measured everything else here.
+
+**RE-MEASURED on the post-D64 run (2026-09-03,
+`fv_suff_answers_boards_v3retry63_2026-09-03T18-42-27Z.jsonl`, 189 runs, current code).** The defect is
+live and its rate is stable, but the AFFECTED RECORDS are not:
+
+- spans stripped: **7 of 189** (was 5 of 189)
+- of those, spans whose surviving prose names a column CONTRADICTING the span's own spec: **5 of 189
+  (2.6%)** — `eval-2|1` (tag col 6, prose col 4), `eval-24|0` (1 vs 5), `eval-30|2` (3 vs 6),
+  `eval-35|1` (5 vs 4), `eval-47|0` (5 vs 3). Previous run: 3 of 189.
+- **Only `eval-35` and `eval-47` recur across the two runs, and at different run indices.** The
+  previously documented instances (`eval-44`, `pin-L7-practical-swindle`) do not reproduce at all.
+
+**Read that as: this is a systemic ~2-3% tax distributed across the corpus by model variance, NOT a
+handful of bad boards.** That strengthens the case for fixing it — there is no subset to special-case —
+and it means any future measurement must be a RATE over a full run; a named-record list will not
+reproduce. It also means the earlier "2 of 18 runs" framing understated how widely it is spread while
+overstating how attached it is to particular boards.
 
 **Cross-refs**: OI-226 (co-occurring on `pin-L7`), OI-172 / Decision A (the strip rule), D63/OI-224
 (`mentionsBetterColumn`'s stated residual imprecision about stripped spans).
@@ -8410,7 +8494,40 @@ a correct row-shape reference is the cheapest defence against that class of erro
 
 ## OI-231 — the deterministic role-claim audit lives in a scratchpad, not the repo
 
-**Status**: open — a decision, not a defect. Needs an owner call.
+**Status**: RESOLVED 2026-09-03. Promoted into `server/tests/zoneAnnotations.test.mjs` (the existing
+file — no new test file, no `package.json` change) as one corpus-wide test covering the **eight**
+previously unguarded claim types: C2 (11 aliases), C3 (22), C5 (9), C6 (20), C8 (150), C9 (63), C9b
+(63), C10 (2) — every count identical to the scratchpad harness. With the three tests already present
+plus D64's pivot guard, all 11 claim types are now guarded in `test:fast`.
+
+Resolved as **promote**, and the "case against" was answered rather than ignored: the test reads
+`scripts/reason_corpus/evidence.jsonl` (the shared, live corpus every other corpus-wide test in that
+file reads), NOT the frozen `runs/` snapshot the scratchpad harness used — so it asserts a soundness
+INVARIANT over whatever the corpus currently holds instead of pinning behaviour to a dataset. All four
+listed latent bugs were FIXED on promotion, not carried over: unparseable cells are skipped rather than
+scored as violations; out-of-range rows are flagged rather than passing through optional chaining; the
+role-prefix strip was removed entirely in favour of unanchored phrase matching, so a long locator can
+no longer break two claim types into 63 false violations; and multi-cell specs are validated on every
+cell.
+
+It is a CHARACTERIZATION guard — green on arrival by design, its value is the RED it produces later —
+so it was mutation-tested rather than TDD'd: (1) removing a claim phrase fires the per-type
+`checked > 0` vacuity assert (the "defect hiding by becoming unmeasurable" failure mode D64 also
+guards against), and (2) pointing `better-col` at `playedCol` produces **63 board-false violations**.
+Both branches bite. `test:fast` 2142 -> 2143, green.
+
+**Why this mattered more than a graded run**, recorded because it generalizes: the grading rubric
+structurally cannot find this defect class. `.claude/skills/grade-fv-sufficiency/SKILL.md` consumes
+`render_decision.zones` as GROUND TRUTH and says so verbatim (`:529-533`: *"never re-derive the offered
+set yourself. Your job is to audit the ANSWER against these decisions ... not to check whether the
+decisions themselves are the ones you would have made"*). A4's condition-D carve-out (`:136`) delegates
+zone fidelity to G7/G5; G7a (`:552`) checks the model's phrase against the `role`; G5 checks the
+alias's `spec`. Nothing in that chain checks the role's own PROSE claims. Measured corroboration: the
+false pivot claim D64 removed appeared verbatim in **1 of 45** runs on the 11 affected records, and
+that run sits in a corpus with no grades file — so even a perfect grader would have had one noisy
+sample of an 11-alias defect.
+
+**Original report follows.**
 **Area**: no file yet; candidate home `connect-four/server/tests/` (as a corpus-wide test) or
 `connect-four/server/scripts/`.
 **Discovered**: 2026-09-03.
@@ -8468,3 +8585,50 @@ and recorded here so they survive the session.
    `result.attempt1.mechanism` but not the nested `result.attempt1.answer.mechanism` — and the nested
    one is the half the spread-not-mutate implementation has to handle separately. Verified correct by
    live probe during review, but a partial-mutation regression there would be silent.
+
+---
+
+## OI-233 — the `double` / `future-fork` roles assert "winning squares at once" with no horizon a board check can pin, and the model repeats the plural D64 just removed
+
+**Status**: open. Same cardinality-over-claim FAMILY as T031/OI-180 (`double`, singular fixed),
+D63/OI-225 (`-fork-square`) and D64/OI-227 (`-fork-pivot`) — but a genuinely different sub-problem, so
+do not treat the earlier fixes as precedent for the wording.
+**Area**: `connect-four/server/scripts/reason_engine/zoneAnnotations.mjs`, `roleText`'s `double`
+branch (*"the fork squares where <owner> <gets> winning squares at once"*) and `future-fork` branch
+(*"BOTH of the two squares <owner> can finish on"*).
+**Discovered**: 2026-09-03, while checking whether D64 had actually removed the false plural.
+
+**The observed instance, on current code.** In the post-D64 run
+(`fv_suff_answers_boards_v3retry63_2026-09-03T18-42-27Z.jsonl`), `eval-43` run 2 serves:
+
+> "…it lets them set the fork pivot at column 4 and then **keep the other winning square alive too**."
+
+`eval-43` is one of the 11 records D64 measured as having exactly **one** gravity-top winning square
+after the pivot lands. D64 removed the plural from the `-fork-pivot` role — and the model sourced an
+equivalent plural from the untouched sibling `opp-double = windows:c4r3,c6r2`, whose role says the
+owner "gets winning squares at once". So the defect class survived the fix that was supposed to end it,
+one handle over. This is the third time this family has been fixed one branch at a time; the next fix
+should audit the whole `roleText` case-space at once (I12), not the branch that was caught.
+
+**Why this is NOT a simple repeat of D64, and why no number is quoted as a violation count.** A
+"gravity-top right now" probe over the 20 near-term `-double` aliases reports 17 with fewer than 2 live
+cells — **that number is not a finding and must not be cited as one.** The probe's horizon does not
+match the claim: unlike `-fork-pivot` ("the move that makes … live at once", anchored to a specific
+ply, so there is a definite board to test), `double`'s "at once" has **no anchoring move**, so there is
+no board on which to evaluate it. Applying the near-term oracle anyway is exactly the "board-false in
+the OTHER direction" trap D63 documents for `-fork-square` — a fork's prongs are *supposed* to complete
+nothing until the pivot is played.
+
+**So the real defect is that the claim is currently unfalsifiable**, which is why the deterministic
+guards do not catch it: `zoneAnnotations.test.mjs`'s C5/C6 check only that the SPEC carries 2+ cells
+(9 and 20 checked, 0 violations), never that they are simultaneously live. Fixing the wording requires
+first deciding what board "at once" is asserted about. Two candidate shapes, both needing an owner call:
+give the claim an explicit anchor (as `-fork-pivot` has) so it becomes board-checkable, or drop the
+simultaneity and keep only the set ("the squares that finish it").
+
+**Do not fix from `eval-43`.** One observed instance at n=3, on a corpus where run-to-run variance
+churns 43% of records' named-column sets (see D64's control-arm measurement) — enumerate the case space
+through the production `buildAnnotationOffer` first, exactly as OI-227 did.
+
+**Cross-refs**: OI-227 / D64 (`-fork-pivot`, resolved), OI-225 / D63 (`-fork-square`), OI-180 / T031
+(`double`'s singular claim), OI-231 (the guards that would need a new claim type to cover this).

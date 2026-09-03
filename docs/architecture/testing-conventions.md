@@ -170,6 +170,34 @@ Two rules learned the expensive way:
 A latent path with no corpus coverage still needs a test — construct the object explicitly and say so
 in a comment (e.g. an immediate-register fork half, which no corpus record exercises).
 
+### Role-claim guards: characterization tests that are green on arrival (OI-231)
+
+`server/tests/zoneAnnotations.test.mjs` guards **all 11 factual claim types** a `roleText` branch can
+make ("completes", "does not complete", "four next move", "makes a winning square live at once", "the
+whole four-in-a-row line", "the column of the better move", "your last move just filled", …) against
+the board its `truthBoard` names, over the whole corpus. This exists because the grading rubric
+structurally cannot cover it — `grade-fv-sufficiency` consumes `render_decision.zones` as ground truth
+and explicitly forbids checking a role against the board, so a false role ships silently and the model
+fails the no-fabrication axis *by complying*. These tests are the only instrument for that class.
+
+Three conventions they establish, all of which are the difference between a guard and decoration:
+
+- **A characterization guard is green on arrival by design.** Its value is the RED it produces later,
+  so TDD does not apply. Prove it bites by **mutation** instead: break the producer, confirm the test
+  fails, restore. Both directions were exercised for OI-231 — removing a claim phrase, and pointing
+  `better-col` at `playedCol` (63 violations).
+- **Assert a non-zero denominator per claim type** (`assert.ok(checked > 0, '… has gone vacuous')`).
+  Without it, a guard passes by the claim becoming *unmeasurable* — the exact way a defect hides when
+  the fix is a wording change. D64 was accepted against this rule: its violations went 11 → 0 while the
+  successor claim kept the identical denominator of 20.
+- **Skip undecidable cases explicitly; never score them as passes.** For a cell claim that means:
+  unparseable or out-of-range → skip; occupied → skip; **not gravity-top → skip** (an unreachable cell
+  is undecidable, not board-false). Getting that last one wrong invented a violation that did not exist.
+
+Oracles come from `classifier.js` (`parseBoardState`, `checkWin`) applied **from the test side**, never
+the helper the producer itself uses — two independent helpers agreeing is what makes it evidence rather
+than a fixture agreeing with its author.
+
 ## What Gets Each Test Type
 
 | Concern | Test type |

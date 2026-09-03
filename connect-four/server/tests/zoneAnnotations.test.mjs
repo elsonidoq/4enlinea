@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { buildAnnotationOffer, normalizeAnnotationTags, processAnnotations } from '../scripts/reason_engine/zoneAnnotations.mjs';
+import { buildAnnotationOffer, normalizeAnnotationTags, processAnnotations, halfOwner } from '../scripts/reason_engine/zoneAnnotations.mjs';
 import { TAG_PHRASE } from '../scripts/reason_engine/causalLinks.mjs';
 
 // Board-decision fixtures with the shape boardSelectionDecisions() actually produces:
@@ -369,7 +369,7 @@ test('a double_threat half offers the fork PIVOT, distinct from the finishing sq
   assert.ok(pivot, `no fork-pivot alias offered; got ${zones.aliases.map((a) => a.handle).join(', ')}`);
   assert.match(pivot.spec, /c5r4$/, 'the pivot is the LAST ply of line[], not entryCell');
   assert.doesNotMatch(pivot.spec, /c6r3/, 'c6r3 is entryCell (line[0]) — the wrong end of the line');
-  assert.match(pivot.role, /creates|makes both/i);
+  assert.match(pivot.role, /CREATE the fork/i);
   assert.ok(!half.forkCells.includes(pivot.spec.replace('future:', '')),
     'the pivot must be distinct from the finishing squares');
 });
@@ -426,7 +426,7 @@ test('fork-pivot role text follows the half register — no "matters later" clai
   const pivotNow = zonesNow.aliases.find((a) => a.handle.endsWith('-fork-pivot'));
   assert.ok(pivotNow, 'immediate-register fork should still offer a pivot alias');
   assert.doesNotMatch(pivotNow.spec, /^future:/, 'an immediate-register fork pivot must not carry future:');
-  assert.match(pivotNow.role, /creates|makes both/i);
+  assert.match(pivotNow.role, /CREATE the fork/i);
   assert.doesNotMatch(pivotNow.role, /matters later/i);
   assert.doesNotMatch(pivotNow.role, /once the forced sequence reaches it/i);
 
@@ -437,7 +437,7 @@ test('fork-pivot role text follows the half register — no "matters later" clai
   const pivotLater = zonesLater.aliases.find((a) => a.handle.endsWith('-fork-pivot'));
   assert.ok(pivotLater, 'forced_sequence-register fork should still offer a pivot alias');
   assert.match(pivotLater.spec, /^future:/, 'a forced_sequence-register fork pivot must carry future:');
-  assert.match(pivotLater.role, /creates|makes both/i);
+  assert.match(pivotLater.role, /CREATE the fork/i);
   assert.match(pivotLater.role, /matters later/i);
   assert.match(pivotLater.role, /once the forced sequence reaches it/i);
 });
@@ -462,7 +462,7 @@ test('fix 1: the fork-pivot role text carries an explicit "not right now" contra
   const zones = buildAnnotationOffer(fv, boardSelectionDecisions(fv));
   const pivot = zones.aliases.find((a) => a.handle.endsWith('-fork-pivot'));
   assert.ok(pivot, `pin-L5-deep-fork must offer a fork-pivot alias; got ${zones.aliases.map((a) => a.handle).join(', ')}`);
-  assert.match(pivot.role, /creates|makes both/i);
+  assert.match(pivot.role, /CREATE the fork/i);
   // The contrast must actively rule out "play this now", matching the sibling future* branches'
   // "not right now" / "not a threat right now" shape — not merely omit a claim.
   assert.match(pivot.role, /not.*(the move to play|right now)/i,
@@ -1200,4 +1200,212 @@ test('OI-225 corpus-wide (M5): every alias claiming the horizon wording ("once t
   }
   assert.ok(checked > 0, 'expected at least one checkable horizon-wording alias in the corpus');
   assert.deepEqual(violations, [], violations.join('\n'));
+});
+
+test('OI-227 corpus-wide: every `-fork-pivot` role claim about how many winning squares go live '
+  + 'matches independently computed board truth (checkWin)', async () => {
+  // Third instance of the cardinality-over-claim class (T031/OI-180 on `double`, D63/OI-225 on
+  // `-fork-square`, now `-fork-pivot`). `roleText`'s two pivot branches asserted "the move that makes
+  // BOTH winning squares live at once" unconditionally; a fork half is not always a pair, and more
+  // importantly two completing cells stacked in one column are not two LIVE squares.
+  //
+  // The oracle is deliberately NOT the code under test: `checkWin` (classifier.js) is applied from
+  // the test side, and the reachability model is gravity-top (`colHeights[col] === row`), because
+  // "live at once" means PLAYABLE at once. Three hand-rolled denominators produced confident wrong
+  // numbers before this one (`forkCells.length`, which several fork halves do not even carry; a
+  // plain empty-completing-cell count, which reported zero violations; and a first draft of this
+  // very check that dropped a floating disc on a non-gravity-top cell).
+  //
+  // Two directions are asserted, so the test cannot go green by the claim becoming UNCHECKABLE:
+  //   (1) a role claiming "both winning squares live at once" needs >= 2 gravity-top winning squares;
+  //   (2) a role claiming "makes a winning square live at once" needs >= 1.
+  // Whichever wording ships, every decidable pivot alias is board-checked. Corpus-wide rather than
+  // pinned to one record, because evidence.jsonl is shared with concurrent agents in this worktree.
+  const { toNarratorVector, pruneVector } = await import('../scripts/reasonNarratorVector.mjs');
+  const { boardSelectionDecisions } = await import('../scripts/reasonBoardSelect.mjs');
+  const { parseBoardState, checkWin } = await import('../classifier.js');
+  const here = _dirname2(_fileURLToPath2(import.meta.url));
+  const rows = _readFileSync2(_join2(here, '../scripts/reason_corpus/evidence.jsonl'), 'utf8')
+    .trim().split('\n').map((l) => JSON.parse(l));
+
+  let pivotAliases = 0;
+  let checked = 0;
+  const violations = [];
+  for (const row of rows) {
+    if (!row.evidence || row.error) continue;
+    let nv, fv, zones;
+    try {
+      nv = toNarratorVector(row.evidence);
+      fv = pruneVector(nv);
+      zones = buildAnnotationOffer(fv, boardSelectionDecisions(fv));
+    } catch { continue; }
+    for (const a of zones.aliases) {
+      if (!/-fork-pivot(?:-\d+)?$/.test(a.handle)) continue;
+      const claimsBoth = /makes both winning squares live at once/.test(a.role);
+      const claimsOne = /makes a winning square live at once/.test(a.role);
+      if (!claimsBoth && !claimsOne) continue;            // e.g. `fork-pivot-played`, which makes no such claim
+      pivotAliases += 1;
+      const m = /^(?:future:)?c(\d+)r(\d+)$/.exec(String(a.spec));
+      if (!m) continue;                                   // window specs are not a single pivot cell
+      const owner = a.handle.startsWith('opp-') ? 'opp' : 'you';
+      const player = owner === 'you' ? fv.player : (fv.player === 1 ? 2 : 1);
+      // The base board the pivot is placed on: the alias's own truthBoard when it has a movestring,
+      // else (projectedDeep) the owning half's `finalMovestring` minus its last ply — the pivot IS
+      // that last ply (see `forkPivotCell`'s comment).
+      let base = a.truthBoard === 'decision' ? fv.movestring
+        : a.truthBoard === 'afterPlayed' ? fv.movestring + String(fv.playedCol)
+        : a.truthBoard === 'afterBest' ? fv.movestring + String(fv.bestCol) : null;
+      if (base == null) {
+        for (const [h, side] of [[nv.lostResource, 'you'], [nv.opponentPunishment, 'opp']]) {
+          if (h && halfOwner(h, side) === owner && h.finalMovestring) { base = h.finalMovestring.slice(0, -1); break; }
+        }
+      }
+      if (base == null) continue;                         // no board to check against: undecidable, never a pass
+      let grid, heights;
+      try { ({ board: grid, colHeights: heights } = parseBoardState(base)); } catch { continue; }
+      const col = Number(m[1]) - 1, r0 = Number(m[2]) - 1;
+      if (grid[r0]?.[col] !== 0) continue;                // pivot already occupied there: undecidable
+      if (heights[col] !== r0) continue;                  // pivot not gravity-top: unreachable, undecidable
+      grid[r0][col] = player;
+      heights[col] += 1;
+      const live = [];
+      for (let c = 0; c < 7; c += 1) {
+        const r = heights[c];
+        if (r < 6 && grid[r][c] === 0 && checkWin(grid, r, c, player)) live.push(`c${c + 1}r${r + 1}`);
+      }
+      checked += 1;
+      const need = claimsBoth ? 2 : 1;
+      if (live.length < need) {
+        violations.push(`${row.id} ${a.handle}=${a.spec} (${a.truthBoard}) claims >=${need} live winning `
+          + `square(s) but the board gives ${live.length} [${live.join(',')}] — role: "${a.role}"`);
+      }
+    }
+  }
+  assert.ok(pivotAliases > 0, 'expected at least one -fork-pivot alias making a live-square claim');
+  assert.ok(checked > 0, 'expected at least one decidable -fork-pivot alias in the corpus');
+  assert.deepEqual(violations, [], `${violations.length} board-false pivot claim(s):\n${violations.join('\n')}`);
+});
+
+test('OI-231 corpus-wide: the eight remaining role-claim types are board-true — the audit harness, '
+  + 'promoted from a scratchpad into a durable guard', async () => {
+  // WHY THIS EXISTS. Every render-layer defect found in the last three sessions (OI-225, OI-227, and
+  // the two wrong counts OI-227's own audit produced before the right one) was found by a pure
+  // function over stored evidence, never by a graded run — and structurally never could be: the
+  // grading rubric consumes `render_decision.zones` as GROUND TRUTH and explicitly forbids checking
+  // the offered role against the board (`grade-fv-sufficiency/SKILL.md`: A4's condition-D carve-out
+  // delegates zone fidelity to G7/G5, G7a checks the model's phrase against the `role`, and G5
+  // checks the alias's `spec`, so the role's own PROSE claims are checked by nobody). The three
+  // tests above this one guard three claim types. This guards the other eight, so a regression in
+  // any of them stops shipping silently.
+  //
+  // This is a CHARACTERIZATION guard, not a bug fix: it is green on arrival by design. Its value is
+  // the RED it will produce later. It is not vacuous — each claim type asserts a non-zero denominator.
+  //
+  // Four latent bugs in the scratchpad harness are fixed here rather than carried over (OI-231):
+  //   1. an unparseable cell is SKIPPED, never scored as a violation with a misleading message;
+  //   2. an out-of-range row is FLAGGED as unparseable rather than passing silently through `?.`;
+  //   3. no role-prefix strip — the claim phrases are matched unanchored, so a locator prefix
+  //      longer than the observed 69 chars cannot silently break two claim types into 63 false
+  //      violations each;
+  //   4. multi-cell specs are validated on EVERY cell, not only the first.
+  const { toNarratorVector, pruneVector } = await import('../scripts/reasonNarratorVector.mjs');
+  const { boardSelectionDecisions } = await import('../scripts/reasonBoardSelect.mjs');
+  const { parseBoardState, checkWin } = await import('../classifier.js');
+  const here = _dirname2(_fileURLToPath2(import.meta.url));
+  const rows = _readFileSync2(_join2(here, '../scripts/reason_corpus/evidence.jsonl'), 'utf8')
+    .trim().split('\n').map((l) => JSON.parse(l));
+
+  const specCells = (spec) => {
+    const s = String(spec).replace(/^future:/, '');
+    if (s.startsWith('windows:')) return s.slice(8).split(/[|,]/).map((x) => x.trim()).filter(Boolean);
+    if (/^col\d+$/.test(s)) return [];
+    return [s];
+  };
+  // Fix (2): an out-of-range row/col yields null (-> "unparseable"), never a silent pass.
+  const parseCell = (c) => {
+    const m = /^c(\d+)r(\d+)$/.exec(String(c));
+    if (!m) return null;
+    const col = Number(m[1]) - 1, row = Number(m[2]) - 1;
+    return (col >= 0 && col < 7 && row >= 0 && row < 6) ? { col, row } : null;
+  };
+
+  const checked = { C2: 0, C3: 0, C5: 0, C6: 0, C8: 0, C9: 0, C9b: 0, C10: 0 };
+  const violations = [];
+  for (const row of rows) {
+    if (!row.evidence || row.error) continue;
+    let fv, zones;
+    try {
+      fv = pruneVector(toNarratorVector(row.evidence));
+      zones = buildAnnotationOffer(fv, boardSelectionDecisions(fv));
+    } catch { continue; }
+    for (const a of zones.aliases) {
+      const role = a.role, cells = specCells(a.spec);
+      const tag = `${row.id} ${a.handle}=${a.spec} (${a.truthBoard})`;
+      const ms = a.truthBoard === 'decision' ? fv.movestring
+        : a.truthBoard === 'afterPlayed' ? fv.movestring + String(fv.playedCol)
+        : a.truthBoard === 'afterBest' ? fv.movestring + String(fv.bestCol) : null;
+      let grid = null, heights = null;
+      if (ms != null) { try { ({ board: grid, colHeights: heights } = parseBoardState(ms)); } catch { grid = null; } }
+      const owner = a.handle.startsWith('opp-') ? 'opp' : 'you';
+      const player = owner === 'you' ? fv.player : (fv.player === 1 ? 2 : 1);
+
+      // C2 — the D61 `key-cell` downgrade: the cell must NOT complete a four on its own board.
+      if (/it does not complete the line on this board/.test(role) && grid) {
+        const q = parseCell(cells[0]);
+        if (q && grid[q.row][q.col] === 0) {                 // occupied/unparseable: undecidable (fix 1)
+          checked.C2 += 1;
+          if (checkWin(grid, q.row, q.col, player)) violations.push(`C2 ${tag}: claims "does not complete" but it completes`);
+        }
+      }
+      // C3 — "can make four next move": empty, gravity-top, AND completing.
+      if (/the single square where (?:you|your opponent) can make four next move/.test(role) && grid) {
+        const q = parseCell(cells[0]);
+        if (q) {
+          checked.C3 += 1;
+          if (grid[q.row][q.col] !== 0) violations.push(`C3 ${tag}: cell already occupied`);
+          else if (heights[q.col] !== q.row) violations.push(`C3 ${tag}: NOT gravity-top (height=${heights[q.col]}, row=${q.row})`);
+          else if (!checkWin(grid, q.row, q.col, player)) violations.push(`C3 ${tag}: does not make four for ${owner}`);
+        }
+      }
+      // C5/C6/C8 — cardinality claims about the SPEC's own cell set (fix 4: all cells counted).
+      if (/BOTH of the two squares/.test(role)) {
+        checked.C5 += 1;
+        if (cells.length !== 2) violations.push(`C5 ${tag}: says "the two squares" but the spec has ${cells.length}`);
+      }
+      if (/the fork squares where/.test(role)) {
+        checked.C6 += 1;
+        if (cells.length < 2) violations.push(`C6 ${tag}: plural "fork squares" but the spec has ${cells.length}`);
+      }
+      if (/the whole four-in-a-row line/.test(role)) {
+        checked.C8 += 1;
+        if (cells.length < 4) violations.push(`C8 ${tag}: claims a whole line of four but the spec has ${cells.length} cell(s)`);
+        for (const c of cells) if (!parseCell(c)) violations.push(`C8 ${tag}: unparseable/out-of-range cell "${c}"`);
+      }
+      // C9/C9b — the two column handles must name the columns the vector actually says.
+      // Matched UNANCHORED (fix 3), so a long locator prefix cannot break these.
+      if (/the column of the better move/.test(role)) {
+        checked.C9 += 1;
+        const m = /^col(\d+)$/.exec(String(a.spec));
+        if (!m || Number(m[1]) - 1 !== fv.bestCol) violations.push(`C9 ${tag}: bestCol=${fv.bestCol}`);
+      }
+      if (/the column you played/.test(role)) {
+        checked.C9b += 1;
+        const m = /^col(\d+)$/.exec(String(a.spec));
+        if (!m || Number(m[1]) - 1 !== fv.playedCol) violations.push(`C9b ${tag}: playedCol=${fv.playedCol}`);
+      }
+      // C10 — "your last move just filled" must name an OCCUPIED cell.
+      if (/the square your last move just filled/.test(role) && grid) {
+        const q = parseCell(cells[0]);
+        if (q) {                                             // fix 1: unparseable -> skip, not violate
+          checked.C10 += 1;
+          if (grid[q.row][q.col] === 0) violations.push(`C10 ${tag}: cell is EMPTY, not filled`);
+        }
+      }
+    }
+  }
+
+  for (const [name, n] of Object.entries(checked)) {
+    assert.ok(n > 0, `claim type ${name} checked 0 aliases — the guard has gone vacuous (corpus shape changed?)`);
+  }
+  assert.deepEqual(violations, [], `${violations.length} board-false role claim(s):\n${violations.join('\n')}`);
 });

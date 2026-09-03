@@ -623,6 +623,19 @@ function AnswerViewer() {
           <span>ms: <span style={{ color: '#94a3b8' }}>{fv.movestring || '(empty)'}</span></span>
           <span>col: <span style={{ color: '#e8543e', fontWeight: 700 }}>{fv.playedCol + 1}</span> → best: <span style={{ color: '#2faa5a', fontWeight: 700 }}>{fv.bestCol + 1}</span></span>
           {grade && <Chip text={grade.case_pass ? 'graded: PASS' : 'graded: FAIL'} bg="#0f172a" fg={grade.case_pass ? '#16a34a' : '#dc2626'} />}
+          {/* Old-vs-new comparison arm, DERIVED server-side by deriveSetFromAnswers (never stored),
+              so it is present on runs written before the arm existed and cannot drift from the file.
+              treatment = this record's prompt carries a fork role text that D63/D64 rewrote; control
+              = its prompt is byte-identical across the two code versions, so any difference you see
+              between runs on a control record is pure model variance, i.e. the noise floor. See
+              evalResultsHelpers.js `hasForkRolePrompt` — including its scope warning. */}
+          {caseRow.promptArm && (
+            <Chip
+              text={caseRow.promptArm === 'treatment' ? 'arm: treatment (fork roles)' : 'arm: control (no fork roles)'}
+              bg="#0f172a"
+              fg={caseRow.promptArm === 'treatment' ? '#d97706' : '#64748b'}
+            />
+          )}
         </div>
       )}
 
