@@ -6057,3 +6057,59 @@ SELECT count(*) FROM public.candidates WHERE status='pending'
 ```
 
 Production will hit this too — it has its own legacy `candidates` rows.
+
+---
+
+## OI-154 — One active `forced_win` puzzle has `correct_cols = NULL`, so it renders a highlight on column 0
+
+**Status**: open (surfaced 2026-09-08 while verifying the local puzzle pool for spec 058's QA work; not fixed)
+**Area**: `public.puzzles` row `ea8d1739-8a69-45a6-964f-edd1b15ecf40` (`category='forced_win'`, `interaction_mode='sequence'`, `is_active=true`)
+**Discovered**: local DB audit before the spec-058 pipeline
+
+**What**: of the 21 active `forced_win` puzzles measured locally, 20 are `interaction_mode='sequence'`
+with a populated `correct_cols`; this one has `correct_cols = NULL`. Measured 2026-09-08 on the local
+Supabase instance — it is the only such row across all 602 active puzzles in all 12 categories.
+
+**Why it matters**: a NULL `correct_cols` is not inert. Per the `correct_cols` engine traps, the
+render path reads `correct_cols[0]`, so NULL renders as **column 0** rather than showing nothing —
+a wrong highlight, not an absent one. A QA agent that lands on this puzzle will file a legitimate-looking
+but misattributed bug against the highlight logic.
+
+**Not measured**: whether the same row (or its equivalent) exists on staging or production. Staging is
+unreachable (see the staging-project note in `deployment_steps.md`); production was not queried.
+
+**Options**: deactivate the single row (leaves `forced_win` at exactly 20 active, still at the
+`specs/051-pattern-acceptance/pool-thresholds.md` floor of N=20, but with no margin); or backfill its
+`correct_cols`. Note `audit_answer_ambiguity.mjs --repair` can replace but never seed, so it is usable
+here only because other `forced_win` rows exist to inherit `goal_prompt` from.
+
+**Explicitly out of scope for spec 058**: that epic's `NOT included` puts QA-discovered findings outside
+its boundary — it delivers the ability to run the QA, not fixes for what the QA finds.
+
+---
+
+## OI-155 — `staging_checks.md` still documents Stripe test-mode keys and cards, a year after checkout moved to Paddle
+
+**Status**: open (surfaced 2026-09-08 while documenting Paddle sandbox test cards; flagged to the owner, not fixed)
+**Area**: `staging_checks.md:102-105`
+**Discovered**: spec-058 pipeline, while adding the Paddle test-card section to the app-qa environment reference
+
+**What**: that block instructs a staging verifier to use Stripe **test-mode** keys (`sk_test_…` /
+`pk_test_…`) and names Stripe's test cards — `4242 4242 4242 4242` = success,
+`4000 0025 0000 3155` = requires 3-D Secure, `4000 0000 0000 9995` = decline — plus a reference to a
+live smoke with `sk_live_…`. Spec 050 removed Stripe entirely (every Stripe file, dependency, env var
+and test is deleted) and replaced it with Paddle.
+
+**Why it matters**: the card *number* coincidentally still works (Paddle sandbox uses the same
+`4242…`), which is exactly what makes this dangerous — the instructions look right and fail only on the
+details. The 3-D Secure and decline card numbers are **Stripe's, not Paddle's**, so a verifier following
+them will get an unexplained failure; and the `sk_test_`/`sk_live_` key guidance describes an
+environment-selection mechanism this project no longer uses (Paddle derives sandbox-vs-live from the key
+*prefix*, `_sdbx_` / `test_`).
+
+**Correct values** are now recorded at `.claude/skills/app-qa/references/environment.md` §"Paddle sandbox
+checkout — test cards": 3DS `4000 0038 0000 0446`, debit `4000 0566 5566 5556`, declined
+`4000 0000 0000 0002`, dunning `4000 0027 6000 3184`.
+
+**Fix**: replace the Stripe block in `staging_checks.md` with a pointer to that section rather than a
+second copy, so the two cannot drift again.
