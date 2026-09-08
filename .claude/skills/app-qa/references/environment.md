@@ -113,6 +113,42 @@ from the server profile, not the JWT).
 If a real email user exists (not the anon one), `set-tier.js` works:
 `cd connect-four && node --env-file=server/.env scripts/set-tier.js <email> paid`.
 
+## Paddle sandbox checkout — test cards
+
+Local and staging checkouts run against the **Paddle sandbox**, which accepts **test cards only**;
+a real card is rejected. Sandbox vs live is decided by the **key prefix**, never `NODE_ENV` — the
+client token is `test_...` and the API key `pdl_sdbx_apikey_...`.
+
+Standard card (valid, no 3-D Secure) — use this for the normal free-to-paid pass:
+
+```
+Card number: 4242 4242 4242 4242
+Expiry:      any FUTURE month/year   (e.g. 11/28)
+CVC:         any 3 digits            (e.g. 123)
+ZIP/Postal:  any value
+Name:        any value
+```
+
+Scenario cards, for exercising the failure paths rather than the happy one:
+
+| Card number           | Result                                                 |
+| --------------------- | ------------------------------------------------------ |
+| `4242 4242 4242 4242` | Valid card, no 3DS — the default |
+| `4000 0038 0000 0446` | Valid card **with** 3DS — checks the challenge step is drivable |
+| `4000 0566 5566 5556` | Valid Visa **debit** |
+| `4000 0000 0000 0002` | **Declined** — checks `checkout.payment-error` handling |
+| `4000 0027 6000 3184` | Succeeds, then renewals decline — checks dunning / `subscription.past_due` |
+
+Source: the `paddle:sandbox-testing` skill (§"Step 2: Use test cards"), which mirrors
+[developer.paddle.com/sdks/sandbox#test-cards](https://developer.paddle.com/sdks/sandbox#test-cards).
+Re-check that page before treating this table as current — Paddle's card list changes.
+
+The overlay is a cross-origin iframe, but the chrome-devtools MCP a11y tree **does** penetrate it:
+the email textbox, country combobox, Continue and Close all come back as addressable uids from
+`take_snapshot`. Driving the checkout from an agent session is supported (verified 2026-09-07).
+
+**Never** use `paddle-live`, and never enter a real card.
+
 ## Chrome (chrome-devtools MCP)
 
 Prefer the MCP tools over launching Chrome yourself:
