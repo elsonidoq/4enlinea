@@ -30,4 +30,4 @@ its consumer keys coach phrases off the tag, so a `direction`-only fix silently 
 saying the wrong thing. The live half needs its own phrase-key mechanism
 ([[project_coach_phrase_pool_dual_lookup]]).
 
-Related: the same eval drove the sparse-lookahead deepening and the always_include rollback — see [[project_lookahead_shared_seam]] and [[project_explain_system]].
+Related: the same eval drove the sparse-lookahead deepening and the always_include rollback — see [[project_lookahead_shared_seam]] and `docs/architecture/llm-coach-endpoints.md`.

@@ -21,4 +21,4 @@ Spanish (`es`) deep-reveal + coach audio shipped via an **isolated final-layer**
 
 **Register — Spanish MUST be Argentinian/Rioplatense voseo** (`encontrá`/`tenés`/`sos`/`vos`), never neutral or Iberian *tú*-Spanish: the first `es.json` pass shipped in *tú*-Spanish and had to be corrected wholesale. This applies to every Spanish string you add — `es.json` copy, KB `short_summary_es`, and Spanish LLM/TTS output alike. The full conversion table + the key-parity rule live in **`docs/architecture/frontend-conventions.md` §i18n** (`tests/unit/i18nKeyParity.test.js` enforces key parity, but it **cannot see register** — voseo is reviewer-enforced only, and it cannot see the two backlogged gaps either: lesson-slide bodies have no i18n mechanism (OI-18) and some hardcoded-English JSX was never wired to `t()` (OI-19)).
 
-Related: [[project_explain_system]], `docs/architecture/server-conventions.md` §Explain Context.
+Related: `docs/architecture/llm-coach-endpoints.md`, `docs/architecture/server-conventions.md` §Explain Context.

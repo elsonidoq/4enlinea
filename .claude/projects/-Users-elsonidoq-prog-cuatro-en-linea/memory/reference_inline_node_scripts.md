@@ -53,3 +53,9 @@ error — it's the loop, not your script.
 
 **Problem 4 — `solver.query()` is async; you MUST `await` it**
 `solver.query(moveString)` returns a **Promise** that resolves to the 7-element per-column score array — it does NOT return the array directly. Forgetting `await` gives you the Promise object, which serializes to `{}` in JSON (a silent failure that passes any "is it set?" check). Always `await solver.query(...)`. The query also takes a **0-indexed** movestring (the wrapper converts to 1-indexed internally) and **rejects** terminal/won positions with `Error: Invalid position` — guard each call in its own try/catch if appending moves that may complete a line.
+
+**Never combine the harness's `run_in_background` with an inner `nohup … &`.** The wrapper exits as
+soon as the shell returns, so the harness reports **exit 0 for a process that is still running** — and
+a partially-written output file then looks like a silent truncation. Measured 2026-08-11 on a 125-call
+batch: 14 of 125 rows present, exit 0, node still alive under `ps`. Either background it with the
+harness alone (it tracks the real process), or poll for the producer's own completion marker.

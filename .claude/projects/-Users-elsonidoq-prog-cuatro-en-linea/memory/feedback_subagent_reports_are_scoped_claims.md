@@ -49,3 +49,49 @@ Confirm the final state is correct (both times it was) and record the misattribu
 inheriting it.
 
 **Corollary — a confidently-argued premise is still a claim.** The same epic's deploy runbook asserted "User Story 2 already shipped and is running in production" and derived a migration-before-code ordering from it. Nothing had shipped (unmerged branch, no remote), and the live code `SELECT`ed the column being dropped — so the runbook, as written, was an instruction to break production. Verify deploy-ordering premises against what is *actually* deployed (`git branch -r --contains`, `origin/main..HEAD`), never against an agent's narration. See [[feedback_implemented_vs_deployable]].
+
+## A grader dispatched to evaluate YOUR fix will sometimes report the fix didn't land
+
+Measured 2026-08-25, deep-reveal grading fan-out (25 agents per run, two runs). Three separate graders
+asserted things about freshly-changed code that were false at source:
+
+- two claimed a pair of sibling alias roles were "byte-identical" — the disambiguation fix was present
+  and the two roles differed (`the one at c3r1: …` vs `the one at c2r1: …`)
+- one attributed a raw-`cNrM` leak to a hint added that session; the leak was **pre-existing** —
+  122/125, 121/125, 123/125 runs across three runs, i.e. essentially constant
+
+Each was a *secondary* claim in a report whose *primary* finding was correct and valuable, which is
+exactly why they slip through: the report reads as competent, so the aside inherits its credibility.
+
+**A report's observation can be RIGHT while its attached framing is WRONG — check both halves
+separately.** 2026-08-26: a grader reported "`lostResource.line` renders as four empty objects" and
+attached "…so the forced denial sequence was suppressed, despite `fieldPartition.rendered` listing
+those paths." The *observation* was exactly right (confirmed at source; 13 of 25 records, now OI-206).
+The *framing* was wrong: that field's disposition is `transformed`, not `render`, so nothing the
+contract promised was being suppressed. Acting on the framing would have "restored" information the
+design deliberately routes through the board. Verify the fact and the interpretation as two claims.
+
+**Before accepting any subagent claim that contradicts a change you just made and verified, re-run the
+one-line check at source.** For a render/prompt claim that means calling the production builder and
+printing the field — not re-reading the diff, and not trusting the agent's quotation of it. A wrong
+"your fix didn't work" costs a rollback of a good change; a wrong "this is caused by your change"
+sends you fixing something that was always there.
+
+## A KILLED agent's last transcript line is not what it accomplished — check the disk
+
+2026-08-27: a `plan_create` agent (and its three verification sub-agents) died on an API session-limit
+429. Its final captured message was *"I now have everything needed. Let me write `research.md` first."*
+— which reads as "nothing was written." In fact it had already written **all four** artifacts
+(`plan.md` 436 lines, `research.md` 300, `data-model.md`, `quickstart.md`), each ending cleanly with no
+truncation. Re-running the stage would have destroyed complete work.
+
+The inverse also holds: it never emitted its `## Handoff context`, and it was **unknowable** whether its
+verification sub-agents finished before dying — so every `file:line` citation in those files had to be
+treated as unverified and re-checked downstream. And one artifact it *did* list as an output
+(`contracts/guard-diagnostics-contract.md`) genuinely did not exist, while a *different* stage's
+critique caught it.
+
+**How to apply:** on any agent failure, `ls` and `wc -l` the expected outputs and check whether the tail
+of each file terminates cleanly, **before** deciding to re-run. Then treat what it wrote as unreviewed:
+partial completion is the normal case, and the missing half is usually the *verification*, not the
+prose.

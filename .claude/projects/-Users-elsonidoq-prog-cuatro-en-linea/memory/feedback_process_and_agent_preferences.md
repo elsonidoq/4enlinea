@@ -5,7 +5,7 @@ metadata:
   node_type: memory
   type: feedback
   originSessionId: 5a34af86-ae36-4059-aa61-20c2adf0e291
-  modified: 2026-07-31T19:37:47.550Z
+  modified: 2026-08-28T18:36:20.338Z
 ---
 
 Merged from `feedback_speckit_epic_scoping` (+ its `feedback_scope_by_diff` half), `feedback_prework_discipline`, `feedback_proportion_process_to_change`, `feedback_agent_and_ui_workflow` (+ its merged `feedback_askuserquestion_preview_format` / `reference_multiagent_orchestration_patterns` halves), and the agent-dispatch rules of `feedback_workflow_hygiene`. These are the owner's non-default preferences — the defaults are usually the opposite.
@@ -76,6 +76,23 @@ Merged from `feedback_speckit_epic_scoping` (+ its `feedback_scope_by_diff` half
 - **NEVER use `preview` for text/code options.** The owner: *"Never use this format again. Text is being suppressed."* Previews render in a boxed pane that truncates ("✂ N lines hidden") and suppresses the option `description`. Reserve `preview` for genuinely visual content (ASCII mockups, diagram comparisons) only.
 - **ASCII diagrams for UI brainstorming** — inline; do NOT offer the browser-based visual companion (declined explicitly).
 - **Prepopulate reviewed data upfront.** For a "re-review" flow, list EVERY field the UI must pre-populate, trace each to its source table, add all selects/**joins** in one edit — fields in related tables (e.g. `annotator_note` on `false_positive_records` joined by `candidate_id`) are the missed ones. Add `Cache-Control: no-store` to admin list endpoints returning mutable data (stale 304s mask changes).
+
+- **Reports/dashboards: self-contained HTML at ONE stable path, or behind the localhost-only `/admin`
+  route — NOT an Artifact.** Asked directly 2026-08-28 and answered: *"It is either a self-contained
+  HTML or it is behind the localhost only /admin path."* A published Artifact was proposed and
+  declined. Pair with [[feedback_artifacts_are_detritus_not_baselines]]: one canonical file that gets
+  overwritten, never a timestamped file per run (`reason_corpus/runs/` is the cautionary example).
+- **No numeric acceptance bar when the owner intends to judge for himself.** Offered a
+  release-readiness threshold (zero-tolerance A4 + an A6 floor); declined: *"I dont want to set a bar,
+  I don't care about the rationalization. I want to be able to see both the numbers and the individual
+  cases."* Build the report so **every individual case is inspectable** (board, served text, per-axis
+  verdict, failure summary) rather than a pass/fail aggregate. Don't re-propose the bar as an oversight.
+- **Pace expensive fan-outs with a stop-and-ask between every batch.** Owner, 2026-08-28, on a
+  ~161-agent grading plan: *"break this down into steps so we avoid running out of tokens in the middle
+  of a big subagent fanout. Between each step the agent must stop, present results so far, and ask me
+  whether it should continue."* He is actively cost-sensitive about grader fan-outs and trims scope
+  when given real per-step counts — quote **agent counts and per-agent token cost** when proposing one,
+  and never chain two large batches without returning to him.
 
 ## 6. What belongs in an epic doc
 

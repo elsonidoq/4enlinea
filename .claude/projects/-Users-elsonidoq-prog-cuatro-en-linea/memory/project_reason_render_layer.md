@@ -89,7 +89,7 @@ assertion or add a catch-all.
 LLM sees (causal-frame `covers`, board selection, …) must be a single declared rule consumed by THREE
 consumers — the composer/render, the grader (`grade-fv-sufficiency`), AND the sampler
 (`select_boards.mjs`). Never a silent local choice; wire all three. See
-[[project_fv_suff_grader_pv_mismatch]], [[feedback_engine_soundness_then_render]].
+`docs/architecture/feature-vector-sufficiency-experiment.md` §14, `docs/architecture/reason-INVARIANTS.md` I0b.
 
 **Opening boards ARE now wired (D33, 2026-07-05 — supersedes the old "render layer NOT wired for
 openingContext" gap).** Opening-phase decisions render via an ADDITIVE `reason_engine/openingFrame.mjs`
@@ -113,3 +113,46 @@ non-obvious traps here:
   qualitative words, never a number in prose. `fieldDisposition` opening full-path checks run BEFORE the
   leaf fallbacks (else `bestCol`/`playedCol`/`text` leaf collisions win). See D33,
   [[project_reason_opening_traps]].
+
+## Adding a render surface adds VOCABULARY the model echoes (measured, 2026-08-25)
+
+Splitting the single `projectedDeep` board into one per deep half (D50) fixed real board-falsehoods —
+and cost the coach-voice axis 12 points, because the model started naming the boards. Two causes, both
+of them "new text the model can see":
+
+1. The new board's caption said *"for your opponent's punishment"* — and "opponent punishment" is on
+   the coach-voice axis's OWN banned-terminology list. The render supplied the banned phrase; the model
+   dutifully echoed it.
+2. Having two boards to distinguish, runs started writing "the deep board" / "the deep reply board" /
+   "the projected board" — paraphrases of internal ids.
+
+Measured on the answers directly: runs leaking a render/board label went **0/125 → 10/125**, on exactly
+the seven records that gained a second board. Not a model regression — a render regression.
+
+**Rule: when you add anything to the assembled prompt, extend `READING_KEY`'s never-repeat list in the
+SAME change, and check the new string against the coach-voice banned list before shipping it.** A new
+board, alias role, caption or frame is player-visible vocabulary until you forbid it.
+
+See [[project_deep_reveal_eval_harness_gap]] — the same run's "model ignores the required set" failures
+were an eval artifact, so read a graded regression carefully before attributing it.
+
+## `alias.spec` / `requiredSet[].spec` is a MATCH KEY, not prompt text — never "clean" it (2026-08-27)
+
+Counting raw `cNrM` occurrences across the render model invites a wrong conclusion. Measured by
+replaying all 25 subset `render_decision` records, there are **two** printed producers, not three:
+`link.text` **20/25** and `zones.aliases[].role` **13/25** (the required block re-prints 10 of those 13,
+because `deriveRequiredSet` copies `role: alias.role` — `renderReasonModel.mjs:153`).
+
+`requiredSet[].spec` is **25/25**, and that number is a trap twice over:
+- **`.spec` is never printed into the prompt.** The required block is `renderReasonModel.mjs:604-605` —
+  `` `- [zone:${g.handle}] = ${g.role}${g.truthBoard ? …}` `` — handle, role, board. The
+  Highlightable-regions block (`:625-660`) has the same shape. No spec.
+- **`.spec` MUST stay coordinate-bearing.** It is the key of `aliasBySpec` (`:137`, matched at `:146`),
+  the spec-string-equality contract D2/D43 rests on. Strip coordinates from it and required-set
+  derivation breaks outright.
+
+So an acceptance criterion asserting "no `cNrM` in any producer" is satisfiable only by breaking the
+code. Scope such a rule to the **printed** surfaces and exempt `.spec` explicitly. And remember the
+tension the widening creates: D49's `disambiguateSiblingRoles` put those coordinates into role text
+**on purpose**, to break `(role, truthBoard)` collisions (48/63 records before, 0 after, §12d) — any
+replacement locator has to preserve that property or it trades one defect for another.

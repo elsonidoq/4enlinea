@@ -1,6 +1,6 @@
 ---
 name: feedback_occam_principled_extrapolation
-description: "Decide designs with Occam's razor — prefer one unifying mechanism over many special-case kinds; extrapolate general rules from examples, don't enumerate cases"
+description: "Decide designs with Occam's razor — prefer one unifying mechanism over many special-case kinds; extrapolate general rules from examples, don't enumerate cases; and its tooling corollary — extend the ONE existing command, never add a sibling script or a new --strategy"
 metadata: 
   node_type: memory
   type: feedback
@@ -25,3 +25,21 @@ smaller, more correct, and easier to reason about. (Established 2026-06-28 durin
   rather than tuning thresholds to the seen set (avoid the overfit [[feedback_eval_design_methodology]]).
 - Be explicit about which residual cases the principle does NOT cover and why (honest scope), instead
   of bolting on a special case to force coverage.
+
+## The tooling corollary: EXTEND the one command, don't add a script or a mode
+
+(Merged from `feedback_one_command_pipeline_extend_dont_add`.) The same razor governs pipeline tooling:
+the user strongly prefers **extending an existing command over adding a new script or a new CLI mode.**
+Concrete corrections from the opening-sampling brainstorm (2026-07-05) — a proposed new `TOOLS/` script
+**and** a proposed new `--strategy opening` were both rejected: *"The `--strategy` must not change. All
+boards must be generated with just one command. Why would we have more than one command to generate
+boards?"* The intended shape was the ONE existing command (`select_boards --strategy coverage`) running
+**two internal phases** (a deterministic opening step, then the existing harvest) into one output —
+"one command generates everything for the next step". Fewer moving parts for the operator; the pipeline
+stays `select_boards → compute --llm → grade` with no extra invocations to sequence.
+
+**How to apply:** default to a new internal phase/branch inside the current entry point, reusing its
+emit/classify/write plumbing, rather than a sibling script or a new strategy value. If you think a new
+`--strategy`/script is warranted, propose it as "extend the existing command" first and justify the new
+surface. **Do not let this override soundness** — the user equally insisted sampled cases stay
+**solver-verified** blunders and cover **both players**, not just the convenient one.

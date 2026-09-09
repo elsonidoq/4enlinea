@@ -1275,13 +1275,14 @@ Saves the user's Papergames account ID and/or onboarding status. Both fields are
 least one must be present**; either or both may be sent in a single call.
 
 **Request body**: `{ papergames_id?: "<string>", onboarding_status?: "not_encountered" | "seen" | "skipped" }`
-- `papergames_id`: non-empty string, max 64 characters, when present.
+- `papergames_id`: non-empty string, max 64 characters, when present — **and it must resolve to a real Papergames profile.** The handler calls `verifyPapergamesAccount()` (`server/papergamesImporter.js`), which probes `GET https://papergames.io/api/profile/<id>`. This is the only endpoint in the app that makes an outbound third-party call as part of input validation, so note its two deliberate properties: it **fails open** (only a definite upstream 404 rejects; a 5xx, timeout, or offline network saves anyway, so a Papergames outage can never trap a valid ID), and it **only runs when `papergames_id` is present in the body** — an `onboarding_status`-only update never touches the network.
 - `onboarding_status` (Epic 8 — Onboarding Experience, spec 048): one of the fixed 3-value enum, when present. Validated via the single shared `isValidOnboardingStatus()` (`server/userHelpers.js`) — the ONE place this enum is checked; no other call site (including `POST /api/user/migrate`) may duplicate the check inline.
 
 **Response**: `204 No Content` on success.
 
 **Errors**:
 - 400 `{ "error": "papergames_id must be a non-empty string (max 64 chars)" }` when `papergames_id` is present but invalid.
+- 400 `{ "error": "No Papergames account found with ID <id> — check your Papergames account ID" }` when the ID is well-formed but 404s upstream. Added 2026-08-25 after a production incident in which a non-existent account ID was stored silently and only failed minutes later, inside a background import job, as the misleading `Papergames API unreachable: fetchRooms HTTP 404`.
 - 400 `{ "error": "invalid onboarding_status" }` when `onboarding_status` is present but not one of the three enum values.
 - 400 `{ "error": "no valid fields provided" }` when neither field is present in the request body.
 - 401 for unauthenticated; 503 if Supabase not configured; 500 `{ "error": "Failed to update profile" }` on DB error.

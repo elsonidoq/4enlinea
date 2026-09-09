@@ -24,8 +24,34 @@ Three cross-path traps around serving blunder/mistake data, discovered during sp
 
    **Second-order trap:** the audio cache key is `sha256(cleanText)` → `tts/deep-reveal/<hash>.mp3`, compared against `explanation_cache.audio_path`. **Changing the sanitizer changes that hash and orphans every stored clip** — so a text-integrity fix here needs an audio-regeneration step, not just `TRUNCATE explanation_cache`.
 
-   Fixed by "Plan A" (2026-08-04, branch `worktree-plan-a-eight-fixes`). **Before adding any text transform for served explanations, grep for every reader of `explanation_cache`** — do not trust this file's or any doc's count. Note `docs/architecture/llm-coach-endpoints.md` still described `stripAnnotationsForTTS` as the only transform on that path as of the fix. See [[feedback_served_vs_raw_diff]].
+   Fixed by "Plan A" (2026-08-04, branch `worktree-plan-a-eight-fixes`). **Before adding any text transform for served explanations, grep for every reader of `explanation_cache`** — do not trust this file's or any doc's count. Note `docs/architecture/llm-coach-endpoints.md` still described `stripAnnotationsForTTS` as the only transform on that path as of the fix. See [[project_grounded_annotation_traps]].
 
 **Why:** each trap is invisible from any single file — the dual builders look like one endpoint from the frontend, and the cache bypass only bites on the (common) cache-hit path that tests rarely exercise.
 
-**How to apply:** when touching the blunder payload shape or explanation text handling, grep for BOTH builders and check the cache-hit path explicitly; a cache-hit test must seed a poisoned cache row (see spec 042 T041). Related: [[project_explain_system]], the polish-epics backlog (git history).
+**How to apply:** when touching the blunder payload shape or explanation text handling, grep for BOTH builders and check the cache-hit path explicitly; a cache-hit test must seed a poisoned cache row (see spec 042 T041). Related: `docs/architecture/llm-coach-endpoints.md`, the polish-epics backlog (git history).
+
+## 4. `explanation_cache` has NO render/prompt version in its key — a render-layer fix is invisible on any position already cached (2026-09-02)
+
+**Trigger: you changed anything that alters deep-reveal text** — a role string, `requiredSet`, the
+causal frame, the retry, a guard rule. The cache key is `sha256(\`${moveString}:${col}\`)` plus locale
+(`server/index.js`, `positionHash` + `buildCacheFilter`, read at ~:1213/:1312/:1504/:3902). It encodes
+the POSITION only. Nothing in it changes when the render layer changes, so every position anyone has
+already viewed keeps serving pre-fix text forever, with no error and no staleness signal.
+
+Consequence that makes it worse: cached rows carry `audio_path`/`audio_generated_at`, and TTS here is
+keyed by text content — so stale audio outlives stale text, and the clip no longer matches even after
+someone regenerates the prose.
+
+**How to apply:** any render-layer change needs an `explanation_cache` purge recorded in
+`docs/deployment_steps.md`, running AFTER the code deploy (purging first just refills it with pre-fix
+text). Pre-launch the databases are disposable, so "delete every row" is the correct action — it is a
+regenerable cache. Verifying a render fix against a position you viewed before the deploy will show the
+OLD text and look like the fix failed. See D61 and the 2026-09-02 entry in `deployment_steps.md`.
+
+**Retry telemetry lives here too, and it is a BIASED sample (2026-09-02, migration 066).**
+`explanation_cache.retry_fired` / `retry_reason` / `served_attempt` record the deep-reveal retry. They
+are written at the cache-MISS insert only, so they describe generation events, not positions: a cached
+position never re-records, and the table is not a time series. `served_attempt` is smallint 1/2 (matching
+`deep_reveal_failures.served_attempt`), and the LLM-error retry is deliberately excluded — only the
+content retry sets `retry_fired`. Querying these as if they were per-position truth, or as a trend, will
+mislead. See D62 and `db-schema.md` §explanation_cache.

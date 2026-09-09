@@ -1,6 +1,6 @@
 ---
 name: project_lesson_audio_generation_traps
-description: "generate-audio without a locator re-synthesizes EVERY lesson clip; back-to-back en/es loses a write; generate-tts.js is FIXED (not broken); approving one coach clip can drop others from the manifest"
+description: "generate-audio without a locator re-synthesizes EVERY lesson clip; a coach clip awaiting_approval CANNOT exist in a green tree (OI-184); editing lesson text orphans its mp3 and trips the zero-orphans check"
 metadata: 
   node_type: memory
   type: project
@@ -68,3 +68,37 @@ goes red (it is a separate assertion from the missing-clip half — a run can pa
 other). Fix with `POST /api/admin/lessons/prune-audio`; it deletes and reports them.
 
 Related: [[project_tts_audio_cached_by_text]], [[project_lesson_progression_audio_traps]].
+
+---
+
+## 5. Generating audio turns the suite RED, and there is no green way to hold a pending clip (2026-09-09)
+
+**Trigger: you added a `coach.spoken.*` key, or edited any lesson string, and are about to generate
+its clip.** Both halves of this were hit for real while fixing OI-174/OI-164.
+
+**Coach clips.** `scripts/generate-tts.js --key <k> --lang all` writes the mp3 and leaves the
+registry entry at **`status: "awaiting_approval"`**. But the manifest — what the app actually plays
+— is **approved slugs only** (`saveManifest` filters `status === 'approved'`), and
+`tests/unit/coachSpokenNamespace.test.js`'s orphan assertion fails on **any on-disk mp3 absent from
+the manifest**. Approval is a human act in `/admin/audio`. So a correctly-generated clip awaiting
+approval **cannot exist in a green tree**. Filed as **OI-184**.
+Do not escape it by hand-editing `status` to `approved` — that record exists solely to say a human
+listened, and falsifying it is worse than shipping silent. Either leave the key clip-less (it ships
+text-only, the pre-existing behaviour) or fix OI-184 deliberately.
+
+**Lesson clips.** Lesson audio is keyed by `sha256(text)[:16]`, so **editing a lesson string orphans
+its mp3**. Regenerating the new one is not enough: `lessonAudioCoverage.test.js` also enforces
+**zero orphans** (`disk has 380 files, 378 referenced`), so the OLD mp3 must be removed in the same
+change. Quarantine it (move, don't delete).
+
+**Two things that do work:**
+- `generateLessonAudio(lesson, { lang, locator })` — the `locator` (e.g.
+  `slides[0].coachMessages[0]`) targets one message. Without it, every clip in the lesson is
+  re-synthesized.
+- `generate-tts.js --key <k>` — targets one coach key. **`--all-new` sweeps up every pre-existing
+  `needs_audio` key too** (e.g. `coach.spoken.forfeited_win.*`, which have been pending for ages and
+  are not yours).
+
+Also: `lessonAudioCoverage` only checks a referenced clip **exists**, never that it was synthesized
+from the **current** text — so a prose edit silently ships a recording of the old wording.
+`tests/lessons/lessonAudioTextHashParity.test.js` (added 2026-09-09) closes that.

@@ -32,7 +32,7 @@ When writing or refining product docs in `docs/mvp/`, keep them **implementation
 - **Verify current-state claims against the actual code**, not against older docs — the user flagged a doc that read as a plan but whose Phase 1 was already shipped. Treat older docs as potentially stale.
 - Resolve genuine product decisions via AskUserQuestion (multiple choice), then fold answers in and empty the "Open product decisions" section.
 
-Related: [[project_explain_system]], [[feedback_process_and_agent_preferences]], [[feedback_process_and_agent_preferences]].
+Related: `docs/architecture/llm-coach-endpoints.md`, [[feedback_process_and_agent_preferences]], [[feedback_process_and_agent_preferences]].
 
 
 ---
@@ -44,3 +44,27 @@ Do not use "heatmap" as a shorthand for the Sparring Hint's column-score overlay
 **Why:** User had to ask for a precise definition mid-audit because the term was unclear.
 
 **How to apply:** Use "column-score overlay" or "column-score row" when referring to the Hint UI element that shows per-column solver scores above the board.
+
+---
+
+## Lead with actionability — never let a non-issue read as an issue
+
+Stated 2026-09-02 after a verification report. When surfacing anything found while checking work
+(a residual case, a leftover, an unexplained number), **the first sentence must say its status**:
+*no action needed* / *your call* / *needs fixing*. Do not walk through the mechanism and reveal at
+the end that there is nothing to do.
+
+The failure that triggered this: a single leftover record (`eval-36`, 1 of 63) was given its own
+section with root-cause analysis and options, when the actual answer was "no actionable — at most
+one line in `docs/open_issues.md`". The user read it as a pending decision and spent two round-trips
+asking what they were being asked to do. Their words: *"You speak like there is an issue, and then
+it turns out there is no issue at all. That should not happen again."*
+
+**Why:** structure signals importance. A dedicated section with analysis reads as "you must decide
+this", regardless of the words inside it. Volume of explanation is itself a claim about priority.
+
+**How to apply:** after verifying work, sort findings into *actionable* and *accounting-only* BEFORE
+writing. Accounting-only items — things mentioned solely so a reported number adds up — get one
+sentence inline, never a heading, never an options list. If a finding exists only because you owe an
+audit trail on your own claim, say exactly that. Related: [[feedback_deferred_sections_are_a_task_list]]
+(the inverse trap — a real deferred item must NOT be silently dropped), [[feedback_verify_at_the_source_layer]].

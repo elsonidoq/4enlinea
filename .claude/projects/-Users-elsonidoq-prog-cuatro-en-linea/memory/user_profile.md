@@ -13,3 +13,23 @@ Strong technical background — comfortable reading C++ bitboard code, React hoo
 - **Commit only when asked — this drifts, it isn't ignorance.** Restated 2026-07-16 after three unrequested commits in one session (a behavior change, a test, a logging tweak). It drifts most when a change *feels* finished. Default: make the change, say what it does, leave it in the working tree. "Merge this" / "commit this" is an instruction, never an inference. It matters doubly because a second agent may share the tree ([[feedback_concurrent_agents_clobber]]) — an unasked commit can sweep up their in-flight work.
 - **No destructive git for curiosity.** Never `git stash`/`git reset` to answer a question like "were these tests already failing?". On 2026-05-18 a mid-write `git stash -- <files>` left `.git/index.lock` behind and corrupted the index (mass staged deletions, manual recovery). To check whether a failure is pre-existing, read the test and reason from the code; if a real baseline is needed, ask him to run it.
 - **Quarantine before delete.** When removing dead code, MOVE files to `src/_quarantine/` (never `git rm`) so he can QA the running site; delete only after he confirms.
+
+## Reply-length control by tag (2026-09-03)
+
+He sometimes imposes a hard reply budget for a stretch of conversation — *"lets chat with that at most
+10 words rule until I explicitly say so"* — and then widens it per-message with a named tag he invents
+on the spot and expects you to honour thereafter:
+
+- `#MTW` — "more than ten words", lifts the cap for that message only
+- `#BBL` — "brief bulleted list"
+- `#NoLimitation` — no length constraint (used when asking for a full artifact, e.g. a handoff prompt)
+
+Two things this revealed about what he actually wants:
+
+- **The cap applies to prose, not to work.** Under a 10-word rule he still expected full tool use,
+  subagent dispatches, file edits and verification — just no narration. Do not interpret a length
+  budget as a scope reduction, and do not skip verification to stay terse.
+- **A bulleted list under the cap means ~10 words PER BULLET**, not 10 words total. He asked for a
+  bulleted summary while the rule was active and accepted short bullets.
+
+When a tag is introduced, treat it as durable for the rest of the session and acknowledge it once.

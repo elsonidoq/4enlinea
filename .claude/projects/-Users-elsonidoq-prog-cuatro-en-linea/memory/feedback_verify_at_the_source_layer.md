@@ -63,4 +63,47 @@ Whenever you are about to believe something about a system, ask: *is this the tr
 9. **Locate by symbol, not line.**
 10. **Cite-or-flag every claim inside an options table.** Before `AskUserQuestion` on a technical choice, open the primary artifact behind **each** option. Then put a `file:line` next to every factual claim in the table — cost, latency, "this would require X", size estimates. **If you can't cite it, write `UNVERIFIED` next to it.** This is the one rule here that does not depend on your recall: it converts an invisible failure into a visible one, so the reader can aim a single skeptical question at exactly the load-bearing claim instead of having to suspect the whole table. Prevention failed seven times in one session while this file was loaded in context; visibility would have caught all seven at a glance.
 
-Related: `CLAUDE.md` §"When writing specs for existing components", [[feedback_llm_output_root_cause]], [[feedback_engine_soundness_then_render]], [[feedback_occam_principled_extrapolation]].
+Related: `CLAUDE.md` §"When writing specs for existing components", [[feedback_llm_output_root_cause]], `docs/architecture/reason-INVARIANTS.md` I0b, [[feedback_occam_principled_extrapolation]].
+
+**Rule 11 — a MECHANISM you did not measure is a hypothesis, however plausible, and however much you
+built the thing.** Measured 2026-08-23: an eval axis declined and I reported, as a finding, that it
+declined *because* two earlier tasks had grown the required handle set — more handles to bind, more
+dropped. Plausible, causally coherent, and wrong. Re-rendering every board at both commits and diffing
+the offered/required sets took ten minutes and showed only 5 of 25 boards changed at all — and those 5
+were the ones that *improved*. The decline sat entirely on prompts the branch never touched.
+The tell: I could not have cited a file:line or a diff for the causal claim, only a story. Before
+writing "X declined **because** Y", produce the artifact that shows Y changed on the cases that
+declined — the same standard applied to a doc comment or a subagent report applies to your own
+explanation of your own work.
+
+**Rule 12 — "verified at source" usually means *verified against the file's TEXT*. The bugs that
+survive live one layer deeper, in RUNTIME shape.** Measured 2026-09-08 across a five-stage
+spec pipeline (epic → spec → plan → tasks, each with an Opus critique). Every claim checkable by
+reading a file held up exactly: line numbers, function names, call-site inventories, a
+`requireLocalhost` closure and its 18+ consumers, which screen owns which affordance. The four
+defects that reached the final review were all claims about things a file's text does not show you:
+
+- **what a function returns** — `subscriptions.list()` looks like a list call and is a synchronous
+  lazy Collection, so `await`ing it yields `data: []`;
+- **where a binding lives** — the Paddle client was a block-scoped `const` inside an `if`, so the
+  routes told to "reuse it" could not see it;
+- **whether a file is reachable by the runner** — two new `.test.mjs` files were never appended to
+  `test:fast`, which is an explicit file list with no glob, so they would never execute;
+- **whether an assertion can fail** — three downgrade fixtures sent in sequence against a decaying
+  account state, where the second asserts "flips to free" on an already-free row.
+
+Three of the four would have passed a green test suite. The tell is that each was *cited correctly*
+and still wrong — the citation proved the symbol exists, not that the code does what the sentence
+claims. **A grep confirms existence; only reading the body, or running it, confirms behavior.**
+
+The second lesson is about where to spend verification budget. When a reviewer reports "every
+citation checks out", that is evidence about the text layer *only*, and should raise rather than
+lower suspicion of the runtime layer — the well-cited artifact is precisely the one whose remaining
+errors are invisible to citation-checking. Ask instead: what does this call *return*, what scope is
+that name in, does this test actually run, and can this assertion fail?
+
+Corollary, and the sharpest instance of it: **a tool built to prevent a failure mode is not immune
+to it.** The task list for a QA-enablement epic reproduced, in its own ordering, the exact silent
+identity-rejection trap the epic existed to close — because the invariant was written as a prose
+warning in one task instead of as a dependency edge. An invariant that is not expressed in the
+artifact the machine reads is decoration.

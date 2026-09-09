@@ -114,6 +114,19 @@ bins are now covered. The canonical bin enumeration is always `REASON_TEMPLATES.
 | HTTP endpoint behavior (interaction_mode guard, error shapes) | Integration test (spins up express in-process) |
 | LLM explanation grounding (hallucination rate) | Hallucination acceptance test (manual, against live API) |
 | Admin curation flow | Manual golden-path verification |
+| A handler that calls a third-party API during request handling | Endpoint test with the call injected via the route module's `deps` slot (never a real request) |
+
+**MUST**: no test may reach a third-party host. When a handler makes an outbound call, register the
+route module with an injected stub — `registerUserRoutes(app, supabase, { verifyPapergamesAccount })`
+(see `server-conventions.md` § "Route Module Organization"). `userEndpoints.test.mjs`'s `createApp()`
+defaults every such dependency to its **inert/fail-open** verdict, so pre-existing tests that predate
+the third-party call keep passing unchanged and never acquire a hidden network dependency. A test that
+cares about the third party passes its own verdict explicitly.
+
+**MUST**: pin the *classification* of a third-party failure, not just the happy path. A status-code
+mapping (404 → "wrong input" vs 5xx → "provider down") is a behavioural contract users read in error
+messages; it is also the part most likely to be quietly re-simplified into a blanket retry
+(`server/tests/papergamesAccountCheck.test.mjs`).
 
 **MUST**: Solver-dependent features use the real C++ binary, never a mock. (Constitution §III)
 **MUST**: Each predicate category has at least one positive and one negative fixture. (Constitution §III)

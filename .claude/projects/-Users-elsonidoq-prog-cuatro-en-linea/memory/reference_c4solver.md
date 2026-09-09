@@ -1,6 +1,6 @@
 ---
 name: reference_c4solver
-description: "c4solver score semantics (sign/magnitude, book encoding) + behavioral quirks — the max<0 vs min<0 universality trap, error-not-hang on winning-move strings, the off-by-1 JS formula, and exit 137 = stale binary"
+description: "c4solver score semantics (sign/magnitude, book encoding) + behavioral quirks — the max<0 vs min<0 universality trap, error-not-hang on winning-move strings, the off-by-1 JS formula, exit 137 = stale binary, and why scores go FLAT at forced-win terminals so you must find the forced block with checkWin"
 metadata:
   node_type: memory
   type: reference
@@ -90,8 +90,27 @@ These differ by 1 when `moveCount` is **odd** — the JS formula underestimates.
 ## Never use a score threshold to detect immediate wins
 `immediateWinScore` was deleted from `predicates.js` and `candidate-generator.js` (2026-05-21): `Math.floor((42 - moveCount) / 2)` yields the same integer for an immediate win and a win-in-2 when `moveCount` is odd. **Rule:** always use `checkWin` at the gravity-top cell — never infer immediacy from a score. Applies in `classifier.js`, `predicates.js`, `candidate-generator.js`.
 
-## Scores at forced-win terminals are flat
-When the opponent faces a forced win, all their column scores are identical. Never use scores to pick which column to highlight — use direct board threat detection. See [[reference_cat5_forced_block_detection]].
+## Scores at forced-win terminals are flat — you CANNOT find the forced block from scores
+In a true forced-win terminal the initiator holds an immediate winning threat the opponent cannot
+actually defuse, so the opponent loses equally fast whatever they play and **all their column scores are
+identical**. Never use scores to pick which column to highlight.
+
+Worked example (`traceForcedWin` Case A), 1-indexed: `77435634165667374673756344`. **26 plies played, so
+move 27 is odd ⇒ P1 (X/Green) is to move**, and the threat owner is **P2 (O/Gray)**. Scores are
+`-8 -8 -8 -8 -8 -1000 -1000` — flat — yet **col 5 is the correct forced block**, because P2 has the
+gravity-top major threat there (`visualize_board.sh` prints `col5 row4 (O) [GT]`). Blocking it only
+pushes the win one row up to the stacked follow-up cell `col5 row5`, so every line ends on the same ply
+and the score stays flat. (The solver *does* betray col 5, but only as an error: appending it prints
+`Invalid move at position 27: move in column 5 would create a winning alignment` — an error, not a score.)
+
+**Watch the perspective.** The mover and the threat owner are *different players* here — the flat scores
+belong to the player to move (P1), while the win belongs to P2. Getting this backwards is the easy
+mistake, and an earlier version of this note had both inverted.
+
+**Correct approach:** place the **threat owner's** (non-mover's) piece at each legal column height and
+call `checkWin`; the first column that creates a win is the forced block (return `[playedCol, wc, wc]` —
+the mover is forced to `wc`, the threat owner wins at `wc`). This is the same "never infer immediacy
+from a score" rule as `immediateWinScore` above. Also in `docs/architecture/server-conventions.md` §"Solver Score Semantics (Critical Invariant)".
 
 ## Exit 137 / SIGKILL → stale binary, rebuild
 If c4solver crashes with exit 137, ignores flags, or produces wrong output, **delete the binary and recompile before investigating anything else**:

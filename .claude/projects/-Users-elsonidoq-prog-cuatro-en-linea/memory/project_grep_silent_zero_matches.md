@@ -68,6 +68,37 @@ not an empty one — which is worse:**
   brace rule; I had read it minutes earlier and still hit it, because the failure surfaced as a
   *finding* rather than as a syntax error.
 
+- **zsh rejects `grep --include=*.mjs` before grep ever runs.** `grep -rln "x" --include=*.mjs src/`
+  printed `(eval):1: no matches found: --include=*.mjs` — a **shell glob error**, not a grep result.
+  I read it as "no references exist", concluded nothing depended on a set of fixture files, deleted
+  them, and broke 5 test files. Quote the pattern (`--include='*.mjs'`) or use `--include=\*.mjs`.
+- **Never `grep -v` the very path fragment you are searching for.** Hunting references to files under
+  `.../fv_suff/`, I piped through `grep -v "/fv_suff/"` to "cut noise" — which removed exactly the
+  matches that mattered, and produced a confident "no live references" that was false. When filtering
+  a reference hunt, filter by *file type* or *directory you are not searching*, never by a substring
+  of the target. If the answer must be trusted, run it unfiltered and read all of it.
+
 Related: [[feedback_verify_at_the_source_layer]] — this is that rule's failure mode at the *tool* layer:
 the grep output is a representation of the file, and it lied. Same family:
 [[project_dom_test_hang_diagnosis]] (`ps` lying about which process is burning the CPU).
+
+---
+
+## `grep -rln` answers "which FILES mention this", not "which files USE this" (2026-09-09)
+
+**Trigger: you are about to state a call-site count or a blast radius from a filename-only grep.**
+
+I asserted, in a report to the owner, that an audit's `CoachDialog` call-site list "omits
+`PlayOnlineScreen.jsx` entirely" — from `grep -rln "CoachDialog" src/`. A subagent disputed it. It
+was right and I was wrong: `PlayOnlineScreen.jsx`'s only hit is a **comment**,
+`{/* Opponent banner — replaces CoachDialog */}`. The audit's list had been correct all along.
+
+`grep -rn "<CoachDialog"` (the actual JSX element) gives the real answer: 10 files / 11 elements.
+
+**The rule**: a call-site or blast-radius claim must grep for the **usage form** — `<Component`,
+`functionName(`, `import { x }` — never the bare identifier, and never with `-l`, which throws away
+the line that would have shown you it was a comment. Prose, comments, doc blocks and a "replaces X"
+note all match the bare name. This is the same class as the multibyte trap above: the tool answered
+a different question than the one asked, confidently and silently.
+
+Related: [[feedback_verify_at_the_source_layer]].

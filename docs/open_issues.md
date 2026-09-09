@@ -6057,3 +6057,170 @@ SELECT count(*) FROM public.candidates WHERE status='pending'
 ```
 
 Production will hit this too — it has its own legacy `candidates` rows.
+
+## OI-148 — The staging environment is down: its Supabase project no longer resolves, so every deploy crash-loops
+
+**Status**: open — production is unaffected; staging has no working database
+**Area**: Railway service `4enlinea-staging` (env `staging`), Supabase project ref `jkqilynpshutqcceopdn`
+**Discovered**: 2026-08-25, when a routine `stagging` push triggered a redeploy
+
+### What is wrong
+
+The staging container crash-loops at boot and `https://staging.decodec4.xyz` returns **502**. The deploy
+log repeats:
+
+```
+(ENOTFOUND) tenant/user postgres.jkqilynpshutqcceopdn not found
+```
+
+The staging Supabase project is gone, not merely unreachable: `jkqilynpshutqcceopdn.supabase.co` is
+**NXDOMAIN** from a normal client, while the production ref resolves and answers. The start command is
+`node server/migrate.js && node server/index.js`, so an unreachable database kills the container before
+the server boots.
+
+### Why it surfaced now, and what it does NOT mean
+
+The push that exposed it (`main` → `stagging` back-merge, `30a2b02`) contains no migration, no schema
+change and no DB config change. The previously running container was most likely still serving on
+connections opened before the project disappeared; **restarting it is what surfaced a pre-existing
+breakage.** Do not chase the merge diff.
+
+### What to do
+
+Pre-launch, regenerate rather than repair (see `CLAUDE.md` § "Staging and production databases are
+disposable"): create a fresh staging Supabase project, run `server/migrate.js` against it from scratch,
+and update `DATABASE_URL` / `SUPABASE_URL` / `SUPABASE_SERVICE_ROLE_KEY` / the `VITE_*` pair in the
+Railway `staging` environment plus `connect-four/server/.env.staging`. Until then **`staging_checks.md`
+cannot be worked at all** — every check in it needs a running staging app.
+
+## OI-149 — Signing out drops the user into the first-run onboarding flow
+
+**Status**: open — behaviour confirmed and deliberately left; it is a product decision, not a defect
+**Area**: `src/store/ProfileStore.jsx` (`signOut`), `src/App.jsx` (first-run auto-route effect), `src/lib/onboardingRouting.js`
+**Discovered**: 2026-08-25
+
+### What is wrong
+
+`signOut()` swaps in a brand-new `IndexedDBStore`. Its `profile` row has no `onboarding_status` (the
+account's copy lives in Supabase), verified by reading the row directly in the browser:
+`{device_uuid: "…", tier: "free"}`. `shouldAutoRouteToOnboarding` treats a missing status as
+`'not_encountered'`, so the effect fires on `session → null` and routes the just-signed-out user to
+`onboardingMission` — the "Hi, I'm your coach / Start sparring" first-run screen — rather than a
+signed-out Home.
+
+It is defensible by the current spec (the auto-route is anonymous-only, and a signed-out user *is*
+anonymous), which is why it was not changed. But a returning user who signs out is not a first-run
+user, and the screen makes it look like the app forgot them.
+
+### What to do
+
+Decide the intended destination after an explicit sign-out. If it is Home, the smallest fix is to
+distinguish "signed out just now" from "never onboarded" — e.g. `signOut()` seeds the fresh local
+profile with `onboarding_status: 'seen'`, rather than widening the auto-route predicate.
+
+Related: the sign-in-from-that-screen strand was fixed separately (`shouldRouteHomeAfterSignIn`,
+`frontend-conventions.md`), so the user is no longer stuck there — only puzzled.
+
+## OI-150 — `OnboardingMissionScreen` offers "Sign in" to a user who is already signed in
+
+**Status**: open — cosmetic, noticed while fixing OI-149's neighbouring strand
+**Area**: `src/screens/OnboardingMissionScreen.jsx:111`
+**Discovered**: 2026-08-25
+
+### What is wrong
+
+The screen renders `{authOpen && <AuthModal … />}` with no `session` check, and its header button opens
+the modal unconditionally. A signed-in user on that screen (reachable via Settings → "Replay intro")
+is offered a sign-in sheet. Compare `HomeScreen.handleProfile()`, which branches on `session` and goes
+to `stats` instead.
+
+### What to do
+
+Mirror `HomeScreen`'s branch: navigate somewhere useful when `session` is truthy rather than opening
+`AuthModal`.
+
+## OI-151 — Server error strings are rendered to users verbatim, so they are always English
+
+**Status**: open — pre-existing pattern; the 2026-08-25 Papergames validation added another instance
+**Area**: `src/screens/SettingsScreen.jsx` (`setError(body.error || t(…))`, and the import-job error path), `server/userRoutes.js`, `server/papergamesImporter.js`
+**Discovered**: 2026-08-25
+
+### What is wrong
+
+`SettingsScreen` prefers the server's `body.error` over its own i18n key, and the import-status poller
+displays `job.error` directly. Server messages are English-only literals, so a Spanish-locale user sees
+English for exactly the failures that need to be understood — now including
+`No Papergames account found with ID … — check your Papergames account ID` and
+`Papergames account not found: … — check your Papergames account ID`.
+
+This is the `project_spanish_output_silent_fallback` trap in its user-visible form: nothing breaks, the
+string just silently ships untranslated.
+
+### What to do
+
+Return a machine-readable code alongside the prose (e.g. `{ error, code: 'papergames_account_not_found' }`)
+and let the client map the code to an i18n key, falling back to `body.error` only for unknown codes.
+
+
+---
+
+## OI-152 — Three docs assert "Paddle does not work locally (owner-confirmed)"; it is false and cost seven weeks
+
+**Status**: open — mechanical doc retraction, carved out of the E2E QA Enablement epic as a do-directly chore
+**Area**: `docs/open_issues.md` (OI-96 area, line ~3779), `specs/057-mvp-launch-gate/spec.md:99`, `docs/epics/pre-launch-mvp-epic.md:180`; consequential mentions at `docs/deployment_steps.md:371,422`, `docs/open_issues.md:3915,5738`, `specs/057-mvp-launch-gate/quickstart.md:171`
+**Discovered**: 2026-09-07
+
+### What is wrong
+
+A sandbox client-side token named *"connect-four local dev (spec 050 US2)"*
+(`ctkn_01kxsd747gp2d0n3xyb28h602q`) was created on the Paddle sandbox account **2026-07-18** for
+exactly this purpose. Its value was never persisted into `connect-four/.env.local`. The resulting
+symptom — `getPaddle()` short-circuits to `null`, so clicking "Become Pro" does nothing visible —
+was then recorded as an *owner-confirmed property of the environment* rather than as a missing
+config line.
+
+Verified 2026-09-07 by writing the token into `.env.local`: `window.Paddle` initializes,
+`cdn.paddle.com/paddle/v2/paddle.js` loads, and "Become Pro" opens a real **sandbox** overlay
+(`sandbox-buy.paddle.com`, "Test Mode", $2.99/mo) with the environment correctly derived from the
+`test_` prefix. Note that `project_app_qa_setup_gotchas` already documented driving Paddle checkout
+fields locally **on 2026-07-18** — i.e. it demonstrably worked that day, and the config was lost
+afterwards.
+
+### Consequence
+
+Every downstream artifact that consumed the premise treated the entire paid journey as
+locally unverifiable, which is why no end-to-end payment QA exists. See
+`docs/epics/e2e-qa-enablement-epic.md`.
+
+### Fix
+
+Retract the three authoritative statements and correct the consequential mentions. Add
+`VITE_PADDLE_CLIENT_TOKEN` to the main checkout's `connect-four/.env.local` (already done in the
+`e2e-qa-enablement` worktree). Never commit the value — `connect-four/.env.example:34` documents
+the variable name only.
+
+---
+
+## OI-153 — `successUrl` / `returnPath` checkout machinery may be entirely dead
+
+**Status**: open — UNVERIFIED, latent cleanup
+**Area**: `connect-four/server/paddleRoutes.js` (`createCheckout`'s `successUrl` + `sanitizeReturnPath`), `src/lib/useUpgradeCheckout.js`, `src/screens/PostSetSummaryScreen.jsx:22`
+**Discovered**: 2026-09-07
+
+### What is wrong
+
+Spec 050 deliberately stopped forwarding `successUrl` to `Paddle.Checkout.open()` (passing it
+navigates the parent window and raced the tier grant — see `project_paddle_integration` §8). The
+server still computes `successUrl` and applies its open-redirect guard, and
+`PostSetSummaryScreen.jsx:22` still passes a `returnPathOverride` of `/setpicker` into machinery the
+UI ignores.
+
+Whether this is *fully* dead is **UNVERIFIED** — the server path was not opened during the
+2026-09-07 review. Removing it may touch the `create-checkout` contract, its tests, and
+`docs/architecture/api-conventions.md`.
+
+### Fix
+
+Open the server path first and confirm no remaining consumer (note the `grep -a` requirement —
+these files hit the non-UTF-8 binary trap, see `project_grep_silent_zero_matches`). Only then
+remove. This is cleanup, never a QA failure.

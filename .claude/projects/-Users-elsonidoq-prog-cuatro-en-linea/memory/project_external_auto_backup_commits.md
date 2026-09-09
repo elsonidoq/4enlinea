@@ -21,4 +21,4 @@ There is an **external process** in this working copy (the owner's own tooling) 
 4. **Don't rebase/amend to "fix" granularity** once the sweep has happened — those generic commits often also contain the owner's unrelated work; a rewrite would destroy it. Verify the code is correct at HEAD and leave the history alone.
 5. When you find uncommitted files you didn't create (`settings.json`, `CLAUDE.md`, `server/index.js`, `privacy.html`, `terms.html`, a pricing page, an OI entry), **leave them** — that's the owner's WIP, and it may collide with your task's files (it did for Task 15, which had to defer until the owner committed a `server/index.js` change).
 
-Related: [[feedback_workflow_hygiene]], [[feedback_verify_at_the_source_layer]].
+Related: [[feedback_process_and_agent_preferences]], [[feedback_verify_at_the_source_layer]].

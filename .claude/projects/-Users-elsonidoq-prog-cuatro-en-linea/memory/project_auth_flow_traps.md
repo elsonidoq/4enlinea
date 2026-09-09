@@ -9,6 +9,28 @@ metadata:
 
 Consolidated auth-flow gotchas (supabase-js client separation, magic link, Google OAuth).
 
+## Local sign-in needs the Supabase stack UP — and a "successful" sign-in can be invisible
+
+**`POST /api/auth/anonymous` → 400 `{"error":"fetch failed"}` means local Supabase is not running**
+(Docker daemon down / no `supabase start`), not that auth is broken. That string is supabase-js's own
+network error passed through `error.message`; the DEV "🛠 Dev: skip auth" button is the usual victim.
+
+**A signed-in session does not imply a changed screen.** 2026-08-25: `/api/auth/session` returned a
+real user and `setSession` ran, while the UI sat unchanged on the onboarding screen — because the only
+reaction to signing in was `consumeReturnTo()`, which no-ops without a stash. Before debugging "login
+does not work", check whether the session actually exists (`GET /api/auth/session` in the page console)
+— the bug is then routing, not auth. A fix landed for anonymous-only screens
+(`shouldRouteHomeAfterSignIn`, see `frontend-conventions.md`); any *new* screen that gates on `session`
+inherits the same hazard.
+
+**Sign-out restarts onboarding.** `signOut()` installs a fresh `IndexedDBStore` whose profile row has
+no `onboarding_status`, so the first-run auto-route fires and lands the user on `onboardingMission`
+(OI-149). A post-sign-out user looking at the coach intro is current behaviour, not a regression.
+
+**HMR does not reliably swap `App.jsx`'s mounted effects.** A verification of a routing fix that
+"still reproduces" right after an edit may be testing the old module — hard-reload (cache-bypassing)
+before concluding the fix failed. This cost a full false-negative debugging round.
+
 ## Gating a CTA does NOT gate the destination screen (open limitation)
 
 There is **no route-level auth guard** anywhere in the app. Every screen key in `URL_MAP` is
@@ -114,3 +136,26 @@ A bare `replaceState(state, '', '/')` **strips the `#access_token=…` fragment*
 **DeepRevealPane.jsx trap:** If `reason` is passed as a raw slug string (e.g. `reason="deep_reveal"`) to `AuthModal`, it renders literally on screen. Must use `reason={t('auth.deepRevealGate')}`.
 
 **Infrastructure (pre-deploy gate):** Google Cloud Console OAuth credential + Supabase provider enable + redirect URL allowlist — one set per environment. Must complete before deploying each environment.
+
+## There is NO email sign-in in the app — Google OAuth is the only real auth (verified 2026-09-08)
+
+`AuthModal.jsx` renders exactly two real controls: **Continue with Google** and **dismiss**, plus the
+`import.meta.env.DEV`-only **🛠 Dev: skip auth** button. There is no email field, no magic-link
+entry point, no password. Server-side, `/api/auth/*` is only `oauth/google`, `callback`, `refresh`,
+`signout`, `session`, and `anonymous` (the dev skip) — grep it before believing otherwise.
+
+**Two things routinely assert otherwise and are stale:** the `app-qa` skill's own brief describes a
+"Continue with email" button below which the dev-skip button sits, and older notes in this very file
+discuss a magic-link flow. Both describe a past state. Do not plan QA coverage, a test, or a bug
+report around an email login path — it does not exist.
+
+**Consequence for autonomous QA:** `Dev: skip auth` mints an *anonymous* user, so an agent can verify
+CTA → modal → post-login routing but **never authentication itself**. Google OAuth is additionally
+untestable from a worktree — `AuthModal.jsx`'s DEV branch hardcodes `http://localhost:3001`, which
+reaches the **main checkout's** server, not the worktree's. Owner tests OAuth manually on staging
+(2026-09-08); it is not an autonomous-QA gap to file.
+
+**Setting an email is not signing in.** The dev QA affordance (`POST /api/admin/qa-set-email` →
+`auth.admin.updateUserById(..., { email_confirm: true })`) writes an email onto an anonymous auth
+user specifically to *bypass* the confirmation round-trip. It exists so the email-bearing checkout
+branch is reachable (`req.user.email`), and it exercises no part of authentication.

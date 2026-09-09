@@ -111,7 +111,12 @@ The frontend has no Supabase SDK dependency. Auth is entirely server-mediated vi
    with the token, and the server sets httpOnly `sb_access_token` and `sb_refresh_token` cookies.
 3. **Session restore**: On page load, `checkSession` calls `GET /api/auth/session` to read the
    cookie and restore signed-in state.
-4. **Sign-out**: `POST /api/auth/signout` clears the cookies.
+4. **Sign-out**: `POST /api/auth/signout` clears the cookies. `signOut()` then swaps the store back
+   to a **brand-new `IndexedDBStore`**, whose `profile` row carries no `onboarding_status` — the
+   account's copy lives in Supabase, not on the device. The first-run auto-route effect below reads
+   that fresh row, so **signing out lands the user on the anonymous onboarding screen**, not on a
+   signed-out Home. That is current behaviour, not a bug report; see `docs/open_issues.md` OI-149 for
+   the open product question.
 5. **Store swap**: On successful sign-in, `ProfileStore.switchToSupabase` **`await`s
    `migrateToSupabase` before calling `setSession`** — the React `session` state flips only after the
    migration completes. `migrateToSupabase` begins with `await this._db()` (the IndexedDB open), so if
@@ -128,6 +133,44 @@ The frontend has no Supabase SDK dependency. Auth is entirely server-mediated vi
 **First-run auto-route effect**: a third `Navigator` effect, gated on `sessionChecked && !session`, reads `store.getProfile()` and — if `onboarding_status` is `'not_encountered'` or `null`/`undefined` — calls `go('onboardingMission')`. The decision boolean itself is `shouldAutoRouteToOnboarding({ sessionChecked, session, onboardingStatus })`, extracted to `src/lib/onboardingRouting.js` — a **plain `.js` module, not inlined in `App.jsx`** — specifically so it is unit-testable via `node --test` (which cannot parse JSX; same constraint/pattern as `src/lib/postLoginReturn.js`). **Anonymous-only, by design** (settled decision, spec.md Assumptions): the `!session` guard means a signed-in user whose account has never been onboarded is never auto-routed on load — only `!session` (confirmed-anonymous) triggers it; they reach onboarding only via Settings "Replay intro".
 
 **`OnboardingMissionScreen`** (`src/screens/OnboardingMissionScreen.jsx`, screen key `onboardingMission`) is the first screen a first-run anonymous user sees — a coach-voiced "mission" screen (three pillars: learn → practice → understand mistakes) with a single **"Start sparring"** CTA. It is a **session-only screen** (registered only in `screenRegistry.jsx`, given `--bg-home` in `surfaceGroups.js`, **not** in `urlMapping.js` — same pattern as `onboardingImportOffer` below). The CTA calls `go('game', ONBOARDING_GAME_PARAMS)` (`{ difficulty: 'easy', side: 'first', onboarding: true }`, from `onboardingRouting.js`), so the onboarding game still runs on the reused `game` screen key. **Analytics moved here**: `track('onboarding_started', {})` now fires on the mission screen's mount (ref-guarded against React 18 StrictMode double-invoke), **not** in the auto-route effect; the CTA additionally fires `track('onboarding_sparring_started', {})`. `onboarding_status` is untouched by this screen (still flips to `'seen'` on the first *move* in `GameScreen`), so reloading on the mission screen re-shows it. NOTE: the coach greeting is currently **text-only — it is not spoken** (the phrase lives under `onboarding.mission.*`, not the `coach.*` TTS namespace, and the screen does not call `speakCoachMessage`); see `docs/open_issues.md` OI-20.
+
+### Routing on a session transition (`shouldRouteHomeAfterSignIn`, 2026-08-25)
+
+`Navigator`'s `[session]` effect is the app's only reaction to signing in. It has two branches, in
+order:
+
+1. `consumeReturnTo()` — FR-013's single named consumption point. If a gated CTA stashed a
+   destination before opening `AuthModal`, go there.
+2. Otherwise, `shouldRouteHomeAfterSignIn({ screenKey, hasStashedDestination })`
+   (`src/lib/onboardingRouting.js`) — if the user completed sign-in while standing on a screen in
+   `ANONYMOUS_ONLY_SCREENS` (currently `onboardingMission`), `go('home')`.
+
+Branch 2 is the complement of the auto-route effect's `!session` guard. Without it a *successful*
+sign-in from an anonymous-only screen's own `AuthModal` rendered a byte-identical page — the session
+was real, nothing moved — and read to users as "log in does not work".
+
+**MUST**: the effect reads the current screen through a **ref** (`screenRef`, synced in its own
+`useEffect` keyed on `screen`), never by adding `screen` to the dependency array. Keying it to the
+session transition alone is what keeps Settings → "Replay intro" working: that is a *signed-in* user
+deliberately navigating into onboarding, and a screen-keyed effect would bounce them straight back
+out. The ref is synced in an effect rather than during render because assigning to a ref during
+render trips `react-hooks`' "Cannot access refs during render" rule.
+
+**MUST**: when adding a screen that only makes sense for a signed-out user, add its key to
+`ANONYMOUS_ONLY_SCREENS` — otherwise signing in from it strands the user exactly as above.
+
+### `AuthModal` dev sign-in
+
+The DEV-only "🛠 Dev: skip auth" button (`src/components/AuthModal.jsx`) is the local stand-in for
+Google OAuth: it `POST`s `/api/auth/anonymous` and, unlike `handleDismiss`, **must not** call
+`clearReturnTo()` — it completes sign-in, so a stashed destination has to survive for the `[session]`
+effect above to consume.
+
+It checks `res.ok`. `fetch` only *rejects* on a network-level failure, so a `400` (e.g. local Supabase
+not running → `{"error":"fetch failed"}`) resolves normally; a bare `try/catch` around it made a failed
+sign-in indistinguishable from a successful one — the modal closed and the user stayed signed out with
+nothing on screen. On failure it now keeps the modal open and renders the reason. This dev path
+requires the local Supabase stack (`supabase start`, which needs Docker running).
 
 ### `OnboardingImportOfferScreen` + the `onboarding_offer_shown_v1` marker (Epic 8 — Onboarding Experience, spec 048, T032/T033/T036)
 

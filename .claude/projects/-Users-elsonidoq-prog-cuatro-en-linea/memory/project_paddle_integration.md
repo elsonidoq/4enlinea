@@ -141,4 +141,59 @@ script include → 0; the only "Paddle" hits are MoR prose), so the flow never w
 `grep -a` — a bare grep on these files hits the non-UTF-8 binary trap and returns a false negative
 ([[project_grep_silent_zero_matches]]).
 
-Related: [[project_stripe_traps]] (obsolete now that Stripe is deleted — kept only for historical Stripe-era context, do not use for anything current); `docs/payment_provider_research.md`; `docs/open_issues.md` (OI-54/55/56/57/59, all resolved); `docs/architecture/api-conventions.md` + `server-conventions.md` (current Paddle contract — authoritative).
+Related: [[project_paddle_integration]] (obsolete now that Stripe is deleted — kept only for historical Stripe-era context, do not use for anything current); `docs/payment_provider_research.md`; `docs/open_issues.md` (OI-54/55/56/57/59, all resolved); `docs/architecture/api-conventions.md` + `server-conventions.md` (current Paddle contract — authoritative).
+
+## 16. Local Paddle DOES work — the "unset token" was a lost config line, not a property of the environment (2026-09-07)
+
+**Retracting a premise recorded in three places.** `docs/open_issues.md` (OI-96 area),
+`specs/057-mvp-launch-gate/spec.md:99` and `docs/epics/pre-launch-mvp-epic.md:180` all state that
+`VITE_PADDLE_CLIENT_TOKEN` is unset locally and therefore "Paddle does not work locally
+(owner-confirmed)". The token half is true; the conclusion is not.
+
+An **active sandbox client-side token already exists** on the account —
+`ctkn_01kxsd747gp2d0n3xyb28h602q`, created **2026-07-18**, named *"connect-four local dev (spec 050
+US2)"*, described *"Frontend Paddle.js overlay checkout — sandbox, VITE_PADDLE_CLIENT_TOKEN for
+local npm run dev"*. It was minted for precisely this and its value was never written into
+`connect-four/.env.local`. Retrieve it with `client.clientTokens.list` via the `paddle-sandbox` MCP,
+or from Paddle dashboard → Developer tools → Authentication → Client-side tokens. **Never print the
+value** — pipe it straight into the env file and verify by prefix/length only
+([[feedback_never_print_secrets]]).
+
+Confirmed live 2026-09-07 once written: `window.Paddle` defined, `cdn.paddle.com/paddle/v2/paddle.js`
+loaded, and "Become Pro" on `/pricing` opens a genuine **sandbox** overlay
+(`sandbox-buy.paddle.com`, "Test Mode") — the `test_` prefix correctly selecting sandbox per §6.
+Server-side was never the problem: `PADDLE_API_KEY` (sandbox) is present in `server/.env`, so
+`/api/paddle/config` and `create-checkout` already worked and live prices already rendered. The
+**only** broken link was the client token.
+
+**The tell that it was never a real property:** [[project_app_qa_setup_gotchas]] documents driving
+Paddle's checkout *fields* locally on **2026-07-18** — the same day the token was created. It
+demonstrably worked, the config was lost, and the loss was then recorded as an environment
+constraint. Nothing on staging/production was affected (the token is present there per OI-96,
+`specs/057-mvp-launch-gate/plan.md:335`), so no deploy step is implied.
+
+**QA consequence — rolling a user back to free must null `paddle_customer_id`, not just `tier`.**
+`server/paddleProcessor.js`'s OI-55 identity binding (documented at
+`docs/architecture/server-conventions.md:1359`) rejects any later `transaction.completed` whose
+`customData.app_user_id` already has an *established* `paddle_customer_id` differing from the
+transaction's customer: it returns `{ securityRejected: true }` and **skips the tier write**. So a
+tier-only rollback makes the *next* QA checkout mint a new Paddle customer, mismatch, and be
+silently rejected — the second run reports "payment is broken" while the app is fine. Also null it,
+cancel the sandbox subscription, and remember a DB tier write never calls `invalidateEntitlement()`
+([[project_entitlement_client_cache_traps]]) so the client needs a reload to observe it.
+
+See `docs/epics/e2e-qa-enablement-epic.md`, OI-152, OI-153.
+
+## Sandbox dunning does NOT fire on a forced renewal (2026-09-08)
+
+The documented dunning test card `4000 0027 6000 3184` ("succeeds, then renewals decline") **did not
+decline** when the renewal was forced early via `subscriptions.update({ nextBilledAt })` — it
+succeeded, and no `subscription.past_due` / `transaction.payment_failed` notification was ever
+emitted. Paddle also enforces a **minimum ~30-minute lead time** on `nextBilledAt`
+(`subscription_next_billed_at_too_soon` below that), so a forced renewal cannot be used to shortcut
+the cycle either. Undetermined whether the simulation only runs on an organic billing cycle or the
+doc is simply wrong.
+
+Consequence: the `past_due` webhook payload could not be harvested, so that downgrade transition is
+unverified locally (OI-158). Do not plan work that assumes this card will produce a `past_due` event
+on demand, and do not hand-author the fixture to move on.

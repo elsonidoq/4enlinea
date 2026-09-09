@@ -28,7 +28,7 @@ diff-only — `perCategory` (from `tallyComparison`) is the only count-based lea
 The staged remediation for the feature-vector grounding gaps (from the 2026-06-26 grade report,
 `server/scripts/fv_suff_answers_2026-06-26T18-15-36Z_grade_report.md`) is the epic
 `docs/epics/feature-vector-grounding-epic.md`, driven through speckit by the `/fv-grounding-manager`
-command. See `project_sparse_lookahead_unvalidated` (merged into this file) and [[project_feature_vector_content_traps]].
+command. See `project_sparse_lookahead_unvalidated` (merged into this file) and `docs/architecture/feature-vector-sufficiency-experiment.md` §"`feature_vector` content traps".
 
 
 ---
@@ -44,7 +44,7 @@ The sparse-board forward look-ahead engine (`connect-four/server/sparseLookahead
 **Judged 2026-06-25** via `/judge-deep-reveals` on `eval_set_large_2_nonfiring_lookup_evals` (positions where the look-ahead did NOT fire). Finding: on decisive `outcome_flip` sparse positions the shallow `compareOpportunities` returned `null` (`sparse_no_winner`) because no near-term Tier-1 structure separates the moves — the edge is deep/positional (e.g. center = first-player win). The ungrounded prompt then let the LLM fabricate threats/parity. Fixes applied that round (all on `stagging`, **not yet re-judged**):
 - **Case 1&2 deepening:** when the player-structure comparison yields no winner AND the played move actually loses (`blunderScore<0`), fall through to the opponent-punishment search on the played root (same machinery case 3 uses) and return a `case:3` oppTag-only shape. Grounds mid-sparse losses (eval-10 now surfaces a `j_shape` refutation); empty-board openings still null → honest-minimal.
 - **INITIAL_GAME depth/budget tier:** `movestring.length ≤ INITIAL_GAME_MS_THRESHOLD(4)` → `INITIAL_GAME_DEPTH(10)`, `INITIAL_GAME_CALL_BUDGET(2000)` — a large one-time search for the handful of opening positions (cached per position). Below `EARLY_GAME_MS_THRESHOLD(8)` → `EARLY_GAME_DEPTH(8)`; else `LOOKAHEAD_DEPTH(4)`. Budget is now per-tier, passed into `searchOpportunities`.
-- Prompt-side (not in this file): the `always_include` KB-term mechanism was removed ([[project_explain_system]]); a no-empty-section rule and a `hasGroundedPattern` gate on the "name the pattern" instruction were added; the `drawing_move` grounding rule reworded ([[project_drawing_move_mislabels_wins]]).
+- Prompt-side (not in this file): the `always_include` KB-term mechanism was removed (`docs/architecture/llm-coach-endpoints.md`); a no-empty-section rule and a `hasGroundedPattern` gate on the "name the pattern" instruction were added; the `drawing_move` grounding rule reworded ([[project_drawing_move_mislabels_wins]]).
 
 ## Traps (cost real time)
 

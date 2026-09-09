@@ -1984,3 +1984,48 @@ direct DB/API measurement — not from screenshots alone.
 - [ ] **Paddle "Default payment link" dashboard setting** (spec 053). **BLOCKED** — owner-only
   dashboard action. Unchanged by this deploy.
 - [ ] **Magic-link email round-trip.** Not exercised; the app now uses Google sign-in on this build.
+
+## Papergames account-ID validation + sign-in routing (2026-08-25 production hotfix) — added 2026-08-25
+
+> **Blocked as written**: staging is down — its Supabase project no longer resolves, so the app
+> crash-loops at boot (`docs/open_issues.md` OI-148). Every check below needs a running staging app.
+> Until staging is rebuilt, the only deployed environment able to exercise them is production, where
+> the same code is already live (`main`@231ef48, Railway deployment `be005f16`).
+
+- [ ] **Save-time rejection of a non-existent Papergames account ID, in a deployed build.**
+  - **What**: Signed in on the deployed app, open Settings → Papergames Import, enter a well-formed but
+    non-existent ID (`69e77229f8f489b51eabd6eb` is the known-404 value from the incident) and press Save.
+  - **Why staging**: local verification used the dev server against the real papergames.io API. What
+    is unverified in a *deployed* build is the egress path: the container reaching papergames.io from
+    Railway, within the 5s probe timeout, and the 400 body surviving the deployed error-rendering path.
+  - **Expected**: Save fails immediately with `No Papergames account found with ID … — check your
+    Papergames account ID`. The stored value is unchanged.
+  - **Source**: 2026-08-25 hotfix, `server/userRoutes.js` `PUT /api/user/profile`.
+
+- [ ] **A correct ID still saves, and the import runs.**
+  - **What**: Enter a real account ID (`69e773d36bf9938bffc1509a`) → Save → Import.
+  - **Why staging**: the fail-open branch and the happy path share one code path with the check above;
+    only a deployed run proves the probe's latency and DNS are fine from inside the container.
+  - **Expected**: Save succeeds. The import log shows `[importForUser] API total rooms: <n>` followed by
+    `Done — imported: …` — not `Papergames account not found` and not `API unreachable`.
+  - **Source**: 2026-08-25 hotfix; also `docs/deployment_steps.md` § "Papergames account-ID validation".
+
+- [ ] **Papergames outage must not block a save (fail-open).**
+  - **What**: Not reproducible on demand — record the verdict opportunistically if papergames.io is ever
+    degraded, or exercise it deliberately by temporarily pointing the probe at an unroutable host in a
+    scratch deploy.
+  - **Why staging**: the unit tests pin `'unknown' → save proceeds` with an injected stub; nothing
+    verifies that a real timeout (not a thrown DNS error) lands in that branch within the 5s budget.
+  - **Expected**: Save returns 204 with the ID stored, no user-visible error.
+  - **Source**: 2026-08-25 hotfix, `verifyPapergamesAccount()` fail-open contract.
+
+- [ ] **Sign-out → sign-in lands on the signed-in Home in a production build.**
+  - **What**: On the deployed app, sign out, then sign in again via the real provider.
+  - **Why staging**: verified locally only through the DEV-only "skip auth" button under Vite HMR. The
+    real OAuth leg reloads the page, so the `[session]` effect runs on a **fresh mount** rather than on
+    a live session transition — a different path through `shouldRouteHomeAfterSignIn`, and the dev
+    button cannot exercise it.
+  - **Expected**: The user lands on the signed-in Home ("Welcome back…"), not the anonymous coach /
+    "Start sparring" onboarding screen.
+  - **Source**: 2026-08-25 hotfix, `src/App.jsx` `[session]` effect. Note OI-149: landing on onboarding
+    *after sign-out* is separate, still-open, expected behaviour.

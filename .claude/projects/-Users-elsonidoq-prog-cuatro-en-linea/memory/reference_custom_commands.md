@@ -57,4 +57,16 @@ collide). Pipeline is unchanged: epic_critique → … → tasks_fix → done.
   `docs/epics/blunder-reason-field-epic.md`.
 - All 8 deleted managers' workflows were `done` at deletion; the commands remain in git history.
 
-Related: [[project_lookahead_shared_seam]], [[project_feature_vector_content_traps]].
+Related: [[project_lookahead_shared_seam]], `docs/architecture/feature-vector-sufficiency-experiment.md` §"`feature_vector` content traps".
+
+
+---
+
+## (merged from `project_speckit_workflow` — SpecKit behavioral traps in this repo)
+
+- **`.specify/feature.json`** is where SpecKit reads the active feature directory from
+  (`{ "feature_directory": "specs/001-decodec4-mvp" }`). Update it when switching between feature specs.
+- **`check-prerequisites.sh` exits with an error when run on `main`** (it expects a feature branch).
+  This is **non-fatal** — proceed, driving off `.specify/feature.json` directly.
+
+- `/create-epic <file-or-prompt>` (added 2026-09-07) — turns raw input (requirements doc, bug report, QA findings, free text) into a `docs/epics/<slug>-epic.md` file that `/epics-manager` can drive. Verifies every input claim at source before it enters the epic, resolves empirically what one command can settle, then **asks the open design decisions via `AskUserQuestion`** (mandatory — not prose), sizes against `docs/best_practices_spec_driven_development.md` §"Epic Sizing" three gates, and carves out chores that individually fail the gates into a "do these directly" list. Stops at the epic file — never writes spec/plan/tasks; `/epics-manager` owns those.

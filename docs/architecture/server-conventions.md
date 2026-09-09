@@ -1489,6 +1489,46 @@ registerUserRoutes(app, supabase);
 
 **MUST**: New route groups with >=5 related endpoints SHOULD follow the `register<Feature>Routes(app, supabase)` extraction pattern rather than inlining in `index.js`. The module should be testable without the real DB or solver.
 
+**Third dependency slot — `registerUserRoutes(app, supabase, deps = {})`** (2026-08-25). A handler that
+calls out to a third party during request handling cannot be endpoint-tested without either hitting the
+network or mocking the module loader. The signature therefore takes an optional third argument whose
+keys are resolved once at registration with `deps.x ?? defaultX`:
+
+```js
+export function registerUserRoutes(app, supabase, deps = {}) {
+  const verifyPapergamesAccount = deps.verifyPapergamesAccount ?? defaultVerifyPapergamesAccount;
+```
+
+`index.js` still calls `registerUserRoutes(app, supabase)` — the slot exists for tests, which pass a
+stub verdict. `userEndpoints.test.mjs`'s `createApp()` defaults every such dependency to its
+inert/fail-open verdict, so a test that does not care about the third party never reaches the network.
+
+**MUST**: any future outbound third-party call made from inside a `/api/user/*` handler goes through
+this slot, not a bare module-level `fetch` — otherwise the endpoint test suite silently acquires a
+network dependency.
+
+## Papergames upstream calls (`server/papergamesImporter.js`)
+
+All outbound papergames.io traffic lives in this one module. Three exported pieces matter beyond
+`importForUser`:
+
+- **`fetchRooms`/`fetchReplay` attach `err.status`** to the `Error` they throw on a non-OK response.
+  Callers must classify on that status, never on the message text.
+- **`classifyPapergamesFetchError(err, accountId)`** → `{ kind, retryable, message }`. An upstream
+  **404 means the account ID does not exist**, not that Papergames is down: `GET /api/profile/<id>`
+  answers 404 `{"message":"User with this email does not exist"}` on the very route that answers 200
+  for a real ID. It is classified `account_not_found`, **non-retryable** — retrying a 404 only delays
+  the real message. Everything else is `unreachable` and retryable.
+- **`verifyPapergamesAccount(accountId, { fetchImpl, timeoutMs })`** → `'ok' | 'not_found' | 'unknown'`,
+  used by `PUT /api/user/profile` for save-time validation. **Fail-open by contract**: only a definite
+  404 answers `'not_found'`; 5xx, timeout, and thrown requests all answer `'unknown'` so an outage can
+  never block a user from saving a valid ID. `fetchImpl` is the test seam.
+
+**MUST**: `importForUser`'s reachability probe treats a non-retryable classification as fatal on the
+first attempt. Do not "simplify" the probe back into a blanket 3-attempt retry — that is exactly the
+shape that produced the 2026-08-25 production incident, where a one-field typo was reported for days
+as `Papergames API unreachable`.
+
 ## In-Memory Job Map Pattern (spec 038)
 
 The papergames import endpoints (`POST /api/user/papergames/import` and `GET /api/user/papergames/import/status`) use a **module-level `Map`** for job state:

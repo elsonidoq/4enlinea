@@ -18,3 +18,17 @@ Surfacing a new `users` table column to the app is **not** a one-place change �
 **Why:** the "just add the column and read it" mental model is wrong on both the server-read and the sign-in-sync paths; each has an allowlist that fails closed (silent `undefined` / silently-not-synced), not open. And even with the code correct, an unapplied migration fails *silently* (204 no-op), not loudly.
 
 **How to apply:** when adding any `users` column, grep for `USER_PROFILE_SELECT_COLUMNS` + `defaultUserProfile` (server read) and `migrateToSupabase` (anon→account sync), and decide explicitly whether the field needs to sync on sign-in. See [[project_auth_flow_traps]] for the IndexedDB profile store, `docs/architecture/api-conventions.md` §`/api/user/*` ownership invariants + session_stats write asymmetry for the server-mediated access rule.
+
+## 4. PostgREST also drops `undefined` **values** — a partial update looks like a full one
+
+Distinct from #3 (unknown *column* dropped): supabase-js serializes the patch with `JSON.stringify`,
+which **omits any key whose value is `undefined`**. So
+`update({ tier: 'paid', paddle_customer_id: undefined })` PATCHes `tier` **alone** and silently
+leaves the other column at its old value — while returning success. Found 2026-09-08 in spec 058's
+`setQaAccountPaidState`, where a caller omitting one field produced exactly the unpaired state the
+function was written to make impossible, and still answered `200 {paidStateSet:true}`.
+
+This bites any "write these two columns together" invariant built on a destructured argument: an
+absent key and an explicit `null` are indistinguishable at the call site but behave completely
+differently at the DB. Write `field ?? null` whenever the pairing is the point, or validate
+presence and reject.

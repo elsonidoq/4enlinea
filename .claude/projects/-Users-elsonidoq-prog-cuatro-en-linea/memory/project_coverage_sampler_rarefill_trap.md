@@ -49,3 +49,20 @@ minutes when it is actually just doing an intractable amount of solver work (roo
   board set). The two are a matched pair — if you re-run `select_boards` to make a new board set, also
   re-run `compute.mjs --input <new boards>` to regenerate the evidence and point the test at the new file,
   or the coverage claim goes stale. Both are `git add -f` (the `*jsonl` global ignore).
+- **`phase_opening` is REQUIRED; the opening *theory* predicates are PROVISIONAL.** Easy to conflate,
+  and `--help` reads like a guarantee for both. `phase_opening` sits in `REASON_UNIVERSE` and NOT in
+  `PROVISIONAL`, so `satisfied()` cannot terminate without opening boards — those are guaranteed. But
+  `reason_opening_named_line` / `reason_opening_defense` / `reason_opening_centrality` are PROVISIONAL
+  (a self-play move landing exactly on a KB book prefix is rare; a deterministic Phase 1 step, seeded
+  by `--seed`, sources them best-effort). **They can come back empty and the harvest still reports
+  success** — check the coverage summary, do not assume. (2026-08-06 harvest got all three: 12/8/8.)
+- **One coverage run spans BOTH universes.** `select_boards.mjs` builds
+  `ALL_REQUIRED = REQUIRED(reason) + RENDER_REQUIRED`, so a single harvest satisfies the reason axes
+  *and* the render axes. Two separate corpora were only ever needed because the older set predated
+  that union.
+- **SUPERSEDED 2026-08-06 — the `boards_coverage_p4_*` / `fv_suff/` file soup is gone.** Every board
+  and evidence artifact now lives at the stable path `connect-four/server/scripts/reason_corpus/`
+  (`boards.jsonl` + `evidence.jsonl` + README). The "regenerate boards and evidence together" rule
+  below still holds and is now written into that README. See
+  [[feedback_artifacts_are_detritus_not_baselines]].
+

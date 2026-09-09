@@ -38,6 +38,6 @@ Link text is a single source of truth asserted **verbatim by 4 test files**: `ca
 
 Context: D34 rewrote L3/L7 to drop defeatist bookends ("You were already losing… Neither move wins") in favour of a practical-resistance frame, keyed on the mover being lost (`case=lose_to_faster_lose`, a SUPERSET of player-2-opening, so it also covers lost player-1 mid-games). Same pass added a `TAG_PHRASE`/`plainTag` C4-vocabulary layer (no raw tactic slug in player text) and the `mechanism`-is-the-only-player-facing-field register contract.
 
-**Stale grader note (still not fixed):** the `grade-fv-sufficiency` skill still says *"A5b render_bug is the expected bucket for this vector today."* After D34 the render is clean, so residual defeatism would correctly bucket `prompt_confusion`, not `render_bug`. Fix next time the grader is touched ([[feedback_reason_case_requires_eval_and_grader]] wants grader + engine in sync).
+**Stale grader note (still not fixed):** the `grade-fv-sufficiency` skill still says *"A5b render_bug is the expected bucket for this vector today."* After D34 the render is clean, so residual defeatism would correctly bucket `prompt_confusion`, not `render_bug`. Fix next time the grader is touched (`docs/architecture/feature-vector-sufficiency-experiment.md` §7b wants grader + engine in sync).
 
 Related: [[project_reason_render_layer]], [[feedback_pedagogy_preferences]].

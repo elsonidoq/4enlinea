@@ -33,4 +33,4 @@ Per-task review is necessary but blind here. This is distinct from [[feedback_ve
 4. **Treat "shouldn't X drive Y?" from the owner as a seam probe** — it usually means two correct halves aren't joined. Drive Y's real path before answering.
 5. **If a component is rendered N times by its parent, any DOM identifier it emits must be scoped by its index** — and a single-instance render test cannot verify that. Check it on the real page (`[...document.querySelectorAll('[aria-label]')]` → look for duplicates), or render the parent.
 
-Related: [[feedback_verify_at_the_source_layer]], [[feedback_agent_and_ui_workflow]], [[feedback_llm_output_root_cause]].
+Related: [[feedback_verify_at_the_source_layer]], [[feedback_process_and_agent_preferences]], [[feedback_llm_output_root_cause]].

@@ -5,7 +5,7 @@ metadata:
   node_type: memory
   type: feedback
   originSessionId: d7194ddb-70f6-4602-a846-18bfc9014c46
-  modified: 2026-08-03T15:49:12.967Z
+  modified: 2026-08-28T18:35:55.777Z
 ---
 
 **When designing a fix, correctness is the constraint. A green suite is not.**
@@ -61,10 +61,33 @@ freeze the test advertises was reverted in production while the test stayed gree
 have detected the change, because the changed code isn't the code it calls. See `docs/open_issues.md`
 OI-127.
 
+**A third failure mode, and the one that ships wrong text: asserting the ABSENCE of the bad thing
+without asserting the TRUTH of the replacement.** Found 2026-08-28, twice in one epic, by code review
+run after every corpus test was already green:
+
+- OI-194's fix replaced raw `cNrM` in `link.text` with `"column N"`. The test asserted *no `cNrM`
+  token appears*. Green — while 6/63 records now named **two different cells identically**
+  ("Column 5 was the better move… the opponent takes column 5", for `c2r5` vs `c2r6`).
+- D49's sibling disambiguation replaced `"the one at c6r5"` with an ordinal locator. The test
+  asserted *the two roles differ from each other*. Green — while **22 of 58** sibling groups asserted
+  a false height ("the lower one" / "the higher one" for two cells **on the same row**).
+
+Both fixes removed a coordinate and introduced a falsehood; both tests were structurally incapable of
+noticing, because *two strings that are both lies still differ, and a lie still contains no
+coordinate*. The old text was ugly-but-true, the new clean-but-false — strictly worse in a grounding
+layer whose entire purpose is truth.
+
+**The rule: when a fix REPLACES a representation, assert a property of the replacement, not merely
+the disappearance of the original.** "No raw coordinate" / "the roles differ" are absence assertions;
+"no two different cells render identically" / "a height claim only where the rows actually differ"
+are truth assertions. The tell: if the test would still pass when the new text is nonsense, it is
+testing the deletion, not the fix.
+
 Tells that a test is vacuous: a loop variable that never reaches the call; both sides of the assert
 built from the same expression; a "must not change" assertion on a **pure** function whose inputs are
 held constant (purity already guarantees it); a unit test whose subject is a helper while the
-behaviour under test lives at the call site. When a test's name describes an *integration* property
+behaviour under test lives at the call site; **an assertion that only forbids the old form and never
+constrains the new one**. When a test's name describes an *integration* property
 ("across a drag", "after a reload"), a unit test of a pure helper usually cannot express it — that
 property needs a render/DOM-level test. (Here one exists and is correct:
 `tests/dom/SplitRevealZoom.dom.test.jsx`.)

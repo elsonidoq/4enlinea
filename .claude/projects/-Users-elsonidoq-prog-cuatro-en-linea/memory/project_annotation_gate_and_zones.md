@@ -41,7 +41,7 @@ Everything about the coach's **annotation gate** (`server/annotationGate.js` + `
 >   coach named `c2r6`/`c5r5`, both were promoted to real highlights, both stripped, both degraded to
 >   "column 2"/"column 5" — the very complaint the epic set out to fix.
 >
-> Also see [[project_ungrounded_highlights_look_real]]: the client synthesises column highlights when
+> Also see [[project_grounded_annotation_traps]]: the client synthesises column highlights when
 > a text has zero tags, so **the rendered page cannot tell you whether anything is grounded.**
 
 > ## 🛑 READ FIRST 2026-08-04 — "missing highlights" is usually NOT this gate
@@ -72,7 +72,7 @@ Everything about the coach's **annotation gate** (`server/annotationGate.js` + `
 >    `[zone:col2]` are not offered handles and were served verbatim. Characterize that drop path
 >    before relying on it.
 >
-> Diagnose with [[feedback_served_vs_raw_diff]] **first** — two queries tell you whether the gate is
+> Diagnose with [[project_grounded_annotation_traps]] **first** — two queries tell you whether the gate is
 > even involved. Fix tracked in `docs/epics/deep-reveal-grounding-epic.md` (Epic 11).
 >
 > Also: `computeMechanism` **discards attempt 1 on retry** (`attempt = await runLlmAttempt(...)`

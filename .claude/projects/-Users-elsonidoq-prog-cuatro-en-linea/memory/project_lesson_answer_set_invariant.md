@@ -52,3 +52,26 @@ existed drifted within the hour. Check content with
 
 Related: [[project_classify_pattern_perspective_trap]], [[project_lesson_interactivity_evaluation]],
 [[feedback_wrong_test_is_part_of_the_bug]], [[reference_verified_tactical_movestrings]].
+
+---
+
+## A lesson slide's board may be a `boardSpec`, NOT a movestring — `visualize_board.sh` is then the WRONG oracle (2026-09-09)
+
+**Trigger: verifying anything about a lesson slide's board — which disc occupies a cell, whose discs
+an overlay marks, whether a cell is empty.**
+
+`CLAUDE.md` says never reason about a movestring by hand, always run `./visualize_board.sh`. True —
+but **many lesson slides carry a `boardSpec`, not a `movestring`**, and the visualizer cannot read
+one. For those slides the oracle is the production decoder **`boardSpecToBoard`
+(`src/lib/board.js`)**, and nothing else.
+
+Caught while fixing OI-168 (a green `win` overlay drawn on Gray's discs): I briefed an agent to
+verify with `visualize_board.sh`; it correctly refused, used `boardSpecToBoard`, and reached the
+same 4-slide answer through the right layer. A second agent on the same issue made the opposite
+mistake first — it hand-rolled a movestring parser with **1-indexed columns**, produced a
+confidently wrong and self-contradictory table, then redid it through `src/lib/movestring.js` and
+got the right answer.
+
+**Rule: replay through the production parser for the representation the slide actually uses.** Never
+a hand-rolled parser (the repo is 0-indexed everywhere: row 0 = bottom, col 0 = leftmost), and never
+the movestring visualizer for a `boardSpec` slide.

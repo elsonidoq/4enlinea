@@ -60,3 +60,36 @@ inherited "already satisfied / no task needed" from an earlier batch or a spec a
 re-test, not a fact — sub-agent handoffs are especially prone to laundering one into the other
 ([[feedback_isolated_review_misses_seams]]). Record explicitly when an environment was unreachable
 rather than assuming its result matches another's.
+
+**A stored artifact is not a baseline for live code.** 2026-08-11: a render change was nearly reported
+as a regression ("non-opening aliases 8.9 -> 8.0") because the 8.9 came from `render_decision` blocks
+**embedded in an answers file generated days earlier by older code**, while the 8.0 was computed live.
+Re-running the identical probe against the pre-change commit in a throwaway `git worktree` gave
+7.97 -> 7.97: no change at all. If a number came out of a file some earlier run wrote, it measures
+THAT run's code — compare live-to-live at two commits, or you are diffing two variables at once.
+
+## A recorded *blocker* expires too — and "owner-confirmed" is not evidence
+
+2026-09-07: three documents stated `VITE_PADDLE_CLIENT_TOKEN` is unset locally and therefore
+"Paddle does not work locally (**owner-confirmed**)" — `docs/open_issues.md` (OI-96 area),
+`specs/057-mvp-launch-gate/spec.md:99`, `docs/epics/pre-launch-mvp-epic.md:180`. Every downstream
+artifact inherited it, and the entire paid journey went unQA'd for seven weeks.
+
+The observation was accurate; the **conclusion was a category error**. An active sandbox client
+token had existed since 2026-07-18, minted for exactly this and named for it — the `.env` line was
+simply never persisted. A one-line fix, restated as a property of the environment. Worse, the
+project's own memory recorded driving Paddle's checkout fields locally *on that same day*, so it
+had demonstrably worked and the config was then lost.
+
+**Why:** a *symptom* ("clicking Become Pro does nothing") gets written down as a *constraint*
+("Paddle can't be tested locally"), and the owner-confirmation attaches to the symptom while
+appearing to certify the constraint. Nobody re-tests a blocker — a closed door is not something you
+push on again — so the premise compounds across every spec that reads it. This is the negative-claim
+trap with an authority stamp on it.
+
+**How to apply:** before letting any recorded blocker shape scope, ask *what exactly would have to
+be true for this to be false, and can I test that in one command?* Missing credentials, missing env
+vars, and "not supported locally" claims are the highest-yield candidates — they are usually one
+lookup away from being retired, and the provider's own API will often tell you (here,
+`client.clientTokens.list` answered it in one call). Treat "owner-confirmed" as dating the
+observation, never as certifying the inference drawn from it.

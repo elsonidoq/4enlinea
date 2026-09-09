@@ -24,6 +24,16 @@ modified: 2026-07-18T15:21:39.160Z
 
 The prod ref `kxtqwsumojtexokrtlfp` is the one this memory's other sections describe. Staging is a SEPARATE project. `server/.env` (root, unsuffixed) points at LOCAL, not staging/prod.
 
+> **⚠️ 2026-08-25 — the staging project is GONE.** `jkqilynpshutqcceopdn.supabase.co` is **NXDOMAIN**
+> (production's ref still resolves), so the Railway staging container crash-loops at boot with
+> `(ENOTFOUND) tenant/user postgres.jkqilynpshutqcceopdn not found` — `migrate.js` runs before the
+> server, so an unreachable DB is fatal — and `staging.decodec4.xyz` returns **502**. A previously
+> running container can keep serving on already-open connections, so **the crash appears on the next
+> redeploy, which then looks like the pushed commit broke staging**. It didn't. Anything in
+> `staging_checks.md` is unworkable until a fresh staging project is created and migrated
+> (pre-launch: regenerate, don't repair). See [[project_live_envs_have_no_real_users]], OI-148.
+
+
 **Staging DATABASE_URL — convention drift, NOT a blocker (corrected 2026-08-02):** `.env.staging` and Railway's injected staging value both use the **transaction pooler (port 6543)**, which the convention below declares forbidden for DDL. **But staging has demonstrably applied migrations through it** — its `schema_migrations` ledger shows five, most recently `061_security_lints.sql` on 2026-07-30. In pgBouncer *transaction* mode a backend is pinned for an explicit `BEGIN…COMMIT`, so `migrate.js`'s DDL transactions work; the "different backend per statement" rationale describes *statement* mode. Converge on 5432 anyway, but **never report 6543 as "this deploy will fail" without checking the ledger first**. See [[OI-31]], [[project_migration_ledger_and_pooler]].
 
 **Wiping staging data:** `connect-four/server/scripts/reset-staging-db.js` TRUNCATEs all `public` tables except `schema_migrations` (keeps schema + migration history). Reads `.env.staging` only, hard-refuses the prod ref, requires typing `Yes` twice. `--dry-run` lists targets. Uses a single TRUNCATE statement so the 6543 pooler is OK.

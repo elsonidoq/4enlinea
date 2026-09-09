@@ -50,3 +50,28 @@ so a disk edit that "changed nothing" is usually the cache, not the CSS
 ([[project_lesson_disk_edit_cache_clobber]]) — identical before/after measurements are the tell.
 Related: [[project_lesson_json_fields_not_rendered]], [[project_spanish_output_silent_fallback]],
 [[feedback_pedagogy_preferences]], [[project_lesson_window_highlights_traps]].
+
+---
+
+## PARTLY FIXED 2026-09-09 (OI-166 / OI-167) — the "120px cap on EVERY screen" claim above is now STALE
+
+The cap is no longer a bare constant. `CoachDialog` gained a **`maxBubblesHeight` prop, default
+120** — so every one of its 11 call sites is byte-for-byte unchanged unless it opts in, and
+`ConceptScreen` is the **only** opt-in, at **200**. Its `fixed` variant's reserved `height: 140` is
+untouched: the board screens deliberately reserve a stable height so an appended coach message does
+not push the board down. If you change the cap again, change the prop's call-site value, not the
+constant.
+
+Measured in a real browser across all 46 slides of lessons 1-10 (1382x727): coach bubbles clipped
+**3 -> 0** (the three claimeven slides were exactly `120/139`, reproducing the filed numbers).
+
+`infoProse` was a different bug than filed. **The panel already scrolled** —
+`InfoProsePanel.jsx` has had `overflowY: 'auto'` and `flex: '0 1 auto'` all along, and its own
+header says "It scrolls itself, not the page." The text was reachable; nothing *advertised* it. Fix
+is a scroll affordance (sticky fade + `▾` chip): overflowing panels stayed 24/46 **by design**,
+panels advertising it went **0 -> 24**. Do not "add scrolling" here.
+
+Known cost, accepted: the taller coach takes **19px** of prose on those three claimeven slides
+(~1 line), on panels already short by 160-220px — and now advertised rather than silently lost.
+Still unmeasured: **Spanish** (the 200 cap is sized for ~20% longer text but not verified) and
+**390x844 mobile**, where the legend wraps more and more slides will show the chip.

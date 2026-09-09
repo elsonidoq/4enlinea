@@ -1,6 +1,6 @@
 ---
 name: project-papergames-integration
-description: "Durable gotchas for papergames import and blunders FK"
+description: "OWNER: live Play-Online was just a test — do NOT work on it or OI-175 (driving it hits real opponents); the IMPORT path is separate and in scope; plus import/blunders FK gotchas"
 metadata: 
   node_type: memory
   type: project
@@ -98,3 +98,32 @@ Captured live via Chrome DevTools MCP network inspection during a real login. No
 ## loadUser trap
 
 `index.js` has **two** SELECT projections for the `users` row (normal path and insert-reselect for brand-new users) plus a fallback literal. All three must be extended whenever new columns are added to `users` — missing any one leaves the field as `undefined` on that code path. Affected columns added by this spec: `papergames_id`, `last_import_at`.
+
+---
+
+## OWNER DIRECTIVE 2026-09-09 — live Play-Online is NOT a product. Do not work on it.
+
+**Trigger: any task that touches `PlayOnlineScreen.jsx`, live papergames rooms, guest registration,
+or OI-175.**
+
+Owner, 2026-09-09, unprompted, on being told an agent was investigating a live-resign bug:
+*"are you testing the integration with papergames to play with another person in our app? that was
+just a test, do not work on it."*
+
+So the **live Play-Online surface is an abandoned experiment**, not a feature. `docs/open_issues.md`
+still carries **OI-175** (a live resign 500s and silently drops the finished game) and it reads like
+ordinary launch-blocking work — **it is not**. It is left open, not closed, because the defect is
+real; it is simply not work anyone should do until the owner says otherwise.
+
+**The papergames IMPORT path is a different feature and is still in scope** — importing the owner's
+own past games (reached from the onboarding import offer) feeds Past Games and Stats. Do not
+conflate the two.
+
+**Cost of ignoring this**: investigating OI-175 requires *live* games. An agent doing so created two
+papergames GUEST accounts and, because the public matchmaker pairs you with whoever is queuing,
+entered **two live matches against real human opponents**, which were then abandoned mid-play when
+the agent was stopped. Driving this surface has real-world side effects on strangers.
+
+Findings already banked in OI-175's entry so nobody re-derives them: `roomUid` IS the right
+identifier (other rooms return 200), it is NOT a publishing race (still 404 after 24h), the room
+itself is deleted rather than the replay missing, and guest rooms ARE publicly visible while live.
