@@ -96,8 +96,12 @@ excluded so scope cannot silently grow.
   `npm run dev` (the server reads the built `dist` at boot) — verification requires a rebuild, a
   restart, and a real production-build browser check.
 - Sandbox vs. live Paddle mode is selected by API-key prefix, not `NODE_ENV`/`MODE`.
-- `VITE_PADDLE_CLIENT_TOKEN` is unset locally (owner-confirmed) — Paddle does not work locally; the
-  sandbox end-to-end transaction check can only run on staging.
+- `VITE_PADDLE_CLIENT_TOKEN` was recorded as unset locally (owner-confirmed) — "Paddle does not
+  work locally", with the sandbox end-to-end transaction check therefore only runnable on staging.
+  **That belief was disproven 2026-09-08 by spec 058 (e2e-qa-enablement)**: the Paddle sandbox
+  checkout overlay works locally once `VITE_PADDLE_CLIENT_TOKEN` is configured in
+  `connect-four/.env.local` — a real sandbox transaction has since been completed end to end
+  against the local app.
 
 ### Grading stability (US4)
 - The two "quality" labels come from genuinely different code: `scoreMove` (live solver judgment at

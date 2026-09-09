@@ -167,9 +167,12 @@ statement itself is a written closeout artifact, not a script output.
    either live environment, so US1's grader fix is inert there and item 1 above cannot even run
    until this ships.
 3. OI-5's refresh-token-rotation probe (US5) — needs real account credentials.
-4. FR-014's CSP check against a real production build in a real browser, and FR-016's real Paddle
-   sandbox transaction (US3, T049) — `VITE_PADDLE_CLIENT_TOKEN` is unset locally; CSP is invisible
-   under `npm run dev`.
+4. FR-014's CSP check against a real production build in a real browser (CSP is invisible under
+   `npm run dev`), and FR-016's real Paddle sandbox transaction (US3, T049). The latter was
+   recorded as blocked because `VITE_PADDLE_CLIENT_TOKEN` was unset locally; **that premise was
+   disproven 2026-09-08 by spec 058 (e2e-qa-enablement)** — the Paddle sandbox checkout overlay
+   works locally once the token is configured in `connect-four/.env.local`, so FR-016 is no longer
+   local-tooling-blocked (it may still need re-running against this specific path).
 5. `explanation_cache` TRUNCATE (US2) and `blunders` regenerate (US4) — both queued PENDING in
    `docs/deployment_steps.md`, not reversible, owner-run against staging then production.
 6. OI-41's explicit won't-fix-or-keep-open call (US3, T047) — an accepted-risk framing is proposed;

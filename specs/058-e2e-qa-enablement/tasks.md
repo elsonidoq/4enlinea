@@ -26,7 +26,7 @@ prerequisite entry — do not reshape them into the "Template for new entries" r
 
 ## Phase 1: Setup
 
-- [ ] T001 Verify the local worktree is bootstrapped per `quickstart.md`'s Prerequisites: run
+- [X] T001 Verify the local worktree is bootstrapped per `quickstart.md`'s Prerequisites: run
   `cd connect-four && npm install` if `node_modules` is missing, confirm
   `connect-four/.env.local` has `VITE_PADDLE_CLIENT_TOKEN=test_...` and
   `connect-four/server/.env` has `PADDLE_NOTIFICATION_WEBHOOK_SECRET` (copy both gitignored files
@@ -49,7 +49,7 @@ is not folded into this one.
 **⚠️ CRITICAL**: T002–T006 MUST be complete (and `test:fast` green) before any US1/US2 endpoint
 task begins.
 
-- [ ] T002 [P] In `connect-four/server/index.js`, hoist the Paddle client to module scope
+- [X] T002 [P] In `connect-four/server/index.js`, hoist the Paddle client to module scope
   (research.md D1a, blocking issue 2): change `let paddlePaymentProcessor = null;` (currently
   near the `if (process.env.PADDLE_API_KEY) { ... }` block that also builds
   `paddleEnvironment`/`createPaddleProcessor`) to also declare `let paddleClient = null;`
@@ -58,7 +58,7 @@ task begins.
   `createPaddleProcessor({ paddleClient, supabase, ... })`'s call and the values it receives are
   otherwise unchanged. Do not add a second `new Paddle(...)` construction site anywhere (rejected
   alternative in research.md D1a).
-- [ ] T003 [P] Create `connect-four/server/qaAccountTools.js` exporting
+- [X] T003 [P] Create `connect-four/server/qaAccountTools.js` exporting
   `createQaAccountTools({ paddleClient, supabase })` → `{ resetQaAccount, setQaAccountEmail }`
   (research.md D2), following `connect-four/server/paddleProcessor.js`'s constructor-injection
   header pattern:
@@ -87,7 +87,7 @@ task begins.
     integration": "always check current Paddle documentation via the `paddle-docs` MCP server
     before suggesting code" — research.md D2 records the shapes above as *intent*, not yet
     MCP-confirmed).
-- [ ] T004 [US1] [US2] Create `connect-four/server/qaAccountTools.test.mjs` — unit tests for both
+- [X] T004 [US1] [US2] Create `connect-four/server/qaAccountTools.test.mjs` — unit tests for both
   exports, mirroring `connect-four/server/paddleProcessor.test.mjs`'s mock-factory style (a
   `makeMockPaddle({...})` helper + a chainable mock `supabase`). **The mocked
   `paddleClient.subscriptions.list` MUST return a fake `SubscriptionCollection` object that
@@ -109,7 +109,7 @@ task begins.
     paddleClient.subscriptions.list(...)` then `for (const sub of subs)`) would fail against the
     fake-collection mock — confirm this by construction of the fake, not by writing a second
     "bug" test.
-- [ ] T005 Append `server/qaAccountTools.test.mjs` to the `test:fast` file list in
+- [X] T005 Append `server/qaAccountTools.test.mjs` to the `test:fast` file list in
   `connect-four/package.json`'s `"test:fast"` script value. **EDIT THIS BY HAND — do NOT delegate
   this specific edit to a sub-agent.** The `test:fast` script is a single ~6,887-character line
   listing every test file explicitly, with no glob pattern; two prior agents died attempting a
@@ -117,7 +117,7 @@ task begins.
   memory `project_test_fast_edit_hazard`). Open `connect-four/package.json` yourself, locate the
   `"test:fast"` value, and append ` server/qaAccountTools.test.mjs` before the closing quote in
   one direct edit.
-- [ ] T006 Run `cd connect-four && npm run test:fast` and confirm it is green — baseline before
+- [X] T006 Run `cd connect-four && npm run test:fast` and confirm it is green — baseline before
   this feature was 1755 tests / 264 suites / 0 fail (orchestrator fact 4, measured 2026-09-07);
   after T002–T005 it should be that baseline plus `qaAccountTools.test.mjs`'s new tests, still 0
   fail, before any US1/US2 endpoint work begins.
@@ -139,7 +139,7 @@ together, addressed by user id — reachable from the same `requireLocalhost` en
 browser QA agent already drives, without routing through `set-tier.js` or coupling US1's
 independent testability to US2's email affordance.
 
-- [ ] T036 [P] [US1] [US2] Extend `connect-four/server/qaAccountTools.js`'s
+- [X] T036 [P] [US1] [US2] Extend `connect-four/server/qaAccountTools.js`'s
   `createQaAccountTools({ paddleClient, supabase })` to also export a third function,
   `setQaAccountPaidState({ userId, paddleCustomerId })`: in a single
   `supabase.from('users').update({ tier: 'paid', paddle_customer_id: paddleCustomerId }).eq('id',
@@ -149,14 +149,14 @@ independent testability to US2's email affordance.
   real Paddle-side action. Use the exact literal `'paid'` — **never** `'pro'` (the real tier enum
   value; several prose locations in this spec/epic say "pro", which is harmless in prose but must
   never appear in code). Depends on T003.
-- [ ] T037 [P] [US1] [US2] Add unit tests for `setQaAccountPaidState` to
+- [X] T037 [P] [US1] [US2] Add unit tests for `setQaAccountPaidState` to
   `connect-four/server/qaAccountTools.test.mjs` (same file T004 created, same mocked-`supabase`
   discipline — no `paddleClient` mock is needed for this export since it never calls it). Cover:
   writes `tier` and `paddle_customer_id` in one `update()` call; a `paddleCustomerId: null` call
   writes `paddle_customer_id: null` (used by T019's portal-400 reachability recipe to produce
   `tier='paid'` + no customer id). Depends on T036, T004. No `test:fast` registration needed — this
   extends the already-registered `qaAccountTools.test.mjs` (T005), it is not a new file.
-- [ ] T038 [US1] [US2] In `connect-four/server/index.js`'s admin block, register `app.post(
+- [X] T038 [US1] [US2] In `connect-four/server/index.js`'s admin block, register `app.post(
   '/api/admin/qa-set-paid-state', requireLocalhost, async (req, res) => { ... })`: body
   `{ userId, paddleCustomerId }` (`paddleCustomerId` may be `null`, per T037's null-case test); 400
   if `userId` is missing; **no 503 payments-not-configured check**, same reasoning as T013 — this
@@ -164,7 +164,7 @@ independent testability to US2's email affordance.
   }).setQaAccountPaidState({ userId, paddleCustomerId })` and respond 200
   `{ paidStateSet: true }`; 500 on a Supabase update error via `logError`. Add this endpoint to
   `contracts/qa-endpoints.md` (done by this fix pass, see the contract file). Depends on T036.
-- [ ] T039 [US1] [US2] Add an HTTP-level test for `POST /api/admin/qa-set-paid-state`, in the same
+- [X] T039 [US1] [US2] Add an HTTP-level test for `POST /api/admin/qa-set-paid-state`, in the same
   file/pattern T009 uses for `qa-rollback` (extend `server/userEndpoints.test.mjs` if that is where
   T009 landed, matching its existing registration in `test:fast` — **only** append a brand-new
   `.test.mjs` file to `connect-four/package.json`'s `test:fast` line, by hand, per T005/T009's
@@ -190,7 +190,7 @@ confirm it succeeds identically (Acceptance Scenarios US1.1–4).
 
 ### Implementation for User Story 1
 
-- [ ] T007 [US1] In `connect-four/server/index.js`'s "Admin endpoints (localhost-only)" block,
+- [X] T007 [US1] In `connect-four/server/index.js`'s "Admin endpoints (localhost-only)" block,
   register `app.post('/api/admin/qa-rollback', requireLocalhost, async (req, res) => { ... })`
   (contracts/qa-endpoints.md), in the same inline registration style as the existing
   `/api/admin/generate` route: body `{ userId }`; 400 `{ error: 'userId is required' }` if
@@ -199,12 +199,12 @@ confirm it succeeds identically (Acceptance Scenarios US1.1–4).
   `createQaAccountTools({ paddleClient, supabase }).resetQaAccount({ userId })` and respond 200
   with its `{ reset, canceledSubscriptions }` result; 500 with `logError` on any unexpected
   Supabase/Paddle SDK error. Depends on T002, T003.
-- [ ] T008 [P] [US1] Create `connect-four/server/scripts/qa-rollback-cli.js` (research.md D2): a
+- [X] T008 [P] [US1] Create `connect-four/server/scripts/qa-rollback-cli.js` (research.md D2): a
   thin CLI wrapper parsing `process.argv` for a target user id and a `--yes` flag; refuses to call
   `resetQaAccount` without `--yes` present (FR-006), printing a clear message instead; on success,
   prints the canceled subscription ids. No CLI wrapper is added for `setQaAccountEmail` (Settled
   decision 9 only requires a button + endpoint for that one). Depends on T003.
-- [ ] T009 [US1] Add HTTP-level tests for `POST /api/admin/qa-rollback` (following the existing
+- [X] T009 [US1] Add HTTP-level tests for `POST /api/admin/qa-rollback` (following the existing
   pattern used for other `requireLocalhost` admin routes in this codebase's server test suite —
   check `server/userEndpoints.test.mjs` for the request-mocking convention before writing new
   scaffolding): 400 on missing `userId`; 503 when `paddleClient` is `null`; 200 with the expected
@@ -217,16 +217,16 @@ confirm it succeeds identically (Acceptance Scenarios US1.1–4).
   here (memory `project_test_fast_edit_hazard`). If this task instead extends
   `server/userEndpoints.test.mjs`, no registration step is needed — that file is already in
   `test:fast` — and this note is satisfied by that fact alone. Depends on T007.
-- [ ] T010 [US1] Update `docs/architecture/api-conventions.md`'s "Access Guards" section (documents
+- [X] T010 [US1] Update `docs/architecture/api-conventions.md`'s "Access Guards" section (documents
   `requireLocalhost`-gated routes) to add `POST /api/admin/qa-rollback`: gate (`requireLocalhost`
   only, not `requireAdmin`), request/response shape, and the 503-when-unconfigured path
   (Constitution VIII, plan.md's mandated doc task).
-- [ ] T011 [US1] If `qaAccountTools.js`'s constructor-injection shape warrants it, add a one-line
+- [X] T011 [US1] If `qaAccountTools.js`'s constructor-injection shape warrants it, add a one-line
   cross-reference from `docs/architecture/server-conventions.md`'s "PaymentProcessor Seam" section
   to `qaAccountTools.js` as a second consumer of the same DI pattern (plan.md Constitution VIII
   task; research.md D2's rationale). If the existing section already generalizes cleanly to a
   second module, a single sentence addition is sufficient — do not restructure the section.
-- [ ] T041 [US1] **Coverage gap 1 (tasks_critique, closes epic AC1/AC2)**: manually drive
+- [X] T041 [US1] **Coverage gap 1 (tasks_critique, closes epic AC1/AC2)**: manually drive
   `resetQaAccount` against a **real** Paddle sandbox subscription — not the mocked client in T004
   — using either the CLI (T008) or the HTTP endpoint (T007). Confirm the full AC1 assertion:
   `users.tier = 'free'` AND `users.paddle_customer_id IS NULL` AND the sandbox subscription itself
@@ -235,7 +235,7 @@ confirm it succeeds identically (Acceptance Scenarios US1.1–4).
   screen renders free-tier UI with **no DevTools intervention**. This is a checkbox task, not the
   Implementation Strategy's "STOP and VALIDATE" prose bullet, which omits the reload. Depends on
   T007, T008.
-- [ ] T042 [US1] **Coverage gap 2 (tasks_critique, closes US1 Acceptance Scenario 5)**: after a
+- [X] T042 [US1] **Coverage gap 2 (tasks_critique, closes US1 Acceptance Scenario 5)**: after a
   reset (T041 or a fresh `resetQaAccount` call), `paddle_customer_id` is `NULL` — re-sending a
   harvested fixture against it would match zero `users` rows and pass **silently** (NF11), proving
   nothing. So first call T038's `setQaAccountPaidState` to re-link the account (`tier='paid'` +
@@ -265,14 +265,14 @@ its documented tier effect (Acceptance Scenarios US2.1–10).
 
 ### Implementation for User Story 2
 
-- [ ] T012 [US2] In `connect-four/src/screens/SettingsScreen.jsx`, add a dev-only "Set QA email"
+- [X] T012 [US2] In `connect-four/src/screens/SettingsScreen.jsx`, add a dev-only "Set QA email"
   button next to the existing `🛠 Dev: clear IndexedDB & sign out` button (`:330`), gated by the
   same `import.meta.env.DEV &&` pattern (research.md D3), that POSTs to
   `/api/admin/qa-set-email` with `{ userId: <current session's user id>, email: <a fixed QA
   address, e.g. prompted or hardcoded 'qa-agent@example.test'> }` and reports success/failure
   inline (reuse `handleDevReset`'s `fetch(...)` scaffolding in the same file as a starting point).
   Depends on T013 existing (or can be developed in parallel and wired once T013 lands).
-- [ ] T013 [US2] In `connect-four/server/index.js`'s admin block, register `app.post(
+- [X] T013 [US2] In `connect-four/server/index.js`'s admin block, register `app.post(
   '/api/admin/qa-set-email', requireLocalhost, async (req, res) => { ... })`
   (contracts/qa-endpoints.md): body `{ userId, email }`; 400 if either is missing; **no 503
   payments-not-configured check** — `setQaAccountEmail` never touches `paddleClient`, and the
@@ -314,7 +314,7 @@ its documented tier effect (Acceptance Scenarios US2.1–10).
   `connect-four/server/scripts/webhook-fixtures/subscription-updated-paused.json`,
   `subscription-canceled.json`, and `subscription-updated-past-due.json` (research.md D5; names
   track the exact `event_type` + trigger). Depends on T014.
-- [ ] T016 [US2] Create `connect-four/server/scripts/send-synthetic-webhook.js` (research.md D6):
+- [X] T016 [US2] Create `connect-four/server/scripts/send-synthetic-webhook.js` (research.md D6):
   a CLI script taking `--fixture <name> --customer-id <paddleCustomerId>` (plus whatever
   subscription-id argument the harvested fixture's substitution point needs). It must: load the
   named fixture, substitute **only** the closed allowlist —`data.customerId`, `data.id`,
@@ -327,7 +327,7 @@ its documented tier effect (Acceptance Scenarios US2.1–10).
   5` second window — the whole compute-and-send must complete within ~5s); POST the header + raw
   body to `POST /api/paddle/webhook` on `$API_PORT`. No tunnel, no webhook simulator (FR-019).
   Depends on T015.
-- [ ] T017 [P] [US2] Add a unit test (e.g.
+- [X] T017 [P] [US2] Add a unit test (e.g.
   `connect-four/server/scripts/send-synthetic-webhook.test.mjs`, or colocated per this codebase's
   existing script-testing convention if one exists — check first) for the signature-construction
   function in isolation: given a fixed secret, timestamp, and raw body, assert the header string
@@ -338,7 +338,7 @@ its documented tier effect (Acceptance Scenarios US2.1–10).
   delegate this specific edit to a sub-agent.** Same one ~6,887-character no-glob line as T005/T009;
   two prior agents died on a sub-agent exact-match edit here (memory
   `project_test_fast_edit_hazard`). Depends on T016.
-- [ ] T018 [US2] Manually drive all 5 checkout CTAs (NF8: `SettingsScreen.jsx:47`,
+- [X] T018 [US2] Manually drive all 5 checkout CTAs (NF8: `SettingsScreen.jsx:47`,
   `SetPickerScreen.jsx:46`, `SagaScreen.jsx:154`, `PostSetSummaryScreen.jsx:22`, `PricingScreen`
   via `screenRegistry.jsx:44`) using the chrome-devtools MCP / app-qa browser-driving pattern:
   confirm the Paddle sandbox overlay opens from each one (FR-011, US2.1). With the default
@@ -356,7 +356,7 @@ its documented tier effect (Acceptance Scenarios US2.1–10).
   transaction is T014's harvest source (tasks_critique B1) — T014 depends on this task completing
   first; do not let T014 run ahead of it or drive its own independent purchase.** Depends on T012,
   T013, and (for the overlay itself) T001's bootstrapped environment.
-- [ ] T019 [US2] Manually reach the billing-portal entry point from the purchased account
+- [X] T019 [US2] Manually reach the billing-portal entry point from the purchased account
   (`paddle_customer_id` populated) and confirm `POST /api/paddle/portal` (NF9) returns a usable
   portal session (US2.5, FR-015). Separately, reach the 400 path (US2.6) via the **reachability
   recipe** (tasks_critique D1: the paid-tier gate on the portal button makes this state otherwise
@@ -370,7 +370,7 @@ its documented tier effect (Acceptance Scenarios US2.1–10).
   in code. If the rendered state is nonetheless wrong once actually observed, record that as a QA
   finding/OI entry, not a fix in this feature (Out of Scope: "Fixing bugs the QA run discovers").
   Depends on T018, T038.
-- [ ] T020 [US2] Using `send-synthetic-webhook.js` (T016) against the same persisted payment-sweep
+- [X] T020 [US2] Using `send-synthetic-webhook.js` (T016) against the same persisted payment-sweep
   account (Settled decision 10), **re-establish `tier='paid'` + the matching `paddle_customer_id`
   via T038's `setQaAccountPaidState` immediately before each of the three sends** (tasks_critique
   B2 — without this, the first fixture already flips the row to `free` and the second/third
@@ -384,11 +384,11 @@ its documented tier effect (Acceptance Scenarios US2.1–10).
   still `tier='paid'` with the customer id unchanged (US2.9, NF4's documented no-write branch —
   this is the only form of that assertion that can fail; "no write to `users`" alone is
   indistinguishable from a free row that was never touched). Depends on T015, T016, T038.
-- [ ] T021 [US2] Re-send the same synthetic event from T020 a second time with an unmodified
+- [X] T021 [US2] Re-send the same synthetic event from T020 a second time with an unmodified
   `event_id` and confirm the route responds without applying a second tier write (NF12,
   duplicate-suppression, US2.10) — this is expected behavior to confirm, not a defect to fix.
   Depends on T020.
-- [ ] T022 [US2] Update `docs/architecture/api-conventions.md`'s "Access Guards" section to add
+- [X] T022 [US2] Update `docs/architecture/api-conventions.md`'s "Access Guards" section to add
   `POST /api/admin/qa-set-email` (gate, request/response shape; **no** 503 payments-not-configured
   path — T013/D2 fixed the contract to scope that check to `qa-rollback` only) and
   `POST /api/admin/qa-set-paid-state` (T038: gate, request/response shape, also no 503 check),
@@ -410,7 +410,7 @@ auth`, confirm the CTA's promised destination (Acceptance Scenarios US3.1–4).
 
 ### Implementation for User Story 3
 
-- [ ] T023 [US3] Manually drive all 6 `AuthModal` call sites (NF8: `HomeScreen.jsx:156`,
+- [X] T023 [US3] Manually drive all 6 `AuthModal` call sites (NF8: `HomeScreen.jsx:156`,
   `StatsScreen.jsx:169`, `SagaScreen.jsx:329`, `MistakeDetailScreen.jsx:551`,
   `OnboardingMissionScreen.jsx:111`, `OnboardingImportOfferScreen.jsx:119`) using the
   chrome-devtools MCP / app-qa browser-driving pattern. Before **each** CTA, run the documented
@@ -439,7 +439,7 @@ states the now-current, verified fact (Acceptance Scenarios US4.1–5).
 
 ### Implementation for User Story 4
 
-- [ ] T024 [P] [US4] In `.claude/skills/app-qa/references/environment.md`, correct NF3 (as amended
+- [X] T024 [P] [US4] In `.claude/skills/app-qa/references/environment.md`, correct NF3 (as amended
   2026-09-08, tasks_critique B2): fix the `set-tier.js` path (currently wrong at the file's
   `set-tier.js`-referencing lines, ~99 and ~114) to `connect-four/server/scripts/set-tier.js`, and
   state its limitation accurately — the email lookup **works** once Settled decision 9's affordance
@@ -448,34 +448,34 @@ states the now-current, verified fact (Acceptance Scenarios US4.1–5).
   (`set-tier.js:27-28`) — it can **never** restore `paddle_customer_id`, so it cannot re-establish a
   paid state the downgrade fixtures (T020) or a post-reset replay (T042) can act on. Point to
   `setQaAccountPaidState` (T036/T038) as the tool that closes that gap (FR-023, FR-027).
-- [ ] T025 [P] [US4] In the same file, add a "Worktree bootstrap" section documenting NF6: a fresh
+- [X] T025 [P] [US4] In the same file, add a "Worktree bootstrap" section documenting NF6: a fresh
   worktree has no `node_modules` (`npm install` required) and no `.env`/`.env.local` files
   (gitignored — must be copied from the main checkout), matching `quickstart.md`'s Prerequisites
   (FR-023).
-- [ ] T026 [P] [US4] In the same file, add a "Rate limits" section documenting NF7: 120 req/min per
+- [X] T026 [P] [US4] In the same file, add a "Rate limits" section documenting NF7: 120 req/min per
   IP, shared with the browser QA session; a 429 response is **plain text**, which surfaces as an
   opaque JSON-decode error with no server log line — so an agent recognizes the failure mode
   instead of misreading it as a JSON bug (FR-023).
-- [ ] T027 [US4] Rewrite `environment.md`'s rollback-tool documentation (FR-025) from the actual
+- [X] T027 [US4] Rewrite `environment.md`'s rollback-tool documentation (FR-025) from the actual
   interface built in T007/T008 (CLI flags, HTTP endpoint request/response shape) and T012/T013
   (the email-seed button/endpoint) — not a pre-implementation guess. Depends on T007, T008, T012,
   T013.
-- [ ] T028 [US4] Retract the "Paddle does not work locally" belief at **all three** locations in
+- [X] T028 [US4] Retract the "Paddle does not work locally" belief at **all three** locations in
   `docs/open_issues.md`: `:3779` (the primary claim — "owner-confirmed: Paddle does not work
   locally"), `:3915` (FR-016 follow-up mention), and `:5738` ("It could not be confirmed against a
   real rejection locally because `VITE_PADDLE_CLIENT_TOKEN` is unset"). Each must state instead
   that the sandbox checkout overlay works locally once `VITE_PADDLE_CLIENT_TOKEN` is configured
   (FR-024). Do this as one pass over the one file so all three edits land together.
-- [ ] T029 [P] [US4] Retract the same belief at `specs/057-mvp-launch-gate/spec.md:99`
+- [X] T029 [P] [US4] Retract the same belief at `specs/057-mvp-launch-gate/spec.md:99`
   ("`VITE_PADDLE_CLIENT_TOKEN` is unset locally (owner-confirmed) — Paddle does not work locally;
   the sandbox end-to-end transaction check can only run on staging") (FR-024).
-- [ ] T030 [P] [US4] Retract the same belief at `docs/epics/pre-launch-mvp-epic.md:180`
+- [X] T030 [P] [US4] Retract the same belief at `docs/epics/pre-launch-mvp-epic.md:180`
   ("OI-96 records the owner's confirmation that `VITE_PADDLE_CLIENT_TOKEN` is unset — Paddle does
   not work locally") (FR-024).
-- [ ] T031 [P] [US4] Retract the same belief at `specs/057-mvp-launch-gate/quickstart.md:171`
+- [X] T031 [P] [US4] Retract the same belief at `specs/057-mvp-launch-gate/quickstart.md:171`
   ("FR-016's real Paddle sandbox transaction ... `VITE_PADDLE_CLIENT_TOKEN` is unset locally")
   (FR-024).
-- [ ] T032 [P] [US4] Retract the consequential mentions at `docs/deployment_steps.md:371,422`
+- [X] T032 [P] [US4] Retract the consequential mentions at `docs/deployment_steps.md:371,422`
   ("no `VITE_PADDLE_CLIENT_TOKEN` locally, so this cannot be exercised in this environment" and
   "a live transaction is not exercisable locally — `VITE_PADDLE_CLIENT_TOKEN` is unset"). **This
   is a prose correction inside existing entries, NOT a new entry under the file's "Template for
@@ -489,20 +489,20 @@ states the now-current, verified fact (Acceptance Scenarios US4.1–5).
 
 ## Phase 7: Polish & Cross-Cutting Concerns
 
-- [ ] T033 Re-run `cd connect-four && npm run test:fast` and confirm it is still green after all
+- [X] T033 Re-run `cd connect-four && npm run test:fast` and confirm it is still green after all
   implementation tasks (T002–T032, T036–T042) — baseline 1755/264/0-fail plus
   `qaAccountTools.test.mjs`'s new tests (T004, T037) and any brand-new `.test.mjs` file actually
   added and registered by T009/T017/T039 (per each task's own registration step — verify each one
   really did append to `test:fast` if it created a new file, rather than assuming it), still 0
   fail (SC-007, AC7).
-- [ ] T034 Walk `quickstart.md` top to bottom as a final integration smoke test: worktree
+- [X] T034 Walk `quickstart.md` top to bottom as a final integration smoke test: worktree
   bootstrap, start the app, run `/app-qa tier-journey` (or the equivalent single documented
   command per AC5 — no new command is created for this, the app-qa skill already accepts a
   `tier-journey` area argument), reset via CLI and via the HTTP endpoint, drive the downgrade
   lifecycle via `send-synthetic-webhook.js`, set an email via the dev-only affordance, and
   re-establish a paid state via `setQaAccountPaidState` — confirm every command in the doc works
   exactly as written.
-- [ ] T035 Confirm every new affordance added by this feature (all three new endpoints, the
+- [X] T035 Confirm every new affordance added by this feature (all three new endpoints, the
   `SettingsScreen.jsx` button, the CLI scripts) is gated by `requireLocalhost` or
   `import.meta.env.DEV` and does not change any production-visible behavior (AC7, SC-008) — spot
   check by grepping the diff for the three new routes and the new button's JSX guard.

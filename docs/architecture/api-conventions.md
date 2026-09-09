@@ -146,8 +146,67 @@ Registered by `registerPaddleRoutes` (`server/paddleRoutes.js`) — see server-c
 
 - **`requirePaid`**: Middleware for paid-tier coach endpoints. Returns 403 if `req.user?.tier !== 'paid'`. Currently used by `GET /api/coach/weakness-map` only. Queue and resolve endpoints use inline `requireAuth` (401) instead.
 - **`userCanAccessCategory(user, categoryId)`**: Helper used in puzzle routes. Returns false for paid categories unless `user?.tier === 'paid'`.
-- **`requireLocalhost`**: Middleware for curation/generation admin endpoints. Checks `req.ip` against `127.0.0.1`, `::1`, `::ffff:127.0.0.1`. Returns 403 for all other IPs.
+- **`requireLocalhost`**: Middleware for curation/generation admin endpoints. Checks **`req.socket.remoteAddress`** (the raw TCP peer address) against `127.0.0.1`, `::1`, `::ffff:127.0.0.1`. Returns 403 for all other IPs. It deliberately does **NOT** use `req.ip` (spec 047 FR-009): with `trust proxy: 1` set — which express-rate-limit needs to see real client IPs behind Railway's proxy — `req.ip` resolves from a client-supplied `X-Forwarded-For`, so a spoofed header would pass this gate.
 - **`requireAdmin`**: Middleware for admin endpoints that need remote access (lessons, eval-set, etc.). In non-production allows all requests; in production checks `req.user.email` against the `ADMIN_EMAILS` env var. Use this instead of `requireLocalhost` when the endpoint must be reachable from the hosted admin UI.
+
+### QA-only account tools (spec 058, e2e-qa-enablement)
+
+All three routes below back `createQaAccountTools({ paddleClient, supabase, authClient })`
+(`server/qaAccountTools.js`), registered inline in `server/index.js`'s "Admin endpoints
+(localhost-only)" block, right after `requireLocalhost`'s definition — the same
+constructor-injection module already used by `paddleProcessor.js` (see server-conventions.md
+"PaymentProcessor Seam"). Neither route uses `requireAdmin` — `requireAdmin` is a no-op outside
+`NODE_ENV=production` and must not be relied on for a dev-only tool.
+
+**Not registered in production at all.** These three routes sit inside an
+`if (process.env.NODE_ENV !== 'production')` block in `server/index.js` — unlike every
+other localhost-only admin route in that file, they mutate auth and entitlement state for an
+*arbitrary* `userId` (`qa-set-email` overwrites any user's confirmed auth email through the
+service-role admin API, which is an account-takeover primitive if a loopback-originating request
+path ever exists inside a deployed container). `requireLocalhost` is still their real gate; the
+registration guard is defence in depth. Local dev leaves `NODE_ENV` unset, so the routes are
+present for the QA harness; Railway sets `NODE_ENV=production` on every service, so they never
+ship. If you run the local server with `NODE_ENV=production`, the QA tooling will 404 by design.
+
+**`POST /api/admin/qa-rollback`** — `requireLocalhost` only. Resets a QA test account to a
+known-free state between runs: cancels every cancelable Paddle sandbox subscription for the
+account's `paddle_customer_id` (`for await` draining the SDK's lazy `SubscriptionCollection` —
+never `await list()` treated as an array, see `qaAccountTools.js`'s header), THEN writes
+`{ tier: 'free', paddle_customer_id: null }` in one `supabase.from('users').update(...)`
+(cancellation always before the null-out, or the customer id becomes unrecoverable).
+**Request**: `{ "userId": "<uuid>" }`. **Response `200`**:
+`{ "reset": true, "canceledSubscriptions": ["<paddle-subscription-id>", ...] }` (empty array is
+success, not partial failure — idempotent). **Errors**: `400 { "error": "userId is required" }`
+missing body field; `503 { "error": "payments not configured" }` when the module-level
+`paddleClient` (hoisted in `index.js` alongside `paddlePaymentProcessor`) is `null` — checked
+*before* calling `createQaAccountTools`, since this is the only one of the three
+`qaAccountTools.js` operations that calls `paddleClient`; `500` on any unexpected Supabase/Paddle
+SDK error, via `logError`.
+
+**`POST /api/admin/qa-set-paid-state`** — `requireLocalhost` only. Re-establishes
+`tier: 'paid'` + a given `paddle_customer_id` on a QA test account, addressed by user id — DB-only,
+never calls `paddleClient` (it recreates the DB state a real checkout would have produced, it does
+not perform any real Paddle-side action), so unlike `qa-rollback` it carries **no** 503
+payments-not-configured pre-check. **Request**:
+`{ "userId": "<uuid>", "paddleCustomerId": "<paddle-customer-id>" | null }` — a `null`
+`paddleCustomerId` is a valid, intentional input (e.g. to reach the customer-portal endpoint's
+no-customer-id 400 path while keeping `tier: 'paid'`). **Response `200`**:
+`{ "paidStateSet": true }`. **Errors**: `400 { "error": "userId is required" }`;
+`500` on a Supabase update error, via `logError`.
+
+**`POST /api/admin/qa-set-email`** — `requireLocalhost` only. Sets a confirmed email on a QA test
+account (FR-013), via `authClient.auth.admin.updateUserById(userId, { email, email_confirm: true
+})` — service-role, immediate, unlike the browser-facing `supabase.auth.updateUser({ email })`
+flow, which requires a confirmation-link click before it takes effect. DB/auth-only write, never
+calls `paddleClient`, so — like `qa-set-paid-state` — it carries **no** 503
+payments-not-configured pre-check. **Request**: `{ "userId": "<uuid>", "email": "<string>" }`.
+**Response `200`**: `{ "emailSet": true }`. **Errors**: `400 { "error": "userId is required" }` /
+`400 { "error": "email is required" }` for either missing body field; `500` on an
+`updateUserById` error, via `logError`.
+
+All three routes return the verbatim `requireLocalhost` 403 body
+(`{ "error": "Admin endpoints are localhost-only" }`) for a non-loopback caller. Full contract:
+`specs/058-e2e-qa-enablement/contracts/qa-endpoints.md`.
 
 ### `/api/user/*` ownership invariants (spec 030)
 
@@ -509,6 +568,15 @@ Returns spoken (TTS) audio for a cached deep-reveal explanation. The client poin
 - **Move selection is NOT softmax anymore**: the old client-side softmax/temperature + `secondBestColumn` mechanic (`src/lib/aiDifficulty.js`) was **deleted**. `chooseSparringMove` = own-win-first → `SPARRING_MISTAKE_RATES[difficulty]` roll → optimal (argmax) on no-mistake, else block an opponent win-in-1 / sample uniformly from strictly-worse-and-non-forbidden columns.
 - **Design consequence — difficulties differ only by mistake rate**: `SPARRING_MISTAKE_RATES` (`server/classifier.js`) is `{ easy: 1/2, medium: 1/4, hard: 1/8, perfect: 0 }`. Every "mistake" the roll produces is still a tactically sound, non-forbidden move (see roll logic above) — so even `easy` never falls for a one-move trap; `medium`/`hard`/`perfect` differ from `easy` only in how often the mistake roll fires, not in move quality. Deliberate design goal: never let the user win by just stacking discs.
 - **Full-board terminal signal (spec 054, FR-008)**: with `difficulty` present and a board that has **no playable column**, the endpoint returns `400 { error: 'no legal move: board is full' }` rather than a response with `col` silently `undefined`. The guard runs **before** `solver.query()` on purpose — c4solver returns an empty line for a full board, which `c4solver-wrapper.js` turns into a generic `"Invalid position"` throw, so a check placed after the query would be unreachable and the endpoint would return a generic 500 instead. `chooseSparringMove` also throws `NoLegalMoveError` (`server/classifier.js`) for the same case, translated by the handler; the ordering is asserted by `tests/unit/scoresValidation.test.js`. Success-path shapes are unchanged.
+- **Won-but-not-full terminal signal (OI-172, 2026-09-09)**: a board on which either player has already
+  connected four returns `400 { error: 'no legal move: the game is already over' }`. The guard is
+  `const scoresBoard = new Board(moves); if (scoresBoard.hasWon(1) || scoresBoard.hasWon(2))`, placed
+  before `solver.query()` for the same reason as the full-board guard above, and it is **deliberately
+  NOT scoped to `difficulty !== undefined`** — a won position has no scores to return on the Hint path
+  either, so both callers get the explicit 400 instead of the generic 500 the solver's
+  `Invalid position` throw used to produce. Note the two guards are distinct and both are needed: the
+  full-board one requires `difficulty` **and** every column at height 6; a won-but-not-full board
+  passes it untouched. Asserted by `tests/unit/scoresTerminalGuard.test.js`.
 - **Do NOT revive depth-limited difficulty**: depth-limited negamax (`-d N`) produces all-zero early-game scores and was abandoned. Tech debt: the endpoint still accepts an optional `depth` body field and `queryDepth` infrastructure remains — both unused.
 
 ## Migrate Endpoint (POST /api/user/migrate)
@@ -634,6 +702,28 @@ When `req.body.aiMove === true`, the server classifies the **post-move** board f
    `immediate_threat` > `double_threat` > `forced_win` > `forced_block` > `forbidden_columns` > `z_threat` > `odd_even_threat` > `claimeven` > `figure_7` > `j_shape` > `overcut` > `undercut` > `claimodd`
 4. If no tags match, `patternTag` is `null`.
 
+**Terminal-position handling on this path (OI-172, 2026-09-09).** Two separate guards, both scoped to
+`aiMove: true` — the user-move/puzzle path is untouched:
+
+- **PRE-move board already finished** → `400 { error: 'position is already won: nothing to evaluate' }`.
+  On the sparring path `movestring` is a live game's position, so a terminal one means "grade a move
+  played into a game that already ended" — invalid input, not a server fault. Implemented as
+  `TerminalPositionError` thrown from `buildEvaluationResponse` and translated at both call sites in
+  `server/evaluateMoveHandler.js`. The scoping is deliberate: several *taught* boards are technically
+  terminal (e.g. the figure_7 fixture `041015021326`), so an unscoped 400 would change puzzle grading
+  well beyond this fix — that residue is filed as OI-182.
+- **POST-move board terminal** (the winning move that ends the game) → **no error and no response-shape
+  change**. `classifyAiMove` classifies `movestring + col`, which the solver cannot answer, and that
+  produced a 500 on every lost sparring game. The handler now short-circuits to `patternTag: null`:
+  `patternTag = isTerminalPosition(movestring + String(colInt)) ? null : await classifyAiMove(...)`.
+  Only the classification is skipped — `scores`/`badge`/`quality` still come from the live PRE-move
+  board, so the winning move keeps a real quality, and the client (`useGameBoard.js` `commitAiMove`)
+  already maps a null tag to the neutral `coach.spoken.ai_move.*` pool.
+
+`isTerminalPosition(movestring)` (exported from `server/evaluateMoveHandler.js`) is
+`length >= 42 || board.hasWon(1) || board.hasWon(2)`. Do **not** "fix" this by making
+`c4solver-wrapper.js` accept terminal positions — its rejection is correct; callers short-circuit.
+
 The `coachPhraseKey` in the AI-move response is ignored by the client. The client uses `quality` and `patternTag` from the response to select phrases from `coach.ai_move.*` pools (see FR-007 in spec 029).
 
 **Latency note**: The AI-path evaluate-move call may exceed the 2 s latency guideline on `forced_win` positions due to `classifyPattern`'s solver queries (re-evaluates the board for each of 13 detectors). This is a known, tracked exception — caching is deferred to a future performance pass.
@@ -758,6 +848,16 @@ Saves a completed sparring game record.
 ```
 
 **Errors**: 400 for validation failures; 503 if Supabase not configured.
+
+**`moves: ''` is a legal request body (OI-163, 2026-09-09).** The required-fields guard checks `moves`
+for **presence**, not truthiness — `if (moves === undefined || moves === null || !difficulty || !side
+|| !result)`. The old `!moves` rejected the empty movestring one line before the format check
+`/^[0-6]{0,42}$/`, which explicitly permits zero moves, so the endpoint's two validators contradicted
+each other and a 0-move game 400ed as "required field missing". Keep the presence form: `''` is a
+well-formed movestring here, exactly as it is for the shared `validateMoves()` every other movestring
+endpoint uses. Asserted by `tests/unit/gamesZeroMoveValidation.test.js`. (Related client-side change:
+`useGameBoard.js`'s resign now refuses at move 0 with a coach message instead of firing `onGameEnd`,
+so no 0-move loss is written on either side — see frontend-conventions.md.)
 
 ## Puzzle GET Endpoint
 
@@ -973,7 +1073,8 @@ Appends one human flag for an eval entry to a per-run sidecar JSONL file. Mirror
 
 ## Admin Blunder-Reason Browser Endpoints
 
-Back the `admin/fv-suff` page (`src/pages/AdminFvSuffPage.jsx`), a desktop, localhost+admin tool with **two modes** (route still named `fv-suff` for historical reasons). Both read JSONL from `server/scripts/`. Guarded by `requireLocalhost + requireAdmin`. Responses are **not field-whitelisted** — records are returned whole.
+Back the `admin/fv-suff` page (`src/pages/AdminFvSuffPage.jsx`), a desktop, localhost+admin tool with **two modes** (route still named `fv-suff` for historical reasons). Both read JSONL from **two** directories, searched in order — `server/scripts/fv_suff/` then
+`server/scripts/` — via `server/evalArtifacts.js`. Guarded by `requireLocalhost + requireAdmin`. Responses are **not field-whitelisted** — records are returned whole.
 
 **Evidence mode** — browses **blunder-reason evidence** (the `computeReason` output precomputed by `server/scripts/compute.mjs`). Evidence rows have shape `{id, evidence, groundTruth}`.
 
@@ -983,7 +1084,10 @@ Back the `admin/fv-suff` page (`src/pages/AdminFvSuffPage.jsx`), a desktop, loca
 **Eval-answers mode** — joins, by `id`, the LLM **answers** and the **grades** (the eval set is derived from the answers file itself via `deriveSetFromAnswers`), so each board+vector shows its LLM answer + A1–A4 grade:
 
 - `GET /api/admin/fv-suff/files` → `{ answers }` — `answers` = `fv_suff_answers_*.jsonl` (excluding `*_grades.jsonl` sidecars).
-- `GET /api/admin/fv-suff?answers=<name>` → `{ set, answers, grades }`. `set` is DERIVED from the answers file via `deriveSetFromAnswers` (no separate eval-set file or `set` query param); `answers` (default `fv_suff_answers_all.jsonl`, validated `isFvSuffAnswersFile`) = `compute.mjs --llm` rows, each embedding its `feature_vector`; `grades` = the `gradesFilenameFor(answers)` sidecar (`<stem>_grades.jsonl` from `grade-fv-sufficiency`), `[]` if absent. Missing answers file is a 404; missing grades are non-fatal (empty). Validators live in `evalResultsHelpers.js` (unit-tested).
+- `GET /api/admin/fv-suff?answers=<name>` → `{ set, answers, grades, file }`. `set` is DERIVED from the answers file via `deriveSetFromAnswers` (no separate eval-set file or `set` query param); `answers` (validated `isFvSuffAnswersFile`) = `compute.mjs --llm` rows, each embedding its `feature_vector`; `grades` = the `gradesFilenameFor(answers)` sidecar (`<stem>_grades.jsonl` from `grade-fv-sufficiency`), `[]` if absent. Missing answers file is a 404; missing grades are non-fatal (empty). Validators live in `evalResultsHelpers.js` (unit-tested).
+  - **`file` (additive, OI-176, 2026-09-09)**: the `basename()` of the answers file actually loaded. Every pre-existing field is unchanged; the page uses this to show which run it is displaying when the caller supplied no `answers` param.
+  - **The default is now the newest listed answers file, not a hardcoded name.** It was the literal `fv_suff_answers_all.jsonl` — a filename no `compute.mjs` run has ever produced and which exists nowhere in the repo, so `/admin/fv-suff` 404ed on every load. It now defaults to `newestAnswersFile(listAnswersFiles())`, i.e. the newest file the `/files` picker itself offers, so the default can never name a file the listing does not contain. If the listing is empty the endpoint returns a 404 rather than guessing.
+  - **"Newest" is by embedded run stamp, NOT lexical sort.** `eval28_2026-07-02…` sorts *after* every `boards_coverage_…_2026-07-06…`, so a lexical last-element pick returns an older run. `AdminFvSuffPage.jsx` carried the same lexical trap and was fixed alongside.
 
 ## `POST /api/admin/audio/preview` — TTS sandbox (2026-07-16)
 

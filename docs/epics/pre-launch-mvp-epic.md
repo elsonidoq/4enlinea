@@ -177,9 +177,12 @@ Harvested and verified 2026-08-03 against this working tree. Re-verify before de
   `npm run dev` — the server reads `dist` at **boot**, so you must rebuild *and* restart to see it.
   Budget for this since US3 adds a mount-time SDK load. [[project_csp_helmet_traps]] [[project_paddle_integration]]
 - **Sandbox vs live is selected by key prefix, not by `NODE_ENV`/`MODE`.** [[project_paddle_integration]]
-- **OI-96 records the owner's confirmation that `VITE_PADDLE_CLIENT_TOKEN` is unset — Paddle does not
-  work locally.** The sandbox end-to-end transaction verification for OI-98 can only be run against
-  staging, which is another reason it is owner-gated rather than an agent task.
+- **OI-96 recorded the owner's confirmation that `VITE_PADDLE_CLIENT_TOKEN` was unset — "Paddle does
+  not work locally."** That belief was disproven 2026-09-08 by spec 058 (e2e-qa-enablement): the
+  Paddle sandbox checkout overlay works locally once `VITE_PADDLE_CLIENT_TOKEN` is configured in
+  `connect-four/.env.local` — a real sandbox transaction has since been completed end to end
+  against the local app. The sandbox end-to-end transaction verification for OI-98 is therefore no
+  longer local-tooling-blocked, though it may still need re-running for this specific path.
 - **OI-95's fix is a client-side branch, not a contract change.** `GET /api/user/entitlement` already
   carries the `authenticated` signal that FR-033's session-lapse logic consumes. **Correction
   (spec-057 planning, 2026-08-03): the three lesson screens never render locked-lesson copy** —

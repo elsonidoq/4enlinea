@@ -3775,9 +3775,12 @@ completed and passed: `/pricing` loaded from the built `dist/` under the real Ex
 checkout CTA opened the Paddle overlay (`cdn.paddle.com/paddle/v2/paddle.js` 304,
 `sandbox-buy.paddle.com` iframe rendered), and our Content-Security-Policy produced **zero**
 violations. The single console line was Paddle's own report-only `frame-ancestors` policy, a local
-`:4509` port artifact, not our header. A live transaction is still not exercisable locally because
-`VITE_PADDLE_CLIENT_TOKEN` is unset (owner-confirmed: Paddle does not work locally) — that is a
-staging concern, not a CSP one.
+`:4509` port artifact, not our header. At the time this entry was filed, a live transaction was
+recorded as not exercisable locally because `VITE_PADDLE_CLIENT_TOKEN` was unset (owner-confirmed:
+"Paddle does not work locally"). **That belief was disproven 2026-09-08 by spec 058
+(e2e-qa-enablement)**: the Paddle sandbox checkout overlay works locally once
+`VITE_PADDLE_CLIENT_TOKEN` is configured in `connect-four/.env.local` — a real sandbox transaction
+has since been completed end to end against the local app in this worktree.
 
 **Original status when filed**: deferred (blocked on tooling, not on code — spec 053 T044)
 **Area**: `connect-four/src/screens/PricingScreen.jsx`, `connect-four/server/index.js` (CSP header),
@@ -3912,7 +3915,11 @@ worse than before this fix) and the auto-open just fails without breaking the pa
 1. FR-014 — a real production-build, real-browser CSP check specifically on the new
    `?_ptxn=`-mount-time path (OI-96's prior pass covered only the click-triggered path).
 2. FR-016 — a real Paddle sandbox transaction confirming the payment-method-update email actually
-   lands an open checkout end-to-end (`VITE_PADDLE_CLIENT_TOKEN` is unset locally).
+   lands an open checkout end-to-end. This was recorded as blocked because
+   `VITE_PADDLE_CLIENT_TOKEN` was unset locally; **that premise was disproven 2026-09-08 by spec
+   058 (e2e-qa-enablement)** — the sandbox checkout overlay works locally once the token is
+   configured in `connect-four/.env.local`, so this check is no longer local-tooling-blocked
+   (it may still need re-running against this specific `?_ptxn=` path).
 
 This entry stays **partially-fixed**, not fully-fixed, until both are signed off. See also
 `docs/deployment_steps.md` § "Spec 053 (Epic 3)", amended 2026-08-04 (T048) to reference this fix
@@ -5735,7 +5742,7 @@ T041 added a mount-time `getPaddle()` call chained with `.then(...)` only. `init
 
 The pre-existing `handleUpgrade` path has the same exposure but is wrapped by its caller's `catch`, so this is a **new** unprotected entry point rather than a new class of bug. Spec 057's own edge case requires that an expired/invalid `_ptxn` degrade gracefully to the normal `/pricing` page — that part works; this is specifically about `initializePaddle` itself rejecting.
 
-**Why deferred**: the page still renders (the effect's failure doesn't block paint), so the user-visible impact is a console error rather than a white screen. It could not be confirmed against a real rejection locally because `VITE_PADDLE_CLIENT_TOKEN` is unset and `getPaddle()` short-circuits to `null` before any network call.
+**Why deferred**: the page still renders (the effect's failure doesn't block paint), so the user-visible impact is a console error rather than a white screen. At the time this entry was filed, it could not be confirmed against a real rejection locally because `VITE_PADDLE_CLIENT_TOKEN` was recorded as unset, causing `getPaddle()` to short-circuit to `null` before any network call. **That premise was disproven 2026-09-08 by spec 058 (e2e-qa-enablement)**: the Paddle sandbox checkout overlay works locally once `VITE_PADDLE_CLIENT_TOKEN` is configured in `connect-four/.env.local` — a rejection-path repro against a real `initializePaddle()` call is now possible locally and has not yet been attempted here.
 
 **If picked up**: add a `.catch()` that logs and leaves the page in its normal state, and cover it with a DOM test that mocks `initializePaddle` to reject (the mocking pattern already exists in `tests/dom/PricingScreenPaddleInit.dom.test.jsx`). Note that suite is not run by `test:fast` — see OI-135.
 
@@ -6113,3 +6120,1517 @@ checkout — test cards": 3DS `4000 0038 0000 0446`, debit `4000 0566 5566 5556`
 
 **Fix**: replace the Stripe block in `staging_checks.md` with a pointer to that section rather than a
 second copy, so the two cannot drift again.
+
+## OI-156 — `verifyTransaction` lacks the established-customer-id check, making OI-55's hardening largely inert
+
+**Status**: deferred (real defect; found by spec 058's QA sweep, out of that spec's scope — "fixing bugs the QA run discovers" is explicitly Out of Scope there)
+**Area**: `connect-four/server/paddleProcessor.js` — `verifyTransaction` vs `handleWebhook`'s `transaction.completed` branch
+**Discovered**: spec 058 (e2e-qa-enablement), 2026-09-08
+
+OI-55's resolution added an identity-binding guard to `handleWebhook`'s `transaction.completed`
+branch: it reads the target user's existing `paddle_customer_id` and, if one is already established
+and differs from the transaction's `customerId`, skips the tier write and returns
+`{ handled: true, eventType, securityRejected: true }` (`paddleProcessor.js` ~`:343-360`).
+
+`verifyTransaction` — the synchronous fallback that `POST /api/paddle/verify-transaction` calls — has
+**no such check**. It verifies `transaction.customData?.app_user_id !== userId` (so a caller cannot
+activate from someone else's transaction id) and then unconditionally calls
+`writeTier({ userId, tier: 'paid', setPaddleCustomerId: transaction.customerId })`
+(`paddleProcessor.js` ~`:233-256`). Because the sync path fires immediately after
+`checkout.completed` and the webhook cannot reach localhost (and generally arrives later in
+production too), the sync path wins the race nearly every time — so OI-55's guard is largely moot in
+practice.
+
+**Reproduced live (2026-09-08, local + Paddle sandbox)**: a second purchase on an already-paid QA
+account silently overwrote `paddle_customer_id` from `ctm_01m215ve6kmw26200awckr2nys` to
+`ctm_01m2166v2qfb1k6kraqncycahv` — no rejection, no log line, no error.
+
+Note the practical severity is lower than the webhook case: `verifyTransaction` runs under the
+victim's own authenticated session and requires `customData.app_user_id === req.user.id`, so this is
+not a third-party takeover on its own. The defect is that the *documented* protection does not hold
+on the path that actually executes, and that an account's Paddle linkage can silently change.
+
+**Why deferred**: spec 058 delivers the ability to run this QA, not fixes for what it finds; and the
+right fix is a decision about where the identity-binding check belongs (shared helper called by both
+paths vs. duplicated), which touches production payment code this spec deliberately does not modify
+("Changes to production tier/entitlement logic" is Out of Scope).
+**If picked up**: extract OI-55's established-customer-id cross-check into a helper and call it from
+`verifyTransaction` before `writeTier`, mirroring the webhook branch's reject-and-log behavior; add
+a `paddleProcessor.test.mjs` case that fails against today's code. Cross-refs: OI-55, and
+`docs/architecture/server-conventions.md` §"Identity binding on `transaction.completed` (OI-55)",
+which should be updated to say which paths the binding actually covers.
+
+## OI-157 — SagaScreen keeps stale `authenticated`/`tier` after an in-place sign-in
+
+**Status**: deferred (out of scope for spec 058 — a QA-run finding)
+**Area**: `connect-four/src/screens/SagaScreen.jsx`
+**Discovered**: spec 058 (e2e-qa-enablement), 2026-09-08
+
+Repro: dev-reset to a signed-out state → open Saga → tap an order-locked lesson → the AuthModal
+opens with the `signin` lock reason → complete `🛠 Dev: skip auth` → tap the *same* lesson again →
+the sign-in AuthModal reappears, when it should now show the order-lock toast ("Finish the previous
+lesson to unlock this one"), since the lock reason should have become `order`. A full page reload
+fixes it immediately (confirmed: post-reload the same tap correctly shows the order-lock toast).
+
+Verified at source: the `getEntitlement()` effect at `SagaScreen.jsx:210` is keyed `[store]`
+(`:214`), and `store` does not change when `refetchSession()` fires from inside `AuthModal`'s
+dev-skip-auth handler — so `tier`/`authenticated` are never re-read after an in-place sign-in.
+
+Note this was reached through the dev-skip-auth affordance, but nothing about the mechanism is
+dev-only — a real in-place sign-in from this CTA has the same stale-state window.
+
+**Why deferred**: spec 058 explicitly does not fix bugs its QA discovers.
+**If picked up**: give the effect a dependency that actually changes on session change (or subscribe
+to the session/entitlement change the way `useLessonLockGuard` does). Cross-ref memory
+`project_lesson_lock_copy_lives_in_saga` (sagaLock is 3 chained fns) and
+`project_entitlement_client_cache_traps`.
+
+## OI-158 — Paddle sandbox dunning card did not decline, so the `past_due` webhook fixture could not be harvested
+
+**Status**: deferred (blocked externally; leaves spec 058 US2 acceptance scenario 9 / SC-004 partially unmet)
+**Area**: `connect-four/server/scripts/webhook-fixtures/`, `.claude/skills/app-qa/references/environment.md` (test-cards section)
+**Discovered**: spec 058 (e2e-qa-enablement), 2026-09-08
+
+Two of the three harvested downgrade fixtures exist and are verified end to end
+(`subscription-updated-paused.json`, `subscription-canceled.json`). The third,
+`subscription-updated-past-due.json`, does **not** exist.
+
+Evidence: a real sandbox checkout paid with the documented dunning card `4000 0027 6000 3184`
+succeeded on the initial charge (as documented). A forced early renewal via
+`subscriptions.update({ nextBilledAt })` — moved up by ~32 minutes, Paddle's minimum lead
+(`subscription_next_billed_at_too_soon` if shorter) — **also succeeded** rather than declining. No
+`subscription.past_due` / `transaction.past_due` / `transaction.payment_failed` notification ever
+appeared in the sandbox notification log. The fixture was deliberately **not** hand-authored: spec
+058 Settled decision 8 requires harvested-not-authored payloads, and a fabricated one here is the
+exact "green test that tests your belief" trap.
+
+Consequently the `past_due → no write` branch (`paddleProcessor.js:64-70`) is the one downgrade
+transition still unverified locally.
+
+Secondary: `.claude/skills/app-qa/references/environment.md`'s test-cards section documents this card
+as "Succeeds, then renewals decline" with no caveat. It is undetermined whether Paddle's sandbox
+dunning simulation simply does not fire on a *forced* renewal, or whether the doc is wrong.
+
+**Why deferred**: the blocker is Paddle sandbox behavior, not our code; waiting out an organic
+~30-day billing cycle was not viable inside this feature's timebox.
+**If picked up**: either wait out a real elapsed billing cycle on a sandbox subscription and harvest
+the resulting notification, or ask Paddle support/docs whether forced renewals bypass the dunning
+simulation — then add the fixture and add the caveat (or the correction) to `environment.md:116`.
+The sender script already handles the fixture by name; only the JSON is missing.
+
+## OI-159 — `qa-set-paid-state` is not re-runnable across QA sessions when a `paddleCustomerId` is reused
+
+**Status**: deferred (usability gap in new QA tooling; partially mitigated)
+**Area**: `connect-four/server/qaAccountTools.js` (`setQaAccountPaidState`), `POST /api/admin/qa-set-paid-state`
+**Discovered**: spec 058 (e2e-qa-enablement), 2026-09-08
+
+`users.paddle_customer_id` carries a unique constraint (still named
+`users_stripe_customer_id_key` from before the Paddle rename). Passing a `paddleCustomerId` already
+held by a *different* row fails with `duplicate key value violates unique constraint
+"users_stripe_customer_id_key"`, which the route surfaces as a generic
+`500 {error:'Internal server error'}` — giving the QA agent no hint of the real cause. Reproduced
+live 2026-09-08.
+
+The sibling email collision (reusing one fixed address across accounts, since `resetQaAccount`
+deliberately never clears the email) **has been fixed**: the dev button now mints a per-account
+address, `qa-agent+<first 8 of userId>@example.test`.
+
+**Why deferred**: the remaining case needs a decision on the right behavior (return a 409 with an
+explanatory message, or have the tool detect and detach the prior holder) rather than a mechanical
+patch, and it does not block any spec 058 acceptance scenario — the documented workaround is to pass
+a customer id not already held.
+**If picked up**: map the Postgres `23505` to a 409 naming the conflicting column and the row that
+already holds the value, in the route's catch. Cross-ref memory `project_paddle_integration`
+("rollback must NULL paddle_customer_id or run 2 is rejected").
+
+## OI-160 — `qa-rollback`'s 503 pre-check is broader than the operation it protects
+
+**Status**: deferred (declined code-review finding — changing it would contradict a written contract)
+**Area**: `connect-four/server/index.js` (`POST /api/admin/qa-rollback`), `specs/058-e2e-qa-enablement/contracts/qa-endpoints.md`
+**Discovered**: spec 058 (e2e-qa-enablement) code review, 2026-09-08
+
+The route returns `503 {error:'payments not configured'}` whenever the module-level `paddleClient`
+is null. But `resetQaAccount` only touches `paddleClient` when the account actually has a
+`paddle_customer_id`; the pure `tier: 'free'` DB write needs no Paddle at all. So a fresh worktree
+that has not yet copied `server/.env` — the exact case the new `environment.md` "Worktree bootstrap"
+section anticipates — cannot use the reset at all, even though most of it would work.
+
+**Why deferred**: `contracts/qa-endpoints.md` explicitly specifies this pre-check and scopes it to
+this route (its "503 scoping" section, amended by tasks_critique D2), and task T007 implements it as
+written. Narrowing it is a contract amendment, not a bug fix, and it was not worth relitigating a
+settled decision inside the implementation pass.
+**If picked up**: move the check inside `resetQaAccount`'s `if (paddleCustomerId)` branch (so it
+fires only when a subscription actually needs cancelling), and amend the contract's "503 scoping"
+section to match.
+
+## OI-161 — the new admin-route tests re-implement the handlers instead of exercising the real registration
+
+**Status**: deferred (structural test-harness limitation)
+**Area**: `connect-four/server/userEndpoints.test.mjs`
+**Discovered**: spec 058 (e2e-qa-enablement) code review, 2026-09-08
+
+`server/index.js` cannot be imported by a test — it calls `app.listen()` at module scope. The new
+suite therefore builds its own Express app with hand-copied handler bodies plus a verbatim copy of
+`requireLocalhost`. The business logic under test is the real `createQaAccountTools`, but nothing
+verifies the actual route registration in `index.js`: a wrong path, a dropped `requireLocalhost`, a
+missing 503 check, or (now) an incorrectly-placed `NODE_ENV !== 'production'` guard on the real
+routes would not turn this suite red. `POST /api/admin/qa-set-email` — the one of the three the dev
+UI actually calls — has no HTTP-level test at all.
+
+Note this is a pre-existing shape: no HTTP-level test pattern for `index.js`'s inline
+`requireLocalhost` admin routes existed anywhere in the codebase before spec 058 (confirmed by grep
+for `requireLocalhost` across `server/*.test.mjs`, which returned nothing).
+
+**Why deferred**: fixing it properly means extracting route registration from `index.js` into an
+importable module (or having `index.js` guard its `listen()` behind a main-module check) — a
+refactor of a 3000-line file, well beyond spec 058's scope.
+**If picked up**: guard `index.js`'s `app.listen()` behind a main-module check
+(`import.meta.url === pathToFileURL(process.argv[1]).href`) so the app can be imported by tests,
+then assert against the real registrations. Cross-ref OI-56 item 2, which records the same class of
+gap for `/api/paddle/webhook`.
+
+## OI-162 — the staging Supabase project no longer exists, so nothing can be verified on staging
+
+**Status**: deferred (infrastructure gap; blocks every staging sign-off item, not just this epic's)
+**Area**: staging environment / `staging_checks.md` / `docs/deployment_steps.md`
+**Discovered**: recorded in memory 2026-08-25; re-verified and filed 2026-09-08 (spec 058)
+
+The staging Supabase project ref `jkqilynpshutqcceopdn` resolves to **NXDOMAIN**. Re-verified
+independently on 2026-09-08 rather than carried from memory:
+
+```
+$ host jkqilynpshutqcceopdn.supabase.co
+Host jkqilynpshutqcceopdn.supabase.co not found: 3(NXDOMAIN)
+```
+
+This worktree also has neither `connect-four/server/.env.staging` nor `.env.production` (both
+gitignored), so even a reachable project could not be targeted from here without restoring them.
+
+**Why this matters beyond one epic**: `staging_checks.md` is a long append-only list of items that
+are explicitly *not* verifiable in local dev — real provider round-trips, real cross-origin
+redirects, deploy-time config. While staging does not exist, **every one of those is unrunnable**,
+and `docs/deployment_steps.md` still carries many `PENDING (production)` entries whose staging half
+was the intended rehearsal. Spec 058 added one more (the webhook fixture drift check, `staging_checks.md`
+§ Epic 13) which is built and proven locally but has never run against an environment where Paddle
+delivers for real — so the frozen-fixture risk it exists to catch stays open regardless of local
+testing.
+
+**Why deferred**: recreating a staging environment is an infrastructure/ownership decision, not a
+code change.
+**If picked up**: recreate the staging Supabase project (or repoint staging at a new ref), restore
+`server/.env.staging`, apply the migration backlog, then work `staging_checks.md` top to bottom —
+starting with the checks whose epics are already `DONE (staging)`/`PENDING (production)` in
+`deployment_steps.md`, since those are the ones closest to shipping. Cross-ref memory
+`reference_supabase_connection` and OI-158 (the `past_due` fixture, whose harvest also needs a live
+Paddle-delivering environment).
+
+## OI-163 — resigning before making a move saves nothing and lands the player on a broken `/game/null` review
+
+**Status**: deferred (cosmetic dead-end; the flow is not stuck)
+**Area**: `connect-four/src/screens/GameScreen.jsx` (`saveGame`), `connect-four/src/lib/useGameBoard.js` (`handleResign`), `connect-four/server/index.js` (`POST /api/games`)
+**Discovered**: full-app agentic QA pass, 2026-09-08 (`agentic_QA_2026-09-08-1929.md`, Group A / Task A3)
+
+**Repro**
+1. Reach a sparring board (`/game`) — e.g. Home → "Sparring" → pick a difficulty, or the onboarding
+   mission's "Start sparring" CTA.
+2. Click **Resign** immediately, before playing a single move (Move 0).
+3. Observe the post-game review screen.
+
+**Observed**: the app navigates to **`/game/null`** and renders the review in its
+"Game not saved — analysis unavailable" state. `POST /api/games` returned **400
+`{"error":"moves, difficulty, side, and result are required"}`**. The Continue CTA still works, so
+the player is not trapped — they can leave the screen normally.
+
+**Expected**: either the resign is refused before any move has been played, or the game is saved
+(a 0-move resign is a legitimate, if unusual, record), or the app routes somewhere coherent instead
+of a review screen for a game id that does not exist.
+
+**Root cause** (established at source, not inferred):
+`handleResign` (`useGameBoard.js:312-316`) does not require any move to have been played — it only
+early-returns on `gameOver` — and calls through to `GameScreen`'s `saveGame` seam with an empty
+move history. `saveGame` builds `const movesStr = finalMoves ? finalMoves.join('') : ''`
+(`GameScreen.jsx:58`), which is `''` at Move 0. The server's validator is a **truthiness** check —
+`if (!moves || !difficulty || !side || !result)` (`server/index.js:1876-1878`) — and `''` is falsy,
+so a legitimately empty movestring is rejected with 400 before it reaches the regex
+`/^[0-6]{0,42}$/` on the next line, which would have **accepted** it (`{0,42}` explicitly permits
+zero moves). The two validators disagree about whether an empty movestring is legal.
+
+**Re-verified 2026-09-09 — HOLDS, line numbers drifted.** The guard is now
+`server/index.js:1803`: `  if (!moves || !difficulty || !side || !result) {` with the regex on
+`:1807`: `  if (typeof moves !== 'string' || !/^[0-6]{0,42}$/.test(moves)) {`. `movesStr` is
+`GameScreen.jsx:58`: `    const movesStr = finalMoves ? finalMoves.join('') : '';` and the `res.ok`
+gate is `GameScreen.jsx:84`: `      if (res.ok) {`. `handleResign` is `useGameBoard.js:316`:
+`  function handleResign() {` → `    if (gameOver) return;`. Locate by symbol, not by line.
+Additional fact not in the original entry: `saveGame` still calls
+`store.saveSparringRecord(result)` (`GameScreen.jsx:93`) on a 0-move resign, so the **local**
+sparring record is incremented for a game that was never saved.
+The POST is fire-and-forget: `saveGame` only reads `data.id` when `res.ok`
+(`GameScreen.jsx:83-86`), so the 400 is swallowed, `gameId` stays `null`, and
+`goReplace(pickGameEndScreen(onboarding), { id: gameId, ... })` (`GameScreen.jsx:107`) navigates to
+the review screen with a null id regardless.
+
+**Why deferred**: cosmetic and self-recovering — the player can continue, and no data is lost
+(there was nothing to save). It is a dead-end screen, not a broken flow, and the QA pass that found
+it was scoped to observation, not repair.
+
+**If picked up**: decide first *which* validator is right. The regex `{0,42}` says an empty
+movestring is valid, so the truthiness guard at `server/index.js:1876` is likely the bug — change
+`!moves` to `moves === undefined || moves === null` (or `typeof moves !== 'string'`) so `''` reaches
+the regex. That alone makes the record save and gives the review a real id. Separately consider
+disabling Resign until at least one move has been played, and having `saveGame` not navigate to a
+review screen when `gameId` is null. Note the same fire-and-forget swallow-the-error shape is
+recorded for the four `puzzle_attempts` writers — this is that class of defect on the games path.
+
+## OI-164 — lesson 5 slide 1 tells the learner Green played the centre column three times; Green played it twice
+
+**Status**: deferred (content fix, one string + its Spanish twin)
+**Area**: `connect-four/lessons/lesson-05-opening-imitate.json` → `slides[0].coachMessages[0].text` / `text_es`
+**Discovered**: full-app agentic QA pass, 2026-09-08 (Task C2)
+
+**Repro**: `/concept/opening-imitate` → slide 1/3 → read the coach bubble against the board.
+
+**Observed**: *"Green has played the centre column three times. Gray is about to move…"*
+The slide's `movestring` is `333` — three discs in the centre column, of which only **two** are
+Green's.
+
+**Root cause** (verified against the board oracle, not inferred): `./visualize_board.sh 333` prints
+`X 1` (row 0), `O 2` (row 1), `X 3` (row 2) in the centre column, `ht = 3`, `Next: Gray`. Green owns
+moves 1 and 3; Gray owns move 2. The sentence conflates *"the centre column has three discs"* with
+*"Green played there three times"* — right on disc count, wrong on attribution. This is a content
+error in the lesson JSON, not a rendering bug: the `movestring` and `boardSpec` agree with each
+other and with the board; only the prose disagrees. The rest of the same sentence ("Gray is about
+to move") is correct and is itself only consistent with the *two*-Green reading.
+
+**Why deferred**: content correction, no code change; batched with the other lesson-content findings
+from this QA pass rather than hot-fixed mid-run.
+**If picked up**: change to "the centre column has been played three times" or "Green has played the
+centre column twice", and update `text_es` ("Verde jugó la columna central tres veces") to match.
+The audio clip is text-hashed (`sha256(text)[:16].mp3`), so **changing this string orphans its
+existing mp3 and requires regenerating the clip** — see the lesson-audio generation traps.
+
+**Re-verified 2026-09-09 — HOLDS, unchanged.** `lesson-05-opening-imitate.json` `slides[0]` still
+carries `movestring` `"333"` and the verbatim strings
+`"Green has played the centre column three times. Gray is about to move — the simplest good reply is often just to play directly above Green's last disc."`
+and
+`"Verde jugó la columna central tres veces. Gris está por mover — la respuesta simple y buena suele ser jugar justo encima de la última ficha de Verde."`
+
+## OI-165 — the claimeven challenge feedback hardcodes "secures Gray's draw" on positions that are a Gray win
+
+**Status**: deferred
+**Area**: `connect-four/src/i18n/en.json:772` (`eval.claimeven.optimal.summary.0`) and `:777`
+(`eval.claimeven.suboptimal.summary.0`); consumed by `ChallengeScreen.jsx` via
+`eval.<category>.<quality>.summary.*`
+**Discovered**: full-app agentic QA pass, 2026-09-08 (Task C3)
+
+**Repro**
+1. Complete lessons 1–7 at any tier so lesson 8 unlocks.
+2. `/clchallenge/claimeven` → puzzle 1/2 → play column 6 (1-based) → read the summary under the ✓ badge.
+3. Next → puzzle 2/2 → play column 5 (1-based) → same line.
+
+**Observed**: both puzzles show *"That's the Claimeven column that secures Gray's **draw**."* — while
+the goal prompt on the same screen says *"…reply-above carries Gray's **win**"* (puzzle 1) and
+*"…fill it so every column pairs and Gray **wins**"* (puzzle 2). The screen contradicts itself.
+
+**Evidence (solver, 0-indexed cols)**
+- Puzzle 1, `333336122241046612122601314`, Gray to move, `correctCol` 4:
+  `scr | -7 | -- | -- | -- | 2 | -7 | -7` → the correct column scores **+2 = a Gray win**.
+  `par | 4E | 0E | 0E | 0E | 3O | 6E | 2E` confirms col 4 is the single odd-parity open column.
+- Puzzle 2, `4313303344010421102`, Gray to move, `correctCol` 3:
+  `scr | -8 | -8 | -10 | 2 | 1 | -8 | -8` → **+2 = a Gray win**.
+
+**Root cause**: `eval.claimeven.*.summary` was authored as one fixed sentence for a category whose
+outcome is **position-dependent**. It is not derived from the solver score the evaluation response
+already carries, so it asserts "draw" on every claimeven puzzle regardless of the true result. Both
+of lesson 8's puzzles are wins, so the wrong sentence shows 2/2 times. The lesson itself already
+states the honest version on `claimeven` slide 3 — *"Claimeven by itself only promises Gray the even
+squares — whether that wins, draws, or merely survives depends on the position"* — which is exactly
+what the i18n string ignores.
+
+**Why deferred**: wrong copy, not a wrong grade — the move is still marked optimal and the challenge
+completes.
+**If picked up**: either word the summary outcome-neutrally ("…secures Gray's even squares"), or
+derive the outcome word from the solver score already present in the evaluate-move response. Note
+`eval.*` has only 6 keys and the parity test over them is presence-only, so adding a position-aware
+variant will not be caught by the existing test.
+
+**Re-verified 2026-09-09 — HOLDS, but the entry undercounted the affected strings. Three keys, in
+two files, not two keys in one.** All three `eval.claimeven.*` summaries assert a draw, and the
+Spanish file carries the same defect — which the original entry did not mention at all:
+
+| key | `en.json` | `es.json` |
+|---|---|---|
+| `eval.claimeven.optimal.summary.0` | `:772` `"That's the Claimeven column that secures Gray's draw."` | `"Esa es la columna de Claimeven que asegura el empate de Gris."` |
+| `eval.claimeven.suboptimal.summary.0` | `:777` `"Still drawing, but the Claimeven key column was stronger."` | `"Sigue siendo empate, pero la columna clave de Claimeven era más fuerte."` |
+| `eval.claimeven.blunder.summary.0` | `:782` `"That column gives up Gray's Claimeven drawing strategy."` | `"Esa columna renuncia a la estrategia de empate Claimeven de Gris."` |
+
+**If picked up (corrected)**: fix **all six strings**, `en.json` *and* `es.json`. An English-only
+edit ships the wrong word in Spanish silently — the i18n fallback is graceful and no grader is
+Spanish-aware.
+
+## OI-166 — `infoProse` silently truncates on 15 of the 45 slides in lessons 1–10, hiding up to 61% of the text
+
+**Status**: deferred
+**Area**: `connect-four/src/components/InfoProsePanel.jsx` (the panel itself) + the flex column in
+`connect-four/src/screens/ConceptScreen.jsx` that decides its residual height
+**Discovered**: full-app agentic QA pass, 2026-09-08 (Tasks C1–C3)
+
+**Repro**: walk `/concept/<lessonId>` for lessons 1–10 and compare the prose panel's `clientHeight`
+to its `scrollHeight`.
+
+**Observed**: 15 of 45 slides overflow with **no scrollbar, no fade, and no "more" affordance**;
+the last visible line is bisected mid-glyph. Measured at viewport 1382×727, tier free. Worst cases:
+`claimeven` slide 4 (752 chars, 131/338 → 61% hidden), `claimeven` slide 3 (869 chars, 157/380 →
+59%), `opening-centre` slide 5 (928 chars, 158/339 → 53%), `odd-rows-belong-to-red` slide 4 (839
+chars, 151/338 → 55%), `block-before-build` slide 4 (589 chars, 145/244 → 41%). On
+`opening-centre` slide 5 the hidden half contains the load-bearing arithmetic ("the numbers show 11
+rather than 13 … because gray's disc sits inside two of its vertical lines") — i.e. the slide's
+actual explanation is the part that never renders.
+
+**Root cause**: the panel's height is whatever the flex layout leaves after the coach bubble, the
+board, and the legend rows. `getComputedStyle` reports `overflow: auto` with no `max-height`, so the
+text is technically scrollable but nothing on screen says so. Lessons 4, 7 and 8 pair long prose
+(500–930 chars) with tall legends, so the residual box is **smallest exactly where the text is
+longest**. There is no author-side length budget and no runtime affordance. This quantifies the
+already-known trap that a wrapping legend row steals `infoProse` space.
+
+**Why deferred**: systemic layout/authoring issue affecting a third of the lesson corpus — a fix
+needs a design decision (scroll affordance vs. per-slide length budget vs. reflow), not a patch.
+**If picked up**: decide the mechanism first. A visible scroll affordance is the smallest change; a
+length budget enforced in the lesson pipeline is the durable one. Whichever is chosen, re-measure
+all 45 slides with `scrollHeight > clientHeight + 4` — the run's table is the baseline.
+
+**Re-verified 2026-09-09 — HOLDS, but the `Area` line was pointing at the wrong file (corrected
+above).** The panel is a separate component: `ConceptScreen.jsx:7`
+`import { InfoProsePanel } from '../components/InfoProsePanel.jsx';`, rendered at
+`ConceptScreen.jsx:289` `        <InfoProsePanel infoProse={slide.infoProse} />`. The component is
+`InfoProsePanel.jsx:29` `export function InfoProsePanel({ infoProse }) {`. `ConceptScreen.jsx:212`
+states the layout contract verbatim: `      {/* Board + legend are pinned (flexShrink: 0); only the infoProse panel scrolls.`
+— i.e. the residual-height mechanism the entry describes is real and is owned by ConceptScreen,
+while the scroll/overflow styling is owned by InfoProsePanel. A fixer needs **both** files.
+
+## OI-167 — the lesson coach bubble clips its FIRST line, not its last, so the reader loses the start of the sentence
+
+**Status**: deferred
+**Area**: `connect-four/src/components/CoachDialog.jsx:59` — the 120px cap.
+**NOT `ConceptScreen.jsx`** (this entry originally said so and was wrong; see the 2026-09-09
+re-verification below). `CoachDialog` is shared, so this fix has cross-screen blast radius.
+**Discovered**: full-app agentic QA pass, 2026-09-08 (Task C3)
+
+**Repro**: `/concept/claimeven` → slide 1/4 → look at the **top** edge of the coach bubble.
+
+**Observed**: `clientHeight = 120`, `scrollHeight = 139`. The bubble is bottom-anchored, so the
+overflow is cut off the **top**: the first visible line is sliced horizontally through the middle of
+its glyphs and the text above it is scrolled out with no scrollbar and no cue. Because the clipping
+is at the top rather than the bottom, the reader cannot tell the sentence began earlier — it simply
+reads as if it starts mid-thought.
+
+Overflows on exactly the three slides whose coach text exceeds 200 characters, all in lesson
+`claimeven`: slide 1 (221 chars), slide 3 (212), slide 4 (219) — each 120/139. Every other slide in
+lessons 1–10 has coach text ≤ 199 chars and does not overflow, pinning the threshold at ~200
+characters for this viewport.
+
+**Root cause**: a hard 120px cap on the coach bubble combined with `overflow: auto` and a
+bottom-pinned scroll position, plus lesson-08 coach copy written past that budget. Nothing in the
+lesson pipeline rejects a 221-character coach message. This is the known 120px coach cap — the new
+information is that it truncates the **head** of the message, which is strictly worse than losing
+the tail.
+
+**Why deferred**: same class as OI-166 and best fixed with it.
+**If picked up**: anchor the coach bubble's scroll to the **top** as a one-line mitigation (turns an
+invisible loss into a visible one), then decide the real fix with OI-166. Note that splitting a long
+coach message into two messages is known to make this worse, not better.
+
+**Re-verified 2026-09-09 — the symptom HOLDS but the entry's `Area` was WRONG and has been
+corrected.** There is **no `120` anywhere in `ConceptScreen.jsx`**. The cap is a single line in the
+shared component, `CoachDialog.jsx:59`: `          maxHeight: 120, overflowY: 'auto',`.
+
+**This changes the fix's blast radius, and the original entry hid it.** `CoachDialog` has **eleven**
+call sites, not one: `GameScreen.jsx:190`, `OnboardingImportOfferScreen.jsx:116`,
+`SocraticScreen.jsx:239`, `HomeScreen.jsx:141`, `ConceptScreen.jsx:205`,
+`PostSetSummaryScreen.jsx:234`, `ChallengeScreen.jsx:811`, `MistakeDetailScreen.jsx:394` and `:418`,
+`OnboardingMissionScreen.jsx:81`, `ReviewScreen.jsx:302`. Changing `maxHeight: 120` or the scroll
+anchor changes the coach bubble on **every screen in the app**, including the board screens whose
+`fixed` variant deliberately reserves a stable height so appending a message does not push the board
+down (`ChallengeScreen.jsx:806-809` comment). A per-screen fix therefore means a new prop on
+`CoachDialog`, not an edit to the constant. Re-verify board stability on `/game` and
+`/challenge/<cat>` after any change here, not just on `/concept/claimeven`.
+
+## OI-168 — the `win` board overlay is hardcoded green, so lessons that mark Gray's discs with it put green rings on gray discs
+
+**Status**: deferred
+**Area**: `connect-four/src/components/Board.jsx:356-363`; content side
+`lesson-02-block-before-build.json` slide 3 and `lesson-06-the-fork.json` slide 0
+**Discovered**: full-app agentic QA pass, 2026-09-08 (Tasks C1–C2)
+
+**Repro**: `/concept/block-before-build` → slide 4/4 → read the legend row and the board rings.
+Second instance: `/concept/the-fork` → slide 1.
+
+**Observed**: a **green** swatch labelled **"Gray's connected discs"**, sitting beside two other
+green swatches ("Green can even win right now", "Green's winning diagonal"); on the board, three
+gray discs carry green rings. In lesson 2 — the lesson that teaches green-vs-gray disc identity —
+the learner sees green highlighting used for the gray player.
+
+**Root cause**: the `win` overlay type is a single hardcoded green pulsing ring
+(`boxShadow: '0 0 0 3px var(--eval-good)'`, `Board.jsx:357-363`) with **no player-aware variant**,
+unlike the threat overlays `tg` (`var(--threat-green)`) / `td` (`var(--threat-gray)`) at
+`Board.jsx:366-375`. Both lessons applied `type: "win"` to Gray's discs because no gray equivalent
+exists. Two instances, one root cause; everywhere else in lessons 1–10 the `win` overlay marks
+Green discs and the colour is correct.
+
+**Why deferred**: cosmetic, but it teaches the wrong colour association in the exact lesson about
+disc identity.
+**If picked up**: add a gray variant of the `win` overlay (mirroring the `tg`/`td` split) and
+re-author the two slides to use it; or re-author them onto the `td` family and leave `Board.jsx`
+alone. Grep every lesson for `"type": "win"` before choosing — only these two apply it to Gray.
+
+**Re-verified 2026-09-09 — HOLDS, code side confirmed verbatim.** `Board.jsx:356-362`:
+`                  {/* win overlay: pulsing ring outside the disc */}` … `                      boxShadow: '0 0 0 3px var(--eval-good)',`
+with no player branch, against `Board.jsx:365-375` where `tg` → `background: 'var(--threat-green)'`
+and `td` → `background: 'var(--threat-gray)'`. Six lesson files contain a `"win"` overlay
+(`lesson-01`, `-02`, `-06`, `-08`, `-13`, `-14`); the *content* claim that only `lesson-02` slide 3
+and `lesson-06` slide 0 apply it to **Gray** is carried over from the QA run and was **not**
+re-checked disc-by-disc here — re-confirm with `./visualize_board.sh` on each slide's `movestring`
+before editing, rather than trusting the count.
+
+## OI-169 — the upgrade modal shown for a locked PRO lesson only advertises Deep Reveals, never lessons
+
+**Status**: deferred
+**Area**: `connect-four/src/screens/SagaScreen.jsx:320-325`, `connect-four/src/components/UpgradeModal.jsx`, `connect-four/src/i18n/en.json:124`
+**Discovered**: full-app agentic QA pass, 2026-09-08 (Task C4)
+
+**Repro**: complete lessons 1–10 at tier `free` → `/saga` → tap any of the five PRO nodes.
+
+**Observed**: heading "Become Pro", body *"Unlimited Deep Reveals — $2.99/month or $21.99/year."*
+Nothing states that paying unlocks lessons 11–15 — the thing the user just tapped. Identical copy on
+all five nodes and on the three direct-URL bounces (`/concept|/socratic|/clchallenge/undercut`).
+
+**Root cause**: `SagaScreen` renders `<UpgradeModal>` with no context/reason prop, and `UpgradeModal`
+has no prop seam through which a call site could vary the value proposition — so every caller
+renders the one global string at `en.json:124`. The lock reason is already computed
+(`sagaLock.js`'s `deriveLockReason` returns `'tier' | 'order' | 'both' | 'signin'`) but is not
+threaded into the modal.
+
+**Why deferred**: conversion-copy improvement, not a functional defect — checkout still works from
+this modal.
+**If picked up**: add a `reason`/`context` prop to `UpgradeModal` (mirroring `AuthModal`'s existing
+`reason` prop, which already does exactly this) and pass the lock reason from `SagaScreen`, then add
+a lesson-specific body string. Cross-ref OI-166/OI-167 only insofar as all three are lesson-surface
+copy work.
+
+**Re-verified 2026-09-09 — HOLDS.** The signature is still
+`UpgradeModal.jsx:29`: `export function UpgradeModal({ onDismiss, onUpgrade, uiState: controlledUiState, onUiStateChange }) {`
+— four props, no `reason`/`context` seam. `SagaScreen.jsx:320` renders `<UpgradeModal` and passes
+only `uiState`/`onUiStateChange`/dismiss/upgrade. The one global string is `en.json:124`:
+`    "body": "Unlimited Deep Reveals — $2.99/month or $21.99/year.",`.
+**Add to the fix**: `es.json` carries the same `upgrade.body` and needs the parallel new string, or
+the new copy ships English-only through the graceful i18n fallback.
+
+## OI-170 — `puzzles.position` is never populated, so 6 of 12 challenge categories draw ZERO puzzles while `/setpicker` advertises a full count
+
+**Status**: **STALE as written — server-side fix landed 2026-09-09, browser verification still
+owed.** Read the "Superseded" block at the end of this entry BEFORE acting on anything above it.
+The diagnosis below is preserved as the historical record of the 2026-09-08 code; the prescription
+in its original "If picked up" (backfill `position`) has been **withdrawn as wrong**.
+**Area**: `connect-four/server/puzzlePool.js` (new), `connect-four/server/index.js` (`GET /api/puzzles/counts` vs `GET /api/puzzles/draw`), `connect-four/server/promotePuzzleRow.js`, `connect-four/server/migrations/044_shape_key_position.sql`
+**Discovered**: full-app agentic QA pass, 2026-09-08 (Task C5)
+
+**Repro**: `/setpicker` at any tier → tap **Claimeven** (advertised "20 positions") → the challenge
+screen renders blank: no board, no puzzle, no error message.
+
+**The two endpoints disagree about what a puzzle is**
+- `GET /api/puzzles/counts` filters on **`is_active = true` only** (`index.js:1585-1587`).
+- `GET /api/puzzles/draw` additionally requires **`position IS NOT NULL`** (`index.js:1663-1665`,
+  and again in the wrap-around query at `:1690-1694`).
+
+So `/setpicker` advertises a count the draw endpoint cannot serve. Measured against the local DB
+(service-role, both filters applied):
+
+| category | advertised (`is_active`) | drawable (`+ position`) |
+|---|---|---|
+| immediate_threat | 66 | 66 |
+| forced_block | 100 | 100 |
+| double_threat | 100 | **2** |
+| forced_win | 21 | **1** |
+| forbidden_columns | 40 | 30 |
+| odd_even_threat | 20 | **0** |
+| z_threat | 20 | **0** |
+| claimeven | 20 | **0** |
+| undercut | 25 | 20 |
+| overcut | 49 | **0** |
+| figure_7 | 21 | **0** |
+| j_shape | 20 | **0** |
+
+**6 of 12 categories are completely unplayable**; 4 more serve far fewer than advertised. Only 2 of
+the 8 free sets (immediate_threat, forced_block) work in full. `claimeven` and `z_threat` are also
+the confirmation categories for lessons 8 and 9.
+
+**Root cause** (established at source): migration `044_shape_key_position.sql:7` adds the column as
+`ADD COLUMN IF NOT EXISTS position INTEGER DEFAULT NULL` — **an ADD COLUMN never populates existing
+rows** — and **nothing in the repo backfills it**. Worse, the canonical row builder for a promoted
+puzzle, `connect-four/server/promotePuzzleRow.js`, does **not set `position` at all**, so every
+newly promoted puzzle is also born `NULL` and therefore invisible to `/api/puzzles/draw`. The two
+categories that work were populated by some earlier one-off, not by the current pipeline. This is
+the known "adding a puzzles column means editing several hand-written insert sites, none shared"
+shape.
+
+**Why this matters beyond local**: the same migration + the same row builder ship to staging and
+production, so deploying 044 and generating content there reproduces this exactly. It is not a
+local-data artifact.
+
+**Why deferred**: content-pipeline repair, and the databases are disposable pre-launch.
+
+**~~If picked up~~ — WITHDRAWN 2026-09-09.** The original guidance here told a fixer to
+*"(2) backfill the existing rows"*. **Do not do that.** It treats `position` as a visibility gate,
+which is the misreading that created the bug. See the superseding block below.
+
+---
+
+### Superseded 2026-09-09 — what actually changed, and what is left
+
+**The server-side divergence is FIXED.** A new module, `connect-four/server/puzzlePool.js`, is now
+the single definition of "this row can be shown to a player", and both endpoints funnel through it.
+The critical change, verbatim at `puzzlePool.js:22-26`:
+
+```
+export function applyVisibilityFilter(query, category) {
+  let q = query.eq('is_active', true);
+  if (category) q = q.eq('category', category);
+  return q;
+}
+```
+
+`position IS NOT NULL` is **gone from the draw path entirely**. `position` is now used only for
+ordering — `puzzlePool.js:33-37`:
+
+```
+export function applyPoolOrder(query) {
+  return query
+    .order('position', { ascending: true, nullsFirst: false })
+    .order('id', { ascending: true });
+}
+```
+
+The module's own header states the corrected reading (`puzzlePool.js:9-11`):
+`// `position` is a *shape-diversity ordering hint* assigned by POST /api/admin/puzzles/reindex` …
+`// a freshly promoted row is born with `position = NULL` and must still be drawable.`
+
+**This reading is right and the original entry's was wrong.** `position` is written only by
+`POST /api/admin/puzzles/reindex` (`index.js:3029`), an admin round-robin over `shape_key` groups.
+It is a *presentation-diversity* input. Gating visibility on it meant an ordering optimisation could
+silently delete two thirds of the content catalogue — which is exactly what happened.
+
+`index.js` now calls through: `:38`
+`import { countVisiblePuzzles, drawCategoryPool, drawMixedPool, PUZZLE_ROW_COLUMNS } from './puzzlePool.js';`
+and the counts endpoint is a one-liner `const counts = await countVisiblePuzzles(supabase);`
+(`index.js:1587`), annotated `// OI-170: the visibility filter lives in puzzlePool.js so this
+endpoint can never again // advertise a set that /api/puzzles/draw refuses to serve.`
+(`index.js:1585-1586`). Coverage: `connect-four/tests/unit/puzzlePool.test.js`, 4 tests, wired into
+`test:fast`, including `test('a puzzle with position = NULL is still drawable', …)` (`:57`) and
+`test('counts and draw apply an identical row-visibility filter', …)` (`:43`).
+
+**Consequence for the advertised-vs-drawable table above: it is now obsolete.** Both endpoints apply
+`is_active = true` and nothing else, so the two columns are the same query by construction. All 12
+categories should draw at their `is_active` count. The table is retained only as the pre-fix
+baseline to re-measure against.
+
+**Still owed (this is the entire remaining scope of OI-170):**
+1. **Browser verification, which has never happened.** The QA servers were started *before* these
+   edits and the API server does not hot-reload, so no observation in
+   `agentic_QA_2026-09-08-1929.md` exercised this code. Drive `/setpicker` → all 12 categories and
+   compare advertised count vs. what actually draws.
+2. **Confirm the 4 tests are not self-confirming.** They were authored alongside the fix by the same
+   agent. Check each RED against the pre-fix filter before treating it as proof.
+3. `promotePuzzleRow.js` still never sets `position` — **re-verified 2026-09-09, and this is now
+   correct behaviour, not a bug.** A promoted row is born `NULL`, sorts last within its category via
+   `nullsFirst: false`, and is fully drawable. No change needed there.
+4. **No content backfill or regeneration is required any more.** Deliverable 4 of
+   `FIX_AND_VERIFY_PROMPT.md` originally said OI-170's fix "will need a content backfill or
+   regeneration"; under the shipped design it does not. The only optional follow-up is running
+   `POST /api/admin/puzzles/reindex` per category to restore *shape diversity* in the draw order —
+   a quality-of-draw improvement, never a prerequisite for a category to be playable.
+5. One residual inconsistency worth a look while in here: the session-resume branch re-fetches rows
+   with a hand-written `.eq('is_active', true)` (`index.js:1644`) rather than through
+   `applyVisibilityFilter`. Same predicate today, but it is a fourth call site outside the module
+   the module exists to be.
+
+See OI-171 for the blank-screen behavior an empty or 403 draw still produces — **that half is
+untouched and still open.**
+
+## OI-171 — an empty or forbidden puzzle draw renders a blank screen with no message, no CTA and no redirect
+
+**Status**: deferred (major)
+**Area**: `connect-four/src/screens/ChallengeScreen.jsx`
+**Discovered**: full-app agentic QA pass, 2026-09-08 (Task C5)
+
+**Repro (two independent paths to the same dead end)**
+1. `/setpicker` → tap **Claimeven** (a free set that draws 0 puzzles — see OI-170).
+2. Navigate directly to `/challenge/undercut` (a PAID set) while tier = `free`.
+
+**Observed**: in both cases the screen renders empty — no board, no puzzle, no explanatory text, no
+upgrade CTA, no redirect back to `/setpicker`. The user is stranded and must use browser Back.
+
+**Note the paywall itself is NOT broken**: the QA pass specifically probed the suspected hole and
+found the **server-side gate holds** — `/api/puzzles/draw` returns 403 for a paid category at free
+tier. The defect is purely that the client has no handling for a draw that returns nothing, whether
+the cause is a 403 (paid set) or an empty result set (OI-170).
+
+**Root cause**: `ChallengeScreen` has no empty-state and no error-state branch — it renders the
+puzzle UI unconditionally and simply produces nothing when the puzzle list is empty, so a 403 and a
+legitimately-empty category are indistinguishable to the user and to a QA observer.
+
+**Why deferred**: the blocking user-visible symptom for free sets is OI-170's data problem; this is
+the missing guard rail that turns it into a silent blank screen.
+**If picked up**: add two distinct states to `ChallengeScreen` — "this set needs Pro" (with the
+upgrade CTA, for a 403) and "no positions available" (with a route back to `/setpicker`, for an
+empty draw). Fixing OI-170 alone would hide this defect without removing it.
+
+**Re-verified 2026-09-09 — HOLDS, wholly untouched by OI-170's server fix, and the root cause needs
+one correction: an empty state DOES exist, but it is gated on `lessonMode`.**
+
+`ChallengeScreen.jsx:745`: `  if (lessonMode && puzzles.length === 0 && phase !== 'loading') {` —
+renders `t('lesson.confirmation.empty', 'No practice puzzles available yet.')` plus a Back button
+(`:750-753`). **The `lessonMode &&` conjunct is the whole defect.** A standalone
+`/challenge/<category>` never satisfies it, falls through `if (phase === 'loading')` (`:759`), and
+lands in the main return with `puzzles.length === 0`, where the progress bar (`:800`) and the meta
+counter (`:795`) are simply omitted and nothing else is substituted. So the fix is smaller than the
+entry implied: **generalise the existing branch** rather than author a new one.
+
+Two further facts a fixer needs, neither in the original entry:
+- **The draw fetch never checks `res.ok`.** `ChallengeScreen.jsx:212-214`:
+  `        const res = await fetch(\`${API}/api/puzzles/draw?category=${drawCategory}&n=${drawN}\`, { credentials: 'include' });`
+  `        const data = await res.json();` `        const loaded = data.puzzles || [];`
+  A 403 body `{"error":"Pro subscription required"}` parses fine and yields `[]`, which is precisely
+  why a paywall block and an empty category are indistinguishable downstream. **Capture the status
+  before `.json()`** — otherwise the two states the entry asks for cannot be told apart at all.
+  (Note `:323-327` already documents this exact `res.ok` trap for the *evaluate* fetch on the same
+  screen — the pattern to copy is a few hundred lines below in the same file.)
+- The `catch` at `:224-227` also collapses to `setPhase('pre-move')`, so a network failure produces
+  the same blank third state.
+
+**Relationship to OI-170 as of 2026-09-09**: the empty-draw path is now much harder to reach (all 12
+categories draw at their `is_active` count), so **the 403 path is the one that still reliably
+reproduces this** — navigate to `/challenge/undercut` at `tier = 'free'`.
+
+## OI-172 — every sparring game the player loses triggers a 500 from `/api/evaluate-move`
+
+**Status**: deferred (major)
+**Area**: `connect-four/server` — the AI-move classification path into `c4solver-wrapper.js`
+**Discovered**: full-app agentic QA pass, 2026-09-08 (Task C6)
+
+**Repro**: play a sparring game at any difficulty and let the AI win (`/game`). Watch the network
+tab and the server log as the winning move lands.
+
+**Observed**: `POST /api/evaluate-move` → **500**. Server log:
+```
+[evaluate-move] Invalid position: "323033131056600101424522"
+```
+Reproduced on every lost game in the pass (5 of 5 games ended in a loss; the 500 accompanied the
+AI's winning move each time).
+
+**Root cause** (established at source, not inferred): the app classifies the AI's move *after* it
+has been played, so the movestring handed to the solver describes an **already-terminal** position.
+`./visualize_board.sh 323033131056600101424522` prints `Move 24 | Next: Green  [GAME OVER]`. The
+solver wrapper rejects a finished position outright — `c4solver-wrapper.js:25` throws
+`new Error('Invalid position: "' + entry.moveString + '"')` — and that rejection surfaces as a 500
+rather than being treated as the expected terminal case. This is the known "forced-win terminals
+must be detected with `checkWin`, not by asking the solver" trap: a terminal board is not a
+question the solver can answer.
+
+**Second affected surface (added by the coordinator's full-log sweep, Task F2)**: the same
+`Invalid position` rejection also fires from **`[scores]`**, not just `[evaluate-move]`. Across the
+whole QA run the server log carried 14 occurrences: 6 tagged `[evaluate-move]`, 1 tagged `[scores]`,
+and 7 untagged `Error: Invalid position:`. So the fix must not be applied only to the
+evaluate-move path — every caller that hands a post-move movestring to the solver needs the same
+terminal-position short-circuit.
+
+**Why deferred**: user-invisible today — the game still ends correctly and the result is persisted;
+the damage is a 500 per lost game in the logs and a wasted solver round-trip.
+**If picked up**: short-circuit the classification call when the position is already won —
+check `checkWin` on the post-move board **before** calling the solver, and return the terminal
+classification directly. Do not "fix" it by making the wrapper accept terminal positions; its
+rejection is correct.
+
+**Re-verified 2026-09-09 — HOLDS on both call sites; neither short-circuits.** The `Area` line above
+is imprecise and is corrected here: the evaluate-move logic is **not** in `index.js`.
+
+- **Call site 1 — `connect-four/server/evaluateMoveHandler.js`.** `index.js:1727`:
+  `app.post('/api/evaluate-move', createEvaluateMoveHandler({ solver, i18nTranslations, supabase }));`
+  → `evaluateMoveHandler.js:133` `export function createEvaluateMoveHandler({ solver, i18nTranslations, supabase }) {`.
+  The solver call is `evaluateMoveHandler.js:66`: `    : await solver.query(movestring);`.
+  **`grep -a "checkWin" evaluateMoveHandler.js` returns nothing** — there is no terminal guard of any
+  kind. The 500 surfaces via `logError('[evaluate-move]', err)` at `:198` and `:257`.
+- **Call site 2 — `POST /api/scores`, `index.js:1067`.** The solver call is `index.js:1091`:
+  `      : (depth ? await queryDepth(moves, depth) : await solver.query(moves));`, error-logged at
+  `index.js:1108` `    logError('[scores]', err);`. The only pre-flight guard is a **board-full**
+  check, and it is scoped to the sparring path only — `index.js:1086`:
+  `    if (difficulty !== undefined && new Board(moves).colHeights.every(h => h >= 6)) {`.
+  A board that is **won but not full** — the actual OI-172 case — passes straight through it, and on
+  the hint path (`difficulty === undefined`) even a full board does. So this site is unprotected.
+
+The wrapper throw is unchanged: `c4solver-wrapper.js:25`
+`        entry.reject(new Error('Invalid position: "' + entry.moveString + '"'));`. A third file,
+`sparseLookahead.js:382`, already documents the same trap in a comment
+(`// the solver rejects it ("Invalid position") and there is nothing to classify.`) — read how that
+path handles it before writing a new guard, rather than inventing a third convention.
+
+## OI-173 — every hard page load silently wipes a signed-in user's sparring record (W/L/D) back to zero
+
+**Status**: deferred (blocker — silent data loss on a live account)
+**Area**: `connect-four/src/store/ProfileStore.jsx` (`switchToSupabase`), `connect-four/src/store/IndexedDBStore.js` (`migrateToSupabase`), `connect-four/server/userRoutes.js` (`/api/user/migrate`)
+**Discovered**: full-app agentic QA pass, 2026-09-08 (Task C8)
+
+**Repro**
+1. Sign in (any account whose local IndexedDB has no pre-sign-in sparring history).
+2. Play and finish a sparring game. Confirm `POST /api/user/sparring-record` → 204 and that
+   `users.sparring_record` incremented.
+3. Do **any** hard navigation or reload (browser refresh, typed URL, re-opening the PWA).
+4. Re-read `users.sparring_record`.
+
+**Observed**: immediately after a resign-loss the row read `{"D":0,"L":1,"W":0}`. One hard
+navigation later it read `{"D":0,"L":0,"W":0}` — the increment was silently erased. Across the whole
+QA session **5 completed sparring games** (all persisted correctly in the `games` table) left
+`/stats` → SPARRING showing **0V / 0D / 0E** the entire time, because every hard navigation
+re-triggered the wipe.
+
+**Root cause** (established at source — and note the code contradicts its own comment):
+`ProfileStore.jsx:85` is commented *"Migrate local state on first sign-in"*, but the guard beneath
+it is `if (currentStore instanceof IndexedDBStore)` (`:87`). A hard reload always re-mounts the
+provider with a **fresh `IndexedDBStore`** before the session check resolves, so that condition is
+true on **every** reload, not just first sign-in — the comment asserts a precondition the code never
+enforces. `migrateToSupabase` then POSTs the **stale local** `sparring_record` (still
+`{W:0,L:0,D:0}`, because post-sign-in results are written straight to `SupabaseStore` and never back
+to IndexedDB) to `/api/user/migrate`. Server-side, `userRoutes.js:543-547` does
+`if (body.sparring_record) { writeSparringRecord(...) }` — an unconditional **overwrite**, not a
+merge, and `{W:0,L:0,D:0}` is a truthy object so the guard does not skip it.
+
+**Related risk (flagged, not independently reproduced)**: `migrateToSupabase` migrates all five
+stores — `puzzle_attempts`, `session_stats`, `lesson_progress`, `sparring_record`, `streak` —
+through the identical overwrite pattern, so the same clobber plausibly applies to the other four.
+`lesson_progress` surviving this run does not disprove it; it was written after the last reload.
+
+**Re-verified 2026-09-09 — the `sparring_record` root cause HOLDS verbatim, and the "same clobber
+plausibly applies to the other four" guess is now RESOLVED at source. It was half right. The five
+stores do NOT travel an identical path — they take five different ones, and exactly two of them
+clobber.** This is the correction that most changes the fix.
+
+Client side unchanged: `ProfileStore.jsx:85` `    // Migrate local state on first sign-in` sits
+directly above `:87` `    if (currentStore instanceof IndexedDBStore) {`, inside
+`:83` `  async function switchToSupabase({ user }) {`. `IndexedDBStore.js:244`
+`  async migrateToSupabase() {` reads all five stores and POSTs them
+(`IndexedDBStore.js:269-277`).
+
+Server side, `POST /api/user/migrate` (`userRoutes.js:494`) dispatches per store, and the guards
+differ:
+
+| store | guard in `userRoutes.js` | writer | verdict |
+|---|---|---|---|
+| `puzzle_attempts` | `:515` `if (body.puzzle_attempts && body.puzzle_attempts.length > 0) {` | `writePuzzleAttempts` (`userHelpers.js:97`) — `supabase.from('puzzle_attempts').insert(rows)`, `23505` treated as success | **SAFE.** Insert-only; never deletes or replaces. Worst case is a duplicate row, never a wipe. |
+| `lesson_progress` | `:536` `if (body.lesson_progress && body.lesson_progress.length > 0) {` | `writeLessonProgress` (`userHelpers.js:70`) — `for (const row of lessonRows) { if (row.status !== 'complete') continue;` then an upsert that only sets `completed_at` | **SAFE.** Purely additive; it can mark a lesson complete but has no path that un-completes one. Its survival in the QA run was not luck. |
+| `session_stats` | `:527` `if (body.session_stats && body.session_stats.length > 0) {` | `writeSessionStats` (`userHelpers.js:55`) — `.upsert({ user_id: userId, date, stats }, { onConflict: 'user_id,date' })` | **LATENT.** Replaces the whole `stats` blob for a date. Post-sign-in stats go to `SupabaseStore`, so the local array is normally empty and the guard skips it — but a local row for today's date *would* overwrite the server's. Lower severity than the two below, not zero. |
+| `sparring_record` | `:543` `if (body.sparring_record) {` | `writeSparringRecord` (`userHelpers.js:142`) — `.update({ sparring_record: record })` | **BROKEN — the reproduced bug.** `IndexedDBStore.js:161` returns `{ W: 0, L: 0, D: 0 }` when the store is empty. That object is **truthy**, so the guard never skips, and the update is a whole-value replace. |
+| `streak` | `:550` `if (body.streak) {` | `writeStreak` (`userHelpers.js:157`) — `.update({ streak_count: streak.streak_count, last_active_date: streak.last_active_date })` | **BROKEN — same mechanism, previously untested, now established.** `IndexedDBStore.js:210` returns `{ streak_count: 0, last_active_date: null }` when the store is empty — again a **truthy object with zeroed contents**. So every hard reload also resets the signed-in user's `streak_count` to `0` and `last_active_date` to `null`. |
+
+**So the blast radius is two columns on `users`, not one and not five.** `streak_count` /
+`last_active_date` are wiped by the same reload that wipes `sparring_record`, by the same
+truthy-empty-default mechanism, and this was never observed in the QA run because nobody re-read the
+streak. Both live on the `users` row; both are whole-value `.update()`s.
+
+**If picked up (corrected and narrowed)**:
+1. **The one-time-marker gate is still the right primary fix** and it closes all five at once. Gate
+   on a persisted "migrated" flag, never on `currentStore instanceof IndexedDBStore`.
+2. **Add a second, independent guard, because a truthy-but-empty payload is the actual trigger.**
+   `if (body.sparring_record)` and `if (body.streak)` must test for *content*, not for
+   *object-ness* — e.g. skip when `W+L+D === 0`, and skip when `streak_count === 0 &&
+   last_active_date == null`. Do this **as well as** (1): it is what makes the endpoint safe against
+   any future caller, not just this one.
+3. Make the two `users`-column writers reconcile (write only when the server value is absent/empty,
+   or merge) rather than replace.
+4. **Verify `streak_count` and `last_active_date` explicitly**, alongside W/L/D, across two hard
+   reloads. Reading only `sparring_record` will show a green result while `streak` is still being
+   wiped.
+5. `puzzle_attempts` and `lesson_progress` need **no** clobber fix — do not add one, and do not
+   report them as unverified. Their safety is established above at `userHelpers.js:97` and `:70`.
+
+**Why deferred**: no real users exist pre-launch, so nothing is being lost today. **This one must be
+re-checked before launch** — after release it becomes silent, unrecoverable user-data loss, and the
+pre-launch disposability rule stops applying.
+**If picked up**: gate the migration on a genuine one-time marker (a persisted "migrated" flag on
+the account or in IndexedDB), not on the store's runtime type — the type is not evidence of first
+sign-in. Then make `/api/user/migrate` reconcile rather than overwrite (write only when the server
+row is absent/empty, or merge). Verify by reloading twice between two games, and check all five
+stores, not just `sparring_record`.
+
+## OI-174 — the post-game coach summary is drawn at random from an undifferentiated pool, so it can praise a badly-played game
+
+**Status**: deferred (minor). **Root cause below was WRONG and is corrected at the end of this
+entry (2026-09-09). Read that before touching anything.**
+**Area** (corrected): the phrase is selected **server-side** — `connect-four/server/index.js:2287-2290`
+(live path) and `connect-four/server/reconstructAnalysisFromBlunders.js:72-75` (cached path) — and
+the pool contents live in `connect-four/src/i18n/en.json` + `es.json`.
+`connect-four/src/screens/ReviewScreen.jsx` only renders `t(analysis.summaryPhraseKey)` and is
+**not** where the selection happens.
+**Discovered**: full-app agentic QA pass, 2026-09-08 (Task C6)
+
+**Repro**: finish a sparring game badly (low accuracy, several blunders) → read the coach line on the
+review screen.
+
+**Observed**: *"You played well. Let's find the edge."* shown for a game graded **17% accuracy with
+3 blunders**. The line is selected from a flat pool with no relation to the game's outcome or
+accuracy, so praise and criticism are equally likely on any game.
+
+**Root cause**: the summary phrase is chosen at random from a single undifferentiated pool; nothing
+keys the selection off the accuracy or blunder count that the same screen already displays.
+
+**Why deferred**: cosmetic tone defect, no wrong data — but it directly undercuts the coaching
+product's credibility, which is the reason to fix it rather than drop it.
+**If picked up**: bucket the pool by outcome/accuracy band and select within the matching bucket.
+Note the known constraint that coach audio is keyed by i18n key (not by text hash), so adding
+buckets adds keys that need TTS clips — a text-only change will ship silent for the new lines.
+
+**Re-verified 2026-09-09 — the SYMPTOM holds, the ROOT CAUSE above is WRONG.** The entry says *"the
+summary phrase is chosen at random from a single undifferentiated pool; nothing keys the selection
+off the accuracy or blunder count."* Both halves are false, and a fixer who believes them will add
+bucketing that **already exists** and never touch the string that actually caused the complaint.
+
+There are **two** pools and the selection **is** keyed off the blunder/suboptimal counts.
+`server/index.js:2287-2290`, verbatim:
+
+```
+  const phrasePool = (blunderCount === 0 && suboptimalCount === 0)
+    ? 'coach.spoken.sparring.review.clean'
+    : 'coach.spoken.sparring.review.mistakes';
+  const summaryPhraseKey = pickFromPool(i18nTranslations, phrasePool) ?? `${phrasePool}.0`;
+```
+
+The cached-analysis path duplicates the same rule at
+`reconstructAnalysisFromBlunders.js:72-75` (`const phrasePool = (cBlunder === 0 && cSuboptimal === 0)`
+…). **Two producers — a fix to one is invisible on the other.**
+
+The 17%-accuracy / 3-blunder game correctly resolved to `…review.mistakes`. The real defect is the
+**contents of that pool**, which spans outright praise to gentle criticism with nothing
+distinguishing them:
+
+```
+coach.spoken.sparring.review.mistakes = {
+  "0": "Good game. One parity mistake decided it.",
+  "1": "A few moments to learn from — let's look.",
+  "2": "You played well. Let's find the edge.",     <-- the line that was shown
+  "3": "Some tactical moments worth revisiting."
+}
+coach.spoken.sparring.review.clean = {
+  "0": "Clean game. Nothing to revisit.",
+  "1": "Excellent — no mistakes to review."
+}
+```
+
+So the existing bucketing is **binary — mistakes vs. no mistakes — and carries no accuracy band**:
+a 17%/3-blunder game and a 95%/1-suboptimal game draw from the identical four strings.
+Note also `"0"` (*"One parity mistake decided it."*) asserts a specific, singular cause on every
+game it lands on, which is a second wrong-content bug in the same pool.
+
+**If picked up (corrected)**:
+1. This is **not** "add bucketing where there is none" — it is **subdivide the existing `mistakes`
+   pool by accuracy/blunder band** (and drop or re-scope the over-specific `"0"`).
+2. Change **both** producers (`index.js:2287` and `reconstructAnalysisFromBlunders.js:72`) or the
+   review of a cached game keeps the old behaviour. `accuracy`, `blunderCount`, `suboptimalCount`
+   and `scored` are all already in scope at both sites.
+3. Add the new keys to `en.json` **and** `es.json`.
+4. The TTS constraint stands: `coach.spoken.*` is keyed by i18n key, so every new key needs a clip
+   or it ships silent.
+
+## OI-175 — resigning a live Play-Online game silently drops it: the save 500s and the user is never told
+
+**Status**: deferred (major)
+**Area**: `connect-four/src/screens/PlayOnlineScreen.jsx` (`saveAndReview`), `connect-four/server/userRoutes.js:749` (`POST /api/user/papergames/save-live-game`), `connect-four/server/papergamesImporter.js` (`fetchReplay`)
+**Discovered**: full-app agentic QA pass, 2026-09-08 (Task C9)
+
+**Repro**
+1. `/play-online` → register as a guest → join a tournament/open match (a real opponent connects;
+   moves exchange correctly — the live match loop itself works).
+2. **Resign** the game.
+3. Watch the network tab and the screen.
+
+**Observed**: `POST /api/user/papergames/save-live-game` → **500**. Server log:
+```
+[save-live-game] fetchReplay HTTP 404 uid=0KsHp65a9
+```
+The UI shows **no error**, does not navigate to `/game/<id>`, and offers no retry. The finished
+game is silently lost — from the player's point of view they resigned and nothing happened.
+
+**Root cause — partially established, and I am flagging the gap rather than guessing**:
+- **Established**: `fetchReplay` throws on any non-OK response —
+  `papergamesImporter.js:100`: `if (!res.ok) throw new Error(\`fetchReplay HTTP ${res.status} uid=${uid}\`)`.
+  `saveLiveGame` calls it unguarded at `papergamesImporter.js:256`, so the throw propagates and the
+  route answers 500. Client-side, `saveAndReview` has no error branch, which is why the failure is
+  invisible: the 500 is swallowed and no navigation happens.
+- **NOT established**: *why* Papergames returned 404 for that uid. Two candidates were not
+  distinguished in this pass — (a) the replay is not yet published at the instant a resign completes
+  (a timing/race issue, which would make this intermittent and fixable with a retry/backoff), or
+  (b) `roomUid` is not the right identifier for the replay endpoint (which would make it a
+  systematic bug, always failing). **Do not assume (a).** The QA pass observed exactly one resign,
+  so it cannot tell an always-fail from a race.
+
+**Why deferred**: needs the (a)-vs-(b) determination before any fix can be chosen, and that needs
+more live Play-Online games than this pass ran.
+**If picked up**: first settle the root cause — resign several live games and see whether the 404 is
+universal or intermittent, and separately fetch the replay for a known-good completed game by
+`roomUid` to test whether that identifier works at all. Only then choose between a retry/backoff and
+an identifier fix. Independently of that, add the missing client error branch in `saveAndReview` —
+a user must never lose a finished game with no message, whichever cause turns out to be right.
+
+**Re-verified 2026-09-09 — HOLDS, including its honest "NOT established" half. Nothing in the code
+settles (a) vs (b), and this static audit could not either. Do not let a fixer manufacture a root
+cause here.**
+
+The established half is exact: `papergamesImporter.js:100`
+`  if (!res.ok) throw new Error(\`fetchReplay HTTP ${res.status} uid=${uid}\`);` inside
+`:97` `async function fetchReplay(uid) {`, called unguarded at `:256`
+`  const replayData = await fetchReplay(roomUid);`. **New**: there are **three** `fetchReplay` call
+sites, not one — `:256`, `:284` and `:375` — so whichever fix is chosen (retry/backoff, identifier
+change) belongs inside `fetchReplay` or at all three, never only at the live-game path.
+
+The client gap is confirmed verbatim inside `PlayOnlineScreen.jsx:125`
+`  const saveAndReview = useCallback(async (result, finalMoveHistory) => {`: it branches on
+`      if (res.status === 401) {` (`:149`) and `      if (res.ok) {` (`:156`) and has **no `else`**.
+A 500 falls off the end of the `try`; the outer `    } catch (err) {` (`:159`) never fires, because
+`fetch` does not throw on a non-OK response. Hence total silence — exactly as observed.
+
+**One trap the entry did not record, and it will make a naive fix inert**: `:126-127`
+`    if (savedRef.current) return; // guard against double-fire` then `    savedRef.current = true;`
+run **before** the POST. Once a save 500s, none of the four call sites documented at `:122-124`
+(our win/draw, opponent win/draw, our resign, `game:finish`) can re-attempt it — only `retry()`
+clears the flag (`:69` `  // and the game:finish path for a normal win. Reset in retry().`). Any
+error branch added here must reset `savedRef.current = false` or route into `retry()`, or the retry
+affordance will do nothing.
+
+**OUT OF SCOPE 2026-09-09 — owner directive. Do not work on this.**
+The owner stated that the Papergames integration for playing another person inside our app "was
+just a test". OI-175 is entirely that surface (live Play-Online resign), so it is **not to be
+fixed** and is excluded from the QA-2026-09-08 remediation and its Phase 2 verification. Left open
+rather than closed: the defect is real, it is simply not work anyone should do until the owner says
+the live Play-Online feature is a product.
+
+**Partial findings from the investigation before it was halted** — recorded so nobody re-derives
+them, NOT as a completed diagnosis:
+- **Hypothesis (b) "roomUid is the wrong identifier" is FALSIFIED.** The same endpoint returns 200
+  for other rooms: `2Z6sbho7s` 200 (233896 bytes), `IC7oB2XZ8` 200, `F_KtgIbVx` 200, while the
+  failing `0KsHp65a9` 404s. All three `fetchReplay` call sites
+  (`papergamesImporter.js:256`, `:284`, `:375`) build the same URL and pass the same kind of
+  identifier — no mismatch in code. uid shape is identical too (9 chars, as 182 of 200 sampled rows).
+- **Hypothesis (a) "replay not yet published" is FALSIFIED for this uid.** Re-fetched ~24h after the
+  resign, still 404. A race resolves; this did not.
+- **The ROOM itself is gone, not just its replay**: `GET /api/room/0KsHp65a9` -> 404
+  `{"message":"Not Found"}`, while `GET /api/room/2Z6sbho7s` -> 200 (`status:"finished"`).
+- **Guest rooms DO exist publicly while live** — probed during two live guest games: `room=200`,
+  `replay=404` before any move. So "guest rooms are never in the REST API" is also falsified.
+- **Surviving hypothesis, UNPROVEN**: guest/tournament rooms are **pruned after the match**, so the
+  replay never becomes available (or only within a short window). `finish_reason` on 200 imported
+  rows is `{winner:165, 'time-up':29, resignation:6}` — resigned games from the owner's REGISTERED
+  account import fine, which is consistent with the guest-vs-registered distinction being the real
+  variable. **Not tested.**
+- Regardless of cause, the missing **client error branch** stands as a real defect: a user must
+  never lose a finished game with no message. Also unfixed, per the directive above.
+
+
+## OI-176 — `/admin/fv-suff` defaults to an evidence filename that does not exist, so it always opens on a raw "Error: 404 Not Found"
+
+**Status**: deferred (minor). **Root cause below was WRONG — the file exists. Corrected at the end
+of this entry (2026-09-09); the "If picked up" guidance was withdrawn with it.**
+**Area** (corrected): `connect-four/server/index.js` — `GET /api/admin/reason` (`:882`) and
+`GET /api/admin/reason/files` (`:872`), plus the client default at
+`connect-four/src/pages/AdminFvSuffPage.jsx:216`
+**Discovered**: full-app agentic QA pass, 2026-09-08 (Task C10)
+
+**Repro**: open `/admin/fv-suff` in this worktree → the page immediately fires a request for its
+hardcoded default evidence filename and renders **"Error: 404 Not Found"** as raw text.
+
+**Observed**: a guaranteed 404 on every load, surfaced as an unstyled error string rather than an
+empty state or a file picker.
+
+**Root cause**: the screen hardcodes a default evidence filename that is not present in this
+checkout. Evidence artifacts of that kind are timestamped debugging residue rather than a committed,
+stable-path file, so a hardcoded default name is guaranteed to go stale — the file it names is not
+tracked and does not exist here.
+
+**Why deferred**: admin-only, non-product surface; it does not affect any user-facing flow.
+**~~If picked up~~ — WITHDRAWN 2026-09-09.** The advice to "drop the default and render a file
+picker" would ship an **empty picker**, because the picker is broken by the same cause. See below.
+
+**Re-verified 2026-09-09 — the 404 HOLDS but the root cause above is WRONG. The file it names is
+not missing; it is one directory below where the endpoint looks.**
+
+The page's default is `AdminFvSuffPage.jsx:216`:
+`  const [file, setFile] = useState('reason_evidence_all.jsonl');`, fetched via `:239`
+`    fetch(\`${API}/api/admin/reason?file=${encodeURIComponent(file)}\`)`.
+
+That endpoint resolves the name against `server/scripts/` and strips any path —
+`index.js:883` `  const scriptsDir = join(dirname(fileURLToPath(import.meta.url)), 'scripts');`,
+`:884` `  const fileName = req.query.file || 'reason_evidence_all.jsonl';`,
+`:889` `    const rows = readFileSync(join(scriptsDir, basename(fileName)), 'utf-8')`.
+
+**But the file exists** — at `connect-four/server/scripts/fv_suff/reason_evidence_all.jsonl`.
+`server/scripts/` itself contains exactly one `.jsonl` (`board_coverage_1.jsonl`); every
+`fv_suff_answers_*.jsonl`, every `*_grades.jsonl`, `fv_eval_set.jsonl` and
+`reason_evidence_all.jsonl` live in the `fv_suff/` **subdirectory**. `basename()` throws the
+subdirectory away, so the read is `server/scripts/reason_evidence_all.jsonl` → `ENOENT` → the
+handler's `    if (err.code === 'ENOENT') return res.status(404)` (`:893`). Guaranteed 404, exactly
+as observed — but a **path** bug, not a stale-artifact bug.
+
+**The file picker is broken by the same cause, which is why the withdrawn advice would not work.**
+`:872-879` lists with a non-recursive `    const files = readdirSync(scriptsDir).filter(isReasonEvidenceFile).sort();`
+over the same `server/scripts/`, so it returns `[]`. The Eval-answers mode is identical:
+`:831-838` `GET /api/admin/fv-suff/files` does `readdirSync(scriptsDir)` and `:842-843`
+`  const scriptsDir = …'scripts');` / `  const answersName = req.query.answers || 'fv_suff_answers_all.jsonl';`
+— so **that** picker is empty too, and its default is a filename that genuinely does not exist
+anywhere.
+
+**If picked up (corrected)**: point all four handlers at `server/scripts/fv_suff/` (a single
+`scriptsDir` constant), keeping `basename()` for the traversal guard. That fixes the default fetch
+*and* repopulates both pickers in one change. Only after the directory is right is "drop the
+default in favour of a picker" a meaningful choice — and note the `isReasonEvidenceFile` /
+`isFvSuffAnswersFile` validators (`evalResultsHelpers.js:24-25`, unit-tested) already accept these
+names, so no validator change is needed. UNVERIFIED: whether any deployed environment ships that
+directory at all; this was checked only in this worktree.
+
+## OI-177 — a PAYING user still cannot open any paid challenge set: SetPickerScreen gates on a static constant, never on tier
+
+**Status**: deferred (blocker — a paid feature is undeliverable through its primary entry point)
+**Area**: `connect-four/src/screens/SetPickerScreen.jsx`
+**Discovered**: full-app agentic QA pass, 2026-09-08 (Task D3), predicted by the plan's coverage audit and then confirmed by driving a real sandbox purchase
+
+**Repro**
+1. Complete a real Paddle sandbox purchase (or set `users.tier = 'paid'` directly).
+2. **Reload the page** (mandatory — the entitlement cache is module-scoped).
+3. `/setpicker` → tap any paid set (`mixed`, `undercut`, `overcut`, `figure_7`, `j_shape`).
+
+**Observed**: the set is still rendered locked and the tap opens the **UpgradeModal** — inviting a
+user who has already paid to buy again. Verified at `tier = 'paid'`, post-reload, with
+`paddle_customer_id = ctm_01m21tmn8wnefb7cydb2tk065s` and a `payment_events` row present. The same
+category is reachable via a direct URL (`/challenge/undercut`), which proves the server-side
+entitlement is correct — it is only this screen that never asks.
+
+**Root cause** (established at source): `SetPickerScreen.jsx` contains **no reference to tier or
+entitlement anywhere in the file**. Locking is `locked={!set.free}` (`:170`) and the click handler
+branches on `set.free` (`:174`), where `set.free` comes from the **static** server-side
+`CHALLENGE_SETS` list, not the account. The file's own comment states the situation plainly at
+`:58-59`: *"This screen has no per-user tier state (its 'locked' sets come from the static
+CHALLENGE_SETS constant, not the account's tier)"*. So the lock is a property of the **set**, not of
+the **user**, and no amount of paying can change it.
+
+**Why this is a launch blocker rather than a defect**: the user pays $2.99/mo and the thing they
+bought remains visibly locked at the place they go to use it, with a prompt to buy it again. It is
+also the reason a QA pass that flipped tier could otherwise have concluded "paid sets are broken" —
+the plan's audit caught the false expectation before the run, which is how this got tested properly.
+
+**Why deferred**: no live users pre-launch, and the QA pass was scoped to observation.
+**MUST be fixed before launch.**
+**If picked up**: read the account tier/entitlement in `SetPickerScreen` (the entitlement helper is
+already used by other screens) and derive `locked` from `!set.free && tier !== 'paid'`, and branch
+the click handler the same way. Then re-verify **after a full reload**, since the entitlement cache
+is module-scoped and a soft invalidation can re-pin a stale value. Note this interacts with OI-170:
+even once unlocked, `overcut`, `figure_7` and `j_shape` currently draw **zero** puzzles, so fixing
+this alone leads a paying user to OI-171's blank screen. Fix both, and verify with a paid account
+end-to-end, not just by unlocking the tile.
+
+**Re-verified 2026-09-09 — HOLDS, entirely unchanged.** `grep -a "tier\|entitle" SetPickerScreen.jsx`
+still returns **no** tier or entitlement read anywhere in the file. The static comment is verbatim
+at `:58-59`:
+`  // This screen has no per-user tier state (its "locked" sets come from the`
+`  // static CHALLENGE_SETS constant, not the account's tier), so there's`
+and the gate is `:170` `              locked={!set.free}` with the click branch at `:174`
+`                set.free`.
+
+**One dependency claim in this entry is now STALE.** It says *"even once unlocked, `overcut`,
+`figure_7` and `j_shape` currently draw **zero** puzzles"*. That was true of the 2026-09-08 code and
+is no longer: OI-170's server fix removed `position IS NOT NULL` from the draw path, so those
+categories now draw at their `is_active` counts (49 / 21 / 20 locally). **The OI-171 dependency
+still stands** — a 403 or any empty draw still renders the same blank screen — but the "unlocking
+this leads into an empty category" reasoning does not. Verify the paid path end-to-end anyway; that
+has never been driven in a browser.
+
+## OI-178 — after a successful payment the UpgradeModal never reaches "success" and never auto-dismisses
+
+**Status**: deferred (major)
+**Area**: `connect-four/src/components/UpgradeModal.jsx`, `connect-four/src/lib/checkoutReturnFlow.js`, `connect-four/src/lib/useUpgradeCheckout.js`, call site `connect-four/src/screens/SettingsScreen.jsx`
+**Discovered**: full-app agentic QA pass, 2026-09-08 (Task D1) — a real Paddle sandbox purchase
+
+**Repro**: Settings → Upgrade CTA → complete a sandbox checkout with card `4242 4242 4242 4242`.
+
+**Observed**: the payment **succeeds** and everything else behaves correctly — the Paddle overlay
+closes in place, the URL stays `/settings`, the `CheckoutReturnBanner` reaches its activated state,
+the underlying screen re-renders Pro with no manual reload, and the DB shows `tier='paid'`,
+`paddle_customer_id='ctm_01m21tmn8wnefb7cydb2tk065s'`, plus a `payment_events` row
+(`event_type=upgrade_completed_track`, `transactionId=txn_01m21tmnazahjrcr1d0b8g3zbg`).
+But the **UpgradeModal sheet itself stays open and interactive in its pristine pre-payment "Become
+Pro" idle state, indefinitely** — it never shows success and never auto-dismisses. It had to be
+closed manually via "Maybe later". A user who has just paid is left looking at a buy-it-now sheet.
+
+**Relationship to OI-59** — this is the same *symptom* as OI-59 ("UpgradeModal didn't auto-dismiss
+after a real staging payment", marked **resolved 2026-07-18**) but reached by a **different race**:
+OI-59's original cause is fixed, and unlike OI-59 the modal here never even transitions to the
+success state — it stays on pristine idle, meaning its `uiState` prop is never advanced at all.
+Do **not** treat OI-59 as covering this; do not reopen OI-59 either. Screenshot evidence:
+`qa-evidence/d1-upgrademodal-stuck-idle-post-payment.png`.
+
+**Root cause: NOT established.** The verification path demonstrably worked (the banner activated and
+the screen re-rendered Pro from the same `checkoutReturnFlow` state), so the failure is specifically
+in the hand-off from that state to **this modal instance's** `uiState`, not in the payment or
+verification. Whether the modal unsubscribed, was re-mounted with a fresh `idle` local state, or
+never received the `onUiStateChange` call was not distinguished in this pass. Recorded as unknown
+rather than guessed.
+**If picked up**: instrument `uiState` on the `SettingsScreen` call site across a real sandbox
+purchase and observe whether `checkoutReturnFlow` transitions while the modal is mounted, and
+whether the modal re-mounts mid-flow. Note the two other tier-gated call sites (`SagaScreen`,
+`SetPickerScreen`) pass `uiState`/`onUiStateChange` the same way and were not payment-tested — check
+all of them, not just Settings.
+
+**Re-verified 2026-09-09 — HOLDS. The root cause is still NOT established and this entry must stay
+that way.** What the audit *did* confirm, and one candidate it can now name with citations:
+
+**Confirmed as described.** All three call sites really do wire it identically:
+`SettingsScreen.jsx:46` `const [upgradeUiState, setUpgradeUiState] = useState('idle');` + `:63`
+`    return subscribeCheckoutReturn((state) => {` → `      if (state === 'activated') { setTier('paid'); setUpgradeUiState('success');`;
+`SagaScreen.jsx:163`/`:174` and `SetPickerScreen.jsx:53`/`:63` are the same shape, passing
+`uiState={upgradeUiState}` at `:323` and `:170`-region respectively. The modal is genuinely
+controlled: `UpgradeModal.jsx:34` `  const uiState = controlledUiState ?? internalUiState;` and
+`:35` `  const setUiState = onUiStateChange ?? setInternalUiState;` — so **when a caller passes
+`onUiStateChange`, every internal `setUiState(...)` writes the PARENT's state.** The auto-dismiss
+exists and is keyed only on `'success'` (`:55-59`).
+
+**A third candidate hypothesis, not previously named, supported by code but NOT proven:** the
+modal's own dismissed-event listener may be racing the success transition and winning.
+`UpgradeModal.jsx:80-86`:
+
+```
+  useEffect(() => {
+    function handleDismissed() {
+      if (uiState === 'loading') setUiState('idle');
+    }
+    window.addEventListener(PADDLE_CHECKOUT_DISMISSED_EVENT, handleDismissed);
+```
+
+and `useUpgradeCheckout.js:61` dispatches that event on **`checkout.closed`**, unconditionally —
+it is not gated on whether the checkout completed:
+
+```
+          } else if (event.name === 'checkout.closed' || event.name === 'checkout.error') {
+            …
+            window.dispatchEvent(new CustomEvent(PADDLE_CHECKOUT_DISMISSED_EVENT));
+```
+
+The QA run's own observation is that after a **successful** payment *"the Paddle overlay closes in
+place"*. If Paddle emits `checkout.closed` after `checkout.completed`, `handleDismissed` fires while
+`uiState === 'loading'` and calls `setUiState('idle')` — which, because `onUiStateChange` is
+provided, drives the **parent** back to `'idle'`. That matches the observed symptom precisely,
+including the detail the entry stresses: the modal sits on **pristine idle**, never on success.
+It also explains why the banner and the screen behind still reach the paid state — they read
+`checkoutReturnFlow` directly and are not routed through the modal's `uiState`.
+
+**This is a hypothesis, not a finding.** It is not established that Paddle emits `checkout.closed`
+after a successful in-place completion, nor whether it lands before or after the
+`subscribeCheckoutReturn('activated')` callback. Both are observable in one instrumented sandbox
+purchase — log every `event.name` from `useUpgradeCheckout.js:58`'s `eventCallback` alongside every
+`setUpgradeUiState` call, with timestamps, and read the ordering. **Do that before patching.** The
+re-mount and never-subscribed hypotheses the entry already names remain live.
+
+**ROOT CAUSE ESTABLISHED 2026-09-09 — hypothesis 3 CONFIRMED by an instrumented sandbox purchase
+(txn_01m238300kdxdnzsvc0ddxgrnk), with a sharper mechanism than this entry proposed.**
+
+The app's OWN `paddle.Checkout.close()`, called in `handleCheckoutCompleted`'s `finally`
+(`useUpgradeCheckout.js:126-127`), makes Paddle emit `checkout.closed` **synchronously inside that
+call**. The eventCallback (`:61-71`) dispatches `PADDLE_CHECKOUT_DISMISSED_EVENT` ungated by
+completion, also synchronously. So `UpgradeModal.jsx:80-86`'s `handleDismissed` runs in the **same
+task** as the `setUpgradeUiState('success')` issued ~1ms earlier — before React re-rendered and
+re-ran the `[uiState]` effect — so its closure still reads `uiState === 'loading'`, the guard
+passes, and because `onUiStateChange` is supplied it writes `'idle'` into the **parent**. Both
+writes land in one React batch, so **`'success'` is never committed at all**. That is why the sheet
+sits pristine rather than showing an error.
+
+Observed timeline (abridged; full log in the session's investigation file):
+```
+152309  setCheckoutReturnState                        failed
+152309  SettingsScreen.setUpgradeUiState              timeout
+152310  finally:before Checkout.close
+152310  paddle.event                         checkout.closed   <<< SYNCHRONOUS
+152310  UpgradeModal.handleDismissed closure uiState=  loading  <<< STALE
+152310  SettingsScreen.setUpgradeUiState              idle
+152322  SettingsScreen.upgradeUiState NOW             idle      ('timeout' never committed)
+```
+
+**The other two hypotheses are RULED OUT by observation, not by argument:**
+- *Re-mount with a fresh `idle`*: `UpgradeModal MOUNT` appears only at t=17.6s (initial open +
+  StrictMode double). **No UNMOUNT/MOUNT after `checkout.completed` at t=150.0s.** The same
+  instance survives the flow, and being controlled it has no local state to reset.
+- *Never subscribed / never received `onUiStateChange`*: the subscription callback DID fire and DID
+  call `setUpgradeUiState`, with a stack proving `checkoutReturnFlow.js:45 -> SettingsScreen.jsx:97/100`.
+  The hand-off works; it is overwritten 1ms later.
+
+**Correction to this entry's blast radius: it is FIVE call sites, not three.**
+`SettingsScreen.jsx:586-591`, `SagaScreen.jsx:320-325`, `SetPickerScreen.jsx:208-213`,
+`PostSetSummaryScreen.jsx:272-277` and `DeepRevealPane.jsx:466-471` all pass
+`onUiStateChange={setUpgradeUiState}` and set `'success'` from a `subscribeCheckoutReturn` callback
+— the exact failing configuration. UNVERIFIED by experiment (only `SettingsScreen` was driven), but
+code-identical. The defect lives in the shared component + shared hook, so **one fix covers all
+five**.
+
+**Recommended fix**: in `useUpgradeCheckout.js`, track a module-level `completedInFlight` flag set
+in the `checkout.completed` branch, and dispatch `PADDLE_CHECKOUT_DISMISSED_EVENT` from the
+`checkout.closed`/`checkout.error` branch only when `!completedInFlight` (clearing it there). That
+matches the event's own documented purpose (`:19-21`: "closes/errors **without a completed
+payment**") — today it also fires on the app's programmatic close. Defence in depth: have
+`handleDismissed` read a ref rather than a closure, and/or refuse to downgrade once the shared store
+has reached a terminal state. **Do NOT drop the `Checkout.close()`** — it is load-bearing for FR-003.
+
+## OI-183 — `/api/paddle/verify-transaction` answered `not_completed` ~2.3s after a successful sandbox payment
+
+**Status**: open (major — unclear; root cause UNKNOWN)
+**Area**: `connect-four/server` — the Paddle verify-transaction path
+**Discovered**: 2026-09-09, incidentally, during the instrumented OI-178 investigation.
+
+**Observed**: after a real sandbox card payment succeeded (transaction
+`txn_01m238300kdxdnzsvc0ddxgrnk`), `POST /api/paddle/verify-transaction` returned
+`{"activated":false,"reason":"not_completed"}` roughly 2.3 seconds later, driving the client down
+its `failed` -> `timeout` branch instead of `activated`.
+
+**Root cause: UNKNOWN.** Not investigated — it was outside the OI-178 experiment's scope and is
+recorded here rather than guessed at. Candidates NOT distinguished: (a) a genuine race, the
+transaction not yet `completed` on Paddle's side 2.3s after card submission, which would make this a
+polling/backoff gap rather than a bug; (b) a mis-read of the transaction status in the handler;
+(c) sandbox-specific timing that would not reproduce in production.
+
+**Why this is NOT a duplicate of OI-178**: OI-178's modal defect reproduces **identically on the
+`activated` branch** — the investigation forced `setCheckoutReturnState('activated')` and the sheet
+still clobbered to pristine. So the two are independent; fixing OI-178 will not fix this, and this
+did not cause OI-178.
+
+**If picked up**: first establish whether it is a race — re-run a sandbox purchase and poll
+`verify-transaction` on an interval, recording the first timestamp at which it flips to
+`activated`. If it flips within a few seconds, the fix is client-side backoff, not a handler change.
+Do not add a retry before establishing which it is.
+
+**Deploy/user impact**: on localhost no webhook can reach the server, so a local purchase never
+activates by that route regardless; this may be partly a local-environment artifact. **Not verified
+against staging or production.**
+
+## OI-179 — /pricing gives a paying user no acknowledgement that they are already Pro
+
+**Status**: deferred (minor)
+**Area**: `connect-four/src/screens/PricingScreen.jsx`
+**Discovered**: full-app agentic QA pass, 2026-09-08 (Task D3)
+
+**Repro**: at `tier = 'paid'` (post-reload), navigate to `/pricing`.
+
+**Observed**: the page renders exactly as it does for a free user — plan toggle and a "Become Pro"
+purchase CTA — with nothing indicating the visitor already has an active subscription.
+
+**Root cause**: `PricingScreen` deliberately has **no tier condition** on its CTA (`:221`) — it is
+the one upgrade surface designed to render regardless of tier, so that a visitor arriving via
+Paddle's payment link (`/pricing?_ptxn=…`) always gets a working checkout. The design decision is
+sound; the omission is that no "you're already Pro" state was added alongside it.
+
+**Why deferred**: cosmetic; a paying user is confused, not blocked, and the billing portal is
+reachable from Settings.
+**If picked up**: add an "already Pro" banner plus a link to the billing portal when the account is
+entitled, while **keeping** the purchase CTA reachable for the `_ptxn` deep-link case — do not gate
+the CTA on tier, or the payment-link flow breaks (that is what `:221` is protecting).
+
+**Re-verified 2026-09-09 — HOLDS, and stronger than stated.** `grep -ac "tier" PricingScreen.jsx`
+returns **0** — the file contains no occurrence of the word `tier` at all, so "no tier condition on
+its CTA" understates it: the screen has no tier awareness of any kind, which is why there is nothing
+to hang an "already Pro" state on yet. The CTA is `:219-221`: `            <button` /
+`              type="button"` / `              onClick={handleCheckoutClick}` — unconditional, with
+no surrounding tier branch. The guidance to keep it reachable stands unchanged; adding the banner
+means introducing the first entitlement read into this file, not adding a condition to an existing
+one. Add the new copy to `es.json` as well as `en.json`.
+
+## OI-180 — several interactive controls are below the 44×44 minimum tap target on mobile
+
+**Status**: deferred (minor)
+**Area**: `connect-four/src/screens/PastGamesListScreen.jsx` (sort/filter chips); the audio-toggle icon buttons shared by `GameScreen` and `ChallengeScreen`
+**Discovered**: full-app agentic QA pass, 2026-09-08 (Task F1), viewport **390×844** (mobile, touch, dpr 2)
+
+**Repro**: emulate a 390×844 mobile viewport, then visit `/pastGames` and any board screen
+(`/game` or `/challenge/immediate_threat`) and measure the control heights.
+
+**Observed**
+- `/pastGames` sort/filter chips render **31.5–33px tall**.
+- The three audio-toggle icon buttons (SFX / music / speech) render **36×36** on **both**
+  `GameScreen` and `ChallengeScreen`.
+
+Both are below the 44×44 minimum tap target, on controls a user is expected to hit repeatedly
+mid-game. No horizontal overflow was found anywhere in the mobile sweep — the layout itself holds;
+this is purely hit-area sizing.
+
+**Root cause**: the controls are sized from their content/font metrics with no minimum tap-target
+floor. ~~The audio toggles are a single shared component rendered by two screens, which is why the
+same 36×36 appears in both places — one fix covers both call sites.~~ **WRONG — struck 2026-09-09;
+see the re-verification below. There is no shared component; the styles are duplicated inline.**
+
+**Why deferred**: usability rather than breakage; every control is still reachable with a careful tap.
+**If picked up**: set `min-height`/`min-width: 44px` on the chip and icon-button styles (padding, not
+font size, so the visual weight is unchanged) and re-measure at 390×844. Use `emulate` with
+`viewport=390x844x2,mobile,touch` — `resize_page` silently floors the width at 500px and will not
+reproduce this (that cost the QA agent real time; see the run's Next-session tuning).
+
+**Re-verified 2026-09-09 — the measurements HOLD; the "one shared component" root cause is WRONG,
+and following it would leave half the bug shipped.** There is no shared audio-toggle component
+anywhere under `src/components/`. The 36×36 style object is **duplicated inline in six places**,
+three per screen:
+
+- `GameScreen.jsx:276`, `:292`, `:308` — each `            width: 36, height: 36, borderRadius: 10, border: 'none',`
+- `ChallengeScreen.jsx:1040`, `:1057`, `:1074` — the same literal, plus a trailing `flexShrink: 0,`
+
+They are recognisably copy-pasted (identical `aria-label={sfxEnabled ? t('audio.muteSfx') : t('audio.unmuteSfx')}`
+handlers at `GameScreen.jsx:272` and `ChallengeScreen.jsx:1034`), which is exactly why the same
+wrong size appears twice — **not** because one component serves both. An agent that fixes
+`GameScreen` and declares "one shared component, both call sites covered" will ship
+`/challenge/<cat>` still at 36×36, and its own unit test will pass.
+
+**If picked up (corrected)**: expect **six** edits, or extract the button into a real shared
+component first (the cleaner fix, and the one the entry mistakenly assumed already existed). The
+chips are separate again: `PastGamesListScreen.jsx:238` `                padding: '7px 0',` (sort row)
+and `:267` `                padding: '7px 14px',` (filter row), neither with any `minHeight` —
+two more edits. **Verify all four screens/rows at 390×844, not one.**
+
+**Batching note**: this makes OI-180 collide with OI-163 (`GameScreen.jsx`) and OI-171
+(`ChallengeScreen.jsx`), which sit in different batches. Sequence it after both.
+
+## OI-181 — signed-out direct navigation to a gated screen bounces to onboarding before the screen's own unauthenticated branch can render
+
+**Status**: deferred (minor)
+**Area**: `connect-four/src/App.jsx` (the anonymous first-run auto-route effect) vs. the per-screen unauthenticated branches
+**Discovered**: full-app agentic QA pass, 2026-09-08 (Task F4)
+
+**Repro**: sign out, then navigate directly to `/saga`, `/settings` or `/stats` by URL.
+
+**Observed**: the app bounces to the onboarding home screen before the target screen's own
+signed-out branch renders. The **net gating outcome is correct** — no content leaks and no stale
+entitlement survives the sign-out — but the screens' unauthenticated states are unreachable by URL.
+The per-lesson AuthModal lock, for instance, is only reachable via the header menu, not by
+navigating to `/saga`.
+
+**Root cause**: the anonymous first-run auto-route fires on `sessionChecked && !session` regardless
+of the requested URL, so for a signed-out visitor it wins over whatever route was asked for. This is
+the same mechanism verified in Task A1 (a fresh reset always re-triggers the auto-route on the next
+full page load) — correct by design for a genuine first run, but it also captures a deliberate
+signed-out deep link.
+
+**Why deferred**: the security-relevant behavior (gating) is right; only the signed-out deep-link
+experience is degraded, and a signed-out user reaching `/saga` by link lands somewhere sensible.
+**If picked up**: decide whether a signed-out deep link should be honored (render the screen's own
+unauthenticated branch) or stashed and replayed after sign-in — `postLoginReturn.js`'s
+`stashReturnTo`/`consumeReturnTo` already implements exactly that pattern for the gated CTAs and
+would be the consistent mechanism. Do not simply disable the auto-route; it is what makes the
+genuine first-run experience work (Task A1 PASSes on it).
+
+**Re-verified 2026-09-09 — HOLDS.** The predicate is in a separate, testable helper the entry did
+not name: `src/lib/onboardingRouting.js:27-30`, verbatim —
+
+```
+export function shouldAutoRouteToOnboarding({ sessionChecked, session, onboardingStatus }) {
+  if (!sessionChecked || session) return false;
+  return onboardingStatus === 'not_encountered' || onboardingStatus == null;
+}
+```
+
+**It takes no route/URL argument at all**, which is precisely the entry's claim, now established at
+source rather than inferred from behaviour. The caller is `App.jsx:170`
+`      if (shouldAutoRouteToOnboarding({ sessionChecked, session, onboardingStatus: profile.onboarding_status })) {`
+inside the effect guarded at `:165` `    if (!sessionChecked || session) return;`.
+**Area corrected**: the fix belongs in `src/lib/onboardingRouting.js` (thread the requested route
+into the predicate, where it is unit-testable) with `src/App.jsx` supplying it — not in `App.jsx`
+alone. `ANONYMOUS_ONLY_SCREENS` (`onboardingRouting.js:38`) is the existing precedent for
+route-awareness in this module.
+
+## OI-182 — a puzzle/lesson row whose `move_string` is a finished board 500s `/api/evaluate-move` against the live solver
+
+**Status**: open (major — latent; no evidence yet that a live `puzzles` row is affected)
+**Area**: `connect-four/server/evaluateMoveHandler.js` (puzzle/lesson grading path),
+`connect-four/tests/integration/singleAnswerCategoriesAccepted.test.js` (the fixtures that expose it)
+**Discovered**: 2026-09-09, while fixing OI-172 (batch C of the QA-2026-09-08 remediation). Found by
+the fix agent, confirmed by the coordinator against the shipped test fixtures.
+
+**Repro**: `POST /api/evaluate-move` with a `movestring` that is already won, on the **puzzle/lesson**
+path (`aiMove` absent/false) — i.e. any request whose board came from a `puzzles.move_string` or a
+lesson inline-challenge board that is terminal.
+
+**Observed (by construction, not yet observed live — see "Unverified")**: `buildEvaluationResponse`
+calls `await solver.query(movestring)` for every non-empty board on this path. `c4solver` returns
+nothing for a finished position and `c4solver-wrapper.js:25` turns that into
+`Invalid position: "<ms>"`, which the handler surfaces as a **500** — the identical mechanism as
+OI-172, one path over.
+
+**Root cause**: OI-172's terminal guard in `buildEvaluationResponse` is **deliberately scoped to
+`isAiMove`**. The puzzle/lesson path was left unguarded on purpose, because narrowing it there would
+change puzzle grading well beyond OI-172's scope and because the taught boards involved are
+legitimate teaching positions, not bad data.
+
+**The evidence that this is real, and the reason it has never been seen**: two *shipped* test
+fixtures are terminal boards —
+`tests/integration/singleAnswerCategoriesAccepted.test.js`'s figure_7 `041015021326` and undercut
+`334455221100`, **both of which print `[GAME OVER]` under `./visualize_board.sh`**. They pass today
+only because that test injects a solver **stub** which happily answers a board the real c4solver
+rejects. So the suite is green over a board the production solver would refuse. This is a
+green-test-over-a-real-defect: the stub tests the fixture's expectations, not the live path.
+
+**Why deferred**: out of batch C's scope, and the correct fix is a content/authoring question, not a
+one-line guard — deciding whether a terminal taught board is *ever* legitimate to grade, and if not,
+which rows/fixtures must be re-authored.
+**If picked up**:
+1. First establish blast radius against real data — query `puzzles` for any `is_active` row whose
+   `move_string` is terminal (`Board#hasWon(1) || hasWon(2)`, or length >= 42). If the count is 0,
+   this is fixture-only and drops to minor.
+2. Then decide: either extend `isTerminalPosition`'s guard to the puzzle path and re-author the
+   offending fixtures/rows, or establish that a terminal taught board is legitimate and make the
+   grading path answer it without the solver.
+3. Do **not** "fix" this by making `c4solver-wrapper.js` accept terminal positions — its rejection
+   is correct (OI-172, invariant I0).
+
+**Unverified**: not reproduced against a live solver over HTTP. The claim rests on reading
+`buildEvaluationResponse`, `c4solver-wrapper.js:25`, and the two fixtures' `[GAME OVER]` boards.
+No `puzzles` row has been checked — step 1 above is exactly that check.
+
+## OI-184 — a coach clip `awaiting_approval` cannot exist without turning `test:fast` red, so the tool's own approval workflow is unrepresentable
+
+**Status**: open (minor — process/tooling contradiction, no user-facing symptom)
+**Area**: `connect-four/tests/unit/coachSpokenNamespace.test.js` (the orphan assertion) vs.
+`connect-four/scripts/generate-tts.js` (the approval workflow)
+**Discovered**: 2026-09-09, hit directly while generating clips for OI-174's new coach keys.
+
+**Repro**
+1. Add a `coach.spoken.*` key to `src/i18n/en.json` + `es.json`.
+2. `node --env-file=server/.env scripts/generate-tts.js --sync --lang all` — the key is added as
+   `needs_audio`.
+3. `node --env-file=server/.env scripts/generate-tts.js --key <the.key> --lang all --yes` — the mp3
+   is written and the registry entry becomes **`status: "awaiting_approval"`**.
+4. `npm run test:fast`.
+
+**Observed**: two failures —
+`[en] every manifest slug resolves to an mp3 on disk, and no mp3 is orphaned` and its `[es]` twin:
+`mp3s not in the manifest: ["coach--spoken--sparring--review--mistakesStrong--0", ...]`.
+
+**Root cause**: the manifest is, by construction, **approved slugs only** — `saveManifest`
+(`scripts/generate-tts.js:120-129`) filters `e.status === 'approved'`. But the orphan assertion
+(`tests/unit/coachSpokenNamespace.test.js:82-93`) treats **every** on-disk mp3 absent from the
+manifest as an orphan, with no exemption for `awaiting_approval`. Since approval is a human act
+performed in `/admin/audio` (the registry's `status`/`approved_at` exist precisely to record that a
+human listened), there is a mandatory window in which a correctly-generated clip is on disk,
+correctly not in the manifest, and **the suite is red**. The workflow the tool implements cannot be
+represented in a green tree.
+
+**Why this is worth fixing rather than working around**: it pushes whoever adds a coach line toward
+one of two bad outcomes — hand-editing `status` to `approved` (falsifying the record that a human
+listened, which is the registry's only purpose), or deleting the generated mp3s and shipping the
+line silent. It also means the generation step cannot be done in the same change as the copy.
+
+**If picked up**: exempt `awaiting_approval` slugs from the orphan assertion — the assertion's real
+intent is to catch mp3s belonging to **no registry entry at all** (genuinely dead files), which is
+still worth testing. Check the intent against `docs/architecture/coach-audio-conventions.md` before
+changing it, and keep the "manifest slug with no mp3" half of the test exactly as-is.
+
+**What was done in this session instead** (deliberately NOT the fix above, to avoid weakening a
+pre-existing test to accommodate new work): the 8 generated clips for
+`coach.spoken.sparring.review.mistakes{Strong,Rough}.{0,1}` x {en,es} were **quarantined** out of
+the tree and their registry entries reverted to `needs_audio`. The clips are preserved (not
+deleted) — see `docs/deployment_steps.md`. Those four summaries therefore currently ship **text
+without audio**, which is the pre-existing behaviour for any un-approved coach key.
