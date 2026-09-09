@@ -67,6 +67,7 @@
     "youWon": "¡Ganaste! 🎉",
     "aiWon": "Ganó la IA.",
     "draw": "Es un empate.",
+    "resignNoMoves": "La partida todavía no empezó — jugá una ficha primero, o usá Atrás para salir.",
     "newGame": "Nueva partida",
     "difficulty": "Dificultad",
     "chooseDifficulty": "Elegí la dificultad",
@@ -129,6 +130,7 @@
   "upgrade": {
     "heading": "Hacete Pro",
     "body": "Actualizá a Pro para revelaciones profundas ilimitadas.",
+    "bodyLessons": "Desbloqueá todas las lecciones Pro, más revelaciones profundas ilimitadas.",
     "price": "$2.99/mes · $21.99/año",
     "tax": "Los impuestos pueden aplicarse y se calculan al finalizar la compra.",
     "links_pricing": "Precios",
@@ -158,6 +160,8 @@
     "proQuota": "Revelaciones Profundas ilimitadas",
     "sharedFeatures": "Puzzles, lecciones y partidas de práctica",
     "taxNote": "Todos los precios están en dólares estadounidenses. Pueden aplicarse impuestos, calculados al finalizar la compra.",
+    "alreadyPro": "Ya sos miembro Pro — gracias por bancar DecodeC4.",
+    "manageBilling": "Gestionar la suscripción",
     "checkoutCta": "Hacete Pro",
     "degraded": "Los precios no están disponibles por el momento. Volvé a intentarlo en un rato.",
     "legalNote": "¿Buscás el Merchant of Record, la política de reembolsos o los términos? Mirá la {{link}}.",
@@ -580,6 +584,14 @@
             "1": "Algunos momentos para aprender — vamos a verlos.",
             "2": "Jugaste bien. Busquemos el margen.",
             "3": "Algunos momentos tácticos que vale la pena repasar."
+          },
+          "mistakesStrong": {
+            "0": "Partida afilada. Te faltó un solo detalle para la perfección.",
+            "1": "Jugaste fuerte de principio a fin — pulamos ese último margen."
+          },
+          "mistakesRough": {
+            "0": "Fue una partida dura. Repasemos qué salió mal.",
+            "1": "Se te escaparon varios momentos clave — hay mucho para aprender acá."
           }
         },
         "outcome": {
@@ -708,6 +720,15 @@
     "leave_leave": "Salir",
     "next": "Siguiente →",
     "try_again": "Intentar de nuevo",
+    "locked": {
+      "body": "Este set de desafíos es parte de Pro. Hazte Pro para desbloquearlo."
+    },
+    "empty": {
+      "body": "Todavía no hay posiciones disponibles para este set."
+    },
+    "error": {
+      "body": "No pudimos cargar estas posiciones. Revisa tu conexión e inténtalo de nuevo."
+    },
     "quality": {
       "optimal": "Óptimo",
       "suboptimal": "Subóptimo",
@@ -769,17 +790,17 @@
     "claimeven": {
       "optimal": {
         "summary": {
-          "0": "Esa es la columna de Claimeven que asegura el empate de Gris."
+          "0": "Esa es la columna de Claimeven: le asegura a Gris las casillas pares."
         }
       },
       "suboptimal": {
         "summary": {
-          "0": "Sigue siendo empate, pero la columna clave de Claimeven era más fuerte."
+          "0": "Es jugable, pero la columna clave de Claimeven era más fuerte."
         }
       },
       "blunder": {
         "summary": {
-          "0": "Esa columna renuncia a la estrategia de empate Claimeven de Gris."
+          "0": "Esa columna abandona el emparejamiento Claimeven de Gris."
         }
       }
     },

@@ -38,6 +38,7 @@ export function SettingsScreen({ go, goBack }) {
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [qaEmailStatus, setQaEmailStatus] = useState(null);
 
   // ── Subscription section (D3) ───────────────────────────────────────────
   const [tier, setTier] = useState('free');
@@ -314,6 +315,41 @@ export function SettingsScreen({ go, goBack }) {
     window.location.reload();
   }
 
+  // spec 058 (e2e-qa-enablement) FR-013: sets a confirmed email on the current
+  // (typically anonymous) QA account so Paddle checkout can be driven without
+  // a `customer` param collision. Dev-gated like handleDevReset; POSTs to the
+  // requireLocalhost-only /api/admin/qa-set-email endpoint (T013).
+  async function handleSetQaEmail() {
+    setQaEmailStatus(null);
+    const userId = session?.user?.id;
+    if (!userId) {
+      setQaEmailStatus({ ok: false, message: 'No signed-in session — sign in first.' });
+      return;
+    }
+    try {
+      // Per-account address, not a fixed one: Supabase auth emails are UNIQUE
+      // and resetQaAccount deliberately never clears the email, so a hardcoded
+      // address collides on the second QA account to press this button and
+      // surfaces only as a generic 500. The userId suffix keeps every run's
+      // address distinct while staying a recognisable QA address.
+      const qaEmail = `qa-agent+${userId.slice(0, 8)}@example.test`;
+      const res = await fetch(`${API}/api/admin/qa-set-email`, {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId, email: qaEmail }),
+      });
+      if (res.ok) {
+        setQaEmailStatus({ ok: true, message: `QA email set: ${qaEmail}` });
+      } else {
+        const body = await res.json().catch(() => ({}));
+        setQaEmailStatus({ ok: false, message: body.error || `Failed (${res.status})` });
+      }
+    } catch (err) {
+      setQaEmailStatus({ ok: false, message: err.message || 'Request failed' });
+    }
+  }
+
   const devReset = import.meta.env.DEV && (
     <div style={{ marginTop: 8, paddingTop: 16, borderTop: '1px dashed var(--ink-faint)' }}>
       <button
@@ -329,6 +365,27 @@ export function SettingsScreen({ go, goBack }) {
       >
         🛠 Dev: clear IndexedDB &amp; sign out
       </button>
+      <button
+        type="button"
+        onClick={handleSetQaEmail}
+        style={{
+          width: '100%', padding: '10px 0', marginTop: 8,
+          borderRadius: 12, border: '1.5px dashed #aaa',
+          background: 'transparent', cursor: 'pointer',
+          fontFamily: 'var(--font-body)', fontSize: 13,
+          color: 'var(--ink-soft)',
+        }}
+      >
+        🛠 Dev: Set QA email
+      </button>
+      {qaEmailStatus && (
+        <p style={{
+          marginTop: 6, fontSize: 12, textAlign: 'center',
+          color: qaEmailStatus.ok ? 'var(--ink-soft)' : '#c0392b',
+        }}>
+          {qaEmailStatus.message}
+        </p>
+      )}
     </div>
   );
 

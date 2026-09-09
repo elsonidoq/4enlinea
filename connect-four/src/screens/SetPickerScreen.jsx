@@ -5,6 +5,7 @@ import { TopBar } from '../components/TopBar.jsx';
 import { SetCard } from '../components/SetCard.jsx';
 import { UpgradeModal } from '../components/UpgradeModal.jsx';
 import { useUpgradeCheckout } from '../lib/useUpgradeCheckout.js';
+import { getEntitlement } from '../lib/entitlement.js';
 import { subscribeCheckoutReturn, resetCheckoutReturnState } from '../lib/checkoutReturnFlow.js';
 
 const API = import.meta.env.VITE_API_BASE_URL || '';
@@ -51,17 +52,40 @@ export function SetPickerScreen({ go }) {
   const [loading, setLoading] = useState(true);
   const [upgradeOpen, setUpgradeOpen] = useState(false);
   const [upgradeUiState, setUpgradeUiState] = useState('idle');
+  // OI-177: a set's `free` flag comes from the STATIC server-side CHALLENGE_SETS
+  // list, so it says whether the SET is paid — never whether the USER has paid.
+  // Gating `locked` on it alone left a paying account looking at locked paid
+  // sets and being invited to buy again. The per-user half of the answer is
+  // this single client-side entitlement helper (never a cached profile.tier
+  // read) — see docs/architecture/frontend-conventions.md "Reading the user's
+  // tier", and the identical reads in SettingsScreen.jsx / SagaScreen.jsx.
+  // `false` is the pre-answer default so a paid set never flashes unlocked;
+  // the server-side draw gate is the real enforcement point either way.
+  const [entitled, setEntitled] = useState(false);
+
+  // getEntitlement() never rejects (fail-open, FR-013), so no catch needed. Its
+  // cache is module-scoped, so no caching is added here.
+  useEffect(() => {
+    let cancelled = false;
+    getEntitlement().then(({ entitled: isEntitled }) => {
+      if (cancelled) return;
+      setEntitled(isEntitled);
+    });
+    return () => { cancelled = true; };
+  }, [isAuthenticated]);
 
   // See SettingsScreen.jsx's identical subscription for the full rationale:
   // UpgradeModal's controlled uiState/onUiStateChange props had no caller, so
   // a real payment left the modal stuck on 'loading' with no way to close.
-  // This screen has no per-user tier state (its "locked" sets come from the
-  // static CHALLENGE_SETS constant, not the account's tier), so there's
-  // nothing else to refresh here — the modal itself now owns auto-dismissing
-  // (with its slide-away animation) once 'success' renders.
+  // The modal itself now owns auto-dismissing (with its slide-away animation)
+  // once 'success' renders. Since OI-177 this screen DOES hold per-user
+  // entitlement state, so a completed checkout also unlocks the paid sets in
+  // place (mirroring SagaScreen.jsx's setTier('paid') in the same callback)
+  // instead of requiring a full reload.
   useEffect(() => {
     return subscribeCheckoutReturn((state) => {
       if (state === 'activated') {
+        setEntitled(true);
         setUpgradeUiState('success');
         resetCheckoutReturnState();
       } else if (state === 'failed') {
@@ -167,11 +191,11 @@ export function SetPickerScreen({ go }) {
               title={t(set.displayNameKey) ?? set.slug}
               stars={set.stars}
               positionCount={counts[set.slug] ?? 0}
-              locked={!set.free}
+              locked={!set.free && !entitled}
               isAuthenticated={isAuthenticated}
               progress={progressData?.progress?.[set.slug]}
               onClick={
-                set.free
+                set.free || entitled
                   ? () => go('challenge', { category: set.slug })
                   : () => setUpgradeOpen(true)
               }

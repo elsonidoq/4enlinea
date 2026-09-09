@@ -11,6 +11,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { registerUserRoutes } from './userRoutes.js';
+import { createQaAccountTools } from './qaAccountTools.js';
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -1537,4 +1538,182 @@ describe('Spec 045 US1 — 60-day rolling refresh-token cookie window', () => {
       `${routeLabel}: sb_refresh_token cookie-set call must use maxAge: REFRESH_TOKEN_MAX_AGE, got: ${cookieCallMatch[0]}`
     );
   }
+});
+
+// ── Spec 058 (e2e-qa-enablement) — POST /api/admin/qa-rollback, POST
+// /api/admin/qa-set-paid-state ────────────────────────────────────────────
+//
+// index.js registers these two routes directly, inline, in its "Admin
+// endpoints (localhost-only)" block — following the same pattern already
+// noted above ("index.js can't be imported directly — it calls app.listen()
+// at module scope"). This block builds a small standalone Express app that
+// registers equivalent handlers, wired to the REAL createQaAccountTools
+// (production import from ./qaAccountTools.js, never re-implemented here) and
+// a byte-for-byte copy of index.js's requireLocalhost function
+// (index.js:2922-2927 at the time of writing — verify against index.js if
+// this test ever drifts). Only the thin Express registration/gate-check
+// lines are duplicated (exactly what D1/D1a in research.md keep inline in
+// index.js for every admin route); the actual reset/paid-state business
+// logic under test is qaAccountTools.js's real code.
+describe('POST /api/admin/qa-rollback, POST /api/admin/qa-set-paid-state', () => {
+  // Verbatim copy of server/index.js's requireLocalhost (index.js:2922-2927).
+  function requireLocalhost(req, res, next) {
+    const ip = req.socket?.remoteAddress || '';
+    if (ip === '127.0.0.1' || ip === '::1' || ip === '::ffff:127.0.0.1') return next();
+    return res.status(403).json({ error: 'Admin endpoints are localhost-only' });
+  }
+
+  /**
+   * Builds a minimal Express app registering the two qa-* admin routes the
+   * same way index.js does: `{ paddleClient, supabase, authClient }` are
+   * passed straight through to the real createQaAccountTools on every
+   * request, matching index.js's own per-request construction.
+   */
+  function createQaApp({ paddleClient, supabase, authClient, spoofNonLocalhost = false } = {}) {
+    const app = express();
+    app.use(express.json());
+    if (spoofNonLocalhost) {
+      // Test-only: stand in for a real non-loopback TCP peer, since a
+      // same-machine test harness can't otherwise produce one. Mirrors what
+      // a genuine remote caller's req.socket.remoteAddress would be.
+      app.use((req, _res, next) => {
+        req.socket = { remoteAddress: '203.0.113.5' };
+        next();
+      });
+    }
+
+    app.post('/api/admin/qa-rollback', requireLocalhost, async (req, res) => {
+      const { userId } = req.body || {};
+      if (!userId) return res.status(400).json({ error: 'userId is required' });
+      if (!paddleClient) return res.status(503).json({ error: 'payments not configured' });
+      try {
+        const result = await createQaAccountTools({ paddleClient, supabase, authClient }).resetQaAccount({ userId });
+        res.json(result);
+      } catch {
+        res.status(500).json({ error: 'Internal server error' });
+      }
+    });
+
+    app.post('/api/admin/qa-set-paid-state', requireLocalhost, async (req, res) => {
+      const { userId, paddleCustomerId } = req.body || {};
+      if (!userId) return res.status(400).json({ error: 'userId is required' });
+      try {
+        const result = await createQaAccountTools({ paddleClient, supabase, authClient })
+          .setQaAccountPaidState({ userId, paddleCustomerId });
+        res.json(result);
+      } catch {
+        res.status(500).json({ error: 'Internal server error' });
+      }
+    });
+
+    return app;
+  }
+
+  function makeFakeSubscriptionCollection(rows) {
+    return {
+      async *[Symbol.asyncIterator]() {
+        for (const row of rows) yield row;
+      },
+    };
+  }
+
+  function makeMockPaddleClient({ subscriptionsByCustomer = {} } = {}) {
+    return {
+      subscriptions: {
+        list: (queryParams) => makeFakeSubscriptionCollection(subscriptionsByCustomer[queryParams.customerId?.[0]] ?? []),
+        cancel: async (id) => ({ id, status: 'canceled' }),
+      },
+    };
+  }
+
+  function makeMockSupabase({ users = {} } = {}) {
+    return {
+      from(table) {
+        return {
+          select: () => ({
+            eq: (col, val) => ({
+              maybeSingle: async () => {
+                if (table === 'users' && Object.prototype.hasOwnProperty.call(users, val)) {
+                  return { data: { paddle_customer_id: users[val] }, error: null };
+                }
+                return { data: null, error: null };
+              },
+            }),
+          }),
+          update: () => ({
+            eq: async () => ({ error: null }),
+          }),
+        };
+      },
+    };
+  }
+
+  const authClientStub = { auth: { admin: { updateUserById: async () => ({ data: {}, error: null }) } } };
+
+  describe('POST /api/admin/qa-rollback', () => {
+    it('400 when userId is missing', async () => {
+      const app = createQaApp({ paddleClient: makeMockPaddleClient(), supabase: makeMockSupabase(), authClient: authClientStub });
+      const { status, body } = await request(app, 'POST', '/api/admin/qa-rollback', { body: {} });
+      assert.equal(status, 400);
+      assert.deepEqual(body, { error: 'userId is required' });
+    });
+
+    it('503 when paddleClient is null (payments not configured)', async () => {
+      const app = createQaApp({ paddleClient: null, supabase: makeMockSupabase(), authClient: authClientStub });
+      const { status, body } = await request(app, 'POST', '/api/admin/qa-rollback', { body: { userId: 'user-1' } });
+      assert.equal(status, 503);
+      assert.deepEqual(body, { error: 'payments not configured' });
+    });
+
+    it('200 with { reset: true, canceledSubscriptions } on success', async () => {
+      const paddleClient = makeMockPaddleClient({ subscriptionsByCustomer: { ctm_1: [{ id: 'sub_a', status: 'active' }] } });
+      const supabase = makeMockSupabase({ users: { 'user-1': 'ctm_1' } });
+      const app = createQaApp({ paddleClient, supabase, authClient: authClientStub });
+      const { status, body } = await request(app, 'POST', '/api/admin/qa-rollback', { body: { userId: 'user-1' } });
+      assert.equal(status, 200);
+      assert.deepEqual(body, { reset: true, canceledSubscriptions: ['sub_a'] });
+    });
+
+    it('non-localhost caller gets 403 with the verbatim requireLocalhost body', async () => {
+      const app = createQaApp({
+        paddleClient: makeMockPaddleClient(),
+        supabase: makeMockSupabase(),
+        authClient: authClientStub,
+        spoofNonLocalhost: true,
+      });
+      const { status, body } = await request(app, 'POST', '/api/admin/qa-rollback', { body: { userId: 'user-1' } });
+      assert.equal(status, 403);
+      assert.deepEqual(body, { error: 'Admin endpoints are localhost-only' });
+    });
+  });
+
+  describe('POST /api/admin/qa-set-paid-state', () => {
+    it('400 when userId is missing', async () => {
+      const app = createQaApp({ paddleClient: makeMockPaddleClient(), supabase: makeMockSupabase(), authClient: authClientStub });
+      const { status, body } = await request(app, 'POST', '/api/admin/qa-set-paid-state', { body: {} });
+      assert.equal(status, 400);
+      assert.deepEqual(body, { error: 'userId is required' });
+    });
+
+    it('200 with { paidStateSet: true } on success (no 503 check — never touches paddleClient)', async () => {
+      const app = createQaApp({ paddleClient: null, supabase: makeMockSupabase(), authClient: authClientStub });
+      const { status, body } = await request(app, 'POST', '/api/admin/qa-set-paid-state', {
+        body: { userId: 'user-1', paddleCustomerId: 'ctm_1' },
+      });
+      assert.equal(status, 200);
+      assert.deepEqual(body, { paidStateSet: true });
+    });
+
+    it('non-localhost caller gets 403', async () => {
+      const app = createQaApp({
+        paddleClient: null,
+        supabase: makeMockSupabase(),
+        authClient: authClientStub,
+        spoofNonLocalhost: true,
+      });
+      const { status, body } = await request(app, 'POST', '/api/admin/qa-set-paid-state', { body: { userId: 'user-1' } });
+      assert.equal(status, 403);
+      assert.deepEqual(body, { error: 'Admin endpoints are localhost-only' });
+    });
+  });
 });

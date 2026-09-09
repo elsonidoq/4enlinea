@@ -5,6 +5,7 @@ import { CoachDialog } from '../components/CoachDialog.jsx';
 import { Toolbar } from '../components/Toolbar.jsx';
 import { Board } from '../components/Board.jsx';
 import { Icon } from '../components/Icon.jsx';
+import { AudioToggleButton } from '../components/AudioToggleButton.jsx';
 import { useStore } from '../store/ProfileStore.jsx';
 import { track } from '../lib/track.js';
 import { useGameBoard } from '../lib/useGameBoard.js';
@@ -266,53 +267,32 @@ export function GameScreen({ go, goReplace, difficulty, side, initialMoves = '',
         )}
 
         {/* Audio toggle buttons */}
-        <button
-          type="button"
-          onClick={toggleSfx}
-          aria-label={sfxEnabled ? t('audio.muteSfx') : t('audio.unmuteSfx')}
+        <AudioToggleButton
+          enabled={sfxEnabled}
+          onToggle={toggleSfx}
+          ariaLabel={sfxEnabled ? t('audio.muteSfx') : t('audio.unmuteSfx')}
           title={sfxEnabled ? t('audio.sfxOn') : t('audio.sfxOff')}
-          style={{
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            width: 36, height: 36, borderRadius: 10, border: 'none',
-            background: 'transparent',
-            cursor: 'pointer',
-            WebkitTapHighlightColor: 'transparent',
-          }}
-        >
-          <Icon name={sfxEnabled ? 'speaker' : 'speakerOff'} size={22} color={sfxEnabled ? 'var(--ink-soft)' : 'var(--ink-faint)'} />
-        </button>
+          iconOn="speaker"
+          iconOff="speakerOff"
+        />
 
-        <button
-          type="button"
-          onClick={toggleMusic}
-          aria-label={musicEnabled ? t('audio.muteMusic') : t('audio.unmuteMusic')}
+        <AudioToggleButton
+          enabled={musicEnabled}
+          onToggle={toggleMusic}
+          ariaLabel={musicEnabled ? t('audio.muteMusic') : t('audio.unmuteMusic')}
           title={musicEnabled ? t('audio.musicOn') : t('audio.musicOff')}
-          style={{
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            width: 36, height: 36, borderRadius: 10, border: 'none',
-            background: 'transparent',
-            cursor: 'pointer',
-            WebkitTapHighlightColor: 'transparent',
-          }}
-        >
-          <Icon name={musicEnabled ? 'music' : 'musicOff'} size={22} color={musicEnabled ? 'var(--ink-soft)' : 'var(--ink-faint)'} />
-        </button>
+          iconOn="music"
+          iconOff="musicOff"
+        />
 
-        <button
-          type="button"
-          onClick={toggleSpeech}
-          aria-label={speechEnabled ? t('audio.muteSpeech') : t('audio.unmuteSpeech')}
+        <AudioToggleButton
+          enabled={speechEnabled}
+          onToggle={toggleSpeech}
+          ariaLabel={speechEnabled ? t('audio.muteSpeech') : t('audio.unmuteSpeech')}
           title={speechEnabled ? t('audio.speechOn') : t('audio.speechOff')}
-          style={{
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            width: 36, height: 36, borderRadius: 10, border: 'none',
-            background: 'transparent',
-            cursor: 'pointer',
-            WebkitTapHighlightColor: 'transparent',
-          }}
-        >
-          <Icon name={speechEnabled ? 'speaker' : 'speakerOff'} size={22} color={speechEnabled ? 'var(--ink-soft)' : 'var(--ink-faint)'} />
-        </button>
+          iconOn="speaker"
+          iconOff="speakerOff"
+        />
       </Toolbar>
     </div>
   );

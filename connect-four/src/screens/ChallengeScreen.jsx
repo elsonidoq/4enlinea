@@ -5,6 +5,7 @@ import { CoachDialog } from '../components/CoachDialog.jsx';
 import { Toolbar } from '../components/Toolbar.jsx';
 import { ToolButton } from '../components/ToolButton.jsx';
 import { Icon } from '../components/Icon.jsx';
+import { AudioToggleButton } from '../components/AudioToggleButton.jsx';
 import { ProgressBar } from '../components/ProgressBar.jsx';
 import { TopBar } from '../components/TopBar.jsx';
 import { useStore } from '../store/ProfileStore.jsx';
@@ -20,6 +21,9 @@ import { DevBoardInjector } from '../components/DevBoardInjector.jsx';
 import { buildDevPuzzle } from '../lib/devFixtures.js';
 import { readDevBoardParam } from '../lib/devBoardParam.js';
 import { isSyntheticPuzzleId } from '../lib/syntheticPuzzleId.js';
+import { UpgradeModal } from '../components/UpgradeModal.jsx';
+import { useUpgradeCheckout } from '../lib/useUpgradeCheckout.js';
+import { subscribeCheckoutReturn, resetCheckoutReturnState } from '../lib/checkoutReturnFlow.js';
 
 const API = import.meta.env.VITE_API_BASE_URL || '';
 
@@ -58,6 +62,7 @@ export function ChallengeScreen({
   const { store, session } = useStore();
   const { playSfx, playMusic, pauseMusic, sfxEnabled, musicEnabled, speechEnabled, toggleSfx, toggleMusic, toggleSpeech } = useAudio();
   const { speakCoachMessage } = useCoachSpeech();
+  const handleUpgrade = useUpgradeCheckout();
 
   const [phase, setPhase] = useState('loading'); // 'loading' | 'pre-move' | 'post-move'
   const [puzzles, setPuzzles] = useState([]);
@@ -72,6 +77,16 @@ export function ChallengeScreen({
   const [selectedCols, setSelectedCols] = useState([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [seqPosition, setSeqPosition] = useState('');
+  // OI-171: why the draw produced no puzzles. `null` = it produced some, or the
+  // category is genuinely empty; 'forbidden' = HTTP 403 (a paid category at free
+  // tier — the server-side paywall, which is correct and untouched); 'error' =
+  // the fetch failed or answered any other non-2xx. Without this the three
+  // outcomes were indistinguishable and all rendered a blank, stranded screen.
+  const [drawError, setDrawError] = useState(null);
+  // The 'forbidden' state's CTA opens the same UpgradeModal every other screen
+  // uses (SetPickerScreen/SagaScreen/SettingsScreen) — no new upgrade affordance.
+  const [upgradeOpen, setUpgradeOpen] = useState(false);
+  const [upgradeUiState, setUpgradeUiState] = useState('idle');
 
   // Deep Reveal state
   const [deepRevealOpen, setDeepRevealOpen] = useState(false);
@@ -145,8 +160,24 @@ export function ChallengeScreen({
     startTimeRef.current = Date.now();
   }
 
+  // See SetPickerScreen.jsx's identical subscription: UpgradeModal's controlled
+  // uiState needs a caller, or a real payment leaves it stuck on 'loading'.
+  useEffect(() => {
+    return subscribeCheckoutReturn((state) => {
+      if (state === 'activated') {
+        setUpgradeUiState('success');
+        resetCheckoutReturnState();
+      } else if (state === 'failed') {
+        setUpgradeUiState('timeout');
+        resetCheckoutReturnState();
+      }
+    });
+  }, []);
+
   useEffect(() => {
     async function loadPuzzles() {
+      // This effect re-runs on a category change, so clear any previous failure.
+      setDrawError(null);
       try {
         // DEV board injector (dead-code-eliminated in prod): a `devPuzzles` prop (set by handleDevLoad's
         // go('challenge', {devPuzzles})) or a ?devBoard= URL param takes priority over the normal draw.
@@ -210,6 +241,18 @@ export function ChallengeScreen({
         const drawCategory = lessonMode ? confirmationCategory : category;
         const drawN        = lessonMode ? confirmationCount    : 8;
         const res = await fetch(`${API}/api/puzzles/draw?category=${drawCategory}&n=${drawN}`, { credentials: 'include' });
+        // OI-171: the status MUST be read before the body. A 403 ("Pro subscription
+        // required", the correct server-side paywall for a paid category at free tier)
+        // parses cleanly into `data.puzzles || [] === []`, so without this check a
+        // paywall block and a genuinely empty category are indistinguishable
+        // downstream — and both used to render a blank screen. Same guard the
+        // evaluate-move fetch below already carries, for the same reason.
+        if (!res.ok) {
+          setDrawError(res.status === 403 ? 'forbidden' : 'error');
+          setPuzzles([]);
+          setPhase('pre-move');
+          return;
+        }
         const data = await res.json();
         const loaded = data.puzzles || [];
         sessionIdRef.current = data.session_id ?? null;
@@ -224,6 +267,10 @@ export function ChallengeScreen({
         }
       } catch (err) {
         console.error('Failed to load puzzles', err);
+        // OI-171: a network/parse failure is its OWN state — never let it render as
+        // an empty category (or as a blank board).
+        setDrawError('error');
+        setPuzzles([]);
         setPhase('pre-move');
       }
     }
@@ -742,16 +789,45 @@ export function ChallengeScreen({
     ? { col: lastDrop?.c, type: evaluation.badge, label: QUALITY_GLYPH[evaluation.quality] }
     : undefined;
 
-  if (lessonMode && puzzles.length === 0 && phase !== 'loading') {
+  // OI-171: this branch used to be gated on `lessonMode`, so a standalone
+  // /challenge/<category> that drew nothing fell through to the main return and
+  // rendered a blank, stranded screen (no board, no message, no CTA, no way back).
+  // Generalised to every no-puzzle outcome, with the three distinguishable states
+  // the user actually needs: needs-Pro (403), empty, and load error.
+  if (puzzles.length === 0 && phase !== 'loading') {
+    const emptyBody = drawError === 'forbidden'
+      ? t('challenge.locked.body')
+      : drawError === 'error'
+        ? t('challenge.error.body')
+        : lessonMode
+          ? t('lesson.confirmation.empty', 'No practice puzzles available yet.')
+          : t('challenge.empty.body');
     return (
-      <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh', background: 'var(--bg-lessons)' }}>
+      <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh', background: lessonMode ? 'var(--bg-lessons)' : 'var(--bg-chal)' }}>
         <TopBar onBack={handleBack} title={lessonMode ? t('lesson.confirmation.header', { title: lessonTitle }) : undefined} onLogoClick={() => go('home')} />
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 16, padding: '2rem', textAlign: 'center', color: 'var(--ink-soft)' }}>
-          <p style={{ margin: 0, fontSize: 15 }}>{t('lesson.confirmation.empty', 'No practice puzzles available yet.')}</p>
+          <p style={{ margin: 0, fontSize: 15 }}>{emptyBody}</p>
+          {drawError === 'forbidden' && (
+            <button onClick={() => setUpgradeOpen(true)} style={{ padding: '10px 24px', borderRadius: 8, border: 'none', background: 'var(--accent, #d6892a)', color: '#fff', cursor: 'pointer', fontSize: 14, fontWeight: 700 }}>
+              {/* upgrade.heading, NOT upgrade.cta: this button OPENS the sheet, it does
+                  not start a checkout. Both read "Become Pro" in English, but es
+                  upgrade.cta is "Continuar al pago" ("Continue to payment") — correct on
+                  UpgradeModal.jsx:250's checkout button, a lie on this one. */}
+              {t('upgrade.heading')}
+            </button>
+          )}
           <button onClick={handleBack} style={{ padding: '10px 24px', borderRadius: 8, border: '1px solid var(--line)', background: 'var(--line)', color: 'var(--ink)', cursor: 'pointer', fontSize: 14 }}>
             {t('common.back', 'Back')}
           </button>
         </div>
+        {upgradeOpen && (
+          <UpgradeModal
+            onDismiss={() => { setUpgradeOpen(false); setUpgradeUiState('idle'); }}
+            onUpgrade={handleUpgrade}
+            uiState={upgradeUiState}
+            onUiStateChange={setUpgradeUiState}
+          />
+        )}
       </div>
     );
   }
@@ -1030,56 +1106,32 @@ export function ChallengeScreen({
         )}
 
         {/* Audio toggle buttons */}
-        <button
-          type="button"
-          onClick={toggleSfx}
-          aria-label={sfxEnabled ? t('audio.muteSfx') : t('audio.unmuteSfx')}
+        <AudioToggleButton
+          enabled={sfxEnabled}
+          onToggle={toggleSfx}
+          ariaLabel={sfxEnabled ? t('audio.muteSfx') : t('audio.unmuteSfx')}
           title={sfxEnabled ? t('audio.sfxOn') : t('audio.sfxOff')}
-          style={{
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            width: 36, height: 36, borderRadius: 10, border: 'none',
-            background: 'transparent',
-            cursor: 'pointer',
-            WebkitTapHighlightColor: 'transparent',
-            flexShrink: 0,
-          }}
-        >
-          <Icon name={sfxEnabled ? 'speaker' : 'speakerOff'} size={22} color={sfxEnabled ? 'var(--ink-soft)' : 'var(--ink-faint)'} />
-        </button>
+          iconOn="speaker"
+          iconOff="speakerOff"
+        />
 
-        <button
-          type="button"
-          onClick={toggleMusic}
-          aria-label={musicEnabled ? t('audio.muteMusic') : t('audio.unmuteMusic')}
+        <AudioToggleButton
+          enabled={musicEnabled}
+          onToggle={toggleMusic}
+          ariaLabel={musicEnabled ? t('audio.muteMusic') : t('audio.unmuteMusic')}
           title={musicEnabled ? t('audio.musicOn') : t('audio.musicOff')}
-          style={{
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            width: 36, height: 36, borderRadius: 10, border: 'none',
-            background: 'transparent',
-            cursor: 'pointer',
-            WebkitTapHighlightColor: 'transparent',
-            flexShrink: 0,
-          }}
-        >
-          <Icon name={musicEnabled ? 'music' : 'musicOff'} size={22} color={musicEnabled ? 'var(--ink-soft)' : 'var(--ink-faint)'} />
-        </button>
+          iconOn="music"
+          iconOff="musicOff"
+        />
 
-        <button
-          type="button"
-          onClick={toggleSpeech}
-          aria-label={speechEnabled ? t('audio.muteSpeech') : t('audio.unmuteSpeech')}
+        <AudioToggleButton
+          enabled={speechEnabled}
+          onToggle={toggleSpeech}
+          ariaLabel={speechEnabled ? t('audio.muteSpeech') : t('audio.unmuteSpeech')}
           title={speechEnabled ? t('audio.speechOn') : t('audio.speechOff')}
-          style={{
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            width: 36, height: 36, borderRadius: 10, border: 'none',
-            background: 'transparent',
-            cursor: 'pointer',
-            WebkitTapHighlightColor: 'transparent',
-            flexShrink: 0,
-          }}
-        >
-          <Icon name={speechEnabled ? 'speaker' : 'speakerOff'} size={22} color={speechEnabled ? 'var(--ink-soft)' : 'var(--ink-faint)'} />
-        </button>
+          iconOn="speaker"
+          iconOff="speakerOff"
+        />
       </Toolbar>
 
     </div>

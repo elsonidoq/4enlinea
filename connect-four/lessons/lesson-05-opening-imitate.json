@@ -9,11 +9,11 @@
       "movestring": "333",
       "coachMessages": [
         {
-          "text": "Green has played the centre column three times. Gray is about to move — the simplest good reply is often just to play directly above Green's last disc.",
+          "text": "Green has played the centre column twice. Gray is about to move — the simplest good reply is often just to play directly above Green's last disc.",
           "mood": "think",
-          "text_es": "Verde jugó la columna central tres veces. Gris está por mover — la respuesta simple y buena suele ser jugar justo encima de la última ficha de Verde.",
-          "audio": "/audio/lessons/bfc591f0df6cddbb.mp3",
-          "audio_es": "/audio/lessons/c02bdb6d2eedaad1.mp3"
+          "text_es": "Verde jugó la columna central dos veces. Gris está por mover — la respuesta simple y buena suele ser jugar justo encima de la última ficha de Verde.",
+          "audio": "/audio/lessons/7612b7b4c00593c3.mp3",
+          "audio_es": "/audio/lessons/1e87d2b2dd1b1103.mp3"
         }
       ],
       "boardSpec": [

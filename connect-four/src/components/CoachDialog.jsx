@@ -21,12 +21,18 @@ const NARRATION_BUTTON_STYLE = {
 };
 
 /**
+ * `maxBubblesHeight` caps the scrolling bubbles column. It defaults to 120, which is the
+ * value every call site had baked in before OI-167, so no screen changes unless it opts
+ * in. Lesson slides opt into a taller cap because their coach copy runs past 200 chars
+ * and the column is bottom-anchored (see the scroll effect below) — overflow is cut off
+ * the TOP, so the reader loses the START of the sentence and cannot tell.
+ *
  * `hasNarration` is an optional override. By default it is derived from
  * messages[].audio, which is correct for every screen whose only narration is the
  * bubbles. ConceptScreen also narrates the slide's infoProse, so it passes the value
  * in — otherwise a prose-only slide would render no narration controls.
  */
-export function CoachDialog({ messages, size = 58, fixed = false, onReplay, onStop, hasNarration }) {
+export function CoachDialog({ messages, size = 58, fixed = false, onReplay, onStop, hasNarration, maxBubblesHeight = 120 }) {
   const { t } = useTranslation();
   const mood = messages[messages.length - 1]?.mood ?? 'happy';
   const bubblesRef = useRef(null);
@@ -54,9 +60,10 @@ export function CoachDialog({ messages, size = 58, fixed = false, onReplay, onSt
       <CoachAvatar size={size} mood={mood} />
       <div
         ref={bubblesRef}
+        data-testid="coach-bubbles"
         style={{
           display: 'flex', flexDirection: 'column', gap: 6, flex: 1, minWidth: 0,
-          maxHeight: 120, overflowY: 'auto',
+          maxHeight: maxBubblesHeight, overflowY: 'auto',
         }}
       >
         {messages.map((m, i) => (

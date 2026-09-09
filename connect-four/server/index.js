@@ -20,6 +20,7 @@ import { computeWeaknessMapFallback } from './weaknessMapFallback.js';
 import { insertGameBlunder } from './insertGameBlunder.js';
 import { pickFromPool } from './pickFromPool.js';
 import { reconstructAnalysisFromBlunders } from './reconstructAnalysisFromBlunders.js';
+import { selectReviewSummaryPool } from './selectReviewSummaryPool.js';
 import { cookieOpts, ACCESS_TOKEN_MAX_AGE, REFRESH_TOKEN_MAX_AGE } from './cookieConfig.js';
 import { resolveDeviceUuid } from './deviceIdentity.js';
 import { resolveGameBlunderOwner, resolveQueueOwner, resolveExplainQuota } from './anonBlunderAccess.js';
@@ -30,10 +31,12 @@ import { buildPromotedPuzzleRow } from './promotePuzzleRow.js';
 import { registerUserRoutes } from './userRoutes.js';
 import { registerPaddleRoutes } from './paddleRoutes.js';
 import { createPaddleProcessor } from './paddleProcessor.js';
+import { createQaAccountTools } from './qaAccountTools.js';
 import { Paddle, Environment } from '@paddle/paddle-node-sdk';
 import { createSolverProcess } from './c4solver-wrapper.js';
 import { checkForcedWinPredicate, checkForbiddenColumnsPredicate } from './candidate-generator.js';
 import { VALID_CATEGORIES, PAID_CATEGORIES, CATEGORY_ORDER, SUPPRESSED_SINGLE_COLUMN_CATEGORIES } from './categories.js';
+import { countVisiblePuzzles, drawCategoryPool, drawMixedPool, PUZZLE_ROW_COLUMNS } from './puzzlePool.js';
 import { CHALLENGE_SETS } from './challengeSets.js';
 import { scoreMove, computeBlunderSeverity } from './moveQualityScorer.js';
 import { classifyStoredMistake } from './mistakeStorageRule.js';
@@ -45,6 +48,7 @@ import i18nTranslationsEs from '../src/i18n/es.json' with { type: 'json' };
 import { loadLessons, getLessons, getLesson, reloadLessons, getLessonsAll, validateLesson } from './lessonLoader.js';
 import { requireAdmin } from './adminAuth.js';
 import { isValidEvalFilename, isValidEvalSetFilename, feedbackFilenameFor, isFvSuffAnswersFile, gradesFilenameFor, deriveSetFromAnswers } from './evalResultsHelpers.js';
+import { listArtifacts, listAnswersFiles, newestAnswersFile, resolveArtifactPath } from './evalArtifacts.js';
 import { saveLessonFile, deleteLessonFile } from './lessonAdmin.js';
 import { generateLessonAudio, pruneOrphanedLessonAudio, collectMessages, LESSON_AUDIO_DIR } from './lessonAudio.js';
 import { shapeKeyForPuzzle } from './shapeDescriptor.js';
@@ -827,30 +831,28 @@ app.post('/api/admin/eval-feedback', requireLocalhost, requireAdmin, (req, res) 
 // (Validators/derivers are in evalResultsHelpers.js, unit-tested.)
 
 app.get('/api/admin/fv-suff/files', requireLocalhost, requireAdmin, (req, res) => {
-  const scriptsDir = join(dirname(fileURLToPath(import.meta.url)), 'scripts');
-  try {
-    const all = readdirSync(scriptsDir);
-    res.json({ answers: all.filter((f) => isFvSuffAnswersFile(f) && !f.endsWith('_grades.jsonl')).sort() });
-  } catch {
-    res.json({ answers: [] });
-  }
+  res.json({ answers: listAnswersFiles() });
 });
 
 app.get('/api/admin/fv-suff', requireLocalhost, requireAdmin, (req, res) => {
-  const scriptsDir = join(dirname(fileURLToPath(import.meta.url)), 'scripts');
-  const answersName = req.query.answers || 'fv_suff_answers_all.jsonl';
+  // OI-176: the old default was the literal 'fv_suff_answers_all.jsonl', a filename no run
+  // has ever produced and which exists nowhere in the repo — a guaranteed 404 on every load
+  // of /admin/fv-suff. Default to the newest run the picker itself offers instead, so the
+  // default can never name a file the listing does not contain.
+  const answersName = req.query.answers || newestAnswersFile(listAnswersFiles());
+  if (!answersName) return res.status(404).json({ error: 'answers file not found' });
   if (!isFvSuffAnswersFile(answersName)) return res.status(400).json({ error: 'invalid answers filename' });
   const parseJsonl = (path) => readFileSync(path, 'utf-8').trim().split('\n').filter(Boolean).map((l) => JSON.parse(l));
   try {
-    const answers = parseJsonl(join(scriptsDir, basename(answersName)));
+    const answersPath = resolveArtifactPath(answersName);
+    if (!answersPath) return res.status(404).json({ error: 'answers file not found' });
+    const answers = parseJsonl(answersPath);
     const set = deriveSetFromAnswers(answers);
     let grades = [];
     const gradesName = gradesFilenameFor(basename(answersName));
-    if (gradesName) {
-      try { grades = parseJsonl(join(scriptsDir, gradesName)); }
-      catch (e) { if (e.code !== 'ENOENT') throw e; }
-    }
-    res.json({ set, answers, grades });
+    const gradesPath = gradesName ? resolveArtifactPath(gradesName) : null;
+    if (gradesPath) grades = parseJsonl(gradesPath);
+    res.json({ set, answers, grades, file: basename(answersName) });
   } catch (err) {
     if (err.code === 'ENOENT') return res.status(404).json({ error: 'answers file not found' });
     logError('[admin/fv-suff]', err);
@@ -868,23 +870,18 @@ function isReasonEvidenceFile(name) {
 }
 
 app.get('/api/admin/reason/files', requireLocalhost, requireAdmin, (req, res) => {
-  const scriptsDir = join(dirname(fileURLToPath(import.meta.url)), 'scripts');
-  try {
-    const files = readdirSync(scriptsDir).filter(isReasonEvidenceFile).sort();
-    res.json({ files });
-  } catch {
-    res.json({ files: [] });
-  }
+  res.json({ files: listArtifacts(isReasonEvidenceFile) });
 });
 
 app.get('/api/admin/reason', requireLocalhost, requireAdmin, (req, res) => {
-  const scriptsDir = join(dirname(fileURLToPath(import.meta.url)), 'scripts');
   const fileName = req.query.file || 'reason_evidence_all.jsonl';
   if (!isReasonEvidenceFile(fileName)) {
     return res.status(400).json({ error: 'invalid reason evidence filename' });
   }
   try {
-    const rows = readFileSync(join(scriptsDir, basename(fileName)), 'utf-8')
+    const evidencePath = resolveArtifactPath(fileName);
+    if (!evidencePath) return res.status(404).json({ error: 'reason evidence file not found' });
+    const rows = readFileSync(evidencePath, 'utf-8')
       .trim().split('\n').filter(Boolean).map((l) => JSON.parse(l));
     res.json({ rows });
   } catch (err) {
@@ -1083,6 +1080,18 @@ app.post('/api/scores', async (req, res) => {
     // so the intended explicit 400 ships instead of a 500.
     if (difficulty !== undefined && new Board(moves).colHeights.every(h => h >= 6)) {
       return res.status(400).json({ error: 'no legal move: board is full' });
+    }
+
+    // OI-172: the same reasoning one step earlier. A board that is WON but not full is still a
+    // finished game — the solver rejects it with `Invalid position` exactly as it rejects a full
+    // board, and that surfaced as `[scores] Error: Invalid position` + a generic 500. This guard
+    // is deliberately NOT scoped to `difficulty !== undefined`: a won position has no scores to
+    // return on the hint path either, so both callers get the explicit 400 instead of a 500.
+    // Same `hasWon(1) || hasWon(2)` idiom as sparseLookahead.js:382-385 and
+    // classifier.js#tagBlunder. Do NOT make c4solver-wrapper.js accept terminal positions.
+    const scoresBoard = new Board(moves);
+    if (scoresBoard.hasWon(1) || scoresBoard.hasWon(2)) {
+      return res.status(400).json({ error: 'no legal move: the game is already over' });
     }
 
     const scores = (moves === '' && !depth)
@@ -1580,22 +1589,9 @@ app.get('/api/puzzles/counts', async (req, res) => {
   if (!supabase) return res.status(503).json({ error: 'database unavailable' });
 
   try {
-    const { data, error } = await supabase
-      .from('puzzles')
-      .select('category, count()')
-      .eq('is_active', true);
-
-    if (error) { logError('[puzzles/counts]', error); return res.status(500).json({ error: 'internal error' }); }
-
-    const counts = {};
-    for (const slug of CATEGORY_ORDER) {
-      counts[slug] = 0;
-    }
-    for (const row of (data || [])) {
-      if (row.category in counts) {
-        counts[row.category] = Number(row.count);
-      }
-    }
+    // OI-170: the visibility filter lives in puzzlePool.js so this endpoint can never again
+    // advertise a set that /api/puzzles/draw refuses to serve.
+    const counts = await countVisiblePuzzles(supabase);
 
     res.json({ counts, sets: CHALLENGE_SETS });
   } catch (err) {
@@ -1631,71 +1627,9 @@ app.get('/api/puzzles/draw', async (req, res) => {
   try {
     let puzzles;
     if (category === 'mixed') {
-      // Interleave: fetch position-ordered pools per category, then take one from each
-      const pools = {};
-      for (const cat of CATEGORY_ORDER) {
-        const { data: catPuzzles } = await supabase
-          .from('puzzles')
-          .select('id, category, move_string, interaction_mode, highlight_metadata, correct_cols, user_player, shape_key, highlight_cells')
-          .eq('category', cat)
-          .eq('is_active', true)
-          .not('position', 'is', null)
-          .order('position', { ascending: true })
-          .limit(n);
-        pools[cat] = catPuzzles || [];
-      }
-
-      // Interleave: take one from each category per position index
-      puzzles = [];
-      for (let posIdx = 0; posIdx < n && puzzles.length < n; posIdx++) {
-        for (const cat of CATEGORY_ORDER) {
-          if (posIdx < pools[cat].length && puzzles.length < n) {
-            puzzles.push(pools[cat][posIdx]);
-          }
-        }
-      }
+      puzzles = await drawMixedPool(supabase, n);
     } else {
-      // Single-category: position-based ordering with random offset
-      const { count: totalIndexed, error: countErr } = await supabase
-        .from('puzzles')
-        .select('*', { count: 'exact', head: true })
-        .eq('category', category)
-        .eq('is_active', true)
-        .not('position', 'is', null);
-
-      if (countErr) { logError('[puzzles/draw]', countErr); return res.status(500).json({ error: 'internal error' }); }
-
-      if (totalIndexed === 0) {
-        puzzles = [];
-      } else {
-        const offset = Math.floor(Math.random() * Math.max(0, totalIndexed - n + 1));
-        const { data: result, error: resultErr } = await supabase
-          .from('puzzles')
-          .select('id, category, move_string, interaction_mode, highlight_metadata, correct_cols, user_player, shape_key, highlight_cells')
-          .eq('category', category)
-          .eq('is_active', true)
-          .not('position', 'is', null)
-          .order('position', { ascending: true })
-          .range(offset, offset + n - 1);
-
-        if (resultErr) { logError('[puzzles/draw]', resultErr); return res.status(500).json({ error: 'internal error' }); }
-
-        puzzles = result || [];
-
-        // Wrap around if needed
-        if (puzzles.length < n && totalIndexed > puzzles.length) {
-          const remaining = n - puzzles.length;
-          const { data: wrap } = await supabase
-            .from('puzzles')
-            .select('id, category, move_string, interaction_mode, highlight_metadata, correct_cols, user_player, shape_key, highlight_cells')
-            .eq('category', category)
-            .eq('is_active', true)
-            .not('position', 'is', null)
-            .order('position', { ascending: true })
-            .range(0, remaining - 1);
-          puzzles = puzzles.concat(wrap || []);
-        }
-      }
+      puzzles = await drawCategoryPool(supabase, category, n);
     }
 
     // Session handling for authenticated users
@@ -1712,7 +1646,7 @@ app.get('/api/puzzles/draw', async (req, res) => {
         // Resume — re-fetch puzzles in original draw order
         const { data: rows } = await supabase
           .from('puzzles')
-          .select('id, category, move_string, interaction_mode, highlight_metadata, correct_cols, user_player, shape_key, highlight_cells')
+          .select(PUZZLE_ROW_COLUMNS)
           .in('id', existing.puzzle_ids)
           .eq('is_active', true);
         const map = Object.fromEntries((rows || []).map(p => [p.id, p]));
@@ -1872,8 +1806,13 @@ app.post('/api/evaluate-move/inline', async (req, res) => {
 app.post('/api/games', async (req, res) => {
   const { device_uuid, moves, difficulty, side, result, accuracy } = req.body;
 
-  // device_uuid may be null for authenticated users; the other fields are required
-  if (!moves || !difficulty || !side || !result) {
+  // device_uuid may be null for authenticated users; the other fields are required.
+  // OI-163: `moves` is checked for PRESENCE, not truthiness. The empty movestring is a legal,
+  // well-formed value — the format check on the next line (`/^[0-6]{0,42}$/`) explicitly permits
+  // zero moves, and so does the shared validateMoves() every other movestring endpoint uses. The
+  // old `!moves` rejected `''` here before the regex ever ran, so the two validators one line
+  // apart contradicted each other and a 0-move game was 400ed as "required field missing".
+  if (moves === undefined || moves === null || !difficulty || !side || !result) {
     return res.status(400).json({ error: 'moves, difficulty, side, and result are required' });
   }
 
@@ -2355,11 +2294,10 @@ app.post('/api/games/analyze', async (req, res) => {
   const accuracy = scored > 0 ? Math.round(optimalCount / scored * 100) : 0;
 
   // Pick summary phrase key
-  // FR-006: same rule as the cached branch above — 0 blunders + >=1 suboptimal is
-  // still a game with mistakes, never "clean"/"no mistakes to review."
-  const phrasePool = (blunderCount === 0 && suboptimalCount === 0)
-    ? 'coach.spoken.sparring.review.clean'
-    : 'coach.spoken.sparring.review.mistakes';
+  // OI-174: same rule as the cached branch above, and now literally the same code —
+  // server/selectReviewSummaryPool.js. FR-006 (0 blunders + >=1 suboptimal is never "clean")
+  // and the accuracy bands both live there.
+  const phrasePool = selectReviewSummaryPool({ blunderCount, suboptimalCount, accuracy });
   const summaryPhraseKey = pickFromPool(i18nTranslations, phrasePool) ?? `${phrasePool}.0`;
 
   res.json({
@@ -2840,6 +2778,11 @@ app.get('/api/blunders/:id', async (req, res) => {
 // ── Paddle endpoints (spec 050; extracted to paddleProcessor.js/paddleRoutes.js) ──
 
 let paddlePaymentProcessor = null;
+// Hoisted to module scope (spec 058 research.md D1a) so the QA-only
+// /api/admin/qa-rollback route below can reuse this exact client instance —
+// never a second `new Paddle(...)` construction site — for listing/canceling
+// sandbox subscriptions during an account reset.
+let paddleClient = null;
 if (process.env.PADDLE_API_KEY) {
   // Derived from the key's own prefix, NOT NODE_ENV: Railway sets
   // NODE_ENV=production on every service (staging included, confirmed via a
@@ -2848,7 +2791,7 @@ if (process.env.PADDLE_API_KEY) {
   // makes the key and the environment it targets impossible to disagree,
   // unlike a second env var someone has to remember to keep in sync.
   const paddleEnvironment = process.env.PADDLE_API_KEY.includes('_sdbx_') ? Environment.sandbox : Environment.production;
-  const paddleClient = new Paddle(process.env.PADDLE_API_KEY, {
+  paddleClient = new Paddle(process.env.PADDLE_API_KEY, {
     environment: paddleEnvironment,
   });
   paddlePaymentProcessor = createPaddleProcessor({
@@ -2919,6 +2862,80 @@ function requireLocalhost(req, res, next) {
   console.warn('[requireLocalhost] blocked request from', ip, 'for', req.method, req.originalUrl);
   return res.status(403).json({ error: 'Admin endpoints are localhost-only' });
 }
+
+// spec 058 (e2e-qa-enablement): the three /api/admin/qa-* routes below are QA
+// tooling and are NEVER registered in a production build. requireLocalhost is
+// their real gate (requireAdmin is a no-op outside NODE_ENV=production and must
+// not be relied on), but these three differ from every other localhost-only
+// admin route in this file: they mutate auth and entitlement state for an
+// ARBITRARY userId — qa-set-email overwrites any user's confirmed auth email
+// via service-role auth.admin.updateUserById, which is an account-takeover
+// primitive if a loopback-originating request path ever exists in a deployed
+// container. Defense in depth: don't ship the route at all where it has no job.
+if (process.env.NODE_ENV !== 'production') {
+
+// spec 058 (e2e-qa-enablement): POST /api/admin/qa-rollback — resets a QA test
+// account back to a known-free state between runs (FR-001/002/003/004/005/006/
+// 008/009). contracts/qa-endpoints.md. requireLocalhost only, not requireAdmin
+// (requireAdmin is a no-op outside NODE_ENV=production and must not be relied
+// on for a dev-only tool like this).
+app.post('/api/admin/qa-rollback', requireLocalhost, async (req, res) => {
+  if (!supabase) return res.status(503).json({ error: 'database unavailable' });
+  const { userId } = req.body || {};
+  if (!userId) return res.status(400).json({ error: 'userId is required' });
+  // 503 pre-check happens BEFORE calling createQaAccountTools — resetQaAccount
+  // is the only one of the three qaAccountTools operations that calls
+  // paddleClient (to list/cancel sandbox subscriptions), so only this route
+  // carries this check (contracts/qa-endpoints.md "503 scoping").
+  if (!paddleClient) return res.status(503).json({ error: 'payments not configured' });
+  try {
+    const result = await createQaAccountTools({ paddleClient, supabase, authClient }).resetQaAccount({ userId });
+    res.json(result);
+  } catch (err) {
+    logError('[admin/qa-rollback]', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// spec 058: POST /api/admin/qa-set-paid-state — re-establishes tier='paid' +
+// paddle_customer_id on a QA test account (tasks_critique B2, FR-027). DB-only
+// write; never touches paddleClient, so no 503 payments-not-configured check
+// (contracts/qa-endpoints.md "503 scoping").
+app.post('/api/admin/qa-set-paid-state', requireLocalhost, async (req, res) => {
+  if (!supabase) return res.status(503).json({ error: 'database unavailable' });
+  const { userId, paddleCustomerId } = req.body || {};
+  if (!userId) return res.status(400).json({ error: 'userId is required' });
+  try {
+    const result = await createQaAccountTools({ paddleClient, supabase, authClient })
+      .setQaAccountPaidState({ userId, paddleCustomerId });
+    res.json(result);
+  } catch (err) {
+    logError('[admin/qa-set-paid-state]', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// spec 058: POST /api/admin/qa-set-email — sets a confirmed email on a QA
+// test account (FR-013) via service-role auth.admin.updateUserById. DB/auth-
+// only write; setQaAccountEmail never touches paddleClient, so no 503
+// payments-not-configured check (contracts/qa-endpoints.md "503 scoping",
+// tasks_critique D2 — that check is scoped to qa-rollback only).
+app.post('/api/admin/qa-set-email', requireLocalhost, async (req, res) => {
+  if (!supabase) return res.status(503).json({ error: 'database unavailable' });
+  const { userId, email } = req.body || {};
+  if (!userId) return res.status(400).json({ error: 'userId is required' });
+  if (!email) return res.status(400).json({ error: 'email is required' });
+  try {
+    const result = await createQaAccountTools({ paddleClient, supabase, authClient })
+      .setQaAccountEmail({ userId, email });
+    res.json(result);
+  } catch (err) {
+    logError('[admin/qa-set-email]', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+} // end spec 058 QA-only route block (non-production registration)
 
 // T005: POST /api/admin/generate
 app.post('/api/admin/generate', requireLocalhost, async (req, res) => {

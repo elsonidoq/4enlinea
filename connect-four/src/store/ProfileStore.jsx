@@ -2,6 +2,7 @@ import { createContext, useContext, useEffect, useState } from 'react';
 import { IndexedDBStore } from './IndexedDBStore.js';
 import { SupabaseStore } from './SupabaseStore.js';
 import { clearEntitlement } from '../lib/entitlement.js';
+import { isLocalMigrationDone, setLocalMigrationDone, clearLocalMigrationDone } from '../lib/localMigrationMarker.js';
 
 // Exported so tests can supply a lightweight `{ store, session, ... }` value directly
 // (a `<StoreContext.Provider>`) instead of standing up the full `ProfileStoreProvider`,
@@ -82,11 +83,18 @@ export function ProfileStoreProvider({ children }) {
 
   async function switchToSupabase({ user }) {
     const supabaseStore = new SupabaseStore(user.id);
-    // Migrate local state on first sign-in
+    // Migrate local state on first sign-in — ONCE per account, gated on a persisted
+    // per-account marker (OI-173). `currentStore instanceof IndexedDBStore` alone is
+    // NOT evidence of a first sign-in: every hard reload re-mounts this provider with
+    // a fresh IndexedDBStore before checkSession resolves, so the old guard re-ran the
+    // migration on every load and POSTed the by-then-empty local stores over the
+    // account's real sparring_record and streak. The marker is only written after
+    // migrateToSupabase() resolves, so a failed migration is retried next load.
     const currentStore = store;
-    if (currentStore instanceof IndexedDBStore) {
+    if (currentStore instanceof IndexedDBStore && !isLocalMigrationDone(user.id)) {
       try {
         await currentStore.migrateToSupabase(supabaseStore);
+        setLocalMigrationDone(user.id);
       } catch (err) {
         console.error('[store] migration error:', err.message);
       }
@@ -102,6 +110,10 @@ export function ProfileStoreProvider({ children }) {
     } catch {
       // ignore errors
     }
+    // OI-173: sign-out installs a FRESH IndexedDBStore, so anything played from here
+    // is new local state that a later sign-in must still be able to migrate. Drop this
+    // account's one-time marker so the next sign-in migrates once again.
+    clearLocalMigrationDone(session?.user?.id);
     setStore(new IndexedDBStore());
     setSession(null);
     // Spec 053 US2: the entitlement cache is module-scoped, not account-scoped.

@@ -1,0 +1,86 @@
+{
+  "data": {
+    "id": "sub_01m215vt7cm867j3qaarjn3dw5",
+    "items": [
+      {
+        "price": {
+          "id": "pri_01kxsbjtepfn9kye0z5n7q3bhx",
+          "name": "Monthly",
+          "type": "standard",
+          "status": "active",
+          "quantity": {
+            "maximum": 1,
+            "minimum": 1
+          },
+          "tax_mode": "location",
+          "created_at": "2026-07-18T00:56:21.718855Z",
+          "product_id": "pro_01kxsbjtcztnfrkz1xkknrhgjt",
+          "unit_price": {
+            "amount": "299",
+            "currency_code": "USD"
+          },
+          "updated_at": "2026-07-18T12:25:39.100762Z",
+          "custom_data": null,
+          "description": "DecodeC4 Pro monthly USD",
+          "import_meta": null,
+          "trial_period": null,
+          "billing_cycle": {
+            "interval": "month",
+            "frequency": 1
+          },
+          "unit_price_overrides": []
+        },
+        "status": "active",
+        "product": {
+          "id": "pro_01kxsbjtcztnfrkz1xkknrhgjt",
+          "name": "DecodeC4 Pro",
+          "type": "standard",
+          "status": "active",
+          "image_url": null,
+          "created_at": "2026-07-18T00:56:21.663Z",
+          "updated_at": "2026-07-18T00:56:21.663Z",
+          "custom_data": null,
+          "description": "DecodeC4 Pro subscription — full access to paid coaching features.",
+          "tax_category": "saas"
+        },
+        "quantity": 1,
+        "recurring": true,
+        "created_at": "2026-09-08T18:53:07.692Z",
+        "updated_at": "2026-09-08T18:53:07.692Z",
+        "trial_dates": null,
+        "next_billed_at": null,
+        "previously_billed_at": "2026-09-08T18:53:07.16361Z"
+      }
+    ],
+    "status": "canceled",
+    "discount": null,
+    "paused_at": "2026-09-08T19:00:03.85Z",
+    "address_id": "add_01m215ve73f95h8wz2q39d9gwe",
+    "created_at": "2026-09-08T18:53:07.692Z",
+    "started_at": "2026-09-08T18:53:07.16361Z",
+    "updated_at": "2026-09-08T19:00:07.587Z",
+    "business_id": null,
+    "canceled_at": "2026-09-08T19:00:07.574Z",
+    "custom_data": {
+      "app_user_id": "12cf0eef-3781-4215-a48d-ea8d828ecb41"
+    },
+    "customer_id": "ctm_01m215ve6kmw26200awckr2nys",
+    "import_meta": null,
+    "billing_cycle": {
+      "interval": "month",
+      "frequency": 1
+    },
+    "currency_code": "USD",
+    "next_billed_at": null,
+    "billing_details": null,
+    "collection_mode": "automatic",
+    "first_billed_at": "2026-09-08T18:53:07.16361Z",
+    "scheduled_change": null,
+    "consent_requirements": [],
+    "current_billing_period": null
+  },
+  "event_id": "evt_01m2168mg4awp90fdfbwkctyq3",
+  "event_type": "subscription.canceled",
+  "occurred_at": "2026-09-08T19:00:07.812569Z",
+  "notification_id": "ntf_01m2168mw9nksq1tawhrbyqd6w"
+}

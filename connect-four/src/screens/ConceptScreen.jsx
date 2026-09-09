@@ -8,6 +8,7 @@ import { InfoProsePanel } from '../components/InfoProsePanel.jsx';
 import { useStore } from '../store/ProfileStore.jsx';
 import { track } from '../lib/track.js';
 import { boardSpecToBoard } from '../lib/board.js';
+import { winLegendColor } from '../lib/overlayColors.js';
 import { useAudio } from '../lib/useAudio.js';
 import { speakLessonAudio, stopSpeech } from '../lib/useCoachSpeech.js';
 import { getSlideNarrationQueue } from '../lib/lessonNarration.js';
@@ -17,14 +18,23 @@ import { windowHighlightsToZhCells, WINDOW_HIGHLIGHT_COLOR, DEFAULT_WINDOW_HIGHL
 
 const API = import.meta.env.VITE_API_BASE_URL || '';
 
+// Every overlay type but `win` has a colour fixed by the type alone. `win` rings a
+// DISC, so its colour follows the disc's identity — see winLegendColor() and OI-168;
+// it is resolved per slide below rather than looked up here.
 const OVERLAY_SWATCH_COLOR = {
   tg:    'rgba(76, 175, 80, 0.4)',
   td:    'rgba(150, 150, 150, 0.4)',
   claim: 'var(--claim, #f59e0b)',
-  win:   'rgba(76, 175, 80, 0.9)',
 };
 
-function swatchColor(type) {
+/**
+ * @param {string} type  the legend row's overlay type.
+ * @param {{ board: string[][], overlays: Array<{c:number,r:number,type:string}> }} slideCtx
+ *   the same board + overlays handed to <Board>, so a `win` swatch can take the colour
+ *   the board actually paints on those cells instead of a hardcoded green.
+ */
+function swatchColor(type, slideCtx) {
+  if (type === 'win') return winLegendColor(slideCtx.board, slideCtx.overlays);
   return OVERLAY_SWATCH_COLOR[type] ?? 'rgba(128, 128, 128, 0.4)';
 }
 
@@ -178,6 +188,10 @@ export function ConceptScreen({ go, goBack, goReplace, lessonId }) {
 
   const slide = lesson.slides[slideIndex];
   const legendItems = slide.legendItems ?? [];
+  // The exact board+overlays handed to <Board> below — the legend resolves its `win`
+  // swatch from these, so the swatch and the ring can never disagree (OI-168).
+  const slideBoard = boardSpecToBoard(slide.boardSpec);
+  const slideOverlays = slide.overlays ?? [];
   // Window highlights get their OWN legend rows rather than going through legendItems:
   // the content gate requires every legendItems[].type to have a matching per-cell
   // overlay of that type on the same slide, and a window has no such overlay.
@@ -202,11 +216,18 @@ export function ConceptScreen({ go, goBack, goReplace, lessonId }) {
       {/* hasNarration is passed explicitly because CoachDialog's own derivation only
           sees messages[].audio — a slide whose only clip is the prose would otherwise
           show no controls. */}
+      {/* maxBubblesHeight: OI-167. The shared 120px default cut the TOP off the three
+          claimeven slides whose coach copy passes ~200 chars (measured 120/139), so the
+          sentence read as starting mid-thought. 200 clears 139 with headroom for Spanish,
+          which runs longer than the English it is translated from. It is a maxHeight, so
+          the 40-odd slides under the old cap are laid out exactly as before and lose no
+          prose height. */}
       <CoachDialog
         messages={slide.coachMessages}
         onReplay={handleReplayNarration}
         onStop={handleStopNarration}
         hasNarration={getSlideNarrationQueue(slide, true).length > 0}
+        maxBubblesHeight={200}
       />
 
       {/* Board + legend are pinned (flexShrink: 0); only the infoProse panel scrolls.
@@ -223,9 +244,9 @@ export function ConceptScreen({ go, goBack, goReplace, lessonId }) {
             Measured on 390x740: without it the prose got exactly its 96px minimum. */}
         <div style={{ width: '100%', maxWidth: 'calc(34dvh * 7 / 6)', margin: '0 auto' }}>
         <Board
-          board={boardSpecToBoard(slide.boardSpec)}
+          board={slideBoard}
           canPlay={false}
-          overlays={slide.overlays ?? []}
+          overlays={slideOverlays}
           zhCells={zhCells}
           windowCounts={windowCounts}
         />
@@ -240,7 +261,7 @@ export function ConceptScreen({ go, goBack, goReplace, lessonId }) {
                   width: 14,
                   height: 14,
                   borderRadius: 3,
-                  background: swatchColor(item.type),
+                  background: swatchColor(item.type, { board: slideBoard, overlays: slideOverlays }),
                   flexShrink: 0,
                 }} />
                 <span style={{ fontSize: 13, color: 'var(--ink)', fontWeight: 600 }}>

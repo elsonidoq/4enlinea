@@ -322,6 +322,12 @@ export function SagaScreen({ go, lockAction }) {
           onUpgrade={handleUpgrade}
           uiState={upgradeUiState}
           onUiStateChange={setUpgradeUiState}
+          /* OI-169: this modal only ever opens because a PRO LESSON was tapped (every
+             direct-URL bounce from /concept|/socratic|/clchallenge lands here too —
+             useLessonLockGuard redirects before those screens mount), so the generic
+             "Unlimited Deep Reveals" body never named the thing the user just tried to
+             open. Same seam AuthModal's `reason` uses, two lines below. */
+          reason={t('upgrade.bodyLessons')}
         />
       )}
 

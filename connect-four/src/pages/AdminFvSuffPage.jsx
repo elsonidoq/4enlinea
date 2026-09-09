@@ -477,18 +477,28 @@ function AnswerViewer() {
       .then((r) => r.ok ? r.json() : { answers: [] })
       .then((d) => {
         setFiles({ answers: d.answers || [] });
-        if ((d.answers || []).length && !answersFile) setAnswersFile(d.answers[d.answers.length - 1]);
+        // OI-176: do NOT preselect `answers[answers.length - 1]` here. The listing is sorted
+        // lexically and these names are `fv_suff_answers_<source-stem>_<run-stamp>.jsonl`, so the
+        // source stem dominates and lexical-last is an OLD run. The load effect below asks the
+        // server with no `answers` param instead, and the server answers with the newest run plus
+        // the name it chose (`d.file`), which then becomes the selection.
       })
       .catch(() => {});
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
-    if (!answersFile) return;
     setLoading(true); setError(null);
-    fetch(`${API}/api/admin/fv-suff?answers=${encodeURIComponent(answersFile)}`)
+    // No file picked yet (first render): let the server choose — it defaults to the newest run
+    // and echoes the name it used as `d.file`, which we then adopt as the selection.
+    const qs = answersFile ? `?answers=${encodeURIComponent(answersFile)}` : '';
+    fetch(`${API}/api/admin/fv-suff${qs}`)
       .then((r) => { if (!r.ok) throw new Error(`${r.status} ${r.statusText}`); return r.json(); })
-      .then((d) => { setData({ set: d.set || [], answers: d.answers || [], grades: d.grades || [] }); setIndex(0); setLoading(false); })
+      .then((d) => {
+        setData({ set: d.set || [], answers: d.answers || [], grades: d.grades || [] });
+        if (!answersFile && d.file) setAnswersFile(d.file);
+        setIndex(0); setLoading(false);
+      })
       .catch((e) => { setError(e.message); setLoading(false); });
   }, [answersFile]);
 

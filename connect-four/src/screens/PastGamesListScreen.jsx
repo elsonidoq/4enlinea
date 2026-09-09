@@ -235,7 +235,10 @@ export function PastGamesListScreen({ go, goBack }) {
               onClick={() => { if (key !== sort) { setSort(key); setOffset(0); } }}
               style={{
                 flex: 1,
+                // OI-180: 44px minimum tap target. The floor is a min-height, not extra
+                // padding, so the chip's text metrics and visual weight are unchanged.
                 padding: '7px 0',
+                minHeight: 44,
                 borderRadius: 10,
                 border: active ? 'none' : '1.5px solid var(--line)',
                 background: active ? 'var(--disc-green)' : 'transparent',
@@ -265,6 +268,7 @@ export function PastGamesListScreen({ go, goBack }) {
               onClick={() => handleFilterChange(key)}
               style={{
                 padding: '7px 14px',
+                minHeight: 44,  // OI-180: 44px minimum tap target (see the sort row above).
                 borderRadius: 20,
                 border: '1.5px solid var(--line)',
                 background: active ? 'var(--disc-green)' : 'transparent',

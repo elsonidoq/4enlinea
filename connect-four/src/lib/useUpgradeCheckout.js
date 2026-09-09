@@ -21,6 +21,49 @@ const API = import.meta.env.VITE_API_BASE_URL || '';
 // 'loading' uiState back to 'idle' (see eventCallback below).
 export const PADDLE_CHECKOUT_DISMISSED_EVENT = 'paddle:checkout-dismissed';
 
+// OI-178: true from the moment Paddle reports a completed payment until the overlay that
+// completed it is closed (or a brand-new checkout is opened). Module-level, like paddlePromise,
+// because there is exactly one Paddle overlay per page load.
+//
+// Why it exists: handleCheckoutCompleted's `finally` calls `paddle.Checkout.close()` ourselves,
+// and Paddle emits `checkout.closed` SYNCHRONOUSLY inside that call. Without this flag the
+// closed branch below bounces PADDLE_CHECKOUT_DISMISSED_EVENT for OUR OWN programmatic close,
+// in the same task as the `setUpgradeUiState('success')` a call site issued ~1ms earlier —
+// UpgradeModal's listener then wrote 'idle' into the parent and, both writes batching, 'success'
+// was never committed at all (instrumented sandbox purchase txn_01m238300kdxdnzsvc0ddxgrnk).
+let completedInFlight = false;
+
+// The ONE Paddle.js eventCallback for the whole app, extracted from getPaddle()'s
+// initializePaddle({...}) call below so it can be exercised directly by
+// tests/dom/UpgradeModalCheckoutRace.dom.test.jsx (the real production function, not a
+// copy of it — testing-conventions.md, "Test the real seam, never a copy of it").
+export function handlePaddleCheckoutEvent(event) {
+  if (event.name === 'checkout.completed') {
+    completedInFlight = true;
+    handleCheckoutCompleted(event.data.transaction_id);
+  } else if (event.name === 'checkout.closed' || event.name === 'checkout.error') {
+    // OI-178: the dismissed event means "the overlay closed/errored WITHOUT a completed
+    // payment" (see its declaration above) — which is precisely what it stopped meaning once
+    // we started closing the overlay ourselves on success. Swallow exactly one close per
+    // completed payment; the flag is also cleared whenever a new checkout is opened
+    // (handleUpgrade below), so it can never get stuck true and silently disarm the genuine
+    // OI-54 reset for a later, abandoned checkout.
+    if (completedInFlight) {
+      completedInFlight = false;
+      return;
+    }
+    // Found in QA: UpgradeModal.jsx sets uiState to 'loading' before
+    // opening the overlay and only ever leaves 'loading' via
+    // checkout.completed. If the user closes the overlay without
+    // paying (Edge Case, spec.md) — or Paddle itself can't open it
+    // (OI-54) — no event reached the modal, so its "Become Pro"
+    // button stayed disabled/stuck in 'loading' forever for the rest
+    // of the session. Bounce a DOM event the modal listens for to
+    // reset itself to 'idle'.
+    window.dispatchEvent(new CustomEvent(PADDLE_CHECKOUT_DISMISSED_EVENT));
+  }
+}
+
 // initializePaddle must run at most once per page load (the SDK warns and
 // refuses on a second call — paddle:checkout-web skill's "Common pitfalls").
 // Module-level singleton promise guards that, and also registers the ONE
@@ -55,21 +98,7 @@ export async function getPaddle() {
       return initializePaddle({
         token,
         environment,
-        eventCallback: (event) => {
-          if (event.name === 'checkout.completed') {
-            handleCheckoutCompleted(event.data.transaction_id);
-          } else if (event.name === 'checkout.closed' || event.name === 'checkout.error') {
-            // Found in QA: UpgradeModal.jsx sets uiState to 'loading' before
-            // opening the overlay and only ever leaves 'loading' via
-            // checkout.completed. If the user closes the overlay without
-            // paying (Edge Case, spec.md) — or Paddle itself can't open it
-            // (OI-54) — no event reached the modal, so its "Become Pro"
-            // button stayed disabled/stuck in 'loading' forever for the rest
-            // of the session. Bounce a DOM event the modal listens for to
-            // reset itself to 'idle'.
-            window.dispatchEvent(new CustomEvent(PADDLE_CHECKOUT_DISMISSED_EVENT));
-          }
-        },
+        eventCallback: handlePaddleCheckoutEvent,
       });
     })();
   }
@@ -166,6 +195,11 @@ export function useUpgradeCheckout(returnPathOverride) {
 
     const paddle = await getPaddle();
     if (!paddle) throw new Error('checkout unavailable');
+
+    // OI-178: a fresh checkout starts with no completed payment behind it. Clearing here (rather
+    // than in handleCheckoutCompleted's finally, which runs AFTER the synchronous checkout.closed
+    // it triggers) is what makes the flag self-healing.
+    completedInFlight = false;
 
     paddle.Checkout.open({
       items: [{ priceId, quantity: 1 }],
