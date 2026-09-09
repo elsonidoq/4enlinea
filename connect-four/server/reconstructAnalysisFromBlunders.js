@@ -19,6 +19,7 @@
 
 import i18nTranslations from '../src/i18n/en.json' with { type: 'json' };
 import { pickFromPool } from './pickFromPool.js';
+import { selectReviewSummaryPool } from './selectReviewSummaryPool.js';
 
 export function reconstructAnalysisFromBlunders({ existingBlunders, moves, side, difficulty, created_at, isPapergames }) {
   const blunderMap = new Map(existingBlunders.map(b => [b.move_index, b]));
@@ -66,12 +67,15 @@ export function reconstructAnalysisFromBlunders({ existingBlunders, moves, side,
   }
 
   const cAccuracy = cScored > 0 ? Math.round(cOptimal / cScored * 100) : 0;
-  // FR-006: "no mistakes"/"clean game" phrasing must not fire when suboptimal
-  // mistakes exist even if there are zero blunders — a game with 0 blunders and
-  // >=1 suboptimal move is still a game with mistakes.
-  const phrasePool = (cBlunder === 0 && cSuboptimal === 0)
-    ? 'coach.spoken.sparring.review.clean'
-    : 'coach.spoken.sparring.review.mistakes';
+  // OI-174: band selection is owned by server/selectReviewSummaryPool.js, shared verbatim with
+  // server/index.js's solver-driven path. FR-006 (0 blunders + >=1 suboptimal is never "clean")
+  // lives inside that rule. Do NOT reintroduce a local copy here — the two producers drifting is
+  // the exact failure mode the extraction prevents.
+  const phrasePool = selectReviewSummaryPool({
+    blunderCount: cBlunder,
+    suboptimalCount: cSuboptimal,
+    accuracy: cAccuracy,
+  });
   const cSummaryKey = pickFromPool(i18nTranslations, phrasePool) ?? `${phrasePool}.0`;
 
   return {

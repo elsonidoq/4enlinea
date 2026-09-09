@@ -67,6 +67,7 @@
     "youWon": "You won! 🎉",
     "aiWon": "AI won.",
     "draw": "It's a draw.",
+    "resignNoMoves": "The game hasn't started yet — play a move first, or use Back to leave.",
     "newGame": "New game",
     "difficulty": "Difficulty",
     "chooseDifficulty": "Choose difficulty",
@@ -122,6 +123,7 @@
   "upgrade": {
     "heading": "Become Pro",
     "body": "Unlimited Deep Reveals — $2.99/month or $21.99/year.",
+    "bodyLessons": "Unlock every Pro lesson — plus unlimited Deep Reveals.",
     "price": "$2.99/month · $21.99/year",
     "tax": "Taxes may apply and are calculated at checkout.",
     "links_pricing": "Pricing",
@@ -151,6 +153,8 @@
     "proQuota": "Unlimited Deep Reveals",
     "sharedFeatures": "Puzzles, lessons, and sparring games",
     "taxNote": "All prices are in US dollars. Taxes may apply and are calculated at checkout.",
+    "alreadyPro": "You're already a Pro member — thanks for supporting DecodeC4.",
+    "manageBilling": "Manage billing",
     "checkoutCta": "Become Pro",
     "degraded": "Pricing is temporarily unavailable right now. Please check back soon.",
     "legalNote": "Looking for the merchant of record, refund policy, or terms? See the {{link}}.",
@@ -580,6 +584,14 @@
             "1": "A few moments to learn from — let's look.",
             "2": "You played well. Let's find the edge.",
             "3": "Some tactical moments worth revisiting."
+          },
+          "mistakesStrong": {
+            "0": "Sharp game. Just one detail short of perfect.",
+            "1": "Strong play throughout — let's polish the last edge."
+          },
+          "mistakesRough": {
+            "0": "A rough one. Let's walk through what went wrong.",
+            "1": "Several turning points slipped away — plenty to learn here."
           }
         },
         "outcome": {
@@ -708,6 +720,15 @@
     "leave_leave": "Leave",
     "next": "Next →",
     "try_again": "Try Again",
+    "locked": {
+      "body": "This challenge set is part of Pro. Become Pro to unlock it."
+    },
+    "empty": {
+      "body": "No positions available for this set yet."
+    },
+    "error": {
+      "body": "We couldn't load these positions. Check your connection and try again."
+    },
     "quality": {
       "optimal": "Optimal",
       "suboptimal": "Suboptimal",
@@ -769,17 +790,17 @@
     "claimeven": {
       "optimal": {
         "summary": {
-          "0": "That's the Claimeven column that secures Gray's draw."
+          "0": "That's the Claimeven column — it locks in Gray's even squares."
         }
       },
       "suboptimal": {
         "summary": {
-          "0": "Still drawing, but the Claimeven key column was stronger."
+          "0": "Playable, but the Claimeven key column was stronger."
         }
       },
       "blunder": {
         "summary": {
-          "0": "That column gives up Gray's Claimeven drawing strategy."
+          "0": "That column gives up Gray's Claimeven pairing."
         }
       }
     },

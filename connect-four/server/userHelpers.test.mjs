@@ -269,7 +269,11 @@ describe('writeSparringRecord', () => {
         eq: async () => ({ error: { message: 'fail' } }),
       }),
     });
-    const result = await writeSparringRecord(supabase, 'u', {});
+    // OI-173: the record must be NON-empty to reach the DB call at all — the
+    // helper now refuses an all-zero payload (see isEmptySparringRecord). `{}`
+    // was an incidental placeholder for this error-path test, never an
+    // assertion that an empty record gets written.
+    const result = await writeSparringRecord(supabase, 'u', { W: 1, L: 0, D: 0 });
     assert.deepEqual(result, { error: 'fail' });
   });
 });

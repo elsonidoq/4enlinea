@@ -353,11 +353,18 @@ function BoardImpl({
                     </div>
                   )}
 
-                  {/* win overlay: pulsing ring outside the disc */}
+                  {/* win overlay: pulsing ring outside the disc.
+                      Colour-aware, the same way tg/td split below: the ring takes the
+                      identity of the disc it rings, so marking GRAY's connected discs
+                      no longer draws a GREEN ring on them (OI-168). An empty cell has no
+                      occupant — there the overlay is a "play here" target marker, not a
+                      disc annotation, and keeps the green eval colour. */}
                   {ovType === 'win' && (
                     <span style={{
                       position: 'absolute', inset: -2, borderRadius: '50%',
-                      boxShadow: '0 0 0 3px var(--eval-good)',
+                      boxShadow: value === 'yellow'
+                        ? '0 0 0 3px var(--disc-gray-hi)'
+                        : '0 0 0 3px var(--eval-good)',
                       animation: 'pulse 1.4s infinite',
                     }} />
                   )}

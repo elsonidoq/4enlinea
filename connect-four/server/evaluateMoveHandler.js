@@ -14,7 +14,7 @@
 // project_integration_test_slowness and tests/integration/evaluateMoveMultiSolution.test.js's
 // header comment for why this separation exists.
 
-import { classify } from './classifier.js';
+import { classify, Board } from './classifier.js';
 import { classifyAiMove } from './classifyAiMove.js';
 import { scoreMove } from './moveQualityScorer.js';
 import { evaluatePredicate, buildPredicatePuzzle } from './predicates.js';
@@ -27,6 +27,22 @@ const MOVES_RE = /^[0-6]{0,42}$/;
 function isValidCol0(col) {
   return Number.isInteger(col) && col >= 0 && col <= 6;
 }
+
+// OI-172. A position that is already won — or has no empty cell left — is not a question the
+// solver can answer: c4solver returns nothing for it and c4solver-wrapper.js:25 turns that into
+// `Invalid position: "<ms>"`. The wrapper's rejection is CORRECT; callers must short-circuit
+// before asking. Same idiom as sparseLookahead.js:382-385 and classifier.js#tagBlunder.
+export function isTerminalPosition(movestring) {
+  if (movestring.length >= 42) return true;
+  const board = new Board(movestring);
+  return board.hasWon(1) || board.hasWon(2);
+}
+
+// Thrown by buildEvaluationResponse when the PRE-move board is already finished — i.e. the caller
+// asked us to grade a move played into a game that had already ended. That is invalid input, not
+// a server fault, so both call sites translate it to a 400 (api-conventions.md: 400 for invalid
+// input) instead of the 500 that the solver's own rejection used to produce.
+export class TerminalPositionError extends Error {}
 
 /**
  * Navigate a nested translations object by dot-separated prefix and return
@@ -61,6 +77,20 @@ function pickFromPool(translations, prefix) {
 // differently depending on whether the request carried a `puzzleId` — which, post-backfill, is the
 // difference between almost every real puzzle drill and every lesson inline challenge.
 async function buildEvaluationResponse({ movestring, colInt, category, isAiMove, solver, i18nTranslations }) {
+  // OI-172: never hand a finished board to the solver (see isTerminalPosition).
+  //
+  // SCOPED TO THE AI/SPARRING PATH ON PURPOSE. On that path `movestring` is a live game's
+  // position, so a terminal one means "grade a move played into a game that already ended" —
+  // invalid input, answerable only with a 400. The puzzle/lesson grading path is deliberately
+  // left alone: several taught boards are *technically* terminal (e.g.
+  // tests/integration/singleAnswerCategoriesAccepted.test.js's figure_7 '041015021326' and
+  // undercut '334455221100' both print [GAME OVER] under ./visualize_board.sh), and rejecting
+  // them here would change puzzle grading well beyond OI-172's scope. Those boards' real
+  // behaviour against a LIVE solver is a separate, pre-existing defect — see batch-C.md.
+  if (isAiMove && isTerminalPosition(movestring)) {
+    throw new TerminalPositionError(`position "${movestring}" is already won — there is no move to evaluate`);
+  }
+
   const scores = (movestring === '' || movestring.length === 0)
     ? EMPTY_BOARD_SCORES
     : await solver.query(movestring);
@@ -72,7 +102,21 @@ async function buildEvaluationResponse({ movestring, colInt, category, isAiMove,
   let patternTag;
   let classifyPhrasePoolKey = null;
   if (isAiMove) {
-    patternTag = await classifyAiMove(movestring, colInt, solver);
+    // OI-172. classifyAiMove classifies the POST-move board (`movestring + col`,
+    // classifyAiMove.js:29-32). When that move ends the game the board is terminal, and a
+    // terminal board is not a question the solver can answer: c4solver-wrapper.js:25 rejects it
+    // with `Invalid position`, which surfaced here as a 500 on EVERY lost sparring game. Do not
+    // "fix" that by making the wrapper accept terminal positions — its rejection is correct.
+    // Same terminal guard idiom as sparseLookahead.js:382-385 and classifier.js#tagBlunder.
+    //
+    // Only the classification is skipped: `scores`/`badge`/`quality` above come from the
+    // PRE-move board, which is still a live position, so the winning move keeps a real quality.
+    // patternTag null is also the truthful answer — there is no pattern to build on a board with
+    // no moves left to play — and the client (useGameBoard.js commitAiMove) already handles a
+    // null patternTag by picking the neutral `coach.spoken.ai_move.*` pool.
+    patternTag = isTerminalPosition(movestring + String(colInt))
+      ? null
+      : await classifyAiMove(movestring, colInt, solver);
   } else {
     const classifyResult = classify(movestring, colInt, scores);
     patternTag = classifyResult?.tag ?? null;
@@ -195,6 +239,10 @@ export function createEvaluateMoveHandler({ solver, i18nTranslations, supabase }
 
           return res.json({ ...response, accepted });
         } catch (err) {
+          // OI-172: a finished board is invalid input, not a server fault.
+          if (err instanceof TerminalPositionError) {
+            return res.status(400).json({ error: 'position is already won: nothing to evaluate' });
+          }
           logError('[evaluate-move]', err);
           return res.status(500).json({ error: 'internal error' });
         }
@@ -254,6 +302,10 @@ export function createEvaluateMoveHandler({ solver, i18nTranslations, supabase }
 
       res.json({ ...response, accepted });
     } catch (err) {
+      // OI-172: a finished board is invalid input, not a server fault.
+      if (err instanceof TerminalPositionError) {
+        return res.status(400).json({ error: 'position is already won: nothing to evaluate' });
+      }
       logError('[evaluate-move]', err);
       res.status(500).json({ error: 'internal error' });
     }

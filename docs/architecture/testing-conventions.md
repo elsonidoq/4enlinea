@@ -179,7 +179,71 @@ As with any negative assertion, confirm the harness actually fails when the forb
 temporarily insert the call, watch it go red, then revert. Used by
 `tests/integration/evaluateMoveStoredSet.test.js` and `tests/unit/sharedSolverSafetyFloor.test.js`.
 
+## Testing `index.js`'s inline admin routes (and its limit)
+
+`server/index.js` calls `app.listen()` at module scope, so **a test cannot import it**. There is
+consequently no way to assert against the real route registrations. The convention that exists
+(`server/userEndpoints.test.mjs`, extended by spec 058) is: build a minimal local Express app,
+register handlers mirroring `index.js`'s route bodies, and have them call the **real** imported
+module under test (e.g. `createQaAccountTools`) plus a verbatim copy of `requireLocalhost`.
+
+Know what this does and does not buy you. The business logic is genuinely exercised; the
+**registration is not**. A wrong path, a dropped `requireLocalhost`, a missing status pre-check, or a
+misplaced environment guard on the real route will not turn these suites red — the test re-implements
+the wiring it is nominally covering. Treat a green run here as evidence about the module, never about
+the endpoint being reachable and gated as intended; verify that part with a real request against a
+running server. Tracked as OI-161; closing it needs `app.listen()` moved behind a main-module guard
+so the app becomes importable.
+
+**The two shapes an "endpoint test" actually takes here** (neither is an HTTP test of the real route;
+`server/index.js` spawns the c4solver at import time, calls `app.listen()`, and exports no `app`):
+
+1. **Source-parse assertion** — read `server/index.js` as text and assert the handler contains the
+   guard. Precedent: `tests/unit/scoresValidation.test.js`, and the OI-172/OI-163 additions
+   `tests/unit/scoresTerminalGuard.test.js` and `tests/unit/gamesZeroMoveValidation.test.js`. Cheap,
+   and it does pin the real production file — but it asserts about *text*, so a semantically
+   equivalent rewrite breaks it and a wrong-but-textually-matching guard passes.
+2. **Handler factory** — extract the handler into its own module that takes its dependencies as
+   arguments, and test the factory. Precedent: `server/evaluateMoveHandler.js`'s
+   `createEvaluateMoveHandler({ solver, i18nTranslations, supabase })`, exercised by
+   `tests/integration/evaluateMoveTerminalPosition.test.js` with a stub solver. This is the shape to
+   prefer for new work: it tests behaviour rather than source text, and the module is the same one
+   `index.js` imports.
+
+Both still leave the *registration* (path, middleware order, method) uncovered — see the paragraph
+above.
+
 ## Running Tests
+
+### There are TWO gates, and `test:fast` is only one of them
+
+This is the single most-missed fact about this repo's test setup, so it is stated before anything
+else. `npm run test:fast` does **not** run the React screen tests. They live in a second, entirely
+separate script:
+
+| Gate | Command | What it runs | Baseline (2026-09-09) |
+|---|---|---|---|
+| `test:fast` | `cd connect-four && npm run test:fast` | `eslint .` then plain `node --test` over ~180 explicitly-listed `.js`/`.mjs` files | **1843 pass / 0 fail** |
+| `test:dom` | `cd connect-four && npm run test:dom` | `node --import ./tests/dom/setup.js --experimental-test-module-mocks --test tests/dom/*.dom.test.jsx` | **117 pass / 0 fail** |
+
+Verify the separation at source rather than trusting this table — the check is one line:
+
+```
+cd connect-four && node -e "console.log(/tests\/dom/.test(require('./package.json').scripts['test:fast']))"
+# => false
+```
+
+Consequences you must plan around:
+
+- **A screen-level change can ship with `test:fast` fully green.** Every React screen fix is invisible
+  to that gate. When you touch anything under `src/screens/`, `src/components/` or a screen-facing
+  `src/lib/` module, run **both** and report **both** numbers.
+- **A `.jsx` file registered in `test:fast` is a SyntaxError**, not a skipped test — plain `node --test`
+  has no JSX capability. New `.dom.test.jsx` files go in `test:dom`; everything else goes in
+  `test:fast`. Neither script auto-discovers: an unregistered file simply never runs.
+- Which kind of test belongs where: if the assertion is about **what the user sees rendered**, it is a
+  `test:dom` test. If it is about a pure function, a handler factory, a source-parse invariant, a
+  fixture or a data shape, it is a `test:fast` test.
 
 ```
 cd connect-four && npm test

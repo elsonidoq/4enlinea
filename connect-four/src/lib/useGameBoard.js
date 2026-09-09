@@ -315,6 +315,16 @@ export function useGameBoard({ initialMoves = '', side, difficulty, onGameEnd, i
   // ── Resign ──────────────────────────────────────────────────────
   function handleResign() {
     if (gameOver) return;
+    // OI-163: there is no game to resign before the first move. Resigning at move 0 used to fire
+    // onGameEnd('loss', []), which is the single seam that (a) POSTs /api/games with moves: ''
+    // — 400'd by the server, id swallowed — (b) writes the LOCAL sparring record anyway, and
+    // (c) navigates to the post-game review with a null id (`/game/null`). Refusing here keeps
+    // local and server state in agreement: no row, no local loss, no review of a game that never
+    // happened. The player is not trapped — the TopBar Back control leaves the screen.
+    if (moveHistory.length === 0) {
+      updateCoach(t('sparring.resignNoMoves'), 'think', false, 'sparring.resignNoMoves');
+      return;
+    }
     setAiThinking(false);
     // useBoardState only sets gameOver on win/draw — resign uses local override
     setResignedOver({ result: 'loss' });

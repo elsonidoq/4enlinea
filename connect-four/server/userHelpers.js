@@ -133,13 +133,39 @@ export async function writePuzzleAttempts(supabase, userId, deviceUuid, attempts
 }
 
 /**
+ * OI-173 content guard. `true` when a sparring_record payload carries no
+ * information at all — not an object, or W+L+D === 0 (which is exactly what
+ * `IndexedDBStore.getSparringRecord()` returns for an EMPTY local store, and
+ * that object is truthy so `POST /api/user/migrate`'s `if (body.sparring_record)`
+ * does not skip it). Exported for direct testing.
+ * @param {*} record
+ * @returns {boolean}
+ */
+export function isEmptySparringRecord(record) {
+  if (!record || typeof record !== 'object') return true;
+  const n = (v) => (typeof v === 'number' && Number.isFinite(v) ? v : 0);
+  return n(record.W) + n(record.L) + n(record.D) === 0;
+}
+
+/**
  * Update the user's sparring_record jsonb column.
+ *
+ * OI-173 (blocker — silent data loss): this is a whole-value replace, so an
+ * empty payload would zero a real record. It is refused here, in the helper
+ * rather than in the route, because BOTH `POST /api/user/migrate` and
+ * `POST /api/user/sparring-record` call it — the helper is the lowest layer
+ * that makes the server refuse to destroy data for every caller, present and
+ * future. No legitimate caller is affected: `/api/user/sparring-record` is a
+ * read-modify-write increment, so its payload always has some counter >= 1.
+ * A skipped empty write reports success (there is nothing to migrate).
+ *
  * @param {object} supabase - Supabase client (service-role key)
  * @param {string} userId
  * @param {object} record - e.g. { W: 3, L: 1, D: 0 }
  * @returns {Promise<{error: string}|undefined>}
  */
 export async function writeSparringRecord(supabase, userId, record) {
+  if (isEmptySparringRecord(record)) return;
   const { error } = await supabase
     .from('users')
     .update({ sparring_record: record })
@@ -148,13 +174,37 @@ export async function writeSparringRecord(supabase, userId, record) {
 }
 
 /**
+ * OI-173 content guard, streak half. `true` when a streak payload carries no
+ * information — not an object, or `streak_count` falsy AND `last_active_date`
+ * absent/null. That is exactly `IndexedDBStore.getStreak()`'s empty-store
+ * default `{ streak_count: 0, last_active_date: null }`, another truthy object
+ * that `if (body.streak)` does not skip. Exported for direct testing.
+ * @param {*} streak
+ * @returns {boolean}
+ */
+export function isEmptyStreak(streak) {
+  if (!streak || typeof streak !== 'object') return true;
+  const count = typeof streak.streak_count === 'number' && Number.isFinite(streak.streak_count)
+    ? streak.streak_count
+    : 0;
+  return count === 0 && (streak.last_active_date === null || streak.last_active_date === undefined);
+}
+
+/**
  * Update the user's streak_count and last_active_date.
+ *
+ * OI-173: same whole-value-replace hazard and same helper-layer guard as
+ * `writeSparringRecord` above — an empty payload would reset a live streak to
+ * 0/null. `/api/user/streak/record-day`, the only other caller, always sends
+ * `streak_count >= 1` plus today's date, so it is unaffected.
+ *
  * @param {object} supabase - Supabase client (service-role key)
  * @param {string} userId
  * @param {{streak_count: number, last_active_date: string}} streak
  * @returns {Promise<{error: string}|undefined>}
  */
 export async function writeStreak(supabase, userId, streak) {
+  if (isEmptyStreak(streak)) return;
   const { error } = await supabase
     .from('users')
     .update({

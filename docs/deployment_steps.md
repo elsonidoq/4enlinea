@@ -368,8 +368,11 @@ expired/invalid-id edge case (Paddle.js still initializes; the auto-open just fa
 is the **client-code half** of the fix and is agent-shipped, verified locally, and covered by
 `tests/dom/PricingScreenPaddleInit.dom.test.jsx`. The **owner-gated half is unchanged and still
 pending**: a real Paddle sandbox transaction must confirm the payment-method-update email actually
-lands an open checkout end-to-end (no `VITE_PADDLE_CLIENT_TOKEN` locally, so this cannot be exercised
-in this environment) — see `staging_checks.md`'s new sign-off item under this heading. **The Default
+lands an open checkout end-to-end — this was recorded as unable to be exercised in this environment
+because `VITE_PADDLE_CLIENT_TOKEN` was unset locally; **that premise was disproven 2026-09-08 by
+spec 058 (e2e-qa-enablement)**, which completed a real Paddle sandbox transaction end to end
+against the local app once the token was configured in `connect-four/.env.local` — see
+`staging_checks.md`'s new sign-off item under this heading. **The Default
 payment link table row below is unchanged in substance** (`/pricing`, never `/pricing-legal`) but its
 rationale is now stronger: `/pricing` actually honors `?_ptxn=` today, so pointing the dashboard
 setting there is both the current recommendation and, as of this change, a page that can complete the
@@ -418,10 +421,14 @@ node server/index.js                    # serves the built dist/ on $API_PORT
 checkout overlay. **Result 2026-08-01: PASS.** The overlay opened (`cdn.paddle.com/paddle/v2/paddle.js`
 304; `sandbox-buy.paddle.com` iframe rendered) with zero violations from our policy. Two gotchas worth
 knowing on a re-run: (a) the Express server resolves `dist/index.html` **at boot**, so restart it after
-any rebuild or it serves stale asset hashes that 404 into the SPA catch-all; (b) a live transaction is
-not exercisable locally — `VITE_PADDLE_CLIENT_TOKEN` is unset, so Paddle shows its own in-iframe
-"Something went wrong" *after* all CSP-governed loads succeed. That boundary is exactly what the CSP
-check needs, so it does not weaken the result.
+any rebuild or it serves stale asset hashes that 404 into the SPA catch-all; (b) at the time of this
+2026-08-01 result, a live transaction was recorded as not exercisable locally because
+`VITE_PADDLE_CLIENT_TOKEN` was unset, so Paddle showed its own in-iframe "Something went wrong"
+*after* all CSP-governed loads succeeded — that boundary was exactly what the CSP check needed, so
+it did not weaken the result. **That local-unavailability premise was disproven 2026-09-08 by spec
+058 (e2e-qa-enablement)**: the Paddle sandbox checkout overlay, including a completed live sandbox
+transaction, works locally once `VITE_PADDLE_CLIENT_TOKEN` is configured in
+`connect-four/.env.local`.
 
 ```bash
 # 2. Confirm no Paddle domain re-submission is needed for the /pricing content change (T047).
@@ -1563,6 +1570,240 @@ filter `import`). Success looks like `[importForUser] API total rooms: <n>` foll
 ### Roll back
 
 Nothing to roll back — this only replaces one profile field with a correct value.
+
+## QA remediation 2026-09-09 (OI-163…OI-181) — Coach TTS for the four new sparring-review summary keys
+
+**Status**: PENDING (all environments — the clips do not exist in the repo at all yet)
+
+**Applies to**: local, staging, production. This is a **content/asset** step, not a schema or data step.
+
+**When**: **After** the code deploy, or any time — the app degrades gracefully. A coach key with no
+approved clip ships **text-only**, which is the pre-existing behaviour for every un-approved
+`coach.spoken.*` key. Nothing breaks while this is outstanding; two of the four post-game summary bands
+are simply silent.
+
+**Blocks**: nothing. It is a quality gap, not a functional prerequisite.
+
+### What's wrong (or: what this sets up)
+
+OI-174 subdivided the single post-game `coach.spoken.sparring.review.mistakes` pool into accuracy bands
+(`server/selectReviewSummaryPool.js`). Four new i18n keys were added to **both** `src/i18n/en.json` and
+`src/i18n/es.json`:
+
+```
+coach.spoken.sparring.review.mistakesStrong.0
+coach.spoken.sparring.review.mistakesStrong.1
+coach.spoken.sparring.review.mistakesRough.0
+coach.spoken.sparring.review.mistakesRough.1
+```
+
+Coach audio is keyed by the **i18n key** (not by a text hash, unlike lesson audio), so a new key means a
+new clip. All four sit at `status: "needs_audio"` in `server/tts-registry.json` and
+`server/tts-registry.es.json` today, and the manifest the app actually plays contains **approved slugs
+only** — so those two bands currently ship with text and no narration.
+
+The eight clips (4 keys × en/es) **were** generated during the session and then **quarantined**, not
+committed. Reason: `generate-tts.js` leaves a fresh clip at `status: "awaiting_approval"`, the manifest
+filters to `status === 'approved'`, and `tests/unit/coachSpokenNamespace.test.js`'s orphan assertion
+treats any on-disk mp3 absent from the manifest as an orphan — so `test:fast` went red (1831 → 1829/2)
+with the clips present. Marking them `approved` by hand would falsify the registry's only purpose
+(recording that a **human listened**), and relaxing the test to accommodate premature work is the wrong
+trade. The contradiction — an `awaiting_approval` clip cannot exist without a red suite — is filed as
+**OI-184**.
+
+The quarantined mp3s are in this session's scratchpad:
+
+```
+/private/tmp/claude-501/-Users-elsonidoq-prog-cuatro-en-linea--claude-worktrees-e2e-qa-enablement/2840106b-5bd3-4958-bfd1-598b66d5693b/scratchpad/pending-coach-audio/{en,es}/
+```
+
+**That directory is ephemeral** — treat it as already gone. Regenerating costs one API call per clip;
+do not build any recovery procedure around it.
+
+### Run it
+
+From `connect-four/`, one command per key (the `--key` form is what keeps the blast radius to these four):
+
+```bash
+cd connect-four
+node --env-file=server/.env scripts/generate-tts.js --key coach.spoken.sparring.review.mistakesStrong.0 --lang all
+node --env-file=server/.env scripts/generate-tts.js --key coach.spoken.sparring.review.mistakesStrong.1 --lang all
+node --env-file=server/.env scripts/generate-tts.js --key coach.spoken.sparring.review.mistakesRough.0  --lang all
+node --env-file=server/.env scripts/generate-tts.js --key coach.spoken.sparring.review.mistakesRough.1  --lang all
+```
+
+`--lang all` does en **and** es in one pass. `OPENAI_API_KEY` is present in `connect-four/server/.env`
+(remote containers have no `.env` — run this locally).
+
+> **Never run the generator without `--key` here.** `--all-new` synthesizes **every** key currently at
+> `status: needs_audio`, which includes pre-existing keys that are none of this change's business
+> (`coach.spoken.forfeited_win.*`, and `sparring.resignNoMoves` added by OI-163 — that one is a
+> `sparring.*` UI string, not a `coach.spoken.*` key, so it is not in the registry at all and ships
+> silent like the existing `sparring.draw` line). `--reset` is worse: it **discards every approval** in
+> the registry. `--sync` is the safe one — it merges new keys in as `needs_audio` and preserves existing
+> statuses.
+
+Then **approve each clip in `/admin/audio`** (localhost-only admin page). Approval is a deliberate human
+act: it records that someone listened. Until a clip is approved it is not in the manifest, the app will
+not play it, and `test:fast` will fail on the orphan assertion — so **generate and approve in one
+sitting**, or not at all. `/admin/audio` has two players on different paths; the one that matters is the
+coach namespace.
+
+### Verify
+
+```bash
+cd connect-four && npm run test:fast
+```
+
+**Success condition**: exits 0 with **1843 pass / 0 fail** or higher, and no orphan failure from
+`tests/unit/coachSpokenNamespace.test.js`. Then confirm all four keys read `"status": "approved"`:
+
+```bash
+cd connect-four && node -e "
+const r=JSON.parse(require('fs').readFileSync('server/tts-registry.json','utf8'));
+const a=Array.isArray(r)?r:(r.clips||[]);
+console.log(a.filter(c=>/mistakes(Strong|Rough)/.test(c.key)).map(c=>c.key+' '+c.status).join('\n'));
+" # expect 4 lines, all 'approved'
+```
+Repeat against `server/tts-registry.es.json`. End-to-end narration in a deployed environment is
+`staging_checks.md` § Epic 13 item 9.
+
+### Roll back
+
+Delete the eight mp3s and set the four registry entries in each language file back to
+`"status": "needs_audio"` with `generated_at`/`approved_at` `null`. The app returns to shipping those two
+bands text-only — the current behaviour — so the rollback is safe and lossless.
+
+---
+
+## QA remediation 2026-09-09 — OI-170 puzzle visibility: code-only, NO data step
+
+**Status**: **N/A — nothing to run.** Recorded explicitly so nobody manufactures a backfill for it.
+
+**Applies to**: none. **When**: n/a. **Blocks**: nothing.
+
+### What's wrong (or: what this sets up)
+
+OI-170 was that `/api/puzzles/counts` and `/api/puzzles/draw` disagreed about which rows are visible:
+`draw` additionally required `position IS NOT NULL`, so `/setpicker` advertised sets the draw endpoint
+returned nothing for. `promotePuzzleRow.js` never sets `position` (only
+`POST /api/admin/puzzles/reindex` does), so in a freshly generated pool **every** row has
+`position = NULL` and 3 of the 4 paid categories drew zero puzzles.
+
+The fix **removed `position` from the visibility filter** (`server/puzzlePool.js`'s
+`applyVisibilityFilter` is now exactly `is_active = true` + the optional category). It did **not** change
+what any row means.
+
+**Therefore: no backfill, no content regeneration, no reindex is required.** A pool full of
+`position = NULL` rows is fully drawable as-is the moment this code deploys. Do not queue a data step
+for this; do not read the deployed pools' NULL `position` values as damage needing repair. `position`
+survives only as an **ordering hint** — `applyPoolOrder` sorts on it with `nullsFirst: false` plus `id`
+as a stable tiebreak, so un-indexed rows sort last and are still served.
+
+### Optional follow-up (a quality improvement, never a prerequisite)
+
+`POST /api/admin/puzzles/reindex` assigns `position` round-robin over `shape_key` groups, which restores
+**shape diversity in the draw order**. Running it makes a drawn set feel more varied. Not running it
+costs nothing but ordering variety, and playability is unaffected either way. If you run it, run it
+**after** the code deploy; it is idempotent.
+
+### Verify
+
+The thing worth measuring in a deployed environment is not this step but the **data** question:
+per-category, does the count `/api/puzzles/counts` advertises equal the number `/api/puzzles/draw` can
+serve? That is `staging_checks.md` § Epic 13 item 3, and it stays owed.
+
+### Roll back
+
+Nothing to roll back — no data was written.
+
+---
+
+## QA remediation 2026-09-09 — lesson-05 text change: two mp3s replaced (no deploy action)
+
+**Status**: **N/A — no deploy step**, provided the working tree is committed as a whole. Recorded because
+the file set is easy to split by accident.
+
+**Applies to**: none (the assets ship inside the image).
+
+### What's wrong (or: what this sets up)
+
+OI-164 corrected `lessons/lesson-05-opening-imitate.json` slide 0 ("three times" → "twice", "tres veces"
+→ "dos veces"). Lesson audio is keyed by `sha256(text)[:16]`, **not** by i18n key, so changing the text
+changes the filename. The two replacement clips were regenerated in-session with the `locator` argument
+(without it the generator re-synthesizes **every** clip in the lesson) and the two superseded files were
+deleted from `connect-four/public/audio/lessons/`:
+
+| | old (deleted) | new (added) |
+|---|---|---|
+| en | `bfc591f0df6cddbb.mp3` | `7612b7b4c00593c3.mp3` |
+| es | `c02bdb6d2eedaad1.mp3` | `1e87d2b2dd1b1103.mp3` |
+
+`public/` is copied verbatim by `vite build`, so the clips ship with the image and there is nothing to run
+against a deployed environment.
+
+**The one hazard**: the two additions are untracked and the two deletions are unstaged. Committing the
+lesson JSON without them ships text that no clip matches — `tests/lessons/lessonAudioTextHashParity.test.js`
+(new, wired into `test:fast`) turns that into a red gate rather than a silent stale recording, which is
+the point of adding it. Commit all four paths together with the lesson JSON.
+
+### Verify
+
+```bash
+cd connect-four && npm run test:fast
+```
+**Success condition**: exits 0; specifically `lessonAudioTextHashParity` and `lessonAudioCoverage`
+(the "zero orphans" prune-parity check) both pass.
+
+### Roll back
+
+Restore the previous lesson JSON text and the two deleted mp3s from git; delete the two new ones.
+
+---
+
+## QA remediation Phase 2, 2026-09-09 — real-browser verification of OI-163…OI-181 (`agentic_QA_2026-09-09-1415.md`)
+
+**Status**: DONE (local worktree only). **Applies to**: local / staging / production (read below —
+this is mostly "no new step", with one exception).
+**When**: after the code deploy of the QA-2026-09-08 remediation batches (A–G2 above).
+
+### What this sets up
+
+Phase 1 (the entries above, `## QA remediation 2026-09-09 — ...`) shipped the code fixes. This pass
+drove 17 of the 18 fixed issues in a real Chrome browser (OI-176 excluded from this run — admin-only
+surface, user directive) plus the three re-run measurements and four coverage gaps from the original
+QA plan. **No new migration, backfill, or content-regeneration step was discovered.** All prior
+per-change entries in this file (coach TTS §, OI-170 §, lesson-05 §) stand unchanged — this pass adds
+evidence, not new deploy machinery.
+
+**One real exception — OI-168 is NOT actually fixed**, despite `docs/open_issues.md` having
+previously read as closed after batch E2's unit-tested legend fix. The board win-ring itself still
+renders green on gray discs in a real browser: `connect-four/src/styles/tokens.css`'s
+`@keyframes pulse` hardcodes the ring color and silently overrides `Board.jsx`'s color-aware inline
+style for the whole animation — jsdom never runs CSS animations, so no existing test could catch
+this. **No fix has shipped for this yet** — it needs a follow-up code change (parameterize `pulse`'s
+color) before it can be deployed anywhere. Re-opened in `docs/open_issues.md`.
+
+**Second exception — OI-178's blast-radius claim is still partially unverified.** Only one real
+purchase (from `SettingsScreen`, made during the Phase-1 investigation) has ever completed
+end-to-end. This pass's attempt to complete a second purchase from `SagaScreen` stalled in the
+Paddle sandbox checkout iframe (browser-driving limitation, not an app defect) before reaching
+`checkout.completed`. `SetPickerScreen`'s purchase was never attempted. **Before treating OI-178 as
+fully closed for production, get one real purchase through from each of the 5 call sites** (or at
+minimum Saga/SetPicker, the two never tested) — see `staging_checks.md` Epic 13 item 6.
+
+### Verify
+
+No new command beyond the existing gates: `cd connect-four && npm run test:fast` (1843/0) and
+`npm run test:dom` (117/0, though 5 of them — `SocraticNarration`/`SocraticHintPhase` — are
+pre-existing order-dependent flakiness unrelated to this work; they pass in isolation).
+
+### Roll back
+
+N/A — this is a verification pass, not a code change. If OI-168's follow-up fix is written later,
+that entry gets its own deploy-prerequisites section here.
+
+---
 
 ## Template for new entries
 

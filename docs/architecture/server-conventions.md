@@ -1319,6 +1319,8 @@ authClient  = createClient(url, serviceKey, { auth: { persistSession: false, aut
 
 **Why this seam matters (substitutability)**: because `registerPaddleRoutes` takes `paymentProcessor` as a plain argument rather than closing over a module-scope Paddle-client singleton, a test can call it against a fresh Express app with any object satisfying the `PaymentProcessor` shape and assert route behavior with zero production code changes. See `specs/045-account-session-checkout/contracts/payment-processor-interface.md` and `specs/050-paddle-checkout-migration/contracts/paddle-api.md`.
 
+**Second consumer of the same DI pattern (spec 058, e2e-qa-enablement)**: `server/qaAccountTools.js`'s `createQaAccountTools({ paddleClient, supabase, authClient })` follows the identical constructor-injection shape for the same reason — its unit tests (`qaAccountTools.test.mjs`) pass a mocked Paddle SDK and mocked Supabase/auth clients with no network access. It reuses the *same* module-level `paddleClient` this section's `paddlePaymentProcessor` block constructs (hoisted to `let paddleClient = null;` alongside `paddlePaymentProcessor`, spec 058 research.md D1a) rather than building a second `new Paddle(...)`. See api-conventions.md's "QA-only account tools" for the three `requireLocalhost` routes it backs.
+
 **Sandbox vs. live environment is derived from the `PADDLE_API_KEY` prefix, not `NODE_ENV`.** `index.js`'s
 `paddleClient` construction does `process.env.PADDLE_API_KEY.includes('_sdbx_') ? Environment.sandbox :
 Environment.production` (and the frontend's `useUpgradeCheckout.js` mirrors this off
@@ -1342,6 +1344,20 @@ is still exercised by `paymentProcessor.test.mjs` and the `PaymentProcessor` sub
 interface's substitutability) is unaffected by the supersession (FR-015).
 
 ### Tier mirror: `payment_events` ledger + tier-mapping table
+
+**What `payment_events.payload` actually contains (spec 058, 2026-09-08).** The insert is
+`payload: event`, where `event` is the object returned by
+`paddleClient.webhooks.unmarshal(rawBody, secret, signatureHeader)` — the SDK's typed, **camelCase**
+`EventEntity`, **not** the raw snake_case body Paddle POSTed. Anything comparing a stored row against
+a raw Paddle payload (a checked-in fixture, a sample from Paddle's docs) must unmarshal that payload
+through the same path first, or it is comparing two different representations.
+
+This also determines what schema drift looks like in the ledger: if Paddle renames a wire field, the
+SDK maps it to `undefined` and `JSON.stringify` drops the key on its way into JSONB, so the field
+**disappears from `payload`** rather than becoming null. Drift is therefore detectable as a missing
+key path and is invisible to any value-based comparison. `server/scripts/check-webhook-fixture-drift.mjs`
+implements exactly that comparison; see `staging_checks.md` § Epic 13 for when to run it and its
+limits (it only sees fields the installed SDK version maps).
 
 `paddleProcessor.js`'s `handleWebhook` makes `users.tier` a **live derivation of the Paddle subscription's current status**, not a value set once at purchase:
 - `transaction.completed` → `tier: 'paid'` + `paddle_customer_id` write + `tracks` insert (`event: 'upgrade_completed'`), exclusively this event's job — subject to the OI-55 identity cross-check below.
@@ -1528,6 +1544,84 @@ All outbound papergames.io traffic lives in this one module. Three exported piec
 first attempt. Do not "simplify" the probe back into a blanket 3-attempt retry — that is exactly the
 shape that produced the 2026-08-25 production incident, where a one-field typo was reported for days
 as `Papergames API unreachable`.
+
+### Extracted shared-rule modules (2026-09-09, QA remediation OI-170/OI-174/OI-176)
+
+Three small modules were pulled out of `index.js` for the same reason in each case: a rule that two
+call sites held independent copies of, and which had already drifted or was one edit away from it.
+When you touch any of these behaviours, change the module — never re-inline the rule.
+
+**`server/puzzlePool.js` — the single source of truth for `puzzles` row visibility.**
+`GET /api/puzzles/counts` and `GET /api/puzzles/draw` built their filters independently and drifted:
+`draw` additionally required `position IS NOT NULL`, so `/setpicker` advertised sets the draw endpoint
+could not serve (OI-170). Both now funnel through `applyVisibilityFilter(query, category)`, which is
+exactly `is_active = true` (plus the optional category). Exports: `applyVisibilityFilter`,
+`applyPoolOrder`, `countVisiblePuzzles`, `drawCategoryPool`, `drawMixedPool`, `PUZZLE_ROW_COLUMNS`.
+
+> **`puzzles.position` is an ordering hint, never a visibility gate.** It is assigned by
+> `POST /api/admin/puzzles/reindex` (round-robin over `shape_key` groups) purely for shape diversity in
+> the draw *order*. A freshly promoted row is born with `position = NULL` — `promotePuzzleRow.js` never
+> sets it — and **must remain drawable**. Ordering handles NULL with
+> `.order('position', { ascending: true, nullsFirst: false })` plus `id` as a stable tiebreak, so
+> un-indexed rows sort last but are still served. Adding `position` back to a filter re-opens OI-170;
+> `tests/unit/puzzlePool.test.js` carries three guards against it.
+
+**`server/selectReviewSummaryPool.js` — the post-game coach summary band rule.** Imported by **both**
+producers of `summaryPhraseKey`: the solver-driven `POST /api/games/analyze` path in `index.js` and the
+cached path in `server/reconstructAnalysisFromBlunders.js`, which previously held byte-identical copies
+of a binary clean/mistakes ternary. Bands, keyed only off values both call sites already compute
+(`blunderCount`, `suboptimalCount`, `accuracy`): `clean` (0/0) → `mistakesStrong` (0 blunders and
+accuracy >= 80) → `mistakes` (<= 1 blunder and accuracy >= 50) → `mistakesRough` (everything else).
+The four existing `coach.spoken.sparring.review.mistakes` strings are deliberately **not** re-worded:
+coach audio is keyed by the i18n **key**, so editing text under an existing key ships the old clip
+with the new wording.
+
+**`server/evalArtifacts.js` — where the admin eval artifacts actually live.** The four read-only
+localhost-admin endpoints (`/api/admin/reason{,/files}`, `/api/admin/fv-suff{,/files}`) resolved names
+against `server/scripts/` only, while every committed artifact sits in `server/scripts/fv_suff/` — so
+every read 404ed and both pickers listed `[]` (OI-176). It searches **both** directories,
+`fv_suff/` first, because the *producer* has not moved: `server/scripts/compute.mjs` still writes with
+`join(__dirname, …)` where `__dirname` is `server/scripts`. Repointing at `fv_suff/` alone would have
+surfaced today's files and silently hidden the output of the very next `compute.mjs` run. The
+`basename()` traversal guard is consolidated inside `resolveArtifactPath`, so no call site can
+reintroduce a path segment.
+
+### Terminal positions: never hand a finished board to the solver
+
+`c4solver` returns nothing for a board that is already won or completely full, and
+`c4solver-wrapper.js` turns that into a generic `Invalid position` throw — which reaches an endpoint as
+a **500**. The wrapper's rejection is **correct**; do not relax it. Every caller short-circuits first,
+with one idiom:
+
+```js
+const board = new Board(moves);
+if (board.hasWon(1) || board.hasWon(2)) { /* … */ }
+```
+
+Existing precedent: `server/sparseLookahead.js` and `classifier.js#tagBlunder`. Added 2026-09-09 (OI-172):
+`POST /api/scores` (400) and `server/evaluateMoveHandler.js`'s exported `isTerminalPosition(movestring)`
+(`length >= 42 || hasWon(1) || hasWon(2)`), used on the AI path both before the solver query (throws
+`TerminalPositionError` → 400) and before `classifyAiMove` on the post-move board (→ `patternTag: null`).
+See api-conventions.md for the wire contracts.
+
+### Whole-value replaces must refuse a content-empty payload (OI-173)
+
+`writeSparringRecord` and `writeStreak` in `server/userHelpers.js` are whole-value `.update(...)`
+writes, so an empty payload zeroes a real record. Both now return early on
+`isEmptySparringRecord(record)` / `isEmptyStreak(streak)` (both exported and unit-tested).
+
+The guard lives in the **helper, not the route**, on purpose: `POST /api/user/migrate` and the
+per-table endpoints (`/api/user/sparring-record`, `/api/user/streak/record-day`) all call these
+helpers, so the helper is the lowest layer that refuses for every caller present and future. The
+route-level `if (body.sparring_record)` / `if (body.streak)` guards are truthiness checks, and
+`IndexedDBStore`'s empty-store defaults (`{W:0,L:0,D:0}`, `{streak_count:0,last_active_date:null}`)
+are truthy objects that pass them.
+
+No legitimate caller is blocked: the sparring route is a read-modify-write increment (always some
+counter >= 1) and the streak route always writes `streak_count >= 1` with a dated `last_active_date`.
+A skipped empty write reports success — there was nothing to migrate. `session_stats` is deliberately
+**not** guarded: it has no meaningful empty sentinel, and a guessed rule there could suppress a real
+`/api/user/challenge-session` write.
 
 ## In-Memory Job Map Pattern (spec 038)
 

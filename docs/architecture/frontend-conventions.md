@@ -928,6 +928,86 @@ window, for the life of the tab. Any future identity transition (account switch,
 - **`CheckoutReturnBanner.jsx`** (mounted once at app root) is a pure renderer of `checkoutReturnFlow.js`'s `idle|confirming|activated|failed` store — it owns no network/confirmation logic itself, and is a second, independent subscriber alongside the 5 `UpgradeModal` call sites above (the store supports multiple listeners; nothing about the modal's subscriptions replaces or conflicts with the banner). `useUpgradeCheckout.js`'s Paddle.js `eventCallback` is the sole listener for `checkout.completed`; on that event it is the **sole caller** of `POST /api/paddle/verify-transaction` (the synchronous activation fallback for a delayed/undelivered webhook) and writes the resulting state into the shared store. See server-conventions.md "Activation: webhook primary + verify-transaction fallback".
 - **`checkoutReturnFlow.js`'s `subscribeCheckoutReturn` replays the current state immediately at subscribe time** (fixed 2026-07-18, OI-59) — it does not only notify of future transitions. `useUpgradeCheckout.js`'s `checkout.completed` handler is a module-level singleton independent of which screen is mounted; without the replay, a screen whose subscription effect wasn't active at the exact instant `'activated'` broadcast would silently miss it forever (the store's internal `state` still held `'activated'` correctly — nothing read it again), leaving `UpgradeModal` stuck on its pristine `'idle'` state even though the account had already correctly become Pro server-side (the tier flip via webhook/`verifyTransaction` doesn't depend on any UI listener). Each of the 5 call sites' subscription callback now calls `resetCheckoutReturnState()` after consuming a terminal `'activated'`/`'failed'` state — required so the replay-on-subscribe fix doesn't leak that same stale outcome into some later, unrelated modal open. Any **new** `UpgradeModal` call site (or any other consumer of this store) must call `resetCheckoutReturnState()` after acting on a terminal state for the same reason.
 
+## Shared components and rules extracted 2026-09-09 (QA remediation)
+
+Each of these exists because the same rule was living in two or more places and had already drifted, or
+because a "fix it once" change silently fixed only one of its copies. Change the shared module — never
+re-inline the rule at a call site.
+
+**`src/components/AudioToggleButton.jsx`** — the one SFX / music / speech toggle button. The
+`width: 36, height: 36, borderRadius: 10` style object was copy-pasted inline **six** times (three in
+`GameScreen`, three in `ChallengeScreen`), so there was no component to fix and any single-screen fix left
+the other screen at 36×36 (OI-180). Exports `AUDIO_TOGGLE_SIZE = 44`; the button carries `width`/`height`
+**and** `minWidth`/`minHeight` at 44 plus `flexShrink: 0`, so a flex parent cannot compress it back under
+the minimum tap target. Only the hit area grew — the icon is still 22px on a transparent background, so
+the toolbars look unchanged. Props: `{ enabled, onToggle, ariaLabel, title, iconOn, iconOff }` (labels
+arrive already translated). **44×44 is the minimum tap target for any new control**; the
+`PastGamesListScreen` sort/filter chips got `minHeight: 44` in the same pass, and
+`tests/dom/TapTargetMinimums.dom.test.jsx` guards it.
+
+**`src/lib/overlayColors.js`** — the `win` overlay colour rule, shared by `Board.jsx` (the ring it paints)
+and `ConceptScreen`'s legend (the swatch that claims to describe it). `win` is the only overlay type whose
+colour is not fixed by the type: it rings a *disc*, so it takes that disc's identity —
+`winOverlayColor(cellValue)` is gray (`var(--disc-gray-hi)`) iff the cell is `'yellow'` (P2/gray),
+otherwise green (`var(--eval-good)`). Before this, `ConceptScreen`'s `OVERLAY_SWATCH_COLOR` keyed `win`
+off the **type alone**, so on the four gray-disc lesson slides the board drew a gray ring while the legend
+square stayed green (OI-168). `winLegendColor(board, overlays)` returns the unanimous colour, or green when
+the slide mixes both (no shipped slide does) — it never picks a majority and mislabels the rest. An
+**empty** cell keeps green: there the overlay is a "play here" target marker rather than a disc
+annotation (lesson-06 slide 3), and it must not be "fixed" to gray. `Board.jsx` still holds the rule
+inline; `tests/unit/winLegendSwatch.test.js` carries a divergence guard that reads `Board.jsx`'s
+`ovType === 'win'` branch and asserts it paints exactly the two tokens the helper exports.
+
+**`src/lib/localMigrationMarker.js`** — the per-account, one-time marker gating the local(IndexedDB)→
+Supabase migration, modelled on `onboardingOfferMarker.js`.
+
+> **`currentStore instanceof IndexedDBStore` is NOT evidence of first sign-in.** `ProfileStore.jsx`'s
+> `switchToSupabase` used to gate the migration on exactly that, under a comment reading "Migrate local
+> state on first sign-in". A hard reload always re-mounts the provider with a fresh `IndexedDBStore`
+> before the session check resolves, so the condition is true on **every** load — the migration re-ran and
+> POSTed the (now empty) local stores over the account's real `sparring_record` and `streak` (OI-173,
+> a data-loss blocker).
+
+The gate is now `currentStore instanceof IndexedDBStore && !isLocalMigrationDone(user.id)`, and the marker
+is written only **after** `migrateToSupabase()` resolves, so a failed migration retries. The key is scoped
+by account (`local_migration_done_v1:<userId>`) because signing into a second account on the same device
+must still migrate that device's local state once — and `signOut` calls `clearLocalMigrationDone(userId)`,
+because sign-out installs a fresh `IndexedDBStore` and post-sign-out anonymous play must migrate again.
+localStorage reads/writes are try/catch'd (private browsing). The server-side content guards in
+`server/userHelpers.js` are the backstop for a legitimately lost marker — see server-conventions.md.
+
+**`UpgradeModal` gained an optional `reason` prop** (OI-169), mirroring `AuthModal.jsx`'s existing prop of
+the same name: an already-translated string a call site supplies to replace the generic
+`upgrade.body` value proposition with one matching what the user just tried to open. Only `SagaScreen`
+passes it today; every other call site is unchanged.
+
+### Screen-level patterns worth copying
+
+**`shouldAutoRouteToOnboarding` takes `requestedScreen`** (`src/lib/onboardingRouting.js`, OI-181). A
+signed-out visitor deep-linking to a screen in the exported `DEEP_LINK_HONORED_SCREENS`
+(`'saga'`, `'settings'`, `'stats'`) is honoured — the auto-route does not fire, so that screen renders its
+own unauthenticated branch. **Anything else — `'home'`, `undefined`, an unrecognised key — falls through to
+the pre-existing auto-route**, so first-run is unbreakable by construction. `App.jsx` passes
+`screenRef.current` (the ref, not `screen`: the mount effect sets it synchronously from `parseUrl` long
+before the async `getProfile()` resolves). No change to `postLoginReturn.js` was needed — `stashReturnTo`
+is already called by the CTAs on those screens; they simply become reachable.
+
+**`SetPickerScreen` and `PricingScreen` now read `getEntitlement()`.** `SetPickerScreen` gates
+`locked={!set.free && !entitled}` (OI-177 — paid sets never unlocked); `PricingScreen` shows a
+`role="status"` already-Pro banner (OI-179) while leaving its CTA unconditional, so the `?_ptxn=` payment
+link still works. Both follow the standard pattern above.
+
+> **The entitlement cache is module-scoped, not account-scoped.** After changing a tier out-of-band (a QA
+> tool, a DB edit, a completed purchase in another tab), **reload the page before judging the UI** — an
+> unchanged screen may be a 5-minute-TTL cache hit rather than a bug. See "Cache lifecycle" above.
+
+**Capture `res.status` BEFORE calling `.json()`.** `ChallengeScreen`'s puzzle-draw fetch reads
+`setDrawError(res.status === 403 ? 'forbidden' : 'error')` and renders three mutually exclusive empty
+states (locked / empty / error). A 403 body parses cleanly into `[]`, so a handler that only inspects the
+parsed payload cannot tell a paywall block from a genuinely empty category — and the user got a blank
+screen with no explanation (OI-171). Any new fetch that can be refused by tier must branch on the status
+code, not on the shape of the body.
+
 ## Board Memoization (`boardPropsAreEqual`, spec 046 US5)
 
 `Board` is exported as `export const Board = memo(BoardImpl, boardPropsAreEqual)` — a custom
@@ -967,9 +1047,22 @@ single, *replaced* message (`ConceptScreen`, `SocraticScreen`, `HomeScreen`) do 
 not need it. If you add a board+coach screen and the board visibly shifts when feedback appears, the fix is
 `fixed`, not board memoization.
 
-**The `maxHeight:120, overflowY:auto` bubble cap is NOT part of `fixed`.** It sits on the inner bubbles
-container in `CoachDialog.jsx`, outside the `fixed` ternary, so it applies on **every** screen including
-the two lesson screens that omit `fixed`. Two consequences for anyone writing coach copy:
+**The bubble cap is NOT part of `fixed`.** It sits on the inner bubbles container in `CoachDialog.jsx`,
+outside the `fixed` ternary, so it applies on **every** screen including the two lesson screens that omit
+`fixed`.
+
+Since OI-167 (2026-09-09) it is the prop **`maxBubblesHeight`, default `120`** — the exact value every
+call site had baked in, so no screen changes unless it opts in. **`ConceptScreen` is the only opt-in**,
+at `200`, because lesson coach copy runs past 200 characters and the column is bottom-anchored (the
+mount effect sets `scrollTop = scrollHeight`), so the overflow is cut off the **top**: the reader loses
+the *start* of the sentence and cannot tell. The container also carries
+`data-testid="coach-bubbles"` so clipping is measurable from a DOM test.
+
+**Do not change the `fixed` variant's reserved outer `height: 140`** when adjusting this. It is a
+deliberate board-screen reservation — growing it shifts the board, which is the whole defect the
+`fixed` variant exists to prevent. `maxBubblesHeight` only touches the inner scroll container.
+
+Two consequences for anyone writing coach copy:
 
 - **The cap is a silent truncation, not a layout change.** The box fits **5 rendered lines** of text
   (`scrollHeight` 119 fits; 139 overflows — 22px of any measurement is bubble padding), roughly
@@ -978,6 +1071,13 @@ the two lesson screens that omit `fixed`. Two consequences for anyone writing co
   one box — it is not a sequential reveal — so splitting a long message into two costs ~28px more
   (6px gap + a second bubble's padding). The mount effect also sets `scrollTop = scrollHeight`, so the
   learner lands on the *last* bubble with earlier ones scrolled out of view.
+
+**Overflow is now advertised, not silent** (OI-166): `InfoProsePanel` renders a sticky bottom fade plus a
+`▾` chip driven by a live `scrollHeight/clientHeight/scrollTop` measurement. It is decorative and
+`aria-hidden`, so it adds no i18n string. Note what this did and did not fix — the panel already had
+`overflowY: 'auto'`, so the text was always *reachable*; what was missing was any signal that more text
+existed. Do not "fix" this by re-adding overflow, and do not read the affordance as meaning the copy now
+fits (measured: 24 of 46 lesson-1–10 panels still overflow — they just say so now).
 
 To check copy, read `scrollHeight - clientHeight` off that container in the browser for every slide, in
 **both** locales — Spanish runs ~15% longer than English and routinely overflows alone. Lesson-side
@@ -1082,7 +1182,16 @@ The mistakes feature has three independent screen routes:
 
 **Owner-only controls gate on `is_owner !== false`, never on `is_owner`** (`MistakeDetailScreen`'s "Mark as reviewed": `session && blunder.is_owner !== false`). The server sets `is_owner` only on the public permalink endpoint (`GET /api/blunders/:id` — see api-conventions.md); blunders reached by **in-app navigation** (coach queue / `gameBlunderList` items) carry **no `is_owner` field at all**, so it is `undefined` there. The `!== false` form deliberately treats `undefined` as owned and hides the control only on an explicit server `false`. Simplifying it to `blunder.is_owner` would silently hide "Mark as reviewed" from every owner navigating in-app.
 
-**Screen registry**: `src/lib/screenRegistry.js` is the canonical map of all 14 screen keys to their React components. Add new screen components here; never wire them directly in `App.jsx`.
+**Screen registry**: `src/lib/screenRegistry.jsx` (note the **`.jsx`** extension — it renders JSX inline for the wrapped entries) is the canonical map of all **21** screen keys to their React components. Add new screen components here; never wire them directly in `App.jsx`.
+
+**Two registry keys do NOT match their component names** — this has misdirected work more than once, so read the mapping rather than inferring it from the filename:
+
+| Screen key | URL | Component actually rendered |
+|---|---|---|
+| `mistakeDetail` | `/mistakeDetail/:category` | **`MistakesListScreen`** (the filtered *list* for one category) |
+| `blunderDetail` | `/blunder/:id` | **`MistakeDetailScreen`** (the individual mistake *detail*) |
+
+So anything you are looking for in `MistakeDetailScreen.jsx` — its "Sign in to unlock" CTA, the deep-reveal trigger, Prev/Next nav — lives at **`/blunder/<id>`**, not at `/mistakeDetail/<category>`.
 
 **Back-stack pattern**: The Navigator maintains a one-level back-stack via `prevScreen`. `goBack()` restores `prevScreen` and clears it to `null`. Do NOT implement `goBack()` by calling `go(prevScreen)` — that would overwrite `prevScreen` with the current screen instead of clearing it, breaking subsequent back navigations.
 

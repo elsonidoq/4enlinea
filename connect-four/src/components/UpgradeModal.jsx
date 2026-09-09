@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Icon } from './Icon.jsx';
 import { usePaddlePrices, formatPrice, computeAnnualSavings } from '../lib/usePaddlePrices.js';
@@ -26,7 +26,11 @@ import { PADDLE_CHECKOUT_DISMISSED_EVENT } from '../lib/useUpgradeCheckout.js';
 const AUTO_DISMISS_DELAY_MS = 1500;
 const EXIT_ANIMATION_MS = 300;
 
-export function UpgradeModal({ onDismiss, onUpgrade, uiState: controlledUiState, onUiStateChange }) {
+// `reason` (OI-169) mirrors AuthModal's existing prop of the same name (AuthModal.jsx:9/:38):
+// an already-translated string a call site supplies to replace the generic value proposition
+// with the one that matches what the user just tried to open. Optional — every existing call
+// site keeps the global `upgrade.body` string untouched.
+export function UpgradeModal({ onDismiss, onUpgrade, uiState: controlledUiState, onUiStateChange, reason }) {
   const { t, i18n } = useTranslation();
   const prices = usePaddlePrices();
   // idle | loading | success | activating | timeout
@@ -77,13 +81,36 @@ export function UpgradeModal({ onDismiss, onUpgrade, uiState: controlledUiState,
   // without this the 'loading' state set above never clears and "Become Pro"
   // stays disabled for the rest of the session. useUpgradeCheckout.js's
   // eventCallback dispatches this on checkout.closed/checkout.error.
+  //
+  // OI-178, defence in depth (the primary fix is in useUpgradeCheckout.js, which no longer
+  // dispatches this event for our own post-payment programmatic close): the downgrade decision
+  // is DEFERRED to a macrotask instead of being taken inline. When this event arrived
+  // synchronously from inside our own Checkout.close(), the call site's
+  // setUpgradeUiState('success') had been issued ~1ms earlier but React had not re-rendered —
+  // so the inline guard read a stale 'loading' and wrote 'idle' into the PARENT, both writes
+  // batching, and 'success' was never committed at all.
+  //
+  // A ref alone does not fix that (it is just as stale mid-task), and neither does consulting
+  // checkoutReturnFlow: every call site calls resetCheckoutReturnState() synchronously right
+  // after setting 'success' (SagaScreen.jsx:174-181 and the four identical siblings), so the
+  // store reads 'idle' again by the time the event lands. Only re-reading the COMMITTED state
+  // after React has flushed the batch is reliable — hence setTimeout(…, 0) + a render-synced ref.
+  const uiStateRef = useRef(uiState);
+  uiStateRef.current = uiState;
   useEffect(() => {
+    let pending = null;
     function handleDismissed() {
-      if (uiState === 'loading') setUiState('idle');
+      pending = setTimeout(() => {
+        pending = null;
+        if (uiStateRef.current === 'loading') setUiState('idle');
+      }, 0);
     }
     window.addEventListener(PADDLE_CHECKOUT_DISMISSED_EVENT, handleDismissed);
-    return () => window.removeEventListener(PADDLE_CHECKOUT_DISMISSED_EVENT, handleDismissed);
-  }, [uiState]);
+    return () => {
+      if (pending) clearTimeout(pending);
+      window.removeEventListener(PADDLE_CHECKOUT_DISMISSED_EVENT, handleDismissed);
+    };
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <>
@@ -131,7 +158,7 @@ export function UpgradeModal({ onDismiss, onUpgrade, uiState: controlledUiState,
           color: 'var(--ink-soft)', fontWeight: 600, fontSize: 14,
           margin: '0 0 12px', lineHeight: 1.45, textAlign: 'center',
         }}>
-          {t('upgrade.body')}
+          {reason || t('upgrade.body')}
         </p>
 
         <p style={{

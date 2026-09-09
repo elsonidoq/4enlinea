@@ -1,0 +1,14 @@
+{
+  "worktree_setup_done": true,
+  "worktree_path": "/Users/elsonidoq/prog/cuatro_en_linea/.claude/worktrees/e2e-qa-enablement",
+  "epic_file": "docs/epics/e2e-qa-enablement-epic.md",
+  "epic_heading": "Epic 13 \u2014 End-to-End QA Enablement",
+  "spec_dir": "specs/058-e2e-qa-enablement",
+  "stage": "done",
+  "pending_brainstorm": null,
+  "pending_brainstorm_answers": null,
+  "pending_critique": null,
+  "pending_answers": null,
+  "pending_handoff": null,
+  "pending_deferrals": []
+}

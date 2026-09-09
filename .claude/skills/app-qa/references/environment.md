@@ -96,8 +96,20 @@ games with papergames id `69e773d36bf9938bffc1509a`.
 
 ## Flip tier (for the free→paid journey pass)
 
-`scripts/set-tier.js` looks up users **by email** — the dev-skip-auth user has **no email**,
-so it will NOT find it. Flip by direct DB update instead.
+`connect-four/server/scripts/set-tier.js` looks up users **by email**
+(`set-tier.js:20-23`, `supabase.auth.admin.listUsers()` then `.find(u => u.email === email)`).
+The dev-skip-auth user starts with **no email**, so before an email has been seeded on it the
+lookup finds nothing. This is no longer a hard limitation: the **"🛠 Dev: Set QA email"** button
+(see "Rollback and paid-state tools" below) seeds `qa-agent@example.test` on the current session's
+account, and once that has run, `set-tier.js <email> paid` works against it.
+
+What is true **regardless of whether an email has been seeded**, and is the load-bearing
+limitation: `set-tier.js`'s only write is `.from('users').update({ tier })` (`set-tier.js:26-29`)
+— it never touches `paddle_customer_id`. It can flip the `tier` column but it can **never
+re-establish a `paddle_customer_id`**, so it cannot recreate the DB state a real checkout would
+have left behind (what the downgrade fixtures or a post-reset replay need to act on). For that,
+use `setQaAccountPaidState` / `POST /api/admin/qa-set-paid-state` (see below), which writes
+`tier` and `paddle_customer_id` together.
 
 To paid (flips every local user; there's normally just the one test user):
 
@@ -110,8 +122,137 @@ Back to free (swap `'paid'`→`'free'` and `.neq('tier','paid')`→`.neq('tier',
 After flipping, **reload the page** in Chrome so the session re-reads the tier (tier comes
 from the server profile, not the JWT).
 
-If a real email user exists (not the anon one), `set-tier.js` works:
-`cd connect-four && node --env-file=server/.env scripts/set-tier.js <email> paid`.
+If a real email user exists (either a naturally-authenticated one, or the anon dev user after
+the "Set QA email" button has run), `set-tier.js` works:
+`cd connect-four && node --env-file=server/.env server/scripts/set-tier.js <email> paid`.
+
+## Worktree bootstrap
+
+A freshly created worktree is missing two things a checkout normally has — set both up before
+starting the server:
+
+- **`node_modules`**: not present. Run `cd connect-four && npm install` first.
+- **`.env` / `.env.local` files**: gitignored, so a new worktree has none. Copy them from the
+  main checkout: `connect-four/.env.local` (needs `VITE_PADDLE_CLIENT_TOKEN` for the frontend)
+  and `connect-four/server/.env` (needs `PADDLE_NOTIFICATION_WEBHOOK_SECRET`, among other
+  server-side vars, for the backend). Never print the values of either — copy the files, don't
+  retype their contents.
+
+Also see "URLs / ports" above: ports come from `eval "$(./worktree-ports.sh)"` at the worktree
+root, never the literal `3001`/`5173`. This matches `specs/057-mvp-launch-gate/quickstart.md`'s
+Prerequisites section.
+
+## Rate limits
+
+The API applies a **120 requests/minute per IP** limit, and an agent driving the browser QA
+session shares that budget with its own `curl`/script calls against the same server (they hit
+the same IP). If you blow through it, the **429 response body is plain text**, not JSON — a
+caller that blindly does `res.json()` gets an **opaque JSON-decode error, with no corresponding
+line in the server log** (the request never reached application code that would log anything).
+If you see a JSON-parse failure with nothing in `$LOG_PATH` to explain it, suspect the rate
+limit first, not a server bug — back off and retry rather than chasing a phantom parsing bug.
+
+## Rollback and paid-state tools (QA account reset)
+
+> **These endpoints exist only outside production.** They are registered inside an
+> `if (process.env.NODE_ENV !== 'production')` block. Local dev leaves `NODE_ENV` unset so they
+> are available to you; if you ever run the local server with `NODE_ENV=production` they 404 by
+> design, and that is not a bug to report.
+
+
+Three dev-only HTTP endpoints, all in `connect-four/server/index.js`, all gated by
+**`requireLocalhost` only** — never `requireAdmin`, which is a no-op outside
+`NODE_ENV=production`. A non-localhost caller gets `403 { "error": "Admin endpoints are
+localhost-only" }`. All three back onto `connect-four/server/qaAccountTools.js`'s
+`createQaAccountTools({ paddleClient, supabase, authClient })`.
+
+| Endpoint | Body | Success | Notes |
+|---|---|---|---|
+| `POST /api/admin/qa-rollback` | `{ userId }` | 200 `{ reset: true, canceledSubscriptions: [ids] }` | 400 if `userId` missing; **503 `{ error: 'payments not configured' }`** when `PADDLE_API_KEY` is unset (the only one of the three that touches `paddleClient`) |
+| `POST /api/admin/qa-set-paid-state` | `{ userId, paddleCustomerId }` (`paddleCustomerId` may be `null`) | 200 `{ paidStateSet: true }` | 400 if `userId` missing; no 503 check — DB-only write, never calls `paddleClient` |
+| `POST /api/admin/qa-set-email` | `{ userId, email }` | 200 `{ emailSet: true }` | 400 if either missing; no 503 check — talks only to Supabase auth (`auth.admin.updateUserById`) |
+
+500s return the generic `{ error: 'Internal server error' }` body (per
+`docs/architecture/server-conventions.md`'s "never `err.message` in the body" rule) — the real
+error lands in the server log via `logError`, not in the response.
+
+**What `resetQaAccount` (behind `qa-rollback`) actually does**: lists the account's Paddle
+sandbox subscriptions via the SDK and cancels every cancelable one (`active`/`trialing`/
+`past_due`/`paused`) with `effectiveFrom: 'immediately'` — **before** nulling
+`paddle_customer_id` (nulling first would make the subscription unrecoverable; no subscription
+id is stored anywhere outside Paddle itself, `users` only carries `paddle_customer_id`) — then
+writes `tier: 'free'` and `paddle_customer_id: null` together in **one** update, so the account
+is never left in an intermediate "free tier, still linked to a Paddle customer" state. It does
+**not** touch `payment_events` and does **not** clear the account's email. It is idempotent —
+re-running it against an already-reset account is a success no-op.
+
+**CLI**: `connect-four/server/scripts/qa-rollback-cli.js` — thin wrapper over `resetQaAccount`.
+Takes the user id **positionally**, not as a `--user` flag, and refuses to run without `--yes`:
+
+```
+cd connect-four && node --env-file=server/.env server/scripts/qa-rollback-cli.js <userId> --yes
+```
+
+**CLI**: `connect-four/server/scripts/send-synthetic-webhook.js` — loads a harvested fixture
+from `connect-four/server/scripts/webhook-fixtures/<name>.json`, re-stamps a fresh `event_id`
+and re-signs it at send time, then POSTs it to this server's own `/api/paddle/webhook` (no
+tunnel, no Paddle simulator):
+
+```
+cd connect-four && node --env-file=server/.env server/scripts/send-synthetic-webhook.js \
+  --fixture <basename> --customer-id <paddleCustomerId> [--subscription-id <id>]
+```
+
+**Dev-only UI**: a **"🛠 Dev: Set QA email"** button in `connect-four/src/screens/
+SettingsScreen.jsx`, inside the existing `import.meta.env.DEV`-gated dev block, right below
+"🛠 Dev: clear IndexedDB & sign out". It POSTs the current session's `userId` to
+`/api/admin/qa-set-email` with a hardcoded `email: 'qa-agent@example.test'` — use it to seed an
+email on the anonymous dev-skip-auth user (see "Flip tier" above and "Auth (dev)") so
+Paddle checkout can be driven without a `customer` param collision.
+
+**Mandatory step after any reset: reload the page.** This is the *only* way to see the effect —
+there is no server-reachable cache-invalidation call, and none may be added. The client's
+`invalidateEntitlement()` is a *soft* invalidation: it zeroes `lastFetchedAt` but deliberately
+keeps `lastKnownGood`, so on the next fetch the fail-open branch can re-pin a stale
+`entitled: true` right after a downgrade — it will NOT surface the reset. Only a full page reload
+discards the module-scoped entitlement cache wholesale. After calling `qa-rollback` or
+`qa-set-paid-state`, reload in Chrome before asserting anything about tier/entitlement UI.
+
+## Paddle sandbox checkout — test cards
+
+Local and staging checkouts run against the **Paddle sandbox**, which accepts **test cards only**;
+a real card is rejected. Sandbox vs live is decided by the **key prefix**, never `NODE_ENV` — the
+client token is `test_...` and the API key `pdl_sdbx_apikey_...`.
+
+Standard card (valid, no 3-D Secure) — use this for the normal free-to-paid pass:
+
+```
+Card number: 4242 4242 4242 4242
+Expiry:      any FUTURE month/year   (e.g. 11/28)
+CVC:         any 3 digits            (e.g. 123)
+ZIP/Postal:  any value
+Name:        any value
+```
+
+Scenario cards, for exercising the failure paths rather than the happy one:
+
+| Card number           | Result                                                 |
+| --------------------- | ------------------------------------------------------ |
+| `4242 4242 4242 4242` | Valid card, no 3DS — the default |
+| `4000 0038 0000 0446` | Valid card **with** 3DS — checks the challenge step is drivable |
+| `4000 0566 5566 5556` | Valid Visa **debit** |
+| `4000 0000 0000 0002` | **Declined** — checks `checkout.payment-error` handling |
+| `4000 0027 6000 3184` | Succeeds, then renewals decline — checks dunning / `subscription.past_due` |
+
+Source: the `paddle:sandbox-testing` skill (§"Step 2: Use test cards"), which mirrors
+[developer.paddle.com/sdks/sandbox#test-cards](https://developer.paddle.com/sdks/sandbox#test-cards).
+Re-check that page before treating this table as current — Paddle's card list changes.
+
+The overlay is a cross-origin iframe, but the chrome-devtools MCP a11y tree **does** penetrate it:
+the email textbox, country combobox, Continue and Close all come back as addressable uids from
+`take_snapshot`. Driving the checkout from an agent session is supported (verified 2026-09-07).
+
+**Never** use `paddle-live`, and never enter a real card.
 
 ## Chrome (chrome-devtools MCP)
 

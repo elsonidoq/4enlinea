@@ -61,6 +61,52 @@ describe('shouldAutoRouteToOnboarding', () => {
     );
   });
 
+  // OI-181 (2026-09-09 re-verify): a signed-out DEEP LINK to a gated screen must be honored
+  // (the screen renders its own unauthenticated branch) instead of being clobbered by the
+  // first-run auto-route. Genuine first-run (landing on '/', i.e. requestedScreen omitted or
+  // 'home') must keep auto-routing — that is the entire reason the auto-route exists.
+  for (const requestedScreen of ['saga', 'settings', 'stats']) {
+    it(`does NOT fire for a signed-out deep link to '${requestedScreen}' (OI-181)`, () => {
+      assert.equal(
+        shouldAutoRouteToOnboarding({
+          sessionChecked: true,
+          session: null,
+          onboardingStatus: 'not_encountered',
+          requestedScreen,
+        }),
+        false,
+      );
+    });
+  }
+
+  it('still fires for a genuine first-run landing on the app root (OI-181 must not regress first-run)', () => {
+    assert.equal(
+      shouldAutoRouteToOnboarding({
+        sessionChecked: true,
+        session: null,
+        onboardingStatus: 'not_encountered',
+        requestedScreen: 'home',
+      }),
+      true,
+    );
+  });
+
+  it('defaults to auto-routing when requestedScreen is absent or unknown (OI-181: never accidentally break first-run)', () => {
+    assert.equal(
+      shouldAutoRouteToOnboarding({ sessionChecked: true, session: null, onboardingStatus: 'not_encountered' }),
+      true,
+    );
+    assert.equal(
+      shouldAutoRouteToOnboarding({
+        sessionChecked: true,
+        session: null,
+        onboardingStatus: 'not_encountered',
+        requestedScreen: 'someUnknownScreenKey',
+      }),
+      true,
+    );
+  });
+
   it('does NOT fire while sessionChecked is false, regardless of session/status (FR-014 race guard)', () => {
     assert.equal(
       shouldAutoRouteToOnboarding({ sessionChecked: false, session: null, onboardingStatus: 'not_encountered' }),

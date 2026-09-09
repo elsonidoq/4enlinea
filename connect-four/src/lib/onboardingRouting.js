@@ -11,6 +11,19 @@
 export const ONBOARDING_GAME_PARAMS = { difficulty: 'easy', side: 'first', onboarding: true };
 
 /**
+ * Screens with their own unauthenticated branch that a signed-out user may deliberately
+ * deep-link to (OI-181). Honouring the deep link means NOT auto-routing to onboarding, so the
+ * screen itself renders that branch — its own signed-out CTA (already wired via
+ * postLoginReturn.js's `stashReturnTo`, see HomeScreen.jsx/StatsScreen.jsx/
+ * OnboardingImportOfferScreen.jsx) is what stashes+replays the destination through sign-in, so
+ * no change to postLoginReturn.js is needed here.
+ *
+ * Deliberately NOT the app root ('home') or an unknown/absent screen — those must keep
+ * auto-routing exactly as before, so a genuine first-run visit is never accidentally broken.
+ */
+export const DEEP_LINK_HONORED_SCREENS = new Set(['saga', 'settings', 'stats']);
+
+/**
  * Decide whether the anonymous first-run auto-route effect should fire.
  *
  * Settled decision (B3/D1, spec.md Assumptions): anonymous-only. A signed-in
@@ -21,11 +34,19 @@ export const ONBOARDING_GAME_PARAMS = { difficulty: 'easy', side: 'first', onboa
  * `onboardingStatus` of `null`/`undefined` is treated identically to
  * `'not_encountered'` at every read site (spec.md Assumptions).
  *
- * @param {{ sessionChecked: boolean, session: object|null, onboardingStatus: string|null|undefined }} args
+ * OI-181: `requestedScreen` is the screenKey the signed-out visitor actually asked for (App.jsx
+ * supplies its own parsed-URL screen ref). A deliberate deep link to a screen in
+ * DEEP_LINK_HONORED_SCREENS is honoured — the auto-route does not fire, so that screen's own
+ * unauthenticated branch renders instead. Any other value (including 'home', absent/undefined,
+ * or an unrecognised key) falls through to the pre-existing behaviour: auto-route fires, exactly
+ * as before OI-181, so first-run is never accidentally broken by an unmapped route.
+ *
+ * @param {{ sessionChecked: boolean, session: object|null, onboardingStatus: string|null|undefined, requestedScreen?: string }} args
  * @returns {boolean}
  */
-export function shouldAutoRouteToOnboarding({ sessionChecked, session, onboardingStatus }) {
+export function shouldAutoRouteToOnboarding({ sessionChecked, session, onboardingStatus, requestedScreen }) {
   if (!sessionChecked || session) return false;
+  if (DEEP_LINK_HONORED_SCREENS.has(requestedScreen)) return false;
   return onboardingStatus === 'not_encountered' || onboardingStatus == null;
 }
 

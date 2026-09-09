@@ -2029,3 +2029,302 @@ direct DB/API measurement — not from screenshots alone.
     "Start sparring" onboarding screen.
   - **Source**: 2026-08-25 hotfix, `src/App.jsx` `[session]` effect. Note OI-149: landing on onboarding
     *after sign-out* is separate, still-open, expected behaviour.
+
+---
+
+## Epic 13 — End-to-End QA Enablement (spec 058) — added 2026-09-08
+
+### Webhook fixture drift — do Paddle's delivered payloads still match our replayed fixtures?
+
+**Why this is a staging check and not a local one.** Spec 058's downgrade-lifecycle coverage replays
+webhook payloads locally, because Paddle cannot deliver to `localhost`. The payloads were harvested
+from real sandbox notifications (Settled decision 8 — never hand-authored), but they are **frozen at
+their harvest date**. If Paddle changes its payload shape afterwards, the local replay keeps passing
+while production breaks: the local test *is* the frozen copy, so it structurally cannot see the
+drift. Staging is the first place Paddle delivers for real, so it is the first place drift is
+visible. This is the residual gap spec 058 explicitly accepted rather than closed.
+
+**Run it** (read-only — SELECTs only, no writes, safe to point at production):
+
+```bash
+cd connect-four && node server/scripts/check-webhook-fixture-drift.mjs --env staging
+```
+
+**Success condition**: exits **0** and prints `No drift: every compared fixture still matches what
+Paddle delivers.`
+
+- Exit **3** = drift found; the script names the exact key paths that appeared or vanished.
+  Re-harvest that fixture (`server/scripts/webhook-fixtures/README.md` records the method) before
+  trusting any local downgrade run.
+- Exit **1** = the check could not run (bad `--env`, missing env file, unreachable DB). **Not a
+  pass.**
+- `compared 0` in the summary is **not a pass either** — it means the environment has received no
+  matching events yet. Re-run after staging has actually processed a pause/cancel, and add
+  `--require-all` once all three event types should exist, so an empty ledger cannot masquerade as
+  success.
+
+**What it compares.** `payment_events.payload` stores the **unmarshaled SDK entity**, not the raw
+wire payload (`paddleProcessor.js` stores `payload: event`). So the script pushes each fixture
+through the same `webhooks.unmarshal` path the processor uses and compares entity key-paths against
+entity key-paths. Values are ignored (ids and timestamps differ per event by design).
+
+**Known limits, verified empirically 2026-09-08 rather than assumed:**
+- It detects a field we depend on **disappearing** (deleting `currency_code` from a fixture surfaced
+  immediately and exited 3).
+- It does **not** detect a brand-new Paddle field, because the SDK drops wire keys it doesn't map —
+  such a field stays invisible until the SDK version that maps it is installed.
+- It does not detect a field that keeps its name but changes meaning. This is a shape check.
+
+**Current coverage**: 2 of 3 fixtures. `subscription-updated-past-due.json` does not exist — the
+sandbox dunning card would not decline (**OI-158**). The script already lists it and will start
+checking it automatically once it is harvested; until then it reports `SKIP`, not a pass.
+
+- [ ] **Run `check-webhook-fixture-drift.mjs --env staging` after the next staging deploy that has
+  processed at least one subscription pause or cancel.** Not yet run against staging: as of
+  2026-09-08 the staging Supabase project is unreachable (NXDOMAIN, recorded 2026-08-25 in memory
+  `reference_supabase_connection`) — re-verified independently on 2026-09-08, not taken from memory:
+  `host jkqilynpshutqcceopdn.supabase.co` still returns NXDOMAIN. There was therefore no staging
+  database to read. Note also that this worktree has neither `connect-four/server/.env.staging` nor
+  `.env.production`; both are gitignored and must be present before the script can target those
+  environments. The script itself is verified working end-to-end against `--env local`, including
+  its drift-detection path (proven by injecting a removed field and observing exit 3).
+
+---
+
+## Epic 13 — End-to-End QA Enablement (spec 058) — added by the full-app QA pass 2026-09-08
+
+Residue of the 32-task full-app QA run (`agentic_QA_2026-09-08-1929.md`,
+plan `docs/superpowers/plans/2026-09-08-full-app-qa.md`). These are the items that run could **not**
+settle locally. Everything else it found is already filed as OI-163…OI-181 and is fixable/verifiable
+in local dev — do not re-route those here.
+
+### 1. Deep-reveal TTS storage bucket exists in staging and production
+
+- **What**: trigger one deep-reveal TTS synthesis in staging and confirm the audio artifact is
+  uploaded and served, then repeat in production after deploy.
+- **Why staging**: local dev logged `[tts/deep-reveal] storage upload error: Bucket not found` —
+  a Supabase **storage bucket is missing**, which is environment provisioning, not application
+  logic, so a local fix would prove nothing about the deployed environments. The failure is
+  **silent to the user** (text renders, audio just never arrives), so it will not surface as a
+  visible bug in a staging click-through unless specifically checked.
+- **Expected**: the upload succeeds, no `Bucket not found` in the server log, and the clip plays.
+- **Source**: full-app QA 2026-09-08, Task F2 log sweep (recorded but deliberately NOT filed as an
+  OI — the Deep Reveal surface was out of scope for that run).
+- [ ] staging — tester/date:
+- [ ] production — tester/date:
+
+### 2. Paid challenge sets are genuinely reachable after a real purchase (OI-177 + OI-170 together)
+
+- **What**: after OI-177 and OI-170 are fixed, complete a real purchase in staging and open **each**
+  paid set (`mixed`, `undercut`, `overcut`, `figure_7`, `j_shape`) end-to-end — not just confirm the
+  tile unlocks.
+- **Why staging**: the two defects mask each other. OI-177 means the tile never unlocks; OI-170
+  means 3 of the 4 paid categories have **zero** drawable puzzles. Fixing only one leads a paying
+  user to a blank screen (OI-171). Local content pools are also not the deployed pools, so
+  "it draws locally" does not establish that the deployed category has rows.
+- **Expected**: every paid set opens and serves its advertised number of puzzles to a paid account.
+- **Source**: full-app QA 2026-09-08, Tasks C5/D3; OI-170, OI-171, OI-177.
+- **UPDATE 2026-09-09 (remediation round)**: all three code fixes have landed locally — OI-177
+  (`SetPickerScreen` now reads `getEntitlement()` and gates `locked={!set.free && !entitled}`),
+  OI-170 (`server/puzzlePool.js` — `position` removed from the visibility filter, so
+  `position = NULL` rows are drawable), OI-171 (`ChallengeScreen` renders three distinct
+  locked/empty/error states). **The check is unchanged and still owed**: none of it was exercised
+  against a deployed environment or a real purchase.
+- [ ] staging — tester/date:
+- [ ] production — tester/date:
+
+### 3. `/api/puzzles/counts` and `/api/puzzles/draw` agree in the deployed environments
+
+- **What**: for every category, compare the count `/api/puzzles/counts` advertises against the number
+  `/api/puzzles/draw` can actually serve, in staging and in production.
+- **Why staging**: this is a **data** divergence, not only a code one — `counts` filters on
+  `is_active` while `draw` also requires `position IS NOT NULL`, so each environment's answer
+  depends on its own rows. Locally 6 of 12 categories drew zero. The deployed pools were generated
+  by the same `promotePuzzleRow.js` that never sets `position`, so the same shape is expected there,
+  but it must be **measured**, not assumed.
+- **Expected**: advertised count == drawable count for every category, in both environments.
+- **Source**: full-app QA 2026-09-08, Task C5; OI-170.
+- **UPDATE 2026-09-09 (remediation round)**: the *code* divergence is closed — both endpoints now
+  funnel through `applyVisibilityFilter` in `server/puzzlePool.js`, so `counts` and `draw` cannot
+  disagree by construction. What remains is purely the **data** question this check was written
+  for: whether each deployed environment's pools actually hold rows. Still owed, unchanged.
+- [ ] staging — tester/date:
+- [ ] production — tester/date:
+
+### 4. The other two checkout call sites survive a real payment (OI-178)
+
+- **What**: complete a real sandbox purchase from **`SagaScreen`** and from **`SetPickerScreen`**
+  (the QA run only payment-tested the `SettingsScreen` CTA) and confirm the `UpgradeModal` reaches
+  its success state and auto-dismisses.
+- **Why staging**: needs a real Paddle round trip, and the failure is a **timing/race** in the
+  hand-off from `checkoutReturnFlow` to the modal instance — the kind of thing that can differ under
+  real network latency rather than a local overlay that returns instantly.
+- **Expected**: on all three call sites the modal shows success and auto-dismisses; no site is left
+  showing a pristine "Become Pro" sheet to someone who just paid.
+- **Source**: full-app QA 2026-09-08, Task D1; OI-178 (root cause not established).
+- **UPDATE 2026-09-09 (remediation round)**: root cause **established** by a real sandbox purchase
+  (`txn_01m238300kdxdnzsvc0ddxgrnk`) and fixed in the shared hook — our own
+  `Paddle.Checkout.close()` made Paddle emit `checkout.closed` synchronously inside that call, so
+  the modal's dismissed-handler wrote `'idle'` over `'success'` in the same React batch and
+  `'success'` was never committed. `useUpgradeCheckout.js` now swallows exactly that one event
+  (`completedInFlight`), and `UpgradeModal` defers its downgrade decision to a macrotask. Because
+  the fix is in the shared hook + shared component, **all five** call sites are covered
+  structurally — SettingsScreen, SagaScreen, SetPickerScreen, `PostSetSummaryScreen.jsx:272-277`
+  and `DeepRevealPane.jsx:466-471` (the QA run named only three). This check widens to those five
+  and remains owed: only a real payment can prove it.
+- [ ] staging — tester/date:
+- [ ] production — tester/date:
+
+### 5. Google OAuth sign-in (carried over — still unverifiable outside staging)
+
+- **What**: sign in with Google and confirm the post-login destination for each of the gated CTAs.
+- **Why staging**: out of scope for the QA run by the brief, and **structurally untestable from a
+  worktree** — the DEV branch hardcodes `http://localhost:3001`, which reaches the MAIN checkout's
+  server rather than the worktree's. The owner verifies this manually.
+- **Expected**: sign-in completes and lands on the destination each CTA promised (three CTAs stash a
+  destination via `postLoginReturn`; four stash nothing and stay put).
+- **Source**: full-app QA 2026-09-08, Group B (drove the same CTAs via `Dev: skip auth` instead).
+- [ ] staging — tester/date:
+- [ ] production — tester/date:
+
+---
+
+## Epic 13 — End-to-End QA Enablement (spec 058) — QA remediation round, added 2026-09-09
+
+Residue of the OI-163…OI-181 remediation (ledger: `.superpowers/sdd/qa-2026-09-08-remediation/progress.md`).
+Everything below is something the remediation **could not settle locally**; the fixes themselves are in
+the tree and both gates are green (`test:fast` 1843/0, `test:dom` 117/0). Items 2, 3 and 4 of the section
+above were **extended in place** rather than duplicated here.
+
+**Standing constraint for every item below**: the staging Supabase project is **unreachable** —
+`jkqilynpshutqcceopdn.supabase.co` returns NXDOMAIN, first recorded 2026-08-25 and re-confirmed
+2026-09-08 (OI-162). No staging measurement in this section has been attempted, and none can be until
+that project is restored or replaced. Where an item can be answered on production instead, it says so.
+
+### 6. Paddle emits exactly ONE `checkout.closed` per completed payment
+
+- **What**: complete one real sandbox purchase against a deployed environment and confirm the
+  `UpgradeModal` reaches `'success'` and auto-dismisses — then repeat with a genuine **abandon**
+  (open the overlay, close it without paying) and confirm the modal still resets to `'idle'`.
+- **Why staging**: the OI-178 fix sets a module-level `completedInFlight` flag on `checkout.completed`
+  and **swallows exactly one** subsequent `closed`/`error` event. If Paddle ever emits *two* closes for
+  one completed payment, the second is not swallowed and the original defect returns; if it emits
+  *none* on some path, the flag is cleared on the next `handleUpgrade` before `Checkout.open`, so it
+  cannot stick — but neither branch is provable without a real Paddle round trip. Localhost receives no
+  webhooks, and the local evidence base is a single sandbox transaction.
+- **Expected**: post-payment the modal shows success and auto-dismisses; a real abandon still returns
+  the modal to `'idle'` (the OI-54 behaviour must be preserved, not disarmed by the new flag).
+- **Source**: OI-178; batch F, `.superpowers/sdd/qa-2026-09-08-remediation/oi178-investigation.md`.
+- **UPDATE 2026-09-09 (local Phase-2 QA, `agentic_QA_2026-09-09-1415.md`)**: attempted a SECOND
+  real sandbox purchase from `SagaScreen` (to close the "only SettingsScreen tested" gap) — the
+  Paddle sandbox checkout iframe stopped registering clicks partway through the form (browser-
+  driving/environment limitation, not an observed app defect); no fresh purchase completed.
+  `SetPickerScreen`'s purchase was never attempted (budget). **Still open**: this staging/prod
+  check remains the only way to settle whether Paddle emits more than one `checkout.closed`, and
+  whether the fix holds from Saga/SetPicker specifically.
+- [ ] staging — tester/date:
+- [ ] production — tester/date:
+
+### 7. `server/scripts/fv_suff/` exists in the deployed image
+
+- **What**: on a deployed instance, open `/admin/fv-suff` and `/admin/reason` (or hit
+  `GET /api/admin/fv-suff/files` and `GET /api/admin/reason/files`) and confirm the file pickers list
+  files rather than `{"answers":[]}` / `{"files":[]}`.
+- **Why staging**: the OI-176 fix makes the four admin endpoints search
+  `server/scripts/fv_suff/` then `server/scripts/`. The 46 artifact files **are** git-tracked
+  (`git ls-files connect-four/server/scripts/fv_suff/` → 46), so they are expected to be present in a
+  railpack build — but that is an inference about the build, not a measurement of it. If the directory
+  is absent from the image, `/admin/fv-suff` stays broken there regardless of this fix, and the failure
+  is an **empty picker**, not an error, so it will not surface unless specifically checked. Note these
+  routes are `requireLocalhost + requireAdmin`, so this must be checked from the container itself (or
+  by an operator with loopback access), not from a browser on the public URL.
+- **Expected**: both `/files` endpoints return non-empty arrays, and `/api/admin/fv-suff` with no
+  `answers` param returns `200` with a `file` field naming the newest run — not a 404.
+- **Source**: OI-176; batch G.
+- **Note 2026-09-09**: the local Phase-2 QA pass (`agentic_QA_2026-09-09-1415.md`) explicitly
+  excluded all admin/internal-tool surfaces by user directive — this item was not driven locally
+  either, still relies solely on the remediation's own curl-level RED/GREEN. Staging/production
+  check unchanged.
+- [ ] staging — tester/date:
+- [ ] production — tester/date:
+
+### 8. `/api/paddle/verify-transaction` after a successful payment (OI-183)
+
+- **What**: complete a real purchase against a deployed environment and observe the response of
+  `POST /api/paddle/verify-transaction` for that transaction.
+- **Why staging**: locally it answered `{"activated":false,"reason":"not_completed"}` roughly 2.3s
+  after a **successful** sandbox payment. Its root cause is recorded as **UNKNOWN** — and localhost
+  receives no Paddle webhooks at all, so this may be a purely local artifact of the missing webhook
+  rather than a real defect. A deployed environment does receive webhooks, so it is the only place the
+  two can be told apart. Do not "fix" this before measuring: half the candidate causes disappear if the
+  answer is "local-only".
+- **Expected**: either `activated: true` for a completed transaction (⇒ local-only artifact, close
+  OI-183), or the same `not_completed` (⇒ a real defect, and OI-183 gets a root cause).
+- **Source**: OI-183; OI-178 investigation, 2026-09-09.
+- [ ] staging — tester/date:
+- [ ] production — tester/date:
+
+### 9. Coach TTS for the four new post-game summary keys
+
+- **What**: after the four `coach.spoken.sparring.review.mistakesStrong.{0,1}` /
+  `…mistakesRough.{0,1}` clips are generated and **approved** in `/admin/audio`, finish a sparring
+  game that lands in each of the two new bands and confirm the coach actually *speaks* the summary.
+- **Why staging**: the clips are not in the manifest today, so those two bands ship **text-only** —
+  and a missing coach clip is silent, not an error, so it cannot be caught by a click-through that
+  isn't listening for it. Approval is a human act by design. See `docs/deployment_steps.md`
+  "Coach TTS for the four new sparring-review summary keys" for the generation/approval procedure and
+  OI-184 for why the clips could not simply be committed.
+- **Expected**: both bands narrate in `en` and `es`; no un-narrated summary.
+- **Source**: OI-174 / OI-184; batch F.
+- [ ] staging — tester/date:
+- [ ] production — tester/date:
+
+### 10. Real-browser confirmation of the three visual fixes (jsdom proves none of them)
+
+- **What**: on a deployed build, eyeball (a) `/concept/block-before-build` — the `win` overlay ring
+  **and** its legend swatch must both read gray on the four gray-disc slides; (b) `/game` and
+  `/challenge/<cat>` — the board must not shift when coach messages accumulate (the `fixed` variant's
+  reserved `height: 140`); (c) the lesson slides in **Spanish** and at **390×844**, where the coach cap
+  and the prose panel are both under more pressure than the measured English desktop case.
+- **Why staging**: jsdom neither paints nor resolves CSS custom properties — every colour assertion in
+  `tests/dom/BoardWinOverlayColor.dom.test.jsx` and `ConceptScreenWinLegendColor.dom.test.jsx` is on
+  the **token string** written into `style.background`, so "is `#525a6b` legible as a ring around a
+  `#3c4250` disc on a `#fbf4e3` hole" is unanswerable there. The local before/after browser sweep
+  covered English at 1382×727 only, and `/game` bounced to `/` so the `fixed` variant was never
+  exercised in a browser at all.
+- **Expected**: gray rings with matching gray swatches; no board shift on any board+coach screen; no
+  new clipping in Spanish or at mobile width.
+- **Source**: batches D / E / E2, all three flagged UNVERIFIED by their own agents.
+- **UPDATE 2026-09-09 (local Phase-2 QA, `agentic_QA_2026-09-09-1415.md`)**: (a) settled locally,
+  and the answer is **NOT clean** — the legend swatch is correct gray, but the board **ring itself
+  still renders green** on gray discs in a real browser: `tokens.css`'s `@keyframes pulse`
+  hardcodes the ring color and overrides `Board.jsx`'s color-aware inline style for the whole
+  animation. This is exactly the failure mode jsdom could not see. Filed as OI-168 STILL BROKEN
+  (was previously marked resolved) — this is now a code fix, not just a staging measurement. (b)
+  and (c) — board-shift stability on `/game`/`/challenge/<cat>`, and Spanish/mobile lesson text —
+  were **not** covered by the local pass (English-only, and `/game` was reached this time but
+  board-shift was not specifically instrumented); still open, still staging/local-browser work.
+- [ ] staging — tester/date:
+- [ ] production — tester/date:
+
+### 11. OI-173 data-loss fix, verified against a real account and a real DB
+
+- **What**: sign in on a deployed environment with an account that already has a non-zero
+  `sparring_record` **and** a non-zero `streak_count`, hard-reload **twice**, then read
+  `sparring_record`, `streak_count` **and** `last_active_date` back from the DB.
+- **Why staging**: the fix has two layers (a per-account localStorage marker client-side, content
+  guards in `server/userHelpers.js` server-side) and **neither was driven in a browser or against a
+  real database** — the whole of batch B is unit and jsdom coverage. The original defect was a silent
+  data-loss blocker, so a structural argument is not sufficient evidence that it is closed. Read all
+  three columns: the streak half of the blocker is a separate write from the record half.
+- **Expected**: all three values unchanged across both reloads. (Note: already-zeroed rows are **not**
+  repaired by this fix — they merely stop being re-zeroed. Pre-launch, that is deliberate.)
+- **Source**: OI-173; batch B, "STILL OWED IN PHASE 2".
+- **UPDATE 2026-09-09 (local Phase-2 QA, `agentic_QA_2026-09-09-1415.md`)**: DONE locally, against
+  a real local DB and two real hard reloads with a game played between each. All three columns —
+  `sparring_record`, `streak_count`, `last_active_date` — held across both reloads (no wipe).
+  Local-DB evidence is now strong; a staging/production re-check is still the row below (kept open
+  because pre-launch databases are disposable and a fresh production DB has different history/RLS
+  from the local one — not because the local result is in doubt).
+- [ ] staging — tester/date:
+- [ ] production — tester/date:

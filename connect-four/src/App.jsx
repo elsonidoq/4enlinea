@@ -167,7 +167,18 @@ function Navigator() {
     (async () => {
       const profile = await store.getProfile();
       if (cancelled) return;
-      if (shouldAutoRouteToOnboarding({ sessionChecked, session, onboardingStatus: profile.onboarding_status })) {
+      if (
+        shouldAutoRouteToOnboarding({
+          sessionChecked,
+          session,
+          onboardingStatus: profile.onboarding_status,
+          // OI-181: screenRef (not `screen`) so a signed-out deep link to a gated screen
+          // (e.g. /saga, /settings, /stats) is honoured — the mount effect above sets `screen`
+          // synchronously from the parsed URL, well before this async getProfile() resolves, so
+          // screenRef.current already reflects the requested route.
+          requestedScreen: screenRef.current,
+        })
+      ) {
         // Route to the mission screen (not the game directly). The mission screen fires
         // track('onboarding_started') on mount and launches the onboarding game via its CTA.
         go('onboardingMission');
