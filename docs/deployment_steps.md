@@ -1761,6 +1761,50 @@ Restore the previous lesson JSON text and the two deleted mp3s from git; delete 
 
 ---
 
+## QA remediation Phase 2, 2026-09-09 — real-browser verification of OI-163…OI-181 (`agentic_QA_2026-09-09-1415.md`)
+
+**Status**: DONE (local worktree only). **Applies to**: local / staging / production (read below —
+this is mostly "no new step", with one exception).
+**When**: after the code deploy of the QA-2026-09-08 remediation batches (A–G2 above).
+
+### What this sets up
+
+Phase 1 (the entries above, `## QA remediation 2026-09-09 — ...`) shipped the code fixes. This pass
+drove 17 of the 18 fixed issues in a real Chrome browser (OI-176 excluded from this run — admin-only
+surface, user directive) plus the three re-run measurements and four coverage gaps from the original
+QA plan. **No new migration, backfill, or content-regeneration step was discovered.** All prior
+per-change entries in this file (coach TTS §, OI-170 §, lesson-05 §) stand unchanged — this pass adds
+evidence, not new deploy machinery.
+
+**One real exception — OI-168 is NOT actually fixed**, despite `docs/open_issues.md` having
+previously read as closed after batch E2's unit-tested legend fix. The board win-ring itself still
+renders green on gray discs in a real browser: `connect-four/src/styles/tokens.css`'s
+`@keyframes pulse` hardcodes the ring color and silently overrides `Board.jsx`'s color-aware inline
+style for the whole animation — jsdom never runs CSS animations, so no existing test could catch
+this. **No fix has shipped for this yet** — it needs a follow-up code change (parameterize `pulse`'s
+color) before it can be deployed anywhere. Re-opened in `docs/open_issues.md`.
+
+**Second exception — OI-178's blast-radius claim is still partially unverified.** Only one real
+purchase (from `SettingsScreen`, made during the Phase-1 investigation) has ever completed
+end-to-end. This pass's attempt to complete a second purchase from `SagaScreen` stalled in the
+Paddle sandbox checkout iframe (browser-driving limitation, not an app defect) before reaching
+`checkout.completed`. `SetPickerScreen`'s purchase was never attempted. **Before treating OI-178 as
+fully closed for production, get one real purchase through from each of the 5 call sites** (or at
+minimum Saga/SetPicker, the two never tested) — see `staging_checks.md` Epic 13 item 6.
+
+### Verify
+
+No new command beyond the existing gates: `cd connect-four && npm run test:fast` (1843/0) and
+`npm run test:dom` (117/0, though 5 of them — `SocraticNarration`/`SocraticHintPhase` — are
+pre-existing order-dependent flakiness unrelated to this work; they pass in isolation).
+
+### Roll back
+
+N/A — this is a verification pass, not a code change. If OI-168's follow-up fix is written later,
+that entry gets its own deploy-prerequisites section here.
+
+---
+
 ## Template for new entries
 
 ```markdown

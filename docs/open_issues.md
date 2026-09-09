@@ -6326,7 +6326,10 @@ Paddle-delivering environment).
 
 ## OI-163 — resigning before making a move saves nothing and lands the player on a broken `/game/null` review
 
-**Status**: deferred (cosmetic dead-end; the flow is not stuck)
+**Status**: ✅ RESOLVED 2026-09-09 — fixed in the QA-2026-09-08 remediation (batch C,
+`useGameBoard.js`/`en.json`/`es.json`), browser-verified in `agentic_QA_2026-09-09-1415.md`:
+resigning at `/game` Move 0 now refuses with a coach message ("The game hasn't started yet…")
+instead of firing `onGameEnd`; no `POST /api/games` fires, no `/game/null` navigation occurs.
 **Area**: `connect-four/src/screens/GameScreen.jsx` (`saveGame`), `connect-four/src/lib/useGameBoard.js` (`handleResign`), `connect-four/server/index.js` (`POST /api/games`)
 **Discovered**: full-app agentic QA pass, 2026-09-08 (`agentic_QA_2026-09-08-1929.md`, Group A / Task A3)
 
@@ -6383,7 +6386,9 @@ recorded for the four `puzzle_attempts` writers — this is that class of defect
 
 ## OI-164 — lesson 5 slide 1 tells the learner Green played the centre column three times; Green played it twice
 
-**Status**: deferred (content fix, one string + its Spanish twin)
+**Status**: ✅ RESOLVED 2026-09-09 — fixed in `lessons/lesson-05-opening-imitate.json`
+(batch E), browser-verified: `/concept/opening-imitate` slide 1/3 now reads "Green has played the
+centre column **twice**." See `agentic_QA_2026-09-09-1415.md`.
 **Area**: `connect-four/lessons/lesson-05-opening-imitate.json` → `slides[0].coachMessages[0].text` / `text_es`
 **Discovered**: full-app agentic QA pass, 2026-09-08 (Task C2)
 
@@ -6416,7 +6421,10 @@ and
 
 ## OI-165 — the claimeven challenge feedback hardcodes "secures Gray's draw" on positions that are a Gray win
 
-**Status**: deferred
+**Status**: ✅ RESOLVED 2026-09-09 — fixed in `en.json`/`es.json` `eval.claimeven.*` (batch F,
+all 3 keys x 2 langs, outcome-neutral wording), browser-verified: `/clchallenge/claimeven` puzzles
+1/2 and 2/2 both now show outcome-neutral text with no draw/win claim asserted. See
+`agentic_QA_2026-09-09-1415.md`.
 **Area**: `connect-four/src/i18n/en.json:772` (`eval.claimeven.optimal.summary.0`) and `:777`
 (`eval.claimeven.suboptimal.summary.0`); consumed by `ChallengeScreen.jsx` via
 `eval.<category>.<quality>.summary.*`
@@ -6469,7 +6477,12 @@ Spanish-aware.
 
 ## OI-166 — `infoProse` silently truncates on 15 of the 45 slides in lessons 1–10, hiding up to 61% of the text
 
-**Status**: deferred
+**Status**: ✅ RESOLVED 2026-09-09 — fixed in `InfoProsePanel.jsx`/`ConceptScreen.jsx` (batch D,
+scroll-affordance mechanism: sticky fade + ▾ chip), browser-verified across all 46 slides in
+lessons 1-10, desktop AND mobile 390×844: of the slides that still overflow (24/46 desktop,
+27/46 mobile — the fix does not remove overflow, only makes it visible), **100% now show the
+affordance**, zero silent truncations either viewport. See `agentic_QA_2026-09-09-1415.md`
+re-run measurement #2 and coverage gap #3.
 **Area**: `connect-four/src/components/InfoProsePanel.jsx` (the panel itself) + the flex column in
 `connect-four/src/screens/ConceptScreen.jsx` that decides its residual height
 **Discovered**: full-app agentic QA pass, 2026-09-08 (Tasks C1–C3)
@@ -6510,7 +6523,13 @@ while the scroll/overflow styling is owned by InfoProsePanel. A fixer needs **bo
 
 ## OI-167 — the lesson coach bubble clips its FIRST line, not its last, so the reader loses the start of the sentence
 
-**Status**: deferred
+**Status**: ✅ RESOLVED 2026-09-09 for its ConceptScreen scope — fixed via `CoachDialog.jsx`'s
+new `maxBubblesHeight` prop (batch D; ConceptScreen opts into 200), browser-verified: 0/46
+ConceptScreen coach bubbles clip, desktop or mobile (all reach full `scrollHeight`, including the
+claimeven slides that clipped at 120/139 pre-fix). **New minor residual filed as OI-185**: the
+other 10 `CoachDialog` call sites (SocraticScreen etc.) keep the un-raised 120px default and can
+still clip — worse on mobile (5/10 lessons swept) than desktop (2/10). See
+`agentic_QA_2026-09-09-1415.md`.
 **Area**: `connect-four/src/components/CoachDialog.jsx:59` — the 120px cap.
 **NOT `ConceptScreen.jsx`** (this entry originally said so and was wrong; see the 2026-09-09
 re-verification below). `CoachDialog` is shared, so this fix has cross-screen blast radius.
@@ -6557,7 +6576,23 @@ down (`ChallengeScreen.jsx:806-809` comment). A per-screen fix therefore means a
 
 ## OI-168 — the `win` board overlay is hardcoded green, so lessons that mark Gray's discs with it put green rings on gray discs
 
-**Status**: deferred
+**Status**: ❌ STILL BROKEN 2026-09-09 — browser-verified STILL REPRODUCES despite a real, tested
+code-level fix. The legend-swatch half (`ConceptScreen.jsx`'s `overlayColors.js`, batch E2) is
+confirmed correct in the browser: the swatch computes the right gray. But the **board ring itself
+still renders green** on gray discs — `/concept/block-before-build` slide 1/4: legend swatch
+`rgb(82,90,107)` (correct gray) vs the actual win-ring `boxShadow` on the 3 gray-disc cells,
+`rgba(43,180,98,…)` (green). **New root cause, one layer below the fix that shipped**:
+`src/styles/tokens.css`'s `@keyframes pulse` hardcodes `box-shadow` to green in both its 0%/100%
+and 50% frames; a CSS animation's keyframe values override the element's own inline `boxShadow`
+for the whole animation duration, so `Board.jsx`'s color-aware inline style (the actual OI-168 fix)
+never paints. This is exactly why the shipped unit tests (`winLegendSwatch.test.js`,
+`BoardWinOverlayColor.dom.test.jsx`) pass: they assert on the inline style STRING, and jsdom never
+runs the CSS animation that overrides it in a real browser. Screenshot evidence and full repro in
+`agentic_QA_2026-09-09-1415.md`. **If picked up**: parameterize `pulse`'s ring color (two keyframes
+`pulse-green`/`pulse-gray`, or animate a CSS custom property referenced inside the keyframe) so the
+animation stops overriding the color-aware inline style set by the OI-168 fix.
+
+**Status (original, pre-2026-09-09)**: deferred
 **Area**: `connect-four/src/components/Board.jsx:356-363`; content side
 `lesson-02-block-before-build.json` slide 3 and `lesson-06-the-fork.json` slide 0
 **Discovered**: full-app agentic QA pass, 2026-09-08 (Tasks C1–C2)
@@ -6594,7 +6629,9 @@ before editing, rather than trusting the count.
 
 ## OI-169 — the upgrade modal shown for a locked PRO lesson only advertises Deep Reveals, never lessons
 
-**Status**: deferred
+**Status**: ✅ RESOLVED 2026-09-09 — fixed via `UpgradeModal`'s new `reason` prop (batch F,
+mirroring `AuthModal`), browser-verified: `/saga` → tap a locked PRO node → UpgradeModal now reads
+"Unlock every Pro lesson — plus unlimited Deep Reveals." See `agentic_QA_2026-09-09-1415.md`.
 **Area**: `connect-four/src/screens/SagaScreen.jsx:320-325`, `connect-four/src/components/UpgradeModal.jsx`, `connect-four/src/i18n/en.json:124`
 **Discovered**: full-app agentic QA pass, 2026-09-08 (Task C4)
 
@@ -6627,8 +6664,14 @@ the new copy ships English-only through the graceful i18n fallback.
 
 ## OI-170 — `puzzles.position` is never populated, so 6 of 12 challenge categories draw ZERO puzzles while `/setpicker` advertises a full count
 
-**Status**: **STALE as written — server-side fix landed 2026-09-09, browser verification still
-owed.** Read the "Superseded" block at the end of this entry BEFORE acting on anything above it.
+**Status**: ✅ RESOLVED 2026-09-09 — browser verification is NO LONGER OWED, it is done. All 8
+free categories drew their full requested `n` (5/5) via `/setpicker`; the 4 paid categories
+correctly 403 at free tier rather than drawing 0 (that's OI-171's paywall concern, also fixed).
+Full 12-category advertised-vs-drawable table in `agentic_QA_2026-09-09-1415.md` re-run
+measurement #1, compared against this entry's own pre-fix baseline table below.
+
+**Status (stale, pre-2026-09-09 browser verification)**: server-side fix landed 2026-09-09, browser
+verification was owed. Read the "Superseded" block at the end of this entry for the mechanism.
 The diagnosis below is preserved as the historical record of the 2026-09-08 code; the prescription
 in its original "If picked up" (backfill `position`) has been **withdrawn as wrong**.
 **Area**: `connect-four/server/puzzlePool.js` (new), `connect-four/server/index.js` (`GET /api/puzzles/counts` vs `GET /api/puzzles/draw`), `connect-four/server/promotePuzzleRow.js`, `connect-four/server/migrations/044_shape_key_position.sql`
@@ -6758,7 +6801,13 @@ untouched and still open.**
 
 ## OI-171 — an empty or forbidden puzzle draw renders a blank screen with no message, no CTA and no redirect
 
-**Status**: deferred (major)
+**Status**: ✅ RESOLVED 2026-09-09 — fixed in `ChallengeScreen.jsx` (batch A: generalised the
+empty-state branch off `lessonMode`, added `res.status` check before `.json()`, 403 CTA state),
+browser-verified: `/challenge/undercut` at free tier now shows "This challenge set is part of Pro.
+Become Pro to unlock it." with a CTA + Back button — no blank screen. See
+`agentic_QA_2026-09-09-1415.md`.
+
+**Status (original)**: deferred (major)
 **Area**: `connect-four/src/screens/ChallengeScreen.jsx`
 **Discovered**: full-app agentic QA pass, 2026-09-08 (Task C5)
 
@@ -6813,7 +6862,17 @@ reproduces this** — navigate to `/challenge/undercut` at `tier = 'free'`.
 
 ## OI-172 — every sparring game the player loses triggers a 500 from `/api/evaluate-move`
 
-**Status**: deferred (major)
+**Status**: ✅ RESOLVED 2026-09-09 — fixed in `evaluateMoveHandler.js` and `server/index.js`
+`/api/scores` (batch C, terminal-position short-circuit via `isTerminalPosition` on the AI path;
+`/api/scores` gets a `hasWon()` 400), verified by direct reproduction of the OI's own documented
+terminal payload against both call sites: `/api/evaluate-move` with the exact terminal movestring
+→ 200 (classification skipped, badge/quality intact) — was 500 pre-fix; `/api/scores` with a
+terminal-not-full board → 400 "no legal move: the game is already over" — was 500 pre-fix. Full
+server log for the run's duration shows zero `Invalid position` hits. See
+`agentic_QA_2026-09-09-1415.md`. Note the puzzle/lesson path residual is tracked separately as
+OI-182 (still open, unrelated scope).
+
+**Status (original)**: deferred (major)
 **Area**: `connect-four/server` — the AI-move classification path into `c4solver-wrapper.js`
 **Discovered**: full-app agentic QA pass, 2026-09-08 (Task C6)
 
@@ -6875,7 +6934,16 @@ path handles it before writing a new guard, rather than inventing a third conven
 
 ## OI-173 — every hard page load silently wipes a signed-in user's sparring record (W/L/D) back to zero
 
-**Status**: deferred (blocker — silent data loss on a live account)
+**Status**: ✅ RESOLVED 2026-09-09 — fixed via a one-time migration marker
+(`localMigrationMarker.js`) + content guards `isEmptySparringRecord`/`isEmptyStreak` in
+`userHelpers.js` (batch B), browser-verified across TWO hard reloads with a game played between
+each: `sparring_record` went `{W:1,L:2,D:0}` → unchanged after reload #1 → `{W:2,L:2,D:0}`
+(cumulative) after playing + reload #2; **`streak_count` (1) and `last_active_date` (today) stayed
+intact across both reloads** — the previously-unverified streak half is confirmed fixed too, not
+just `sparring_record`. See `agentic_QA_2026-09-09-1415.md` re-run measurement #3. This was a
+launch blocker; now closed. Silent data loss no longer reproduces.
+
+**Status (original)**: deferred (blocker — silent data loss on a live account)
 **Area**: `connect-four/src/store/ProfileStore.jsx` (`switchToSupabase`), `connect-four/src/store/IndexedDBStore.js` (`migrateToSupabase`), `connect-four/server/userRoutes.js` (`/api/user/migrate`)
 **Discovered**: full-app agentic QA pass, 2026-09-08 (Task C8)
 
@@ -6962,8 +7030,16 @@ stores, not just `sparring_record`.
 
 ## OI-174 — the post-game coach summary is drawn at random from an undifferentiated pool, so it can praise a badly-played game
 
-**Status**: deferred (minor). **Root cause below was WRONG and is corrected at the end of this
-entry (2026-09-09). Read that before touching anything.**
+**Status**: ✅ RESOLVED 2026-09-09 — fixed via `server/selectReviewSummaryPool.js` shared by both
+producers (batch F, pool subdivided into `clean`/`mistakesStrong`/`mistakes`/`mistakesRough`),
+browser-verified: a sparring game at 25% accuracy / 1 optimal / 3 blunders resolved to
+`coach.spoken.sparring.review.mistakesRough.1` = "Several turning points slipped away — plenty to
+learn here." — a correctly critical tone, drawn from the subdivided pool. Note: the
+`mistakesStrong`/`mistakesRough` audio clips are unapproved (OI-184, open) — silent narration on
+those two buckets is expected, not a new defect. See `agentic_QA_2026-09-09-1415.md`.
+
+**Status (original)**: deferred (minor). Root cause below was corrected 2026-09-09 during the
+remediation — read that block before touching anything.
 **Area** (corrected): the phrase is selected **server-side** — `connect-four/server/index.js:2287-2290`
 (live path) and `connect-four/server/reconstructAnalysisFromBlunders.js:72-75` (cached path) — and
 the pool contents live in `connect-four/src/i18n/en.json` + `es.json`.
@@ -7134,8 +7210,18 @@ them, NOT as a completed diagnosis:
 
 ## OI-176 — `/admin/fv-suff` defaults to an evidence filename that does not exist, so it always opens on a raw "Error: 404 Not Found"
 
-**Status**: deferred (minor). **Root cause below was WRONG — the file exists. Corrected at the end
-of this entry (2026-09-09); the "If picked up" guidance was withdrawn with it.**
+**Status**: ⚠️ CODE-FIXED 2026-09-09, BROWSER-UNVERIFIED BY SCOPE — the directory-path fix (all four
+handlers repointed at `server/scripts/fv_suff/` via `evalArtifacts.js`, batch G) landed and was
+verified at the HTTP layer by the remediation itself (curl RED/GREEN, see the Superseded block
+below). The 2026-09-09 Phase-2 QA pass that verified the other 17 fixes in a real browser
+**explicitly excluded this issue by user directive mid-run** ("I only want USER-FACING QA, not on
+the admin internal tools") — `/admin/fv-suff` and `/admin/reason` are admin-only, non-user-facing
+surfaces, so they were never opened in that pass's browser. Treat as unverified-in-browser by
+scope exclusion, not as broken or as fully closed. If this page is ever exercised again, confirm
+it opens on a real evidence file (not a 404) and that the default is the newest run by timestamp.
+
+**Status (original)**: deferred (minor). Root cause corrected 2026-09-09 during the remediation —
+see the Superseded block below.
 **Area** (corrected): `connect-four/server/index.js` — `GET /api/admin/reason` (`:882`) and
 `GET /api/admin/reason/files` (`:872`), plus the client default at
 `connect-four/src/pages/AdminFvSuffPage.jsx:216`
@@ -7194,7 +7280,16 @@ directory at all; this was checked only in this worktree.
 
 ## OI-177 — a PAYING user still cannot open any paid challenge set: SetPickerScreen gates on a static constant, never on tier
 
-**Status**: deferred (blocker — a paid feature is undeliverable through its primary entry point)
+**Status**: ✅ RESOLVED 2026-09-09 — fixed in `SetPickerScreen.jsx` (batch A: entitlement read
+added, `locked={!set.free && !entitled}`), browser-verified end-to-end: flipped account to
+`tier='paid'`, hard reloaded, `/setpicker` → tapped "Undercut" → navigated DIRECTLY into
+`/challenge/undercut` (no UpgradeModal) → played the full 8-puzzle set to `/summary` → confirmed
+server-side via direct DB read that 8 `puzzle_attempts` rows were written. This was a launch
+blocker; now closed and played through, not just unlocked. See `agentic_QA_2026-09-09-1415.md`
+coverage gap #2.
+
+**Status (original)**: deferred (blocker — a paid feature is undeliverable through its primary
+entry point)
 **Area**: `connect-four/src/screens/SetPickerScreen.jsx`
 **Discovered**: full-app agentic QA pass, 2026-09-08 (Task D3), predicted by the plan's coverage audit and then confirmed by driving a real sandbox purchase
 
@@ -7250,7 +7345,19 @@ has never been driven in a browser.
 
 ## OI-178 — after a successful payment the UpgradeModal never reaches "success" and never auto-dismisses
 
-**Status**: deferred (major)
+**Status**: ⚠️ FIX SHIPPED, ⚠️ PARTIALLY RE-VERIFIED 2026-09-09 — the root-cause fix
+(`completedInFlight` flag in `useUpgradeCheckout.js`, batch F, one shared fix covering all 5 call
+sites) already has ONE real-purchase confirmation from the remediation itself
+(`txn_01m238300kdxdnzsvc0ddxgrnk`, driven from SettingsScreen, root-caused via instrumented
+logging). The 2026-09-09 Phase-2 QA pass attempted a SECOND real purchase from SagaScreen
+specifically (to close the "only SettingsScreen tested" gap) but the Paddle sandbox checkout
+iframe stopped registering clicks partway through the form (an environment/browser-driving
+limitation — the form was valid, nothing errored) — no fresh purchase was completed, and
+SetPickerScreen's purchase was never attempted at all (budget). **Still genuinely unverified**:
+whether the fix holds from SagaScreen/SetPickerScreen specifically, and whether Paddle ever emits
+more than one `checkout.closed`. See `agentic_QA_2026-09-09-1415.md` coverage gap #4.
+
+**Status (original)**: deferred (major)
 **Area**: `connect-four/src/components/UpgradeModal.jsx`, `connect-four/src/lib/checkoutReturnFlow.js`, `connect-four/src/lib/useUpgradeCheckout.js`, call site `connect-four/src/screens/SettingsScreen.jsx`
 **Discovered**: full-app agentic QA pass, 2026-09-08 (Task D1) — a real Paddle sandbox purchase
 
@@ -7414,7 +7521,13 @@ against staging or production.**
 
 ## OI-179 — /pricing gives a paying user no acknowledgement that they are already Pro
 
-**Status**: deferred (minor)
+**Status**: ✅ RESOLVED 2026-09-09 — fixed in `PricingScreen.jsx` (batch F: first
+`getEntitlement()` read + `role="status"` already-Pro banner, CTA left unconditional),
+browser-verified: `/pricing` at tier paid shows "You're already a Pro member…" banner AND the
+"Become Pro" CTA is still present/clickable — both halves confirmed, including that the CTA stays
+reachable for the `?_ptxn=` Paddle payment-link case. See `agentic_QA_2026-09-09-1415.md`.
+
+**Status (original)**: deferred (minor)
 **Area**: `connect-four/src/screens/PricingScreen.jsx`
 **Discovered**: full-app agentic QA pass, 2026-09-08 (Task D3)
 
@@ -7445,7 +7558,14 @@ one. Add the new copy to `es.json` as well as `en.json`.
 
 ## OI-180 — several interactive controls are below the 44×44 minimum tap target on mobile
 
-**Status**: deferred (minor)
+**Status**: ✅ RESOLVED 2026-09-09 — fixed via extracted `AudioToggleButton.jsx` (all 6 former
+inline call sites now use it) + `minHeight: 44` on both PastGames chip rows (batch G),
+browser-verified at 390×844×2 mobile/touch via `getBoundingClientRect()` on all 4 affected
+surfaces: `/game` audio toggles 44×44 (was 36×36), `/challenge/immediate_threat` audio toggles
+44×44 (was 36×36), `/pastGames` sort row 44px tall (was 31.5-33px), `/pastGames` filter row 44px
+tall (was 31.5-33px). See `agentic_QA_2026-09-09-1415.md`.
+
+**Status (original)**: deferred (minor)
 **Area**: `connect-four/src/screens/PastGamesListScreen.jsx` (sort/filter chips); the audio-toggle icon buttons shared by `GameScreen` and `ChallengeScreen`
 **Discovered**: full-app agentic QA pass, 2026-09-08 (Task F1), viewport **390×844** (mobile, touch, dpr 2)
 
@@ -7497,7 +7617,14 @@ two more edits. **Verify all four screens/rows at 390×844, not one.**
 
 ## OI-181 — signed-out direct navigation to a gated screen bounces to onboarding before the screen's own unauthenticated branch can render
 
-**Status**: deferred (minor)
+**Status**: ✅ RESOLVED 2026-09-09 — fixed via `shouldAutoRouteToOnboarding` gaining a
+`requestedScreen` param + `DEEP_LINK_HONORED_SCREENS` allowlist (batch G2), browser-verified:
+signed-out direct navigation to `/saga`, `/settings`, `/stats` now each render their own
+unauthenticated branch (no bounce to onboarding). **Also confirmed the at-risk property**: genuine
+first-run navigation to `/` still auto-routes to onboarding correctly — the fix did not break the
+property it depends on. See `agentic_QA_2026-09-09-1415.md`.
+
+**Status (original)**: deferred (minor)
 **Area**: `connect-four/src/App.jsx` (the anonymous first-run auto-route effect) vs. the per-screen unauthenticated branches
 **Discovered**: full-app agentic QA pass, 2026-09-08 (Task F4)
 
@@ -7634,3 +7761,38 @@ pre-existing test to accommodate new work): the 8 generated clips for
 the tree and their registry entries reverted to `needs_audio`. The clips are preserved (not
 deleted) — see `docs/deployment_steps.md`. Those four summaries therefore currently ship **text
 without audio**, which is the pre-existing behaviour for any un-approved coach key.
+
+## OI-185 — `CoachDialog`'s raised bubble cap (OI-167's fix) only reached `ConceptScreen`; the other 10 call sites, incl. `SocraticScreen`, still clip at the un-raised 120px default
+
+**Status**: open (minor)
+**Area**: `connect-four/src/components/CoachDialog.jsx` (default `maxBubblesHeight=120`),
+`connect-four/src/screens/SocraticScreen.jsx:239` (does not pass a raised value)
+**Discovered**: 2026-09-09, Phase-2 browser QA verifying OI-167 (`agentic_QA_2026-09-09-1415.md`)
+
+**Repro**: `/concept/threat-vocabulary` → click Continue through all 10 slides to land on
+`/socratic/threat-vocabulary` → measure `[data-testid="coach-bubbles"]` `scrollHeight` vs
+`clientHeight`. Also reproduces on `/socratic/odd-rows-belong-to-red`.
+
+**Observed**: `threat-vocabulary`'s Socratic intro bubble: `scrollHeight` 139 / `clientHeight` 120
+(clips) at desktop. `odd-rows-belong-to-red`'s: 158/120. At mobile (390×844) the same class
+reproduces on **5/10** lessons swept (immediate-threat 139/120, block-before-build 139/120,
+threat-vocabulary 177/120, odd-rows-belong-to-red 216/120, zugzwang-tempo 158/120) — worse than
+desktop's 2/10, as the coach-bubble legend wraps more at the narrower width.
+
+**Root cause**: confirmed at source — OI-167's fix (2026-09-09 remediation, batch D) raises
+`maxBubblesHeight` to 200 only at the `ConceptScreen.jsx:205` call site. The other 10
+`CoachDialog` call sites (`GameScreen.jsx`, `OnboardingImportOfferScreen.jsx`, `SocraticScreen.jsx`,
+`HomeScreen.jsx`, `PostSetSummaryScreen.jsx`, `ChallengeScreen.jsx`,
+`MistakeDetailScreen.jsx` (x2), `OnboardingMissionScreen.jsx`, `ReviewScreen.jsx`) keep the
+original 120px default and can exhibit OI-167's exact symptom whenever their coach text exceeds
+~200 characters. This is a disclosed, deliberate scope boundary from the remediation ledger, not
+an accidental regression — filed so it is tracked rather than silently rediscovered by the next
+QA pass.
+
+**Why deferred**: same class as OI-166/167, cosmetic truncation with a scroll affordance
+underneath (not a data-loss or blocking defect) — but worth closing with the same mechanism now
+that `ConceptScreen`'s fix has proven it out.
+**If picked up**: audit each of the 10 remaining call sites' actual coach-text length budget;
+either raise `maxBubblesHeight` per call site the way `ConceptScreen` did, or set a shared higher
+default now that one screen has validated the approach and re-measure board-screen stability
+(the `fixed` variant's reserved height) is unaffected.

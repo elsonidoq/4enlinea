@@ -2170,6 +2170,13 @@ that project is restored or replaced. Where an item can be answered on productio
 - **Expected**: post-payment the modal shows success and auto-dismisses; a real abandon still returns
   the modal to `'idle'` (the OI-54 behaviour must be preserved, not disarmed by the new flag).
 - **Source**: OI-178; batch F, `.superpowers/sdd/qa-2026-09-08-remediation/oi178-investigation.md`.
+- **UPDATE 2026-09-09 (local Phase-2 QA, `agentic_QA_2026-09-09-1415.md`)**: attempted a SECOND
+  real sandbox purchase from `SagaScreen` (to close the "only SettingsScreen tested" gap) — the
+  Paddle sandbox checkout iframe stopped registering clicks partway through the form (browser-
+  driving/environment limitation, not an observed app defect); no fresh purchase completed.
+  `SetPickerScreen`'s purchase was never attempted (budget). **Still open**: this staging/prod
+  check remains the only way to settle whether Paddle emits more than one `checkout.closed`, and
+  whether the fix holds from Saga/SetPicker specifically.
 - [ ] staging — tester/date:
 - [ ] production — tester/date:
 
@@ -2189,6 +2196,10 @@ that project is restored or replaced. Where an item can be answered on productio
 - **Expected**: both `/files` endpoints return non-empty arrays, and `/api/admin/fv-suff` with no
   `answers` param returns `200` with a `file` field naming the newest run — not a 404.
 - **Source**: OI-176; batch G.
+- **Note 2026-09-09**: the local Phase-2 QA pass (`agentic_QA_2026-09-09-1415.md`) explicitly
+  excluded all admin/internal-tool surfaces by user directive — this item was not driven locally
+  either, still relies solely on the remediation's own curl-level RED/GREEN. Staging/production
+  check unchanged.
 - [ ] staging — tester/date:
 - [ ] production — tester/date:
 
@@ -2239,6 +2250,15 @@ that project is restored or replaced. Where an item can be answered on productio
 - **Expected**: gray rings with matching gray swatches; no board shift on any board+coach screen; no
   new clipping in Spanish or at mobile width.
 - **Source**: batches D / E / E2, all three flagged UNVERIFIED by their own agents.
+- **UPDATE 2026-09-09 (local Phase-2 QA, `agentic_QA_2026-09-09-1415.md`)**: (a) settled locally,
+  and the answer is **NOT clean** — the legend swatch is correct gray, but the board **ring itself
+  still renders green** on gray discs in a real browser: `tokens.css`'s `@keyframes pulse`
+  hardcodes the ring color and overrides `Board.jsx`'s color-aware inline style for the whole
+  animation. This is exactly the failure mode jsdom could not see. Filed as OI-168 STILL BROKEN
+  (was previously marked resolved) — this is now a code fix, not just a staging measurement. (b)
+  and (c) — board-shift stability on `/game`/`/challenge/<cat>`, and Spanish/mobile lesson text —
+  were **not** covered by the local pass (English-only, and `/game` was reached this time but
+  board-shift was not specifically instrumented); still open, still staging/local-browser work.
 - [ ] staging — tester/date:
 - [ ] production — tester/date:
 
@@ -2255,5 +2275,11 @@ that project is restored or replaced. Where an item can be answered on productio
 - **Expected**: all three values unchanged across both reloads. (Note: already-zeroed rows are **not**
   repaired by this fix — they merely stop being re-zeroed. Pre-launch, that is deliberate.)
 - **Source**: OI-173; batch B, "STILL OWED IN PHASE 2".
+- **UPDATE 2026-09-09 (local Phase-2 QA, `agentic_QA_2026-09-09-1415.md`)**: DONE locally, against
+  a real local DB and two real hard reloads with a game played between each. All three columns —
+  `sparring_record`, `streak_count`, `last_active_date` — held across both reloads (no wipe).
+  Local-DB evidence is now strong; a staging/production re-check is still the row below (kept open
+  because pre-launch databases are disposable and a fresh production DB has different history/RLS
+  from the local one — not because the local result is in doubt).
 - [ ] staging — tester/date:
 - [ ] production — tester/date:
